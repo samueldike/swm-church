@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Church Calendar - {{ siteName }}</title>
+<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
+<link rel="apple-touch-icon" href="/images/swm-logo.png"/>
+
+{% include "partials/site-head-assets.html" %}
+<style>
+  .hero-gradient{background:linear-gradient(to right,rgba(26,26,26,.9),rgba(26,26,26,.5)),url('/images/swm-logo.png');background-size:cover;background-position:center}
+  .calendar-grid{display:grid;grid-template-columns:repeat(7,1fr)}
+  .calendar-day{min-height:120px;border-right:1px solid #f3f4f6;border-bottom:1px solid #f3f4f6;padding:12px;transition:background .2s}
+  .calendar-day:hover{background:rgba(201,162,39,.03)}
+  .event-badge-calendar{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700;text-transform:uppercase;margin-bottom:4px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .event-weekly{background:rgba(201,162,39,.1);color:#92400e;border-left:2px solid #c9a227}
+  .event-special{background:#1a1a1a;color:#fff;border-left:2px solid #d4af37}
+  .event-outreach{background:#eff6ff;color:#1d4ed8;border-left:2px solid #3b82f6}
+  .event-casom{background:#c9a227;color:#fff;border-left:2px solid #1a1a1a}
+  @media(prefers-reduced-motion:reduce){.calendar-day{transition:none}}
+</style>
+
+</head>
+<body class="bg-background-light text-secondary font-sans antialiased">
+{% include "partials/site-header.html" %}
+<section class="relative h-[50vh] flex items-center overflow-hidden hero-gradient">
+<div class="relative z-10 px-6 lg:px-20 max-w-7xl mx-auto w-full text-center">
+<span class="text-primary-light text-sm md:text-base font-bold tracking-[0.3em] uppercase mb-4 block">Our Schedule</span>
+<h1 class="text-white text-5xl md:text-7xl font-serif font-medium leading-tight mb-6">Church <span class="italic text-primary-light">Calendar</span></h1>
+<p class="text-gray-200 text-lg md:text-xl font-light max-w-2xl mx-auto leading-relaxed">
+            Plan your season around His presence. Join us for our weekly services and special monthly programs.
+        </p>
+</div>
+</section>
+<section class="py-16 px-6 lg:px-8 bg-background-light">
+<div class="max-w-7xl mx-auto">
+<div class="flex flex-col lg:flex-row gap-12">
+<div class="flex-grow">
+<div class="bg-white rounded-3xl shadow-soft border border-gray-100 overflow-hidden">
+<div class="p-8 border-b border-gray-100 flex items-center justify-between flex-wrap gap-4">
+<div>
+<h2 class="text-3xl font-serif font-bold text-secondary italic" id="current-month-year">May 2024</h2>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 rounded-full hover:bg-accent text-secondary" id="prev-month" onclick="changeMonth(-1)">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="p-2 rounded-full hover:bg-accent text-secondary" id="next-month" onclick="changeMonth(1)">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+<div class="h-6 w-px bg-gray-200 mx-2"></div>
+<button class="px-6 py-2 rounded-full bg-accent text-secondary text-sm font-bold hover:bg-gray-200 transition-all" onclick="goToToday()">Today</button>
+</div>
+</div>
+<div class="calendar-grid bg-secondary text-white/70 text-[10px] uppercase tracking-[0.2em] font-bold py-3">
+<div class="text-center">Sun</div>
+<div class="text-center">Mon</div>
+<div class="text-center">Tue</div>
+<div class="text-center">Wed</div>
+<div class="text-center">Thu</div>
+<div class="text-center">Fri</div>
+<div class="text-center">Sat</div>
+</div>
+<div class="calendar-grid border-l border-t border-gray-100" id="calendar-days">
+<!-- Calendar days will be populated by JavaScript -->
+</div>
+</div>
+<div class="mt-8 flex flex-wrap gap-4">
+<button class="flex items-center gap-3 px-8 py-4 bg-primary text-white rounded-2xl font-bold hover:bg-primary-dark transition-all shadow-glow">
+<span class="material-symbols-outlined">download</span>
+                        Download Annual Calendar (PDF)
+                    </button>
+<button class="flex items-center gap-3 px-8 py-4 border border-secondary text-secondary rounded-2xl font-bold hover:bg-secondary hover:text-white transition-all">
+<span class="material-symbols-outlined">calendar_add_on</span>
+                        Subscribe to iCal/Google
+                    </button>
+</div>
+</div>
+<aside class="w-full lg:w-80 flex flex-col gap-8">
+<div class="bg-white p-8 rounded-3xl shadow-soft border border-gray-100">
+<h3 class="text-lg font-serif font-bold text-secondary mb-6 border-b border-gray-100 pb-4 italic">Calendar Legend</h3>
+<div class="space-y-4">
+<div class="flex items-center gap-3">
+<span class="w-4 h-4 rounded-sm bg-primary/20 border-l-2 border-primary"></span>
+<span class="text-sm font-medium text-gray-600">Weekly Services</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="w-4 h-4 rounded-sm bg-secondary border-l-2 border-primary-light"></span>
+<span class="text-sm font-medium text-gray-600">Special Events</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="w-4 h-4 rounded-sm bg-blue-100 border-l-2 border-blue-500"></span>
+<span class="text-sm font-medium text-gray-600">Outreach</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="w-4 h-4 rounded-sm bg-primary border-l-2 border-secondary"></span>
+<span class="text-sm font-medium text-gray-600">School of Ministry</span>
+</div>
+</div>
+</div>
+<div class="bg-secondary p-8 rounded-3xl shadow-xl text-white">
+<h3 class="text-lg font-serif font-bold text-primary-light mb-8 italic">Next 3 Major Programs</h3>
+<div class="space-y-10" id="upcoming-events">
+<!-- Upcoming events will be populated by JavaScript -->
+</div>
+</div>
+</aside>
+</div>
+</div>
+</section>
+{% include "partials/site-footer.html" %}
+
+<script>
+    let currentDate = new Date();
+    let currentMonth = currentDate.getMonth();
+    let currentYear = currentDate.getFullYear();
+    let events = []; // Will hold events loaded from API
+
+    // Load events when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        loadEvents();
+    });
+
+    // Load events from API
+    async function loadEvents() {
+        try {
+            const response = await fetch('/api/events/calendar');
+            events = await response.json();
+            renderCalendar(currentMonth, currentYear);
+            renderUpcomingEvents();
+        } catch (error) {
+        }
+    }
+
+    // Render the calendar
+    function renderCalendar(month, year) {
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+        const startDate = new Date(firstDay);
+        startDate.setDate(startDate.getDate() - firstDay.getDay()); // Start from Sunday
+        
+        const endDate = new Date(lastDay);
+        endDate.setDate(endDate.getDate() + (6 - lastDay.getDay())); // End on Saturday
+        
+        const calendarDays = document.getElementById('calendar-days');
+        calendarDays.innerHTML = '';
+        
+        // Update month/year header
+        document.getElementById('current-month-year').textContent = 
+            firstDay.toLocaleDateString('default', { month: 'long', year: 'numeric' });
+        
+        // Create calendar days
+        const dayCount = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+        for (let i = 0; i < dayCount; i++) {
+            const currentDay = new Date(startDate);
+            currentDay.setDate(startDate.getDate() + i);
+            
+            const dayElement = document.createElement('div');
+            dayElement.className = 'calendar-day';
+            
+            if (currentDay.getMonth() !== month) {
+                dayElement.classList.add('bg-gray-50/50');
+            }
+            
+            const dayNumber = currentDay.getDate();
+            const dayNumberElement = document.createElement('span');
+            dayNumberElement.className = currentDay.getMonth() === month ? 
+                'text-xs font-bold text-gray-400' : 
+                'text-xs font-bold text-gray-300';
+            dayNumberElement.textContent = dayNumber;
+            
+            // Check if today
+            const today = new Date();
+            if (currentDay.toDateString() === today.toDateString()) {
+                dayNumberElement.classList.add('text-primary');
+            }
+            
+            dayElement.appendChild(dayNumberElement);
+            
+            // Add events for this day
+            const dayEvents = events.filter(event => {
+                const eventDate = new Date(event.start_date);
+                return eventDate.toDateString() === currentDay.toDateString();
+            });
+            
+            if (dayEvents.length > 0) {
+                const eventsContainer = document.createElement('div');
+                eventsContainer.className = 'mt-2';
+                
+                dayEvents.forEach(event => {
+                    const eventBadge = document.createElement('span');
+                    eventBadge.className = `event-badge-calendar event-${event.event_type}`;
+                    
+                    // Format time if available
+                    let timeText = '';
+                    if (event.start_time) {
+                        const time = formatTime(event.start_time);
+                        timeText = ` â€¢ ${time}`;
+                    }
+                    
+                    eventBadge.textContent = `${event.title}${timeText}`;
+                    eventsContainer.appendChild(eventBadge);
+                });
+                
+                dayElement.appendChild(eventsContainer);
+            }
+            
+            calendarDays.appendChild(dayElement);
+        }
+    }
+
+    // Change month
+    function changeMonth(direction) {
+        currentMonth += direction;
+        if (currentMonth > 11) {
+            currentMonth = 0;
+            currentYear++;
+        } else if (currentMonth < 0) {
+            currentMonth = 11;
+            currentYear--;
+        }
+        renderCalendar(currentMonth, currentYear);
+    }
+
+    // Go to today
+    function goToToday() {
+        const today = new Date();
+        currentMonth = today.getMonth();
+        currentYear = today.getFullYear();
+        renderCalendar(currentMonth, currentYear);
+    }
+
+    // Format time for display
+    function formatTime(timeString) {
+        if (!timeString) return '';
+        
+        const [hours, minutes] = timeString.split(':');
+        let hour = parseInt(hours);
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        
+        hour = hour % 12 || 12;
+        
+        return `${hour}:${minutes} ${ampm}`;
+    }
+
+    // Render upcoming events in sidebar
+    function renderUpcomingEvents() {
+        const upcomingEventsContainer = document.getElementById('upcoming-events');
+        upcomingEventsContainer.innerHTML = '';
+        
+        // Filter upcoming events (only published events starting from today)
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const upcomingEvents = events
+            .filter(event => {
+                const eventDate = new Date(event.start_date);
+                return event.status === 'published' && eventDate >= today;
+            })
+            .sort((a, b) => new Date(a.start_date) - new Date(b.start_date))
+            .slice(0, 3); // Show only next 3 events
+        
+        if (upcomingEvents.length === 0) {
+            upcomingEventsContainer.innerHTML = '<p class="text-gray-400 text-center py-4">No upcoming events</p>';
+            return;
+        }
+        
+        upcomingEvents.forEach(event => {
+            const eventElement = document.createElement('div');
+            eventElement.className = 'group';
+            
+            const eventDate = new Date(event.start_date);
+            const formattedDate = eventDate.toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric', 
+                year: 'numeric' 
+            });
+            
+            eventElement.innerHTML = `
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-[10px] font-bold tracking-widest text-primary uppercase">${formattedDate}</span>
+                    <a class="text-[10px] font-bold text-primary-light hover:underline flex items-center gap-1" href="{{ url_for('events') }}">
+                        Add <span class="material-symbols-outlined text-xs">add</span>
+                    </a>
+                </div>
+                <h4 class="text-xl font-serif font-bold group-hover:text-primary-light transition-colors mb-2">${event.title}</h4>
+                <p class="text-gray-400 text-xs leading-relaxed">${event.description || 'Join us for this special event.'}</p>
+            `;
+            
+            upcomingEventsContainer.appendChild(eventElement);
+        });
+    }
+</script>
+</body></html>

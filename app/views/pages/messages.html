@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Audio Messages - {{ siteName }}</title>
+<meta name="description" content="Listen to and download audio sermons from {{ siteName }}."/>
+<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
+{% include "partials/site-head-assets.html" %}
+<style>
+  .audio-player{display:flex;align-items:center;gap:12px;padding:12px 16px;background:#f9fafb;border-radius:12px;border:1px solid #e5e7eb;margin-top:16px}
+  .audio-player audio{flex:1;height:40px;border-radius:8px}
+  .audio-player audio::-webkit-media-controls-panel{background:#f3f4f6}
+  .audio-player audio::-webkit-media-controls-play-button{color:#1a1a1a}
+  .audio-player audio::-webkit-media-controls-time-display{color:#374151;font-size:12px}
+  .btn-download{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:9999px;background:#1a1a1a;color:#fff;font-size:13px;font-weight:700;text-decoration:none;transition:background .2s}
+  .btn-download:hover{background:#c9a227}
+  .featured-audio-player{display:flex;align-items:center;gap:12px;padding:16px 20px;background:rgba(255,255,255,.08);border-radius:12px;border:1px solid rgba(255,255,255,.12);margin-top:20px}
+  .featured-audio-player audio{flex:1;height:44px;border-radius:8px}
+  .featured-audio-player audio::-webkit-media-controls-panel{background:rgba(255,255,255,.1)}
+  .featured-audio-player audio::-webkit-media-controls-play-button{color:#fff}
+  .featured-audio-player audio::-webkit-media-controls-time-display{color:rgba(255,255,255,.8);font-size:12px}
+  .btn-download-featured{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;border-radius:9999px;background:#c9a227;color:#fff;font-size:14px;font-weight:700;text-decoration:none;transition:background .2s}
+  .btn-download-featured:hover{background:#b38b2e}
+  @media(max-width:640px){
+    .audio-player{flex-direction:column;align-items:stretch}
+    .audio-player audio{width:100%}
+    .featured-audio-player{flex-direction:column;align-items:stretch}
+    .featured-audio-player audio{width:100%}
+  }
+</style>
+</head>
+<body class="bg-background-light text-secondary font-sans antialiased">
+{% include "partials/site-header.html" %}
+
+<section class="bg-secondary px-6 py-20 text-white lg:px-8">
+  <div class="mx-auto max-w-7xl">
+    <p class="text-sm font-bold uppercase tracking-[0.22em] text-primary-light">Audio Archive</p>
+    <h1 class="mt-4 max-w-3xl font-serif text-5xl font-semibold leading-tight md:text-6xl">Audio Messages</h1>
+    <p class="mt-5 max-w-2xl text-lg leading-8 text-gray-200">Stream sermon information from our archive and download audio delivered through our external distribution channels.</p>
+  </div>
+</section>
+
+<main class="px-6 py-12 lg:px-8">
+  <div class="mx-auto max-w-7xl space-y-10">
+    <form method="GET" action="{{ url_for('messages') }}" class="flex flex-col gap-3 border-b border-gray-200 pb-6 sm:flex-row sm:items-center">
+      <input name="search" value="{{ search }}" class="h-12 flex-1 rounded-full border border-gray-200 bg-white px-5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" placeholder="Search by message title, caption or speaker">
+      <button class="h-12 rounded-full bg-secondary px-6 text-sm font-bold text-white hover:bg-primary">Search</button>
+      {% if search != '' %}<a href="{{ url_for('messages') }}" class="inline-flex h-12 items-center justify-center rounded-full border border-gray-200 px-6 text-sm font-bold text-gray-600 hover:text-gray-900">Reset</a>{% endif %}
+    </form>
+
+    {% if featured_sermon %}
+      <section class="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-soft">
+        <div class="grid lg:grid-cols-[380px_minmax(0,1fr)]">
+          <div class="flex min-h-72 items-center justify-center bg-secondary p-10">
+            <img src="/images/swm-logo.png" alt="{{ siteName }}" class="max-h-40 w-auto object-contain" width="160" height="160">
+          </div>
+          <div class="p-8 lg:p-10">
+            <p class="text-xs font-bold uppercase tracking-[0.2em] text-primary">Featured Audio</p>
+            <a href="{{ url_for('messages_show', slug=featured_sermon.slug) }}">
+            <h2 class="mt-3 font-serif text-3xl font-bold text-secondary md:text-4xl hover:text-primary transition-colors">{{ featured_sermon.title }}</h2>
+            </a>
+            <p class="mt-4 whitespace-pre-line text-sm leading-7 text-gray-600">{{ featured_sermon.caption }}</p>
+            <div class="mt-6 flex flex-wrap items-center gap-3 text-sm text-gray-500">
+              {% if featured_sermon.preacher %}<span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-base text-primary">person</span>{{ featured_sermon.preacher }}</span>{% endif %}
+              {% if featured_sermon.published_at %}<span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-base text-primary">calendar_month</span>{{ featured_sermon.published_at.strftime('%B %d, %Y') }}</span>{% endif %}
+            </div>
+            {% if featured_sermon.telegram_file_id %}
+              <div class="featured-audio-player">
+                <audio controls preload="metadata" src="{{ url_for('messages_stream', sermon_id=featured_sermon.id) }}"></audio>
+                <a href="{{ url_for('messages_download', sermon_id=featured_sermon.id) }}" class="btn-download-featured"><span class="material-symbols-outlined" style="font-size:18px">download</span>Download</a>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </section>
+    {% endif %}
+
+    <section class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+      {% for sermon in sermons %}
+        <article class="rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
+          <p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Audio Message</p>
+          <a href="{{ url_for('messages_show', slug=sermon.slug) }}">
+          <h2 class="mt-3 font-serif text-2xl font-bold text-secondary hover:text-primary transition-colors">{{ sermon.title }}</h2>
+          </a>
+          <p class="mt-3 line-clamp-4 text-sm leading-6 text-gray-600">{{ sermon.caption }}</p>
+          <div class="mt-5 space-y-2 text-sm text-gray-500">
+            {% if sermon.preacher %}<p class="flex items-center gap-2"><span class="material-symbols-outlined text-base text-primary">person</span>{{ sermon.preacher }}</p>{% endif %}
+            {% if sermon.published_at %}<p class="flex items-center gap-2"><span class="material-symbols-outlined text-base text-primary">calendar_month</span>{{ sermon.published_at.strftime('%b %d, %Y') }}</p>{% endif %}
+          </div>
+          {% if sermon.telegram_file_id %}
+            <div class="audio-player">
+              <audio controls preload="metadata" src="{{ url_for('messages_stream', sermon_id=sermon.id) }}"></audio>
+              <a href="{{ url_for('messages_download', sermon_id=sermon.id) }}" class="btn-download"><span class="material-symbols-outlined" style="font-size:16px">download</span></a>
+            </div>
+          {% else %}
+            <div class="mt-6 flex items-center justify-between border-t border-gray-100 pt-5">
+              <span class="text-xs font-semibold text-gray-400">{{ sermon.branch.name if sermon.branch else '' }}</span>
+            </div>
+          {% endif %}
+        </article>
+      {% else %}
+        <div class="col-span-full rounded-2xl border border-gray-100 bg-white p-10 text-center text-sm text-gray-500">No audio messages have been published yet.</div>
+      {% endfor %}
+    </section>
+
+    {% if pagination and pagination.pages > 1 %}
+    <div class="flex justify-center gap-2 mt-8">
+      {% if pagination.has_prev %}
+        <a href="{{ pagination.prev_url }}" class="px-4 py-2 rounded-full border border-gray-200 text-sm font-bold hover:bg-gray-50">Previous</a>
+      {% endif %}
+      <span class="px-4 py-2 text-sm text-gray-500">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+      {% if pagination.has_next %}
+        <a href="{{ pagination.next_url }}" class="px-4 py-2 rounded-full border border-gray-200 text-sm font-bold hover:bg-gray-50">Next</a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</main>
+
+{% include "partials/site-footer.html" %}
+</body>
+</html>

@@ -1,0 +1,128 @@
+{% set editMode = report is defined %}{% set action = url_for('hod.reports.update', id=report.id) if editMode else url_for('hod.reports.store') %}{% set attendance = report.attendance if editMode and report.attendance else {} %}{% set collections = report.collections if editMode and report.collections else {} %}{% set weekKeys = ['week1','week2','week3','week4','week5','others','total'] %}{% set weekLabels = {'week1': '1', 'week2': '2', 'week3': '3', 'week4': '4', 'week5': '5', 'others': 'Others', 'total': 'Total'} %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>{{ 'Edit' if editMode else 'Submit' }} Monthly Unit Report - {{ siteName }}</title>
+<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+
+</head>
+<body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
+<div class="flex h-screen overflow-hidden">
+{% include "partials/admin-sidebar.html" %}
+<main class="flex-1 flex flex-col overflow-hidden">
+{% with title="Edit Monthly Unit Report" if editMode else "Submit Monthly Unit Report", subtitle=(hod.department.name or 'Department') ~ ' \u00B7 ' ~ (hod.branch.name or 'Branch') %}{% include "partials/admin-topbar.html" %}{% endwith %}
+<div class="flex-1 overflow-y-auto p-6 lg:p-10 space-y-6">
+{% if errors %}
+<div class="rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm px-4 py-3">{{ errors | first }}</div>
+{% endif %}
+
+<form method="POST" action="{{ action }}" class="space-y-6">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+{% if editMode %}
+<input type="hidden" name="_method" value="PUT">
+{% endif %}
+
+<section class="bg-white border border-gray-200 rounded-2xl p-5 lg:p-6 space-y-4">
+<div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
+<div>
+<h2 class="admin-page-title">MONTHLY REPORT FOR: {{ (hod.department.name or '').upper() }} UNIT/DEPARTMENT</h2>
+<p class="text-xs text-gray-500 mt-1">Format aligned with church unit report template</p>
+</div>
+<div class="w-full lg:w-56">
+<label class="text-sm font-semibold block mb-1">Date/Month of Report</label>
+<input type="month" name="report_month" value="{{ request.form.get('report_month', report.report_month.strftime('%Y-%m') if editMode and report.report_month else now().strftime('%Y-%m')) }}" class="w-full rounded-lg border-gray-300" required>
+</div>
+</div>
+
+<h3 class="font-bold">SECTION A - INTRODUCTION</h3>
+<textarea name="introduction" rows="5" class="w-full rounded-lg border-gray-300" required>{{ request.form.get('introduction', report.introduction if editMode and report.introduction else '') }}</textarea>
+
+<h3 class="font-bold">ATTENDANCE</h3>
+<div class="overflow-x-auto rounded-lg border border-gray-200">
+<table class="w-full min-w-[760px] text-sm">
+<thead>
+<tr class="bg-gray-100 text-gray-700">
+<th class="border-b border-r p-2 text-left">WEEK</th>
+{% for wk in weekKeys %}
+<th class="border-b p-2 text-left">{{ weekLabels[wk] }}</th>
+{% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for rowKey, rowLabel in [('male', 'Male'), ('female', 'Female'), ('total', 'TOTAL')] %}
+<tr>
+<td class="border-r border-b p-2 font-semibold">{{ rowLabel }}</td>
+{% for wk in weekKeys %}
+<td class="border-b p-1"><input name="attendance_{{ rowKey }}_{{ wk }}" value="{{ request.form.get('attendance_' + rowKey + '_' + wk, attendance.get(rowKey, {}).get(wk, '')) }}" class="w-full rounded border-gray-300 text-xs"></td>
+{% endfor %}
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+<textarea name="attendance_note" rows="3" placeholder="I was unable to keep correct track... / attendance observations" class="w-full rounded-lg border-gray-300">{{ request.form.get('attendance_note', report.attendance_note if editMode and report.attendance_note else '') }}</textarea>
+
+<h3 class="font-bold">COLLECTIONS/DUES</h3>
+<div class="overflow-x-auto rounded-lg border border-gray-200">
+<table class="w-full min-w-[760px] text-sm">
+<thead>
+<tr class="bg-gray-100 text-gray-700">
+<th class="border-b border-r p-2 text-left">WEEK</th>
+{% for wk in weekKeys %}
+<th class="border-b p-2 text-left">{{ weekLabels[wk] }}</th>
+{% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for rowKey, rowLabel in [('dues', 'Dues'), ('others', 'Others')] %}
+<tr>
+<td class="border-r border-b p-2 font-semibold">{{ rowLabel }}</td>
+{% for wk in weekKeys %}
+<td class="border-b p-1"><input name="{{ rowKey }}_{{ wk }}" value="{{ request.form.get(rowKey + '_' + wk, collections.get(rowKey, {}).get('weeks', {}).get(wk, collections.get(rowKey, {}).get(wk, ''))) }}" class="w-full rounded border-gray-300 text-xs"></td>
+{% endfor %}
+</tr>
+{% endfor %}
+<tr>
+<td class="border-r p-2 font-semibold">Others Label</td>
+<td colspan="7" class="p-1"><input name="others_label" value="{{ request.form.get('others_label', collections.others.label if collections.others is defined and collections.others.label is defined else '') }}" class="w-full rounded border-gray-300 text-xs" placeholder="e.g Data"></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div>
+<label class="text-sm font-semibold">Collections TOTAL (N)</label>
+<input name="collections_total" value="{{ request.form.get('collections_total', collections.total if collections.total is defined else '') }}" class="w-full rounded-lg border-gray-300">
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+<div><label class="text-sm font-semibold">COMMENT(S)/OBSERVATION(S)</label><textarea name="observations" rows="4" class="w-full rounded-lg border-gray-300">{{ request.form.get('observations', report.observations if editMode and report.observations else '') }}</textarea></div>
+<div><label class="text-sm font-semibold">CHALLENGES</label><textarea name="challenges" rows="4" class="w-full rounded-lg border-gray-300">{{ request.form.get('challenges', report.challenges if editMode and report.challenges else '') }}</textarea></div>
+<div><label class="text-sm font-semibold">RECOMMENDATIONS</label><textarea name="recommendations" rows="4" class="w-full rounded-lg border-gray-300">{{ request.form.get('recommendations', report.recommendations if editMode and report.recommendations else '') }}</textarea></div>
+<div><label class="text-sm font-semibold">PROJECTIONS</label><textarea name="projections" rows="4" class="w-full rounded-lg border-gray-300">{{ request.form.get('projections', report.projections if editMode and report.projections else '') }}</textarea></div>
+</div>
+
+<div class="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+<strong>SECTION B: OFFICE USE ONLY</strong><br>
+Resident Pastor and Senior Pastor comments are completed by super admin after submission.
+</div>
+</section>
+
+<div class="sticky bottom-2 bg-white/95 backdrop-blur border border-gray-200 rounded-xl p-3 flex flex-col sm:flex-row gap-2 sm:justify-end">
+<a href="{{ url_for('hod.reports.index') }}" class="rounded-lg border border-gray-300 text-gray-700 px-5 py-2.5 font-semibold text-center">Cancel</a>
+<button type="submit" class="rounded-lg bg-gray-800 text-white px-5 py-2.5 font-semibold">Save Draft</button>
+<button type="submit" name="submit_now" value="1" class="rounded-lg bg-primary text-white px-5 py-2.5 font-semibold hover:bg-[#8f6e22]">Submit Report</button>
+</div>
+</form>
+</div>
+</main>
+</div>
+</body>
+</html>
+
+
+

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>HOD Invitation - {{ siteName }}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:Manrope,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f4;padding:40px 20px;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:16px;overflow:hidden;">
+  <tr><td style="background-color:#c9a227;padding:24px 32px;text-align:center;">
+    <h1 style="color:#1a1814;font-size:20px;margin:0;font-weight:800;">{{ siteName }}</h1>
+    <p style="color:#1a1814;font-size:12px;margin:4px 0 0;opacity:0.8;">HOD Invitation</p>
+  </td></tr>
+  <tr><td style="padding:32px;">
+    <p style="color:#333;font-size:14px;margin:0 0 16px;">Hello <strong>{{ invitation.name if invitation.name else 'there' }}</strong>,</p>
+    <p style="color:#333;font-size:14px;margin:0 0 16px;">You have been invited to serve as Head of Department for <strong>{{ invitation.department.name if invitation.department else '' }}</strong> at <strong>{{ invitation.branch.name if invitation.branch else '' }}</strong>.</p>
+    <p style="color:#333;font-size:14px;margin:0 0 24px;">Click the button below to activate your account:</p>
+    <p style="text-align:center;margin:0 0 24px;">
+      <a href="{{ url_for('hod_invitation_accept', token=token, _external=True) }}" style="display:inline-block;background-color:#c9a227;color:#1a1814;font-weight:700;font-size:14px;padding:14px 32px;border-radius:12px;text-decoration:none;">Activate Account</a>
+    </p>
+    <p style="color:#999;font-size:12px;margin:0;">If you did not expect this invitation, please ignore this email.</p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body>
+</html>

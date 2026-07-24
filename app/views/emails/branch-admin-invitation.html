@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html><body style="font-family: Arial, sans-serif; color: #1a1a1a;">
+<h2>Branch Super Admin Invitation</h2>
+<p>Hello {{ invitation.name }},</p>
+<p>You have been invited as the super admin for <strong>{{ invitation.branch.name }}</strong>.</p>
+<p>Use the secure link below to activate your account and set your password:</p>
+<p><a href="{{ acceptUrl }}">{{ acceptUrl }}</a></p>
+<p>This link expires on {{ invitation.expires_at.strftime('%b %d, %Y %I:%M %p') if invitation.expires_at else '' }}.</p>
+<p>If you were not expecting this invitation, please ignore this email.</p>
+</body></html>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Admins - {{ siteName }}</title>
+<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+</head>
+<body class="bg-background-light text-secondary font-sans antialiased overflow-hidden"><div class="flex h-screen overflow-hidden">{% include "partials/admin-sidebar.html" %}
+<main class="flex-1 flex flex-col overflow-hidden">{% with title="Admins", subtitle="Manage super and branch admins" %}{% include "partials/admin-topbar.html" %}{% endwith %}
+<div class="flex-1 overflow-y-auto p-5 lg:p-8 space-y-4">
+{% if session.get('success') %}<div class="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-4 py-3">{{ session.get('success') }}</div>{% endif %}
+{% if errors and errors.get('createAdmin') %}<div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ (error_messages.get('createAdmin', [''])[0] if error_messages.get('createAdmin') else '') }}</div>
+{% elif errors %}<div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ (error_messages.values()|map('first')|list|first if error_messages else '') }}</div>{% endif %}
+
+<section class="content-card p-4 lg:p-5">
+<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <div><h2 class="text-base font-bold text-gray-900">Admins</h2><p class="text-xs text-gray-500 mt-0.5">{{ "{:,}".format(admins|length) }} records</p></div>
+  <button type="button" data-open-create-admin class="h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors"><i class="ri-shield-user-line text-base"></i><span>Add Admin</span></button>
+</div>
+<div class="mt-4 overflow-x-auto">
+<table class="w-full min-w-[780px] text-sm">
+<thead><tr class="border-b border-gray-100"><th class="table-header py-3 pr-4">Admin</th><th class="table-header py-3 pr-4">Role</th><th class="table-header py-3 pr-4">Branch</th><th class="table-header py-3 pr-4">Status</th><th class="table-header py-3 text-right">Actions</th></tr></thead>
+<tbody class="divide-y divide-gray-100">
+{% for admin in admins %}
+
+<tr class="hover:bg-gray-50/50 transition-colors">
+<td class="py-3 pr-4"><p class="font-semibold text-gray-900">{{ admin.name }}</p><p class="text-xs text-gray-500">{{ admin.email }}</p></td>
+<td class="py-3 pr-4 text-gray-600">{{ (admin.role or '')|replace('_', ' ')|capitalize }}</td>
+<td class="py-3 pr-4 text-gray-500">{{ admin.branch.name or 'N/A' }}</td>
+<td class="py-3 pr-4"><span class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide {{ 'bg-emerald-50 text-emerald-600' if admin.is_active else 'bg-gray-100 text-gray-500' }}">{{ 'Active' if admin.is_active else 'Disabled' }}</span></td>
+<td class="py-3">
+<div class="flex items-center justify-end gap-2">
+  <button type="button" class="admin-edit-btn w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50 transition-colors" title="Edit admin"
+    data-action="{{ url_for('admin.admins.update', id=admin.id) }}" data-name="{{ admin.name|e }}" data-phone="{{ admin.phone|e }}" data-role="{{ admin.role }}" data-branch-id="{{ admin.branch_id }}" data-is-active="{{ 1 if admin.is_active else 0 }}"><i class="ri-edit-line text-base"></i></button>
+  <button type="button" class="admin-password-btn w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50 transition-colors" title="Reset password" data-action="{{ url_for('admin.admins.reset-password', id=admin.id) }}" data-name="{{ admin.name|e }}"><i class="ri-key-2-line text-base"></i></button>
+</div>
+</td>
+</tr>
+{% else %}
+
+<tr><td colspan="5" class="py-10 text-center text-sm text-gray-500">No admins found.</td></tr>
+{% endfor %}
+</tbody></table></div>
+
+  </div>
+</section>
+</div></main></div>
+
+<div id="create-admin-modal" class="fixed inset-0 z-50 hidden" aria-hidden="true"><div class="absolute inset-0 bg-black/50" data-close-admin-modal></div><div class="absolute inset-x-4 top-6 mx-auto max-w-3xl rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4"><h3 class="text-sm font-bold text-gray-900">Add Admin</h3><button type="button" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-50" data-close-admin-modal><i class="ri-close-line text-lg"></i></button></div>
+<form method="POST" action="{{ url_for('admin.admins.store') }}" class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3 modal-scroll overflow-y-auto max-h-[calc(100vh-9rem)]"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label><span class="form-label">Name</span><input name="name" value="{{ request.form.get('name', '') }}" class="form-input" required></label>
+<label><span class="form-label">Email</span><input type="email" name="email" value="{{ request.form.get('email', '') }}" class="form-input" required></label>
+<label><span class="form-label">Phone</span><input name="phone" value="{{ request.form.get('phone', '') }}" class="form-input"></label>
+<label><span class="form-label">Role</span><select name="role" class="form-input" required><option value="super_admin" {{ 'selected' if request.form.get('role', '') == 'super_admin' }}>Super Admin</option><option value="branch_super_admin" {{ 'selected' if request.form.get('role', '') == 'branch_super_admin' }}>Branch Super Admin</option></select></label>
+<label><span class="form-label">Branch</span><select name="branch_id" class="form-input"><option value="">No branch</option>{% for branch in branches %}<option value="{{ branch.id }}" {{ 'selected' if request.form.get('branch_id', '') == branch.id|string else '' }}>{{ branch.name }}</option>{% endfor %}</select></label>
+<label><span class="form-label">Password</span><input type="password" name="password" class="form-input" required></label>
+<label><span class="form-label">Confirm Password</span><input type="password" name="password_confirmation" class="form-input" required></label>
+<div class="sm:col-span-2 flex justify-end gap-2 pt-2"><button type="button" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900" data-close-admin-modal>Cancel</button><button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814] hover:bg-primary-dark">Create</button></div>
+</form></div></div>
+
+<div id="edit-admin-modal" class="fixed inset-0 z-50 hidden" aria-hidden="true"><div class="absolute inset-0 bg-black/50" data-close-admin-modal></div><div class="absolute inset-x-4 top-10 mx-auto max-w-2xl rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4"><h3 class="text-sm font-bold text-gray-900">Edit Admin</h3><button type="button" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-50" data-close-admin-modal><i class="ri-close-line text-lg"></i></button></div>
+<form id="edit-admin-form" method="POST" action="" class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3 modal-scroll overflow-y-auto max-h-[calc(100vh-9rem)]"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"> <input type="hidden" name="_method" value="PUT">
+<label><span class="form-label">Name</span><input id="edit-admin-name" name="name" class="form-input" required></label>
+<label><span class="form-label">Phone</span><input id="edit-admin-phone" name="phone" class="form-input"></label>
+<label><span class="form-label">Role</span><select id="edit-admin-role" name="role" class="form-input"><option value="super_admin">Super Admin</option><option value="branch_super_admin">Branch Super Admin</option></select></label>
+<label><span class="form-label">Branch</span><select id="edit-admin-branch-id" name="branch_id" class="form-input"><option value="">No branch</option>{% for branch in branches %}<option value="{{ branch.id }}">{{ branch.name }}</option>{% endfor %}</select></label>
+<label class="sm:col-span-2 flex items-center gap-2 text-sm font-semibold text-gray-600"><input id="edit-admin-is-active" type="checkbox" name="is_active" value="1" class="rounded border-gray-300 text-primary focus:ring-primary"> Active</label>
+<div class="sm:col-span-2 flex justify-end gap-2 pt-2"><button type="button" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900" data-close-admin-modal>Cancel</button><button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814] hover:bg-primary-dark">Save Changes</button></div>
+</form></div></div>
+
+<div id="password-admin-modal" class="fixed inset-0 z-50 hidden" aria-hidden="true"><div class="absolute inset-0 bg-black/50" data-close-admin-modal></div><div class="absolute inset-x-4 top-10 mx-auto max-w-lg rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4"><div><h3 class="text-sm font-bold text-gray-900">Reset Password</h3><p id="password-admin-name" class="text-xs text-gray-500 mt-0.5"></p></div><button type="button" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-50" data-close-admin-modal><i class="ri-close-line text-lg"></i></button></div>
+<form id="password-admin-form" method="POST" action="" class="p-5 space-y-3 modal-scroll overflow-y-auto max-h-[calc(100vh-9rem)]"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label><span class="form-label">New Password</span><input type="password" name="password" class="form-input" required></label>
+<label><span class="form-label">Confirm Password</span><input type="password" name="password_confirmation" class="form-input" required></label>
+<div class="flex justify-end gap-2 pt-2"><button type="button" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900" data-close-admin-modal>Cancel</button><button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814] hover:bg-primary-dark">Reset</button></div>
+</form></div></div>
+
+<script>
+(() => {
+const body=document.body, createModal=document.getElementById('create-admin-modal'), editModal=document.getElementById('edit-admin-modal'), passModal=document.getElementById('password-admin-modal');
+const open=(m)=>{m.classList.remove('hidden');m.setAttribute('aria-hidden','false');body.classList.add('overflow-hidden')};
+const close=()=>{[createModal,editModal,passModal].forEach(m=>{m.classList.add('hidden');m.setAttribute('aria-hidden','true')});body.classList.remove('overflow-hidden')};
+document.querySelector('[data-open-create-admin]')?.addEventListener('click',()=>open(createModal));
+document.querySelectorAll('[data-close-admin-modal]').forEach(el=>el.addEventListener('click',close));
+document.querySelectorAll('.admin-edit-btn').forEach(btn=>btn.addEventListener('click',()=>{document.getElementById('edit-admin-form').action=btn.dataset.action||'';document.getElementById('edit-admin-name').value=btn.dataset.name||'';document.getElementById('edit-admin-phone').value=btn.dataset.phone||'';document.getElementById('edit-admin-role').value=btn.dataset.role||'super_admin';document.getElementById('edit-admin-branch-id').value=btn.dataset.branchId||'';document.getElementById('edit-admin-is-active').checked=btn.dataset.isActive==='1';open(editModal)}));
+document.querySelectorAll('.admin-password-btn').forEach(btn=>btn.addEventListener('click',()=>{document.getElementById('password-admin-form').action=btn.dataset.action||'';document.getElementById('password-admin-name').textContent=btn.dataset.name||'';open(passModal)}));
+document.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
+{% if errors and errors.get('createAdmin') %} open(createModal); {% endif %}
+})();
+</script>
+</body></html>

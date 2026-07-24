@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>My Profile - {{ siteName }}</title>
+<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+
+
+</head>
+<body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
+<div class="flex h-screen overflow-hidden">
+{% include "partials/admin-sidebar.html" %}
+<main class="flex-1 flex flex-col overflow-hidden">
+{% with title="My Profile", subtitle="Update your account details and security" %}{% include "partials/admin-topbar.html" %}{% endwith %}
+<div class="flex-1 overflow-y-auto p-5 lg:p-8 space-y-6">
+{% if session.get('success') %}
+<div class="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-4 py-3">{{ request.session.get('success') }}</div>
+{% endif %}
+{% if errors %}
+<div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ (error_messages.values()|map('first')|list|first if error_messages else '') }}</div>
+{% endif %}
+
+<section class="content-card p-5 lg:p-6">
+<div class="flex items-center gap-2 mb-4">
+<i class="ri-person-line h-5 w-5 text-primary"></i>
+<h2 class="admin-page-title">Profile Information</h2>
+</div>
+<form method="POST" action="{{ url_for('admin.profile.update') }}" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="_method" value="PUT">
+<div>
+<label class="form-label">Full Name</label>
+<input name="name" value="{{ request.form.get('name', admin.name) }}" class="mt-1 form-input" required>
+{% if error_messages.get('name') %}<p class="text-xs text-red-600 mt-1">{{ error_messages.get('name', [''])[0] }}</p>{% endif %}
+</div>
+<div>
+<label class="form-label">Email</label>
+<input name="email" type="email" value="{{ request.form.get('email', admin.email) }}" class="mt-1 form-input" required>
+{% if error_messages.get('email') %}<p class="text-xs text-red-600 mt-1">{{ error_messages.get('email', [''])[0] }}</p>{% endif %}
+</div>
+<div class="md:col-span-2">
+<label class="form-label">Phone</label>
+<input name="phone" value="{{ request.form.get('phone', admin.phone) }}" class="mt-1 form-input" placeholder="Optional">
+{% if error_messages.get('phone') %}<p class="text-xs text-red-600 mt-1">{{ error_messages.get('phone', [''])[0] }}</p>{% endif %}
+</div>
+<div class="md:col-span-2 flex justify-end">
+<button type="submit" class="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">Save Profile</button>
+</div>
+</form>
+</section>
+
+<section class="content-card p-5 lg:p-6">
+<div class="flex items-center gap-2 mb-4">
+<i class="ri-lock-line h-5 w-5 text-primary"></i>
+<h2 class="admin-page-title">Change Password</h2>
+</div>
+<form method="POST" action="{{ url_for('admin.profile.password.update') }}" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="_method" value="PUT">
+<div class="md:col-span-2">
+<label class="form-label">Current Password</label>
+<input name="current_password" type="password" class="mt-1 form-input" required>
+{% if error_messages.get('current_password') %}<p class="text-xs text-red-600 mt-1">{{ error_messages.get('current_password', [''])[0] }}</p>{% endif %}
+</div>
+<div>
+<label class="form-label">New Password</label>
+<input name="password" type="password" class="mt-1 form-input" required>
+{% if error_messages.get('password') %}<p class="text-xs text-red-600 mt-1">{{ error_messages.get('password', [''])[0] }}</p>{% endif %}
+</div>
+<div>
+<label class="form-label">Confirm Password</label>
+<input name="password_confirmation" type="password" class="mt-1 form-input" required>
+</div>
+<div class="md:col-span-2 flex justify-end">
+<button type="submit" class="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">Update Password</button>
+</div>
+</form>
+</section>
+</div>
+</main>
+</div>
+</body>
+</html>
+
+
+

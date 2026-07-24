@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Prayer Request - {{ siteName }}</title>
+<meta name="description" content="Submit a prayer request and our team will stand in faith with you at {{ siteName }}."/>
+<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
+{% include "partials/site-head-assets.html" %}
+<style>
+  .prayer-card{background:#fff;border:1px solid #f3f4f6;border-radius:24px;box-shadow:0 1px 3px rgba(0,0,0,.04),0 4px 12px rgba(0,0,0,.03);padding:32px}
+  .prayer-label{display:block;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;margin-bottom:8px}
+  .prayer-input{width:100%;padding:12px 16px;border:1px solid #e5e7eb;border-radius:12px;background:#f9fafb;font-size:14px;color:#1a1a1a;outline:none;transition:border-color .2s,box-shadow .2s}
+  .prayer-input:focus{border-color:#c9a227;box-shadow:0 0 0 3px rgba(201,162,39,.12)}
+  .prayer-input::placeholder{color:#9ca3af}
+  .prayer-textarea{min-height:140px;resize:vertical}
+  .prayer-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 24px;border-radius:12px;background:#1a1a1a;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer;transition:background .2s,transform .15s}
+  .prayer-btn:hover{background:#c9a227}
+  .prayer-btn:active{transform:scale(.98)}
+  .checkbox-label{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;color:#374151}
+  .checkbox-label input[type="checkbox"]{width:18px;height:18px;border-radius:6px;border:1.5px solid #d1d5db;accent-color:#c9a227;cursor:pointer}
+  .success-box{display:flex;align-items:flex-start;gap:12px;padding:16px 20px;border-radius:12px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46}
+</style>
+</head>
+<body class="bg-background-light text-secondary font-sans antialiased">
+{% include "partials/site-header.html" %}
+
+<main>
+  <section class="bg-secondary px-6 py-20 text-white lg:px-8">
+    <div class="mx-auto max-w-7xl">
+      <p class="text-sm font-bold uppercase tracking-[0.22em] text-primary-light">We Stand With You</p>
+      <h1 class="mt-4 max-w-3xl font-serif text-5xl font-semibold leading-tight md:text-6xl">Prayer &amp; Support</h1>
+      <p class="mt-5 max-w-2xl text-lg leading-8 text-gray-200">Submit a prayer request and our team will stand in faith with you.</p>
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-6xl px-6 py-16 lg:px-8">
+    {% if session.get('prayer_success') %}
+      <div class="mb-8 success-box">
+        <span class="material-symbols-outlined mt-0.5 text-xl">check_circle</span>
+        <div>
+          <p class="font-semibold">{{ session.get('prayer_success') }}</p>
+          <p class="mt-1 text-sm opacity-80">You can submit another request below if needed.</p>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if errors %}
+      <div class="mb-8 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+        <p class="mb-2 font-semibold">Please fix the following:</p>
+        <ul class="list-disc space-y-1 pl-5">
+          {% for error in errors %}
+            <li>{{ error }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
+
+    <div class="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+      <div class="prayer-card">
+        <h2 class="font-serif text-2xl font-bold text-secondary">Submit a Prayer Request</h2>
+        <p class="mt-2 text-sm text-gray-500">Share your prayer need with us. All requests are treated with confidentiality and care.</p>
+
+        <form action="{{ url_for('prayer.store') }}" method="POST" class="mt-8 space-y-5">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+          <div class="grid gap-4 md:grid-cols-2">
+            <div>
+              <label class="prayer-label" for="prayer-name">Your Name</label>
+              <input id="prayer-name" name="name" value="{{ request.form.get('name', '') }}" required class="prayer-input" placeholder="John Doe"/>
+            </div>
+            <div>
+              <label class="prayer-label" for="prayer-email">Email (optional)</label>
+              <input id="prayer-email" type="email" name="email" value="{{ request.form.get('email', '') }}" class="prayer-input" placeholder="john@example.com"/>
+            </div>
+          </div>
+
+          <div>
+            <label class="prayer-label" for="prayer-phone">Phone (optional)</label>
+            <input id="prayer-phone" name="phone" value="{{ request.form.get('phone', '') }}" class="prayer-input" placeholder="0801 234 5678"/>
+          </div>
+
+          <div>
+            <label class="prayer-label" for="prayer-request">Prayer Request</label>
+            <textarea id="prayer-request" name="request" required class="prayer-input prayer-textarea" placeholder="Share your prayer request with us...">{{ request.form.get('request', '') }}</textarea>
+          </div>
+
+          <div class="space-y-3">
+            <label class="checkbox-label">
+              <input type="checkbox" name="anonymous" value="1" {{ 'checked' if request.form.get('') else '' }}/>
+              Submit anonymously (your name will not be displayed)
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" name="notify_me" value="1" {{ 'checked' if request.form.get('') else '' }}/>
+              Notify me when my prayer is being prayed for
+            </label>
+          </div>
+
+          <button type="submit" class="prayer-btn">
+            <span class="material-symbols-outlined" style="font-size:20px">volunteer_activism</span>
+            Submit Prayer Request
+          </button>
+        </form>
+      </div>
+
+      <aside class="space-y-6">
+        <div class="prayer-card">
+          <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <span class="material-symbols-outlined">groups</span>
+          </div>
+          <h3 class="mt-4 font-serif text-xl font-bold text-secondary">Our Prayer Team</h3>
+          <p class="mt-2 text-sm text-gray-500">A dedicated group of intercessors who pray regularly for the needs of our community.</p>
+        </div>
+
+        <div class="prayer-card">
+          <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <span class="material-symbols-outlined">lock</span>
+          </div>
+          <h3 class="mt-4 font-serif text-xl font-bold text-secondary">Confidential</h3>
+          <p class="mt-2 text-sm text-gray-500">Your prayer requests are kept confidential and shared only with our prayer team.</p>
+        </div>
+
+        <div class="prayer-card">
+          <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <span class="material-symbols-outlined">chat</span>
+          </div>
+          <h3 class="mt-4 font-serif text-xl font-bold text-secondary">Need to Talk?</h3>
+          <p class="mt-2 text-sm text-gray-500">If you need someone to talk to, reach out to us directly.</p>
+          <a href="{{ url_for('contact') }}" class="mt-4 inline-flex items-center gap-2 text-sm font-bold text-primary hover:text-primary-dark">
+            <span class="material-symbols-outlined" style="font-size:18px">mail</span>
+            Contact Us
+          </a>
+        </div>
+      </aside>
+    </div>
+  </section>
+</main>
+
+{% include "partials/site-footer.html" %}
+</body>
+</html>

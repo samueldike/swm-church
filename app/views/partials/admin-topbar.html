@@ -1,0 +1,177 @@
+{% include "partials/admin-theme.html" %}
+
+<script>
+(() => {
+  const storedTheme = localStorage.getItem('swm-admin-theme');
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  document.documentElement.classList.toggle('dark', storedTheme ? storedTheme === 'dark' : prefersDark);
+})();
+</script>
+<script src="{{ url_for('static', path='js/admin-richtext.js') }}" defer></script>
+<script src="{{ url_for('static', path='js/site-confirm.js') }}" defer></script>
+<script src="{{ url_for('static', path='js/turbo.es2017-umd.js') }}" defer></script>
+<script src="{{ url_for('static', path='js/live-actions.js') }}" defer></script>
+
+<header class="bg-white border-b border-gray-100 flex-shrink-0 z-20">
+  <div class="flex items-center justify-between px-4 md:px-6 h-14 gap-3">
+    <div class="flex items-center gap-3 min-w-0">
+      <button id="admin-sidebar-open" type="button" class="lg:hidden p-1.5 rounded-lg text-gray-600 hover:text-primary hover:bg-gray-50 flex-shrink-0">
+        <i class="ri-menu-line text-lg"></i>
+      </button>
+      <div class="w-5 h-5 flex items-center justify-center flex-shrink-0 hidden sm:flex">
+        <i class="{{ headerIcon|default('ri-dashboard-3-line') }} text-primary text-base"></i>
+      </div>
+      <div class="min-w-0">
+        <h1 class="text-[15px] font-bold text-gray-900 leading-tight truncate">{{ title|default('Admin Portal') }}</h1>
+        {% if subtitle %}
+          <p class="text-[11px] text-gray-400 truncate">{{ subtitle }}</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+      <form method="GET" action="{{ url_for('admin_members') }}" class="relative hidden md:block" data-no-loading>
+        <div class="w-4 h-4 flex items-center justify-center absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+          <i class="ri-search-line text-gray-400 text-sm"></i>
+        </div>
+        <input name="q" type="text" placeholder="Search members, events..."
+               value="{{ request.query_params.get('q', '') }}"
+               class="pl-9 pr-4 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:border-primary focus:bg-white w-44 lg:w-52 transition-colors"/>
+      </form>
+
+      <button id="admin-theme-toggle" type="button" class="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors relative" aria-label="Switch theme" aria-pressed="false">
+        <i class="ri-sun-line text-base theme-light-icon"></i>
+        <i class="ri-moon-line text-base theme-dark-icon hidden"></i>
+      </button>
+
+      {% if admin and admin.role == 'super_admin' %}
+        <div class="relative">
+          <button id="admin-notifications-toggle" type="button" class="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors relative" aria-label="Notifications">
+            <i class="ri-notification-3-line text-base"></i>
+            {% if critical_notifications|length > 0 %}
+              <span class="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full"></span>
+            {% endif %}
+          </button>
+          <div id="admin-notifications-panel" class="hidden absolute right-0 mt-2 w-96 max-w-[90vw] rounded-xl border border-gray-200 bg-white shadow-lg z-50">
+            <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-3">
+              <h3 class="text-sm font-bold text-secondary">Incident Notifications (24h)</h3>
+              <a href="{{ url_for('admin_security_logs') }}?reviewed=no&severity=critical" class="text-xs font-semibold text-primary hover:text-primary-dark">Open Logs</a>
+            </div>
+            {% if critical_notifications|length > 0 %}
+              <div class="max-h-96 overflow-y-auto p-2 space-y-2">
+                {% for incident in critical_notifications %}
+                  <article class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                    <div class="flex items-center justify-between gap-3">
+                      <p class="font-semibold text-amber-900 text-xs">{{ incident.action }}</p>
+                      <p class="text-[11px] text-amber-700">{{ incident.created_at.strftime('%b %d, %I:%M %p') if incident.created_at else '' }}</p>
+                    </div>
+                    <p class="text-[11px] text-amber-800 mt-1">IP: {{ incident.ip_address or 'N/A' }} {% if incident.assigned_to %} &bull; Assigned: {{ incident.assigned_to.name }}{% endif %}</p>
+                  </article>
+                {% endfor %}
+              </div>
+            {% else %}
+              <p class="px-4 py-4 text-sm text-gray-500">No open incidents in the last 24 hours.</p>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+
+      <div class="relative">
+        <button id="admin-profile-toggle" type="button" class="flex items-center gap-2 pl-2 sm:pl-3 sm:border-l sm:border-gray-200 cursor-pointer">
+          <div class="w-7 h-7 flex items-center justify-center rounded-full bg-primary text-[#1a1814] text-[11px] font-bold">{{ admin_initials|default('AD') }}</div>
+          <div class="hidden sm:block text-left">
+            <p class="text-xs font-semibold text-gray-800 leading-tight truncate max-w-[120px]">{{ admin_name }}</p>
+            <p class="text-[10px] text-gray-400">{{ role_label }}</p>
+          </div>
+          <div class="w-4 h-4 flex items-center justify-center hidden sm:flex">
+            <i class="ri-arrow-down-s-line text-gray-400 text-xs"></i>
+          </div>
+        </button>
+        <div id="admin-profile-panel" class="hidden absolute right-0 mt-2 w-64 max-w-[90vw] rounded-xl border border-gray-200 bg-white shadow-lg z-50 overflow-hidden">
+          <div class="px-4 py-3 border-b border-gray-100">
+            <p class="text-xs font-bold uppercase tracking-wide text-primary">{{ admin_branch_name }}</p>
+            <p class="text-xs text-gray-500 mt-1 truncate">{{ admin_name }}</p>
+          </div>
+          <div class="p-1">
+            <a href="{{ url_for('admin_profile') }}" class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors">
+              <i class="ri-user-line text-sm"></i><span>My profile</span>
+            </a>
+            <a href="{{ url_for('home') }}" class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors">
+              <i class="ri-global-line text-sm"></i><span>View site</span>
+            </a>
+            <form action="{{ url_for('admin_logout') }}" method="POST">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button type="submit" class="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors">
+                <i class="ri-logout-box-r-line text-sm"></i><span>Sign out</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<script>
+(() => {
+  window.__swmAdminTopbarAbort?.abort();
+  const controller = new AbortController();
+  window.__swmAdminTopbarAbort = controller;
+  const listenerOptions = { signal: controller.signal };
+  const body = document.body;
+  const sidebar = document.getElementById('admin-sidebar');
+  const overlay = document.getElementById('admin-sidebar-overlay');
+  const openBtn = document.getElementById('admin-sidebar-open');
+  const closeBtn = document.getElementById('admin-sidebar-close');
+  const notifyBtn = document.getElementById('admin-notifications-toggle');
+  const notifyPanel = document.getElementById('admin-notifications-panel');
+  const profileBtn = document.getElementById('admin-profile-toggle');
+  const profilePanel = document.getElementById('admin-profile-panel');
+  const themeBtn = document.getElementById('admin-theme-toggle');
+  const syncThemeButton = () => {
+    const isDark = document.documentElement.classList.contains('dark');
+    themeBtn?.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+    themeBtn?.querySelector('.theme-light-icon')?.classList.toggle('hidden', isDark);
+    themeBtn?.querySelector('.theme-dark-icon')?.classList.toggle('hidden', !isDark);
+  };
+  syncThemeButton();
+  themeBtn?.addEventListener('click', () => {
+    const nextIsDark = !document.documentElement.classList.contains('dark');
+    document.documentElement.classList.toggle('dark', nextIsDark);
+    localStorage.setItem('swm-admin-theme', nextIsDark ? 'dark' : 'light');
+    syncThemeButton();
+  });
+  if (!sidebar || !overlay) return;
+  const open = () => { sidebar.classList.remove('-translate-x-full'); overlay.classList.remove('hidden'); body.classList.add('overflow-hidden'); };
+  const close = () => { sidebar.classList.add('-translate-x-full'); overlay.classList.add('hidden'); body.classList.remove('overflow-hidden'); };
+  openBtn?.addEventListener('click', open, listenerOptions);
+  closeBtn?.addEventListener('click', close, listenerOptions);
+  overlay.addEventListener('click', close, listenerOptions);
+  notifyBtn?.addEventListener('click', (e) => { e.stopPropagation(); notifyPanel?.classList.toggle('hidden'); profilePanel?.classList.add('hidden'); }, listenerOptions);
+  profileBtn?.addEventListener('click', (e) => { e.stopPropagation(); profilePanel?.classList.toggle('hidden'); notifyPanel?.classList.add('hidden'); }, listenerOptions);
+  document.addEventListener('click', (e) => {
+    if (notifyPanel && notifyBtn && !notifyPanel.contains(e.target) && !notifyBtn.contains(e.target)) notifyPanel.classList.add('hidden');
+    if (profilePanel && profileBtn && !profilePanel.contains(e.target) && !profileBtn.contains(e.target)) profilePanel.classList.add('hidden');
+  }, listenerOptions);
+  window.addEventListener('resize', () => {
+    if (window.innerWidth >= 1024) { overlay.classList.add('hidden'); body.classList.remove('overflow-hidden'); sidebar.classList.remove('-translate-x-full'); }
+    else if (overlay.classList.contains('hidden')) sidebar.classList.add('-translate-x-full');
+  }, listenerOptions);
+})();
+</script>
+<script>
+(() => {
+  document.querySelectorAll('form:not([data-no-loading])').forEach(form => {
+    form.addEventListener('submit', function() {
+      const btn = this.querySelector('button[type="submit"]');
+      if (btn && !btn.disabled) {
+        btn.disabled = true;
+        btn.dataset.originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="ri-loader-4-line animate-spin text-base"></i><span class="ml-1">Saving...</span>';
+        btn.classList.add('opacity-60', 'cursor-not-allowed');
+        setTimeout(() => { btn.disabled = false; btn.innerHTML = btn.dataset.originalHtml; btn.classList.remove('opacity-60', 'cursor-not-allowed'); }, 8000);
+      }
+    });
+  });
+})();
+</script>

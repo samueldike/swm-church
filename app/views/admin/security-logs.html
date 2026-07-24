@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Security Logs - {{ siteName }}</title>
+<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+
+
+</head>
+<body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
+<div class="flex h-screen overflow-hidden">
+{% include "partials/admin-sidebar.html" %}
+<main class="flex-1 flex flex-col overflow-hidden">
+{% with title="Security Logs", subtitle="Audit trail for authentication and privileged actions" %}{% include "partials/admin-topbar.html" %}{% endwith %}
+<div class="flex-1 overflow-y-auto p-5 lg:p-8 space-y-6">
+{% if session.get('success') %}
+<div class="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-4 py-3">{{ request.session.get('success') }}</div>
+{% endif %}
+<section class="content-card p-5 lg:p-6">
+<form method="GET" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-8 gap-3 items-end">
+<div>
+<label class="form-label">Action</label>
+<input name="action" value="{{ request.query_params.get('action') }}" class="mt-1 form-input" placeholder="e.g. admin.login.success">
+</div>
+<div>
+<label class="form-label">Admin</label>
+<select name="admin_id" class="mt-1 form-input">
+<option value="">All admins</option>
+{% for a in admins %}
+<option value="{{ a.id }}" {{ 'selected' if request.query_params.get('admin_id', '') == a.id|string else '' }}>{{ a.name }} ({{ a.email }})</option>
+{% endfor %}
+</select>
+</div>
+<div>
+<label class="form-label">Assigned To</label>
+<select name="assigned_to_admin_id" class="mt-1 form-input">
+<option value="">Any</option>
+{% for a in admins %}
+<option value="{{ a.id }}" {{ 'selected' if request.query_params.get('assigned_to_admin_id', '') == a.id|string else '' }}>{{ a.name }}</option>
+{% endfor %}
+</select>
+</div>
+<div>
+<label class="form-label">IP</label>
+<input name="ip" value="{{ request.query_params.get('ip') }}" class="mt-1 form-input" placeholder="127.0.0.1">
+</div>
+<div>
+<label class="form-label">Severity</label>
+<select name="severity" class="mt-1 form-input">
+<option value="">All</option>
+<option value="info" {{ 'selected' if request.query_params.get('severity', '') == 'info' else '' }}>Info</option>
+<option value="warn" {{ 'selected' if request.query_params.get('severity', '') == 'warn' else '' }}>Warn</option>
+<option value="critical" {{ 'selected' if request.query_params.get('severity', '') == 'critical' else '' }}>Critical</option>
+</select>
+</div>
+<div>
+<label class="form-label">Reviewed</label>
+<select name="reviewed" class="mt-1 form-input">
+<option value="">All</option>
+<option value="yes" {{ 'selected' if request.query_params.get('reviewed', '') == 'yes' else '' }}>Reviewed</option>
+<option value="no" {{ 'selected' if request.query_params.get('reviewed', '') == 'no' else '' }}>Unreviewed</option>
+</select>
+</div>
+<div>
+<label class="form-label">Meta Key</label>
+<input name="meta_key" value="{{ request.query_params.get('meta_key') }}" class="mt-1 form-input" placeholder="email">
+</div>
+<div>
+<label class="form-label">Meta Value</label>
+<input name="meta_value" value="{{ request.query_params.get('meta_value') }}" class="mt-1 form-input" placeholder="admin@site.com">
+</div>
+<div>
+<label class="form-label">From</label>
+<input type="date" name="date_from" value="{{ request.query_params.get('date_from') }}" class="mt-1 form-input">
+</div>
+<div>
+<label class="form-label">To</label>
+<input type="date" name="date_to" value="{{ request.query_params.get('date_to') }}" class="mt-1 form-input">
+</div>
+<div class="flex gap-2">
+<button class="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">Filter</button>
+<a href="{{ url_for('admin_security_logs') }}" class="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors">Reset</a>
+<a href="{{ url_for('admin_security_logs_export', id=request.query_params.id) }}" class="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors">Export CSV</a>
+</div>
+</form>
+</section>
+
+<section class="content-card p-5 lg:p-6">
+<form id="bulk-review-form" method="POST" action="{{ url_for('admin_security_logs_bulk_review') }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+</form>
+<div class="mb-4 flex flex-col sm:flex-row sm:items-end gap-3">
+<div class="flex-1">
+<label class="form-label">Bulk Review Note</label>
+<input form="bulk-review-form" name="review_note" class="mt-1 form-input" placeholder="Optional note for selected logs">
+</div>
+<button form="bulk-review-form" class="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">Mark Selected Reviewed</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full min-w-[1050px] text-sm">
+<thead>
+<tr class="border-b border-gray-100">
+<th class="table-header py-2 pr-3"><input id="select-all-logs" type="checkbox" class="rounded border-gray-300"></th>
+<th class="table-header py-2 pr-3">Time</th>
+<th class="table-header py-2 pr-3">Action</th>
+<th class="table-header py-2 pr-3">Severity</th>
+<th class="table-header py-2 pr-3">Review</th>
+<th class="table-header py-2 pr-3">Assignee</th>
+<th class="table-header py-2 pr-3">Actor</th>
+<th class="table-header py-2 pr-3">Target</th>
+<th class="table-header py-2 pr-3">IP</th>
+<th class="py-2">Meta</th>
+</tr>
+</thead>
+<tbody>
+{% for log in logs %}
+
+<tr class="border-b last:border-0 align-top">
+<td class="py-3 pr-3"><input type="checkbox" name="log_ids[]" value="{{ log.id }}" form="bulk-review-form" class="log-checkbox rounded border-gray-300"></td>
+<td class="py-3 pr-3 text-xs text-gray-600">{{ log.created_at.strftime('M d, Y h:i:s A') }}</td>
+<td class="py-3 pr-3">
+<span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-primary/10 text-primary">{{ log.action }}</span>
+</td>
+<td class="py-3 pr-3 text-xs">
+{% set sev = log.severity %}
+<span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide {{ 'bg-red-100 text-red-700' if sev == 'critical' else ('bg-amber-100 text-amber-700' if sev == 'warn' else 'bg-blue-100 text-blue-700') }}">
+{{ (sev or '')|upper }}
+</span>
+</td>
+<td class="py-3 pr-3 text-xs">
+{% if log.reviewed_at %}
+  <div class="space-y-1">
+    <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-600">REVIEWED</span>
+    <p class="text-gray-500">{{ log.reviewed_at.strftime('M d, Y h:i A') }}</p>
+    {% if log.reviewedBy %}
+      <p class="text-gray-500">by {{ log.reviewedBy.name }}</p>
+    {% endif %}
+    {% if log.review_note %}
+      <p class="text-gray-600 italic">"{{ log.review_note }}"</p>
+    {% endif %}
+  </div>
+{% else %}
+  <form method="POST" action="{{ url_for('admin_security_logs_review', log_id=log.id) }}" class="space-y-1">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input name="review_note" class="form-input text-xs w-44" placeholder="Optional note">
+    <button class="rounded-lg bg-primary px-2 py-1 text-[10px] font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">Mark Reviewed</button>
+  </form>
+{% endif %}
+</td>
+<td class="py-3 pr-3 text-xs">
+  {% if log.assignedTo %}
+    <p class="font-semibold text-secondary">{{ log.assignedTo.name }}</p>
+    <p class="text-gray-500">{{ (log.assigned_at.strftime('M d, h:i A') if log.assigned_at else '') }}</p>
+  {% endif %}
+  <form method="POST" action="{{ url_for('admin_security_logs_assign', log_id=log.id) }}" class="mt-1 flex items-center gap-1">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <select name="assigned_to_admin_id" class="form-input text-xs">
+      {% for a in admins %}
+      <option value="{{ a.id }}" {{ 'selected' if log.assigned_to_admin_id==a.id else '' }}>{{ a.name }}</option>
+      {% endfor %}
+    </select>
+    <button class="rounded-lg bg-primary px-2 py-1 text-[10px] font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">Assign</button>
+  </form>
+</td>
+<td class="py-3 pr-3 text-xs">
+{% if log.admin %}
+<p class="font-semibold text-secondary">{{ log.admin.name }}</p>
+<p class="text-gray-500">{{ log.admin.email }}</p>
+{% else %}
+<span class="text-gray-500">System/Anonymous</span>
+{% endif %}
+</td>
+<td class="py-3 pr-3 text-xs text-gray-600">
+{% if log.target_type %}
+<p>{{ log.target_type.__class__.__name__ }}</p>
+<p>#{{ log.target_id }}</p>
+{% else %}
+<span class="text-gray-400">-</span>
+{% endif %}
+</td>
+<td class="py-3 pr-3 text-xs text-gray-600">{{ log.ip_address or '-' }}</td>
+<td class="py-3 text-xs text-gray-600">
+{% if log.extra_data %}
+<pre class="whitespace-pre-wrap break-all bg-gray-50 border border-gray-200 rounded-lg p-2 text-[11px] leading-4 dark:bg-gray-900/50 dark:border-gray-700 dark:text-gray-300">{{ log.extra_data|tojson }}</pre>
+{% else %}
+<span class="text-gray-400">-</span>
+{% endif %}
+</td>
+</tr>
+{% else %}
+
+<tr><td colspan="10" class="py-8 text-center text-gray-500">No audit log entries found.</td></tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+<div class="mt-4">{% if pagination.has_prev or pagination.has_next %}
+  <div class="flex items-center gap-2">
+    {% if pagination.has_prev %}<a href="{{ pagination.prev_url }}" class="text-xs text-primary font-medium hover:underline">&larr; Previous</a>{% endif %}
+    <span class="text-xs text-gray-400">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+    {% if pagination.has_next %}<a href="{{ pagination.next_url }}" class="text-xs text-primary font-medium hover:underline">Next &rarr;</a>{% endif %}
+  </div>
+  {% endif %}</div>
+</section>
+</div>
+</main>
+</div>
+<script>
+(() => {
+  const selectAll = document.getElementById('select-all-logs');
+  const boxes = Array.from(document.querySelectorAll('.log-checkbox'));
+  selectAll.addEventListener('change', () => boxes.forEach((b) => b.checked = selectAll.checked));
+})();
+</script>
+</body>
+</html>
+
+
+

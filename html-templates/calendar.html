@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Church Calendar - Scent of Water Ministry</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#b38b2e",
+                        "primary-dark": "#8f6e22",
+                        "primary-light": "#e6c87d",
+                        "secondary": "#1a1a1a",
+                        "secondary-light": "#2a2a2a",
+                        "background-light": "#fcfcfb",
+                        "background-dark": "#101622",
+                        "muted": "#9ca3af",
+                        "accent": "#f4f4f5"
+                    },
+                    fontFamily: {
+                        "sans": ["Manrope", "sans-serif"],
+                        "serif": ["Playfair Display", "serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "1rem",
+                        "2xl": "1.5rem",
+                        "3xl": "2rem",
+                        "full": "9999px"
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+                        'soft-hover': '0 10px 30px -5px rgba(0, 0, 0, 0.1)',
+                        'glow': '0 0 15px rgba(179, 139, 46, 0.3)',
+                    }
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        @layer utilities {
+            .hero-gradient {
+                background: linear-gradient(to right, rgba(26, 26, 26, 0.9), rgba(26, 26, 26, 0.5)), url('https://lh3.googleusercontent.com/aida-public/AB6AXuDqHbDKEblCOL-2zMFOeCympsppkKYFhq35Ly2nki6Vecz1o22K2Tnlb1v9cCdxkBbuF_mtIIMnHNHY0GjRtvFvf91QjoE1Wb2wMoF2pC4RWvGCDEveRQZ7jC-qIxRBp9c5W_wNBKe_N8fy3AX5rDtLSARotb6GW6kRRKu6aAChGjvATzK7jk3CjhdPIOS5rsHgzmT6I2FeEP9xwP6o9f-cv0d331NxLq0geaciroc4YpEESLYQTj-0aJt_Piu3pyNIcO236wcOa-A');
+                background-size: cover;
+                background-position: center;
+            }
+            .calendar-grid {
+                display: grid;
+                grid-template-columns: repeat(7, 1fr);
+            }
+            .calendar-day {
+                min-height: 120px;
+                @apply border-r border-b border-gray-100 p-3 transition-all hover:bg-accent/50;
+            }
+            .event-badge {
+                @apply text-[10px] px-2 py-0.5 rounded-sm font-bold uppercase mb-1 block truncate;
+            }
+            .event-weekly { @apply bg-primary/10 text-primary-dark border-l-2 border-primary; }
+            .event-special { @apply bg-secondary text-white border-l-2 border-primary-light; }
+            .event-outreach { @apply bg-blue-50 text-blue-700 border-l-2 border-blue-500; }
+            .event-casom { @apply bg-primary text-white border-l-2 border-secondary; }
+        }
+    </style>
+</head>
+<body class="bg-background-light text-secondary font-sans antialiased overflow-x-hidden selection:bg-primary selection:text-white">
+<header class="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
+<div class="flex items-center justify-between px-6 lg:px-8 py-4 max-w-7xl mx-auto">
+<div class="flex items-center gap-3 group cursor-pointer">
+<img alt="Scent of Water Ministry Logo" class="h-12 w-auto object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuASxum-ZJDlKwDdlcpGE2_scb_M_tY44VJTm0Hu99A2K8OMcVU6U5Am93QluMIWwOMtMuc-grp8qZk6F8N85maKX1ai0Y5PucmQBzVAVw74_vrhd9cy3Kcc1SCq2LPPQVKUyQxDo3ciEO0lEm11mscKUjtokGXMuKYuuxiP6EvpAGpZX6zMbBoiB3lbAX3VuHJkztGh8Rkagy-OWVCd42do9gSnt9w_niR8X_kil-B6ToVLIvFL6ZdejcInIZwa1agXhg8_BkMBmj0"/>
+<div class="flex flex-col">
+<h2 class="text-secondary text-lg font-bold tracking-tight font-serif uppercase leading-none">Scent of Water</h2>
+<span class="text-[10px] tracking-[0.2em] text-primary font-medium uppercase mt-0.5">Ministry</span>
+</div>
+</div>
+<nav class="hidden xl:flex items-center gap-8">
+<a class="text-gray-600 text-sm font-medium hover:text-primary transition-colors" href="#">Home</a>
+<a class="text-gray-600 text-sm font-medium hover:text-primary transition-colors" href="#">About</a>
+<a class="text-gray-600 text-sm font-medium hover:text-primary transition-colors" href="#">Departments</a>
+<a class="text-gray-600 text-sm font-medium hover:text-primary transition-colors" href="#">Messages</a>
+<a class="text-gray-600 text-sm font-medium hover:text-primary transition-colors" href="#">CASOM</a>
+<a class="text-secondary text-sm font-bold hover:text-primary transition-colors relative after:absolute after:bottom-[-4px] after:left-0 after:h-[2px] after:w-full after:bg-primary" href="#">Events</a>
+<a class="text-gray-600 text-sm font-medium hover:text-primary transition-colors" href="#">Get Involved</a>
+<a class="text-gray-600 text-sm font-medium hover:text-primary transition-colors" href="#">Contact</a>
+</nav>
+<div class="flex items-center gap-4">
+<a class="hidden md:flex items-center justify-center px-6 py-2.5 rounded-full border border-primary text-primary hover:bg-primary hover:text-white text-sm font-bold transition-all" href="#">Give</a>
+<button class="hidden sm:flex h-11 px-7 items-center justify-center rounded-full bg-secondary hover:bg-primary text-white text-sm font-bold transition-all shadow-md">
+                Plan Your Visit
+            </button>
+</div>
+</div>
+</header>
+<section class="relative h-[50vh] flex items-center overflow-hidden hero-gradient">
+<div class="relative z-10 px-6 lg:px-20 max-w-7xl mx-auto w-full text-center">
+<span class="text-primary-light text-sm md:text-base font-bold tracking-[0.3em] uppercase mb-4 block">Our Schedule</span>
+<h1 class="text-white text-5xl md:text-7xl font-serif font-medium leading-tight mb-6">Church <span class="italic text-primary-light">Calendar</span></h1>
+<p class="text-gray-200 text-lg md:text-xl font-light max-w-2xl mx-auto leading-relaxed">
+            Plan your season around His presence. Join us for our weekly services and special monthly programs.
+        </p>
+</div>
+</section>
+<section class="py-16 px-6 lg:px-8 bg-background-light">
+<div class="max-w-7xl mx-auto">
+<div class="flex flex-col lg:flex-row gap-12">
+<div class="flex-grow">
+<div class="bg-white rounded-3xl shadow-soft border border-gray-100 overflow-hidden">
+<div class="p-8 border-b border-gray-100 flex items-center justify-between flex-wrap gap-4">
+<div>
+<h2 class="text-3xl font-serif font-bold text-secondary italic">May 2024</h2>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 rounded-full hover:bg-accent text-secondary">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="p-2 rounded-full hover:bg-accent text-secondary">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+<div class="h-6 w-px bg-gray-200 mx-2"></div>
+<button class="px-6 py-2 rounded-full bg-accent text-secondary text-sm font-bold hover:bg-gray-200 transition-all">Today</button>
+</div>
+</div>
+<div class="calendar-grid bg-secondary text-white/70 text-[10px] uppercase tracking-[0.2em] font-bold py-3">
+<div class="text-center">Sun</div>
+<div class="text-center">Mon</div>
+<div class="text-center">Tue</div>
+<div class="text-center">Wed</div>
+<div class="text-center">Thu</div>
+<div class="text-center">Fri</div>
+<div class="text-center">Sat</div>
+</div>
+<div class="calendar-grid border-l border-t border-gray-100">
+<div class="calendar-day bg-gray-50/50"></div>
+<div class="calendar-day bg-gray-50/50"></div>
+<div class="calendar-day bg-gray-50/50"></div>
+<div class="calendar-day">
+<span class="text-xs font-bold text-gray-400">1</span>
+<div class="mt-2">
+<span class="event-badge event-weekly">Bible Study • 5pm</span>
+</div>
+</div>
+<div class="calendar-day"><span class="text-xs font-bold text-gray-400">2</span></div>
+<div class="calendar-day"><span class="text-xs font-bold text-gray-400">3</span></div>
+<div class="calendar-day">
+<span class="text-xs font-bold text-gray-400">4</span>
+<div class="mt-2">
+<span class="event-badge event-weekly">Pre-Service • 5pm</span>
+</div>
+</div>
+<div class="calendar-day">
+<span class="text-xs font-bold text-primary">5</span>
+<div class="mt-2">
+<span class="event-badge event-weekly">Service • 7am</span>
+<span class="event-badge event-weekly">Service • 9:30am</span>
+</div>
+</div>
+<div class="calendar-day">
+<span class="text-xs font-bold text-gray-400">6</span>
+<div class="mt-2">
+<span class="event-badge event-weekly">Prayers • 4:40pm</span>
+</div>
+</div>
+<div class="calendar-day"><span class="text-xs font-bold text-gray-400">7</span></div>
+<div class="calendar-day">
+<span class="text-xs font-bold text-gray-400">8</span>
+<div class="mt-2">
+<span class="event-badge event-weekly">Bible Study • 5pm</span>
+</div>
+</div>
+<div class="calendar-day"><span class="text-xs font-bold text-gray-400">9</span></div>
+<div class="calendar-day">
+<span class="text-xs font-bold text-gray-400">10</span>
+<div class="mt-2">
+<span class="event-badge event-special">Singles Point Blank</span>
+</div>
+</div>
+<div class="calendar-day">
+<span class="text-xs font-bold text-gray-400">11</span>
+<div class="mt-2">
+<span class="event-badge event-weekly">Pre-Service • 5pm</span>
+</div>
+</div>
+<div class="calendar-day">
+<span class="text-xs font-bold text-primary">12</span>
+<div class="mt-2">
+<span class="event-badge event-weekly">Service • 7am</span>
+<span class="event-badge event-weekly">Service • 9:30am</span>
+</div>
+</div>
+<div class="calendar-day"><span class="text-xs font-bold text-gray-400">13</span></div>
+<div class="calendar-day"><span class="text-xs font-bold text-gray-400">14</span></div>
+<div class="calendar-day">
+<span class="text-xs font-bold text-gray-400">15</span>
+<div class="mt-2">
+<span class="event-badge event-weekly">Bible Study • 5pm</span>
+<span class="event-badge event-casom text-[8px]">CASOM Exams</span>
+</div>
+</div>
+<div class="calendar-day"><span class="text-xs font-bold text-gray-400">16</span></div>
+<div class="calendar-day"><span class="text-xs font-bold text-gray-400">17</span></div>
+<div class="calendar-day">
+<span class="text-xs font-bold text-gray-400">18</span>
+<div class="mt-2">
+<span class="event-badge event-outreach">Prison Outreach</span>
+<span class="event-badge event-weekly">Pre-Service • 5pm</span>
+</div>
+</div>
+<div class="calendar-day">
+<span class="text-xs font-bold text-primary">19</span>
+<div class="mt-2">
+<span class="event-badge event-weekly">Service • 7am</span>
+<span class="event-badge event-weekly">Service • 9:30am</span>
+</div>
+</div>
+<div class="calendar-day"><span class="text-xs font-bold text-gray-400">20</span></div>
+<div class="calendar-day"><span class="text-xs font-bold text-gray-400">21</span></div>
+<div class="calendar-day"><span class="text-xs font-bold text-gray-400">22</span></div>
+<div class="calendar-day"><span class="text-xs font-bold text-gray-400">23</span></div>
+<div class="calendar-day">
+<span class="text-xs font-bold text-gray-400">24</span>
+<div class="mt-2">
+<span class="event-badge event-special bg-secondary text-white font-black">Monthly Vigil • 9pm</span>
+</div>
+</div>
+<div class="calendar-day"><span class="text-xs font-bold text-gray-400">25</span></div>
+<div class="calendar-day bg-gray-50/50"></div>
+<div class="calendar-day bg-gray-50/50"></div>
+<div class="calendar-day bg-gray-50/50"></div>
+<div class="calendar-day bg-gray-50/50"></div>
+<div class="calendar-day bg-gray-50/50"></div>
+<div class="calendar-day bg-gray-50/50"></div>
+</div>
+</div>
+<div class="mt-8 flex flex-wrap gap-4">
+<button class="flex items-center gap-3 px-8 py-4 bg-primary text-white rounded-2xl font-bold hover:bg-primary-dark transition-all shadow-glow">
+<span class="material-symbols-outlined">download</span>
+                        Download Annual Calendar (PDF)
+                    </button>
+<button class="flex items-center gap-3 px-8 py-4 border border-secondary text-secondary rounded-2xl font-bold hover:bg-secondary hover:text-white transition-all">
+<span class="material-symbols-outlined">calendar_add_on</span>
+                        Subscribe to iCal/Google
+                    </button>
+</div>
+</div>
+<aside class="w-full lg:w-80 flex flex-col gap-8">
+<div class="bg-white p-8 rounded-3xl shadow-soft border border-gray-100">
+<h3 class="text-lg font-serif font-bold text-secondary mb-6 border-b border-gray-100 pb-4 italic">Calendar Legend</h3>
+<div class="space-y-4">
+<div class="flex items-center gap-3">
+<span class="w-4 h-4 rounded-sm bg-primary/20 border-l-2 border-primary"></span>
+<span class="text-sm font-medium text-gray-600">Weekly Services</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="w-4 h-4 rounded-sm bg-secondary border-l-2 border-primary-light"></span>
+<span class="text-sm font-medium text-gray-600">Special Events</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="w-4 h-4 rounded-sm bg-blue-100 border-l-2 border-blue-500"></span>
+<span class="text-sm font-medium text-gray-600">Outreach</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="w-4 h-4 rounded-sm bg-primary border-l-2 border-secondary"></span>
+<span class="text-sm font-medium text-gray-600">School of Ministry</span>
+</div>
+</div>
+</div>
+<div class="bg-secondary p-8 rounded-3xl shadow-xl text-white">
+<h3 class="text-lg font-serif font-bold text-primary-light mb-8 italic">Next 3 Major Programs</h3>
+<div class="space-y-10">
+<div class="group">
+<div class="flex items-center justify-between mb-3">
+<span class="text-[10px] font-bold tracking-widest text-primary uppercase">May 10, 2024</span>
+<a class="text-[10px] font-bold text-primary-light hover:underline flex items-center gap-1" href="#">
+                                    Add <span class="material-symbols-outlined text-xs">add</span>
+</a>
+</div>
+<h4 class="text-xl font-serif font-bold group-hover:text-primary-light transition-colors mb-2">Singles Point Blank</h4>
+<p class="text-gray-400 text-xs leading-relaxed">A specialized session for the young and unmarried to discuss life and purpose.</p>
+</div>
+<div class="group">
+<div class="flex items-center justify-between mb-3">
+<span class="text-[10px] font-bold tracking-widest text-primary uppercase">May 18, 2024</span>
+<a class="text-[10px] font-bold text-primary-light hover:underline flex items-center gap-1" href="#">
+                                    Add <span class="material-symbols-outlined text-xs">add</span>
+</a>
+</div>
+<h4 class="text-xl font-serif font-bold group-hover:text-primary-light transition-colors mb-2">Prison Outreach</h4>
+<p class="text-gray-400 text-xs leading-relaxed">Spreading the love of Christ to the incarcerated within our community.</p>
+</div>
+<div class="group">
+<div class="flex items-center justify-between mb-3">
+<span class="text-[10px] font-bold tracking-widest text-primary uppercase">May 24, 2024</span>
+<a class="text-[10px] font-bold text-primary-light hover:underline flex items-center gap-1" href="#">
+                                    Add <span class="material-symbols-outlined text-xs">add</span>
+</a>
+</div>
+<h4 class="text-xl font-serif font-bold group-hover:text-primary-light transition-colors mb-2">Monthly Vigil</h4>
+<p class="text-gray-400 text-xs leading-relaxed">An all-night intense spiritual warfare and intercession encounter.</p>
+</div>
+</div>
+</div>
+</aside>
+</div>
+</div>
+</section>
+<footer class="bg-secondary text-white pt-24 pb-12 px-6 lg:px-8 border-t border-white/5">
+<div class="max-w-7xl mx-auto">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 lg:gap-20 mb-20">
+<div class="flex flex-col gap-8">
+<div class="flex items-center gap-3">
+<img alt="Scent of Water Ministry" class="h-10 w-auto object-contain bg-white/10 rounded-lg p-1" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCCmdQYoqV-GzFEPZsE2nwXrjnU0JSGmcP2tFmvBcC7GG65eBBDLBCnLAAN3USkKZd1ouJktNZj_2drG51ZvQ8lKZ_XoMDr1Il5MSR_0xUbdLgtTgKFvZvW7FsD_d836xon-Or9_F_Xytv8yTv9u-9e8n_Fm016XGWdzlAn7-80CSgmYNfva3r2bJUt_rmJIxW47aT-Vo9y6_4-QMMHMjY3y00PLT9NCUOljvoX9ivTPBGNcj0XdpQrY___bdT5P8DRDpXsWKIWnmU"/>
+<div class="flex flex-col">
+<span class="font-serif font-bold text-lg leading-none">Scent of Water</span>
+<span class="text-[10px] uppercase tracking-widest text-primary mt-1">Ministry</span>
+</div>
+</div>
+<p class="text-gray-400 text-sm leading-relaxed font-light">
+                    A place of refreshing, restoration, and renewal. Join us as we grow together in Christ and impact our world.
+                </p>
+</div>
+<div>
+<h3 class="font-serif font-bold text-lg mb-8 text-white relative inline-block after:absolute after:bottom-[-8px] after:left-0 after:w-10 after:h-[2px] after:bg-primary">Quick Links</h3>
+<ul class="flex flex-col gap-4 text-gray-400 text-sm">
+<li><a class="hover:text-primary transition-colors" href="#">About Us</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">CASOM</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Calendar</a></li>
+<li><a class="hover:text-primary transition-colors" href="#">Contact</a></li>
+</ul>
+</div>
+<div>
+<h3 class="font-serif font-bold text-lg mb-8 text-white relative inline-block after:absolute after:bottom-[-8px] after:left-0 after:w-10 after:h-[2px] after:bg-primary">Contact Us</h3>
+<ul class="flex flex-col gap-6 text-gray-400 text-sm">
+<li class="flex items-start gap-4">
+<span class="material-symbols-outlined text-primary text-sm">location_on</span>
+<span>No. 1 Scent Close,<br/>Nigeria</span>
+</li>
+<li class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary text-sm">phone</span>
+<span>07037736698, 08035593426</span>
+</li>
+</ul>
+</div>
+<div>
+<h3 class="font-serif font-bold text-lg mb-8 text-white relative inline-block after:absolute after:bottom-[-8px] after:left-0 after:w-10 after:h-[2px] after:bg-primary">Newsletter</h3>
+<div class="flex flex-col gap-3">
+<input class="h-12 px-5 rounded-lg bg-white/5 border border-white/10 text-white outline-none" placeholder="Your email" type="email"/>
+<button class="h-12 px-5 rounded-lg bg-primary text-white font-bold hover:bg-white hover:text-primary transition-all">Subscribe</button>
+</div>
+</div>
+</div>
+<div class="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center gap-6 text-xs text-gray-500">
+<p>© 2024 Scent of Water Ministry. All rights reserved.</p>
+</div>
+</div>
+</footer>
+
+</body></html>

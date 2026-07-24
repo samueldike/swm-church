@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>System Settings - {{ siteName }}</title>
+<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
+<link rel="apple-touch-icon" href="/images/swm-logo.png"/>
+
+<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&amp;display=swap" rel="stylesheet"/>
+
+
+</head>
+<body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
+<div class="flex h-screen overflow-hidden">
+{% include "partials/admin-sidebar.html" %}
+<main class="flex-1 flex flex-col overflow-hidden">
+{% with title="System Settings", subtitle="Configure payment gateways, church accounts, and admin security controls", headerIcon="ri-settings-4-line" %}{% include "partials/admin-topbar.html" %}{% endwith %}
+
+<div class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
+{% if request.session.get('status') %}
+<div class="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold px-4 py-3 rounded-xl">
+{{ request.session.get('status') }}
+</div>
+{% endif %}
+
+{% if error_messages %}
+<div class="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
+<p class="font-semibold mb-2">Please fix the following:</p>
+<ul class="list-disc list-inside space-y-1">
+{% for field_errors in error_messages.values() %}
+{% for error in field_errors %}
+<li>{{ error }}</li>
+{% endfor %}
+{% endfor %}
+</ul>
+</div>
+{% endif %}
+
+<form action="{{ url_for('admin_settings_update') }}" method="POST">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+<div class="settings-layout">
+<aside class="content-card settings-menu-panel">
+<h2 class="section-title mb-4">Settings Menu</h2>
+<div class="space-y-2">
+<button type="button" class="settings-tab active" data-settings-tab="general">
+<i class="ri-settings-3-line h-4 w-4"></i>
+General Site
+</button>
+<button type="button" class="settings-tab" data-settings-tab="appearance">
+<i class="ri-palette-line text-base"></i>
+Appearance
+</button>
+<button type="button" class="settings-tab" data-settings-tab="gateway">
+<i class="ri-money-dollar-circle-line h-4 w-4"></i>
+Giving Gateway
+</button>
+<button type="button" class="settings-tab" data-settings-tab="accounts">
+<i class="ri-bank-line h-4 w-4"></i>
+Church Accounts
+</button>
+<button type="button" class="settings-tab" data-settings-tab="security">
+<i class="ri-shield-check-line h-4 w-4"></i>
+Admin Security
+</button>
+<button type="button" class="settings-tab" data-settings-tab="email">
+<i class="ri-mail-send-line text-base"></i>
+Email Delivery
+</button>
+<button type="button" class="settings-tab" data-settings-tab="audio">
+<i class="ri-broadcast-line text-base"></i>
+Audio Distribution
+</button>
+<button type="button" class="settings-tab" data-settings-tab="legal">
+<i class="ri-file-text-line h-4 w-4"></i>
+Legal Pages
+</button>
+</div>
+</aside>
+
+<div class="settings-content-panel">
+<section class="content-card settings-panel" data-settings-panel="general">
+<h2 class="section-title">General Site</h2>
+<div class="grid md:grid-cols-2 gap-5">
+<div>
+<label class="form-label">Site Name</label>
+<input class="form-input" name="site_name" value="{{ request.form.get('site_name', settings['site_name']) }}" />
+</div>
+<div>
+<label class="form-label">Site Tagline</label>
+<input class="form-input" name="site_tagline" value="{{ request.form.get('site_tagline', settings['site_tagline']) }}" />
+</div>
+<div>
+<label class="form-label">Public Contact Email</label>
+<input class="form-input" name="public_contact_email" type="email" value="{{ request.form.get('public_contact_email', settings['public_contact_email']) }}" />
+</div>
+<div>
+<label class="form-label">Support Phone</label>
+<input class="form-input" name="support_phone" value="{{ request.form.get('support_phone', settings['support_phone']) }}" />
+</div>
+<div class="md:col-span-2">
+<label class="form-label">Headquarters Address</label>
+<input class="form-input" name="headquarters_address" value="{{ request.form.get('headquarters_address', settings['headquarters_address']) }}" />
+</div>
+<div>
+<label class="form-label">Timezone</label>
+<select class="form-input" name="timezone" required>
+{% for tz in timezones %}
+<option value="{{ tz }}" {{ 'selected' if request.form.get('timezone', settings['timezone']) == tz else '' }}>{{ tz }}</option>
+{% endfor %}
+</select>
+</div>
+</div>
+</section>
+
+<section class="content-card settings-panel hidden" data-settings-panel="appearance">
+<h2 class="section-title">Admin Appearance</h2>
+{% set themeMode = request.form.get('admin_theme_mode', settings['admin_theme_mode']) %}
+{% set selectedPreset = request.form.get('admin_theme_preset', settings['admin_theme_preset']) %}
+{% set customTheme = {
+  'primary': request.form.get('admin_theme_custom_primary', settings['admin_theme_custom_primary']),
+  'primary_dark': request.form.get('admin_theme_custom_primary_dark', settings['admin_theme_custom_primary_dark']),
+  'primary_light': request.form.get('admin_theme_custom_primary_light', settings['admin_theme_custom_primary_light']),
+  'secondary': request.form.get('admin_theme_custom_secondary', settings['admin_theme_custom_secondary']),
+  'background': request.form.get('admin_theme_custom_background', settings['admin_theme_custom_background']),
+  'sidebar': request.form.get('admin_theme_custom_sidebar', settings['admin_theme_custom_sidebar']),
+} %}
+<input type="hidden" name="admin_theme_mode" value="{{ themeMode }}" data-theme-mode-input>
+<input type="hidden" name="admin_theme_preset" value="{{ selectedPreset }}" data-theme-preset-input>
+
+<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+{% for theme, key in themePresets.items() %}
+<button type="button"
+  class="theme-preset-option rounded-2xl border p-4 text-left transition-all {{ 'border-primary bg-primary/5 ring-2 ring-primary/20' if themeMode == 'preset' and selectedPreset == key else 'border-gray-200 bg-white hover:border-primary/40' }}"
+  data-theme-preset="{{ key }}"
+  data-theme-primary="{{ theme['primary'] }}"
+  data-theme-primary-dark="{{ theme['primary_dark'] }}"
+  data-theme-primary-light="{{ theme['primary_light'] }}"
+  data-theme-secondary="{{ theme['secondary'] }}"
+  data-theme-background="{{ theme['background'] }}"
+  data-theme-sidebar="{{ theme['sidebar'] }}">
+  <div class="flex items-center justify-between gap-3">
+    <div>
+      <p class="text-sm font-bold text-gray-900">{{ theme['name'] }}</p>
+      <p class="mt-1 text-xs text-gray-500">{{ theme['description'] }}</p>
+    </div>
+    <span class="hidden items-center justify-center rounded-full bg-primary text-white theme-preset-check" style="height: 25px; width: 46px;"><i class="ri-check-line text-sm"></i></span>
+  </div>
+  <div class="mt-4 flex h-9 overflow-hidden rounded-xl border border-gray-100">
+    <span class="flex-1" style="background-color: {{ theme['primary'] }}"></span>
+    <span class="flex-1" style="background-color: {{ theme['secondary'] }}"></span>
+    <span class="flex-1" style="background-color: {{ theme['background'] }}"></span>
+    <span class="flex-1" style="background-color: {{ theme['sidebar'] }}"></span>
+  </div>
+</button>
+{% endfor %}
+</div>
+
+<div class="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h3 class="text-sm font-bold text-gray-900">Custom Theme</h3>
+      <p class="text-xs text-gray-500 mt-0.5">Create your own admin palette when the presets do not fit.</p>
+    </div>
+    <button type="button" class="inline-flex h-10 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-xs font-bold text-gray-700 hover:border-primary/40 hover:text-primary" data-use-custom-theme>
+      <i class="ri-brush-line text-base"></i>
+      Use Custom
+    </button>
+  </div>
+  <div class="mt-4 grid gap-4 md:grid-cols-3">
+    <label><span class="form-label">Primary</span><input type="color" name="admin_theme_custom_primary" value="{{ customTheme['primary'] }}" class="h-11 w-full rounded-xl border border-gray-200 bg-white p-1" data-custom-color="primary"></label>
+    <label><span class="form-label">Primary Dark</span><input type="color" name="admin_theme_custom_primary_dark" value="{{ customTheme['primary_dark'] }}" class="h-11 w-full rounded-xl border border-gray-200 bg-white p-1" data-custom-color="primaryDark"></label>
+    <label><span class="form-label">Primary Light</span><input type="color" name="admin_theme_custom_primary_light" value="{{ customTheme['primary_light'] }}" class="h-11 w-full rounded-xl border border-gray-200 bg-white p-1" data-custom-color="primaryLight"></label>
+    <label><span class="form-label">Secondary</span><input type="color" name="admin_theme_custom_secondary" value="{{ customTheme['secondary'] }}" class="h-11 w-full rounded-xl border border-gray-200 bg-white p-1" data-custom-color="secondary"></label>
+    <label><span class="form-label">Background</span><input type="color" name="admin_theme_custom_background" value="{{ customTheme['background'] }}" class="h-11 w-full rounded-xl border border-gray-200 bg-white p-1" data-custom-color="background"></label>
+    <label><span class="form-label">Sidebar</span><input type="color" name="admin_theme_custom_sidebar" value="{{ customTheme['sidebar'] }}" class="h-11 w-full rounded-xl border border-gray-200 bg-white p-1" data-custom-color="sidebar"></label>
+  </div>
+  <div class="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white" data-theme-preview>
+    <div class="flex">
+      <div class="w-28 p-3" data-preview-sidebar>
+        <div class="mb-3 h-3 w-16 rounded-full bg-white/80"></div>
+        <div class="h-6 rounded-lg" data-preview-primary-soft></div>
+        <div class="mt-2 h-6 rounded-lg bg-white/10"></div>
+      </div>
+      <div class="flex-1 p-4" data-preview-background>
+        <div class="mb-3 h-4 w-24 rounded-full" data-preview-secondary></div>
+        <div class="grid grid-cols-3 gap-2">
+          <div class="h-12 rounded-xl bg-white"></div>
+          <div class="h-12 rounded-xl" data-preview-primary></div>
+          <div class="h-12 rounded-xl bg-white"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="content-card settings-panel hidden" data-settings-panel="gateway">
+<h2 class="section-title">Giving Gateway</h2>
+<div class="grid md:grid-cols-2 gap-5 mb-6">
+<div>
+<label class="form-label">Active Gateway (one at a time)</label>
+<select class="form-input" name="active_giving_gateway">
+<option value="paystack" {{ 'selected' if request.form.get('active_giving_gateway', settings['active_giving_gateway']) == 'paystack' else '' }}>Paystack</option>
+<option value="flutterwave" {{ 'selected' if request.form.get('active_giving_gateway', settings['active_giving_gateway']) == 'flutterwave' else '' }}>Flutterwave</option>
+</select>
+</div>
+<div>
+<label class="form-label">Gateway Mode</label>
+<select class="form-input" name="giving_mode">
+<option value="test" {{ 'selected' if request.form.get('giving_mode', settings['giving_mode']) == 'test' else '' }}>Test</option>
+<option value="live" {{ 'selected' if request.form.get('giving_mode', settings['giving_mode']) == 'live' else '' }}>Live</option>
+</select>
+</div>
+</div>
+
+<div class="grid md:grid-cols-2 gap-5">
+<div data-gateway-fields="paystack">
+<label class="form-label">Paystack Public Key</label>
+<input class="form-input" name="paystack_public_key" value="{{ request.form.get('paystack_public_key', settings['paystack_public_key']) }}" />
+</div>
+<div data-gateway-fields="paystack">
+<label class="form-label">Paystack Secret Key</label>
+<input class="form-input" name="paystack_secret_key" value="{{ request.form.get('paystack_secret_key', settings['paystack_secret_key']) }}" />
+</div>
+<div data-gateway-fields="flutterwave">
+<label class="form-label">Flutterwave Public Key</label>
+<input class="form-input" name="flutterwave_public_key" value="{{ request.form.get('flutterwave_public_key', settings['flutterwave_public_key']) }}" />
+</div>
+<div data-gateway-fields="flutterwave">
+<label class="form-label">Flutterwave Secret Key</label>
+<input class="form-input" name="flutterwave_secret_key" value="{{ request.form.get('flutterwave_secret_key', settings['flutterwave_secret_key']) }}" />
+</div>
+<div class="md:col-span-2" data-gateway-fields="flutterwave">
+<label class="form-label">Flutterwave Encryption Key</label>
+<input class="form-input" name="flutterwave_encryption_key" value="{{ request.form.get('flutterwave_encryption_key', settings['flutterwave_encryption_key']) }}" />
+</div>
+</div>
+</section>
+
+<section class="content-card settings-panel hidden" data-settings-panel="accounts">
+<h2 class="section-title">Church Accounts (Multiple)</h2>
+<p class="text-xs text-gray-500 mb-4">Add each giving account with separate bank, account number, and account name fields.</p>
+{% set accountRows = request.form.get('church_accounts', settings['church_accounts']) %}
+{% if accountRows is not iterable or accountRows|length == 0 %}
+{% set accountRows = [{'bank_name': '', 'account_number': '', 'account_name': ''}] %}
+{% endif %}
+<div id="church-account-rows" class="space-y-3">
+{% for account in accountRows %}
+<div class="church-account-row" data-account-row>
+<label><span class="form-label">Bank Name</span><input class="form-input" name="church_accounts[{{ loop.index0 }}][bank_name]" value="{{ account.get('bank_name', '') }}" /></label>
+<label><span class="form-label">Account Number</span><input class="form-input" name="church_accounts[{{ loop.index0 }}][account_number]" value="{{ account.get('account_number', '') }}" /></label>
+<label><span class="form-label">Account Name</span><input class="form-input" name="church_accounts[{{ loop.index0 }}][account_name]" value="{{ account.get('account_name', '') }}" /></label>
+<button type="button" class="h-10 w-10 self-end rounded-xl border border-gray-200 text-gray-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors" data-remove-account-row aria-label="Remove account"><i class="ri-delete-bin-line text-base"></i></button>
+</div>
+{% endfor %}
+</div>
+<button type="button" id="add-church-account-row" class="mt-4 inline-flex h-10 items-center gap-2 rounded-xl border border-gray-200 px-4 text-xs font-bold text-gray-600 hover:border-primary/40 hover:text-primary transition-colors">
+<i class="ri-add-line text-base"></i><span>Add Account</span>
+</button>
+</section>
+
+<section class="content-card settings-panel hidden" data-settings-panel="security">
+<h2 class="section-title">Admin Security</h2>
+<div class="grid md:grid-cols-2 gap-5">
+<div>
+<label class="form-label">Admin Session Timeout (minutes)</label>
+<input class="form-input" name="admin_session_timeout_minutes" type="number" min="5" max="1440" value="{{ request.form.get('admin_session_timeout_minutes', settings['admin_session_timeout_minutes']) }}" />
+</div>
+<div>
+<label class="form-label">Audit Log Retention (days)</label>
+<input class="form-input" name="audit_log_retention_days" type="number" min="7" max="3650" value="{{ request.form.get('audit_log_retention_days', settings['audit_log_retention_days']) }}" />
+</div>
+<div class="space-y-3 pt-6">
+<label class="flex items-center gap-3 text-sm font-semibold">
+<input type="hidden" name="enforce_strong_passwords" value="0"/>
+<input type="checkbox" name="enforce_strong_passwords" value="1" {{ 'checked' if request.form.get('enforce_strong_passwords', settings['enforce_strong_passwords']) == '1' else '' }} class="rounded border-gray-300 text-primary focus:ring-primary"/>
+Enforce strong passwords
+</label>
+<label class="flex items-center gap-3 text-sm font-semibold">
+<input type="hidden" name="enable_admin_2fa" value="0"/>
+<input type="checkbox" name="enable_admin_2fa" value="1" {{ 'checked' if request.form.get('enable_admin_2fa', settings['enable_admin_2fa']) == '1' else '' }} class="rounded border-gray-300 text-primary focus:ring-primary"/>
+Require 2FA for admins
+</label>
+<label class="flex items-center gap-3 text-sm font-semibold">
+<input type="hidden" name="allow_admin_remember_me" value="0"/>
+<input type="checkbox" name="allow_admin_remember_me" value="1" {{ 'checked' if request.form.get('allow_admin_remember_me', settings['allow_admin_remember_me']) == '1' else '' }} class="rounded border-gray-300 text-primary focus:ring-primary"/>
+Allow remember me on admin login
+</label>
+</div>
+</div>
+</section>
+
+<section class="content-card settings-panel hidden" data-settings-panel="email">
+<h2 class="section-title">Email Delivery</h2>
+<p class="text-xs text-gray-500 mb-5">HarvestTrack app login credentials are sent with Resend. Store the API key here so branch admins can create workers without seeing or managing mail credentials.</p>
+<div class="grid md:grid-cols-2 gap-5">
+<div class="md:col-span-2">
+<label class="form-label">Resend API Key</label>
+<input class="form-input" name="resend_api_key" value="{{ request.form.get('resend_api_key', settings['resend_api_key']) }}" placeholder="re_xxxxxxxxx" autocomplete="off" />
+<p class="mt-1 text-[11px] text-gray-500">Stored encrypted. Required before HarvestTrack worker credentials can be mailed.</p>
+</div>
+<div>
+<label class="form-label">Sender Email</label>
+<input class="form-input" name="resend_from_email" type="email" value="{{ request.form.get('resend_from_email', settings['resend_from_email']) }}" placeholder="{{ settings['public_contact_email'] }}" />
+</div>
+<div>
+<label class="form-label">Sender Name</label>
+<input class="form-input" name="resend_from_name" value="{{ request.form.get('resend_from_name', settings['resend_from_name']) }}" placeholder="{{ settings['site_name'] }}" />
+</div>
+</div>
+</section>
+
+<section class="content-card settings-panel hidden" data-settings-panel="audio">
+<h2 class="section-title">Audio Message Distribution</h2>
+<p class="text-xs text-gray-500 mb-5">Super admins manage delivery credentials here. Audio files are sent to external platforms from the temporary upload and are not saved in the site project folder.</p>
+<div class="grid md:grid-cols-2 gap-5">
+<div>
+<label class="form-label">Telegram Bot Token</label>
+<input class="form-input" name="telegram_bot_token" value="{{ request.form.get('telegram_bot_token', settings['telegram_bot_token']) }}" autocomplete="off" placeholder="123456:ABC..." />
+<p class="mt-1 text-[11px] text-gray-500">Stored encrypted. Required for Telegram delivery and website background downloads.</p>
+</div>
+<div>
+<label class="form-label">Telegram Audio Chat / Channel ID</label>
+<input class="form-input" name="telegram_audio_chat_id" value="{{ request.form.get('telegram_audio_chat_id', settings['telegram_audio_chat_id']) }}" placeholder="@channelname or -100..." />
+</div>
+<div>
+<label class="form-label">Audiomack API Key</label>
+<input class="form-input" name="audiomack_api_key" value="{{ request.form.get('audiomack_api_key', settings['audiomack_api_key']) }}" autocomplete="off" />
+<p class="mt-1 text-[11px] text-gray-500">Stored encrypted. Used when an Audiomack API integration is connected.</p>
+</div>
+<div>
+<label class="form-label">Audiomack Profile URL</label>
+<input class="form-input" name="audiomack_profile_url" type="url" value="{{ request.form.get('audiomack_profile_url', settings['audiomack_profile_url']) }}" placeholder="https://audiomack.com/..." />
+</div>
+<div>
+<label class="form-label">Spotify / Podcast RSS URL</label>
+<input class="form-input" name="spotify_rss_url" type="url" value="{{ request.form.get('spotify_rss_url', settings['spotify_rss_url']) }}" />
+</div>
+<div>
+<label class="form-label">Apple Podcasts URL</label>
+<input class="form-input" name="apple_podcasts_url" type="url" value="{{ request.form.get('apple_podcasts_url', settings['apple_podcasts_url']) }}" />
+</div>
+<div>
+<label class="form-label">YouTube Music URL</label>
+<input class="form-input" name="youtube_music_url" type="url" value="{{ request.form.get('youtube_music_url', settings['youtube_music_url']) }}" />
+</div>
+<div class="md:col-span-2">
+<label class="form-label">Other Platform Notes / Credentials Reference</label>
+<textarea class="form-input min-h-28" name="other_audio_platform_notes">{{ request.form.get('other_audio_platform_notes', settings['other_audio_platform_notes']) }}</textarea>
+</div>
+</div>
+</section>
+
+<section class="content-card settings-panel hidden" data-settings-panel="legal">
+<h2 class="section-title">Legal Pages</h2>
+<div class="space-y-5">
+<div>
+<label class="form-label">Privacy Policy Content</label>
+<textarea class="form-input min-h-40" name="privacy_policy_content">{{ request.form.get('privacy_policy_content', settings['privacy_policy_content']) }}</textarea>
+</div>
+<div>
+<label class="form-label">Terms of Service Content</label>
+<textarea class="form-input min-h-40" name="terms_of_service_content">{{ request.form.get('terms_of_service_content', settings['terms_of_service_content']) }}</textarea>
+</div>
+</div>
+</section>
+
+<div class="flex justify-end">
+<button type="submit" class="action-btn primary">
+Save All Settings
+</button>
+</div>
+</div>
+</div>
+</form>
+</div>
+</main>
+</div>
+<script>
+(() => {
+function initializeSettingsPage() {
+    window.__swmSettingsPageAbort.abort();
+    const controller = new AbortController();
+    window.__swmSettingsPageAbort = controller;
+    const listenerOptions = { signal: controller.signal };
+
+    const tabs = Array.from(document.querySelectorAll('[data-settings-tab]'));
+    const panels = Array.from(document.querySelectorAll('[data-settings-panel]'));
+    if (!tabs.length || !panels.length) {
+        return;
+    }
+
+    const gatewaySelect = document.querySelector('select[name="active_giving_gateway"]');
+    const gatewayFieldBlocks = Array.from(document.querySelectorAll('[data-gateway-fields]'));
+    const accountRows = document.getElementById('church-account-rows');
+    const addAccountRow = document.getElementById('add-church-account-row');
+    const themeModeInput = document.querySelector('[data-theme-mode-input]');
+    const themePresetInput = document.querySelector('[data-theme-preset-input]');
+    const themePresetButtons = Array.from(document.querySelectorAll('[data-theme-preset]'));
+    const customThemeButton = document.querySelector('[data-use-custom-theme]');
+    const customColorInputs = Array.from(document.querySelectorAll('[data-custom-color]'));
+    const preview = {
+        sidebar: document.querySelector('[data-preview-sidebar]'),
+        background: document.querySelector('[data-preview-background]'),
+        primary: document.querySelector('[data-preview-primary]'),
+        primarySoft: document.querySelector('[data-preview-primary-soft]'),
+        secondary: document.querySelector('[data-preview-secondary]'),
+    };
+
+    function activateTab(key) {
+        tabs.forEach((tab) => {
+            const active = tab.dataset.settingsTab === key;
+            tab.classList.toggle('active', active);
+        });
+
+        panels.forEach((panel) => {
+            const active = panel.dataset.settingsPanel === key;
+            panel.classList.toggle('hidden', !active);
+        });
+    }
+
+    tabs.forEach((tab) => {
+        tab.addEventListener('click', () => activateTab(tab.dataset.settingsTab), listenerOptions);
+    });
+
+    function toggleGatewayFields() {
+        if (!gatewaySelect) {
+            return;
+        }
+
+        const activeGateway = gatewaySelect.value;
+        gatewayFieldBlocks.forEach((block) => {
+            block.classList.toggle('hidden', block.dataset.gatewayFields !== activeGateway);
+        });
+    }
+
+    if (gatewaySelect) {
+        gatewaySelect.addEventListener('change', toggleGatewayFields, listenerOptions);
+        toggleGatewayFields();
+    }
+
+    function previewTheme(theme) {
+        if (preview.sidebar) preview.sidebar.style.backgroundColor = theme.sidebar;
+        if (preview.background) preview.background.style.backgroundColor = theme.background;
+        if (preview.primary) preview.primary.style.backgroundColor = theme.primary;
+        if (preview.primarySoft) preview.primarySoft.style.backgroundColor = `${theme.primary}33`;
+        if (preview.secondary) preview.secondary.style.backgroundColor = theme.secondary;
+    }
+
+    function customThemeValues() {
+        const valueFor = (key) => customColorInputs.find((input) => input.dataset.customColor === key)?.value;
+        return {
+            primary: valueFor('primary') or '#c9a227',
+            primaryDark: valueFor('primaryDark') or '#a5831f',
+            primaryLight: valueFor('primaryLight') or '#e8d5a3',
+            secondary: valueFor('secondary') or '#1a1a1a',
+            background: valueFor('background') or '#f8f8f7',
+            sidebar: valueFor('sidebar') or '#1a1814',
+        };
+    }
+
+    function syncThemeControls() {
+        const mode = themeModeInput.value or 'preset';
+        const preset = themePresetInput.value or 'gold';
+        themePresetButtons.forEach((button) => {
+            const active = mode === 'preset' and button.dataset.themePreset === preset;
+            button.classList.toggle('border-primary', active);
+            button.classList.toggle('bg-primary/5', active);
+            button.classList.toggle('ring-2', active);
+            button.classList.toggle('ring-primary/20', active);
+            button.classList.toggle('border-gray-200', !active);
+            button.querySelector('.theme-preset-check')?.classList.toggle('hidden', !active);
+            button.querySelector('.theme-preset-check')?.classList.toggle('flex', active);
+        });
+
+        customThemeButton.classList.toggle('border-primary', mode === 'custom');
+        customThemeButton.classList.toggle('text-primary', mode === 'custom');
+
+        if (mode === 'custom') {
+            previewTheme(customThemeValues());
+            return;
+        }
+
+        const selected = themePresetButtons.find((button) => button.dataset.themePreset === preset) || themePresetButtons[0];
+        if (selected) {
+            previewTheme({
+                primary: selected.dataset.themePrimary,
+                secondary: selected.dataset.themeSecondary,
+                background: selected.dataset.themeBackground,
+                sidebar: selected.dataset.themeSidebar,
+            });
+        }
+    }
+
+    themePresetButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            if (themeModeInput) themeModeInput.value = 'preset';
+            if (themePresetInput) themePresetInput.value = button.dataset.themePreset;
+            syncThemeControls();
+        }, listenerOptions);
+    });
+
+    customThemeButton.addEventListener('click', () => {
+        if (themeModeInput) themeModeInput.value = 'custom';
+        syncThemeControls();
+    }, listenerOptions);
+
+    customColorInputs.forEach((input) => {
+        input.addEventListener('input', () => {
+            if (themeModeInput) themeModeInput.value = 'custom';
+            syncThemeControls();
+        }, listenerOptions);
+    });
+    syncThemeControls();
+
+    function renumberAccountRows() {
+        if (!accountRows) {
+            return;
+        }
+
+        accountRows.querySelectorAll('[data-account-row]').forEach((row, index) => {
+            row.querySelectorAll('input').forEach((input) => {
+                const field = input.name.match(/\[(bank_name|account_number|account_name)\]$/)?.[1];
+                if (field) {
+                    input.name = `church_accounts[${index}][${field}]`;
+                }
+            });
+            const removeButton = row.querySelector('[data-remove-account-row]');
+            if (removeButton) {
+                removeButton.classList.toggle('opacity-40', accountRows.querySelectorAll('[data-account-row]').length === 1);
+            }
+        });
+    }
+
+    function createAccountRow() {
+        if (!accountRows) {
+            return;
+        }
+
+        const index = accountRows.querySelectorAll('[data-account-row]').length;
+        const row = document.createElement('div');
+        row.className = 'church-account-row';
+        row.dataset.accountRow = '';
+        row.innerHTML = `
+            <label><span class="form-label">Bank Name</span><input class="form-input" name="church_accounts[${index}][bank_name]" /></label>
+            <label><span class="form-label">Account Number</span><input class="form-input" name="church_accounts[${index}][account_number]" /></label>
+            <label><span class="form-label">Account Name</span><input class="form-input" name="church_accounts[${index}][account_name]" /></label>
+            <button type="button" class="h-10 w-10 self-end rounded-xl border border-gray-200 text-gray-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors" data-remove-account-row aria-label="Remove account"><i class="ri-delete-bin-line text-base"></i></button>
+        `;
+        accountRows.appendChild(row);
+        renumberAccountRows();
+        row.querySelector('input')?.focus();
+    }
+
+    addAccountRow.addEventListener('click', createAccountRow, listenerOptions);
+    accountRows.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-remove-account-row]');
+        if (!button || !accountRows) {
+            return;
+        }
+
+        const rows = accountRows.querySelectorAll('[data-account-row]');
+        if (rows.length === 1) {
+            rows[0].querySelectorAll('input').forEach((input) => input.value = '');
+            return;
+        }
+
+        button.closest('[data-account-row]')?.remove();
+        renumberAccountRows();
+    }, listenerOptions);
+    renumberAccountRows();
+
+    activateTab('general');
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeSettingsPage, { once: true });
+} else {
+    initializeSettingsPage();
+}
+
+if (!window.__swmSettingsTurboListenerAttached) {
+    window.__swmSettingsTurboListenerAttached = true;
+    document.addEventListener('turbo:load', initializeSettingsPage);
+}
+})();
+</script>
+</body></html>
+
+
+

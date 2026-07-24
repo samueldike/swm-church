@@ -1,0 +1,162 @@
+from __future__ import annotations
+
+import os
+from typing import Any
+
+from jinja2 import Environment, FileSystemLoader
+from starlette.requests import Request
+from starlette.responses import HTMLResponse
+
+_template_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "views")
+_env = Environment(
+    loader=FileSystemLoader(_template_dir),
+    autoescape=True,
+    trim_blocks=True,
+    lstrip_blocks=True,
+    cache_size=0,
+    auto_reload=True,
+)
+
+
+def _nl2br(value: str) -> str:
+    return value.replace("\n", "<br>\n") if value else ""
+
+
+def _timesince(value) -> str:
+    if not value:
+        return ""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    if hasattr(value, 'tzinfo') and value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    diff = now - value
+    seconds = diff.total_seconds()
+    if seconds < 60:
+        return "just now"
+    minutes = seconds / 60
+    if minutes < 60:
+        return f"{int(minutes)}m ago"
+    hours = minutes / 60
+    if hours < 24:
+        return f"{int(hours)}h ago"
+    days = hours / 24
+    if days < 30:
+        return f"{int(days)}d ago"
+    months = days / 30
+    if months < 12:
+        return f"{int(months)}mo ago"
+    years = months / 12
+    return f"{int(years)}y ago"
+
+
+_env.filters["nl2br"] = _nl2br
+_env.filters["timesince"] = _timesince
+
+
+class TemplateRequest:
+    def __init__(self, request: Request, form_data: dict | None = None):
+        self._request = request
+        self.session = request.session
+        self.client = request.client
+        self.headers = request.headers
+        self.url = request.url
+        self.query_params = request.query_params
+        self.method = request.method
+        self.path = request.url.path
+        self._form_data = _FormProxy(form_data or {})
+
+    @property
+    def form(self):
+        return self._form_data
+
+
+class _FormProxy:
+    def __init__(self, data: dict):
+        self._data: dict = data
+
+    def get(self, key: str, default: Any = "") -> Any:
+        return self._data.get(key, default)
+
+    def getlist(self, key: str) -> list:
+        val = self._data.get(key, [])
+        if isinstance(val, list):
+            return val
+        return [val] if val else []
+
+    def __getitem__(self, key: str) -> Any:
+        return self._data[key]
+
+
+async def render_template(
+    request: Request,
+    template_name: str,
+    context: dict[str, Any] | None = None,
+) -> HTMLResponse:
+    ctx: dict[str, Any] = dict(context) if context else {}
+
+    db = ctx.pop("_db", None)
+
+    from app.core.settings_cache import get_settings
+
+    if db is not None:
+        site = await get_settings(db)
+    else:
+        site = {}
+
+    ctx.setdefault("siteName", site.get("siteName", "Scent of Water Ministry"))
+    ctx.setdefault("siteTagline", site.get("siteTagline", "Dominion By Knowledge"))
+    ctx.setdefault("siteHeadquartersAddress", site.get("siteHeadquartersAddress", ""))
+    ctx.setdefault("siteSupportPhone", site.get("siteSupportPhone", ""))
+    ctx.setdefault("siteContactEmail", site.get("siteContactEmail", ""))
+
+    def url_for(route_name: str, *args, **path_params: Any) -> str:
+        if route_name == "static":
+            path = path_params.get("path", "")
+            return f"/static/{path}" if path else "/static"
+        normalized = route_name.replace(".", "_").replace("-", "_")
+        router = request.app.router
+        for route in router.routes:
+            if getattr(route, "name", None) == normalized:
+                path = getattr(route, "path", "")
+                import re
+                route_params = re.findall(r"\{(\w+)\}", path)
+                if args and route_params:
+                    for i, val in enumerate(args):
+                        if i < len(route_params):
+                            path_params[route_params[i]] = val
+                for param, val in path_params.items():
+                    path = path.replace("{" + param + "}", str(val))
+                return path
+        return "/"
+
+    ctx["url_for"] = url_for
+
+    form_data: dict = {}
+    if request.method == "POST":
+        try:
+            body = await request.body()
+            if body:
+                from urllib.parse import parse_qs
+                form_data = {k: v[0] if len(v) == 1 else v for k, v in parse_qs(body.decode()).items()}
+        except Exception:
+            pass
+    ctx["request"] = TemplateRequest(request, form_data)
+    ctx["session"] = request.session
+    ctx["csrf_token"] = request.session.get("csrf_token", "")
+    if not ctx["csrf_token"]:
+        import secrets
+        ctx["csrf_token"] = secrets.token_hex(32)
+        request.session["csrf_token"] = ctx["csrf_token"]
+
+    flash_messages = request.session.pop("flash_messages", [])
+    if "flash_messages" not in ctx:
+        ctx["flash_messages"] = flash_messages
+
+    ctx["current_page"] = request.url.path
+    ctx.setdefault("error_messages", {})
+    ctx.setdefault("errors", {})
+    ctx.setdefault("now", lambda: __import__("datetime").datetime.utcnow())
+
+    template = _env.get_template(template_name)
+    html = template.render(ctx)
+    return HTMLResponse(content=html)

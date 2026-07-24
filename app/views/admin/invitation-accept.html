@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Accept Invitation - {{ siteName }}</title>
+<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
+<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
+{% include "partials/admin-theme.html" %}
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+</head>
+<body class="bg-background-light text-secondary font-sans antialiased">
+<main class="min-h-screen flex items-center justify-center bg-background-light px-6">
+  <div class="w-full max-w-md bg-white rounded-2xl border border-gray-100 shadow-soft p-8">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center border border-primary/30">
+        <span class="text-primary font-bold text-xs uppercase">SWM</span>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold text-secondary">Activate Branch Admin Account</h1>
+        <p class="text-xs text-gray-500">{{ siteName }}</p>
+      </div>
+    </div>
+
+    <dl class="grid gap-3 text-sm mb-6">
+      <div class="flex justify-between gap-4"><dt class="text-gray-500">Branch</dt><dd class="font-semibold text-right">{{ invitation.branch.name if invitation.branch else '' }}</dd></div>
+      <div class="flex justify-between gap-4"><dt class="text-gray-500">Email</dt><dd class="font-semibold text-right">{{ invitation.email }}</dd></div>
+    </dl>
+
+    {% if error_messages %}
+    <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      {% for key, errors in error_messages.items() %}
+        {% for err in errors %}
+          {{ err }}<br>
+        {% endfor %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('admin_invitation_accept', token=token) }}" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div>
+        <label class="form-label" for="password">Password</label>
+        <input id="password" type="password" name="password" class="form-input" required>
+      </div>
+      <div>
+        <label class="form-label" for="password_confirmation">Confirm Password</label>
+        <input id="password_confirmation" type="password" name="password_confirmation" class="form-input" required>
+      </div>
+      <button type="submit" class="w-full h-12 rounded-xl bg-primary text-[#1a1814] font-bold text-sm hover:bg-primary-dark transition-all">Activate Account</button>
+    </form>
+
+    <p class="mt-6 text-center text-sm text-gray-500">
+      <a href="{{ url_for('admin_login') }}" class="text-primary hover:underline">Back to Login</a>
+    </p>
+  </div>
+</main>
+<script src="{{ url_for('static', path='js/turbo.es2017-umd.js') }}" defer></script>
+<script src="{{ url_for('static', path='js/live-actions.js') }}" defer></script>
+</body>
+</html>

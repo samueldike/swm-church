@@ -1,0 +1,33 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+node_modules/
+.DS_Store
+*.log
+
+# Temp/test files
+temp/
+temp_*.py
+test_*.py
+check_*.py
+fix_*.py
+migrate_data.py
+extract_mysql.py
+run_server.py
+seed_admin.py
+*.pyc
+
+# Legacy Laravel files
+public/
+html-templates/
+.phpunit.result.cache
+
+# Backup
+swm-backup/
+*.sql

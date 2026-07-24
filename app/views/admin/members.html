@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Members - {{ siteName }}</title>
+<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+</head>
+<body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
+<div class="flex h-screen overflow-hidden">
+{% include "partials/admin-sidebar.html" %}
+<main class="flex-1 flex flex-col overflow-hidden">
+{% with title="Members", subtitle="Create and manage branch members" %}{% include "partials/admin-topbar.html" %}{% endwith %}
+
+<div class="flex-1 overflow-y-auto p-5 lg:p-8 space-y-4">
+{% if session.get('success') %}
+<div class="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-4 py-3">{{ session.get('success') }}</div>
+{% endif %}
+{% if session.get('import_errors') %}
+<div class="rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3">
+  <p class="font-semibold">Some rows were skipped:</p>
+  <ul class="mt-1 list-disc pl-5 space-y-0.5 text-xs">
+    {% for error in request.session.get('import_errors', []) %}
+      <li>{{ error }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% if error_messages.get('createMember') %}
+<div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ error_messages.get('createMember', [''])[0] }}</div>
+{% elif error_messages.get('importMembers') %}
+<div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ error_messages.get('importMembers', [''])[0] }}</div>
+{% elif error_messages %}
+<div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ (error_messages.values()|map('first')|list|first if error_messages else '') }}</div>
+{% endif %}
+
+<section class="content-card p-4 lg:p-5">
+  <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <div>
+      <h2 class="text-base font-bold text-gray-900">Members</h2>
+      <p class="text-xs text-gray-500 mt-0.5">{{ "{:,}".format(pagination.total) }} records</p>
+    </div>
+    <div class="flex flex-col sm:flex-row gap-2 sm:items-center">
+      {% if isSuper %}
+        <form method="GET" action="{{ url_for('admin.members') }}" class="flex items-center gap-2">
+          <select name="branch_id" class="filter-select min-w-48" onchange="this.form.submit()">
+            <option value="">All branches</option>
+            {% for branch in branches %}
+              <option value="{{ branch.id }}" {{ 'selected' if request.query_params.get('branch_id')|string == branch.id|string else '' }}>{{ branch.name }}</option>
+            {% endfor %}
+          </select>
+          {% if request.query_params.get('branch_id') %}
+            <a href="{{ url_for('admin.members') }}" class="h-10 inline-flex items-center rounded-xl border border-gray-200 px-3 text-xs font-semibold text-gray-600 hover:text-gray-900">Reset</a>
+          {% endif %}
+        </form>
+      {% endif %}
+      <button type="button" data-open-import-members class="h-10 inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-bold text-gray-700 hover:text-gray-900 hover:border-primary/40 transition-colors">
+        <i class="ri-upload-cloud-2-line text-base"></i>
+        <span>Bulk Upload</span>
+      </button>
+      <button type="button" data-open-create-member class="h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">
+        <i class="ri-user-add-line text-base"></i>
+        <span>Add Member</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="mt-4 overflow-x-auto">
+    <table class="w-full min-w-[760px] text-sm">
+      <thead>
+        <tr class="border-b border-gray-100">
+          <th class="table-header py-3 pr-4">Member</th>
+          <th class="table-header py-3 pr-4">Branch</th>
+          <th class="table-header py-3 pr-4">Status</th>
+          <th class="table-header py-3 pr-4">Joined</th>
+          <th class="table-header py-3 text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-100">
+      {% for member in members %}
+
+        {% set initials = ((member.first_name or 'M')[0] ~ (member.last_name or '')[0])|upper %}
+{% set statusClass = 'bg-emerald-50 text-emerald-600' if member.membership_status == 'active' else 'bg-gray-100 text-gray-500' %}
+        <tr class="hover:bg-gray-50/50 transition-colors">
+          <td class="py-3 pr-4">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold flex-shrink-0">{{ initials or 'M' }}</div>
+              <div class="min-w-0">
+                <p class="font-semibold text-gray-900 truncate">{{ member.full_name }}</p>
+                <p class="text-xs text-gray-500 truncate">{{ member.email or 'No email' }}{% if member.phone %} <span class="text-gray-300">&middot;</span> {{ member.phone }}{% endif %}</p>
+              </div>
+            </div>
+          </td>
+          <td class="py-3 pr-4 text-gray-600">{{ member.branch.name or 'N/A' }}</td>
+          <td class="py-3 pr-4"><span class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide {{ statusClass }}">{{ (member.membership_status or '')|capitalize }}</span></td>
+          <td class="py-3 pr-4 text-gray-500">{{ member.joined_at.strftime('M d, Y') if member.joined_at else 'N/A' }}</td>
+          <td class="py-3">
+            <div class="flex items-center justify-end gap-2">
+              <button type="button"
+                class="member-edit-btn w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50 transition-colors"
+                title="Edit member"
+                data-action="{{ url_for('admin.members.update', id=member.id) }}"
+                data-branch-id="{{ member.branch_id }}"
+                data-first-name="{{ member.first_name|e }}"
+                data-last-name="{{ member.last_name|e }}"
+                data-email="{{ member.email|e }}"
+                data-phone="{{ member.phone|e }}"
+                data-gender="{{ member.gender }}"
+                data-date-of-birth="{{ (member.date_of_birth.strftime('Y-m-d') if member.date_of_birth else '') }}"
+                data-joined-at="{{ (member.joined_at.strftime('Y-m-d') if member.joined_at else '') }}"
+                data-membership-status="{{ member.membership_status }}"
+                data-notes="{{ member.notes|e }}">
+                <i class="ri-edit-line text-base"></i>
+              </button>
+              <form method="POST" action="{{ url_for('admin.members.destroy', id=member.id) }}" data-confirm="Delete this member?" data-confirm-title="Delete Member" data-confirm-accept="Delete">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}"> <input type="hidden" name="_method" value="DELETE">
+                <button class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete member">
+                  <i class="ri-delete-bin-line text-base"></i>
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+
+        <tr><td colspan="5" class="py-10 text-center text-sm text-gray-500">No members found.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="mt-4">{% if pagination.has_prev or pagination.has_next %}
+  <div class="flex items-center gap-2 mt-4">
+    {% if pagination.has_prev %}<a href="{{ pagination.prev_url }}" class="text-xs text-primary font-medium hover:underline">&larr; Previous</a>{% endif %}
+    <span class="text-xs text-gray-400">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+    {% if pagination.has_next %}<a href="{{ pagination.next_url }}" class="text-xs text-primary font-medium hover:underline">Next &rarr;</a>{% endif %}
+  </div>
+  {% endif %}</div>
+</section>
+</div>
+</main>
+</div>
+
+<div id="import-members-modal" class="fixed inset-0 z-50 hidden" aria-hidden="true">
+  <div class="absolute inset-0 bg-black/50" data-close-member-modal></div>
+  <div class="absolute inset-x-4 top-10 mx-auto max-w-xl rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+    <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+      <div>
+        <h3 class="text-sm font-bold text-gray-900">Bulk Upload Members</h3>
+        <p class="text-xs text-gray-500 mt-0.5">Upload an Excel or CSV file with one member per row.</p>
+      </div>
+      <button type="button" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-50" data-close-member-modal aria-label="Close">
+        <i class="ri-close-line text-lg"></i>
+      </button>
+    </div>
+    <form method="POST" action="{{ url_for('admin.members.import') }}" enctype="multipart/form-data" class="p-5 space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>
+        <span class="form-label">Upload To Branch</span>
+        <select name="branch_id" class="form-input" required>
+          <option value="">Select branch</option>
+          {% for branch in branches %}
+            <option value="{{ branch.id }}" {{ 'selected' if branches|length == 1 else '' }}>{{ branch.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        <span class="form-label">Excel File</span>
+        <input type="file" name="members_file" accept=".xlsx,.xls,.csv" class="form-input" required>
+      </label>
+      <div class="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 text-xs text-gray-600 leading-relaxed">
+        <div class="flex items-center justify-between gap-3">
+          <p class="font-semibold text-gray-800">Accepted columns</p>
+          <a href="{{ url_for('admin.members.import-template') }}" data-turbo="false" class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-bold text-gray-700 hover:border-primary/40 hover:text-gray-900">
+            <i class="ri-file-excel-2-line text-sm"></i>
+            Download Template
+          </a>
+        </div>
+        <p class="mt-1">Required: first_name, last_name. Optional: email, phone, gender, date_of_birth, joined_at, membership_status, notes, department.</p>
+        <p class="mt-2">Rows with an existing email update that member. Other valid rows create new members.</p>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900" data-close-member-modal>Cancel</button>
+        <button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814] hover:bg-primary-dark">Upload Members</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="create-member-modal" class="fixed inset-0 z-50 hidden" aria-hidden="true">
+  <div class="absolute inset-0 bg-black/50" data-close-member-modal></div>
+  <div class="absolute inset-x-4 top-6 mx-auto max-w-3xl rounded-2xl border border-gray-200 bg-white shadow-lg max-h-[calc(100vh-3rem)] overflow-hidden">
+    <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+      <div>
+        <h3 class="text-sm font-bold text-gray-900">Add Member</h3>
+        <p class="text-xs text-gray-500 mt-0.5">Keep profile details concise and complete.</p>
+      </div>
+      <button type="button" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-50" data-close-member-modal aria-label="Close">
+        <i class="ri-close-line text-lg"></i>
+      </button>
+    </div>
+    <form method="POST" action="{{ url_for('admin.members.store') }}" data-confirm="Create this new member?" class="p-5 overflow-y-auto modal-scroll max-h-[calc(100vh-9rem)]">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {% if isSuper %}
+          <label class="sm:col-span-2"><span class="form-label">Branch</span><select name="branch_id" class="form-input" required><option value="">Select branch</option>{% for branch in branches %}<option value="{{ branch.id }}" {{ 'selected' if request.form.get('branch_id', '')|string == branch.id|string else '' }}>{{ branch.name }}</option>{% endfor %}</select></label>
+        {% endif %}
+        <label><span class="form-label">First Name</span><input name="first_name" value="{{ request.form.get('first_name', '') }}" class="form-input" required></label>
+        <label><span class="form-label">Last Name</span><input name="last_name" value="{{ request.form.get('last_name', '') }}" class="form-input" required></label>
+        <label><span class="form-label">Email</span><input type="email" name="email" value="{{ request.form.get('email', '') }}" class="form-input"></label>
+        <label><span class="form-label">Phone</span><input name="phone" value="{{ request.form.get('phone', '') }}" class="form-input"></label>
+        <label><span class="form-label">Gender</span><select name="gender" class="form-input"><option value="">Not specified</option><option value="male" {{ 'selected' if request.form.get('gender', '') == 'male' else '' }}>Male</option><option value="female" {{ 'selected' if request.form.get('gender', '') == 'female' else '' }}>Female</option></select></label>
+        <label><span class="form-label">Status</span><select name="membership_status" class="form-input" required><option value="active" {{ 'selected' if request.form.get('membership_status', 'active') == 'active' else '' }}>Active</option><option value="inactive" {{ 'selected' if request.form.get('membership_status', '') == 'inactive' else '' }}>Inactive</option></select></label>
+        <label><span class="form-label">Date of Birth</span><input type="date" name="date_of_birth" value="{{ request.form.get('date_of_birth', '') }}" class="form-input"></label>
+        <label><span class="form-label">Joined</span><input type="date" name="joined_at" value="{{ request.form.get('joined_at', '') }}" class="form-input"></label>
+        <div class="sm:col-span-2"><span class="form-label">Notes</span><textarea name="notes" rows="3" class="form-input">{{ request.form.get('notes', '') }}</textarea></div>
+      </div>
+      <div class="mt-5 flex justify-end gap-2">
+        <button type="button" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900" data-close-member-modal>Cancel</button>
+        <button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814] hover:bg-primary-dark">Create Member</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="edit-member-modal" class="fixed inset-0 z-50 hidden" aria-hidden="true">
+  <div class="absolute inset-0 bg-black/50" data-close-member-modal></div>
+  <div class="absolute inset-x-4 top-6 mx-auto max-w-3xl rounded-2xl border border-gray-200 bg-white shadow-lg max-h-[calc(100vh-3rem)] overflow-hidden">
+    <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+      <div>
+        <h3 class="text-sm font-bold text-gray-900">Edit Member</h3>
+        <p class="text-xs text-gray-500 mt-0.5">Update profile details without leaving the list.</p>
+      </div>
+      <button type="button" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-50" data-close-member-modal aria-label="Close">
+        <i class="ri-close-line text-lg"></i>
+      </button>
+    </div>
+    <form id="edit-member-form" method="POST" action="" data-confirm="Save changes to this member?" class="p-5 overflow-y-auto modal-scroll max-h-[calc(100vh-9rem)]">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}"> <input type="hidden" name="_method" value="PUT">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {% if isSuper %}
+          <label class="sm:col-span-2"><span class="form-label">Branch</span><select id="edit-branch-id" name="branch_id" class="form-input" required>{% for branch in branches %}<option value="{{ branch.id }}">{{ branch.name }}</option>{% endfor %}</select></label>
+        {% endif %}
+        <label><span class="form-label">First Name</span><input id="edit-first-name" name="first_name" class="form-input" required></label>
+        <label><span class="form-label">Last Name</span><input id="edit-last-name" name="last_name" class="form-input" required></label>
+        <label><span class="form-label">Email</span><input id="edit-email" type="email" name="email" class="form-input"></label>
+        <label><span class="form-label">Phone</span><input id="edit-phone" name="phone" class="form-input"></label>
+        <label><span class="form-label">Gender</span><select id="edit-gender" name="gender" class="form-input"><option value="">Not specified</option><option value="male">Male</option><option value="female">Female</option></select></label>
+        <label><span class="form-label">Status</span><select id="edit-membership-status" name="membership_status" class="form-input" required><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+        <label><span class="form-label">Date of Birth</span><input id="edit-date-of-birth" type="date" name="date_of_birth" class="form-input"></label>
+        <label><span class="form-label">Joined</span><input id="edit-joined-at" type="date" name="joined_at" class="form-input"></label>
+        <div class="sm:col-span-2"><span class="form-label">Notes</span><textarea id="edit-notes" name="notes" rows="3" class="form-input"></textarea></div>
+      </div>
+      <div class="mt-5 flex justify-end gap-2">
+        <button type="button" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900" data-close-member-modal>Cancel</button>
+        <button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814] hover:bg-primary-dark">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(() => {
+  const body = document.body;
+  const importModal = document.getElementById('import-members-modal');
+  const createModal = document.getElementById('create-member-modal');
+  const editModal = document.getElementById('edit-member-modal');
+  const editForm = document.getElementById('edit-member-form');
+  const fields = {
+    branchId: document.getElementById('edit-branch-id'),
+    firstName: document.getElementById('edit-first-name'),
+    lastName: document.getElementById('edit-last-name'),
+    email: document.getElementById('edit-email'),
+    phone: document.getElementById('edit-phone'),
+    gender: document.getElementById('edit-gender'),
+    dateOfBirth: document.getElementById('edit-date-of-birth'),
+    joinedAt: document.getElementById('edit-joined-at'),
+    membershipStatus: document.getElementById('edit-membership-status'),
+    notes: document.getElementById('edit-notes'),
+  };
+  const openModal = (modal) => {
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    body.classList.add('overflow-hidden');
+  };
+  const closeModals = () => {
+    [importModal, createModal, editModal].forEach((modal) => {
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+    });
+    body.classList.remove('overflow-hidden');
+  };
+  document.querySelector('[data-open-import-members]')?.addEventListener('click', () => openModal(importModal));
+  document.querySelector('[data-open-create-member]')?.addEventListener('click', () => openModal(createModal));
+  document.querySelectorAll('[data-close-member-modal]').forEach((el) => el.addEventListener('click', closeModals));
+  document.querySelectorAll('.member-edit-btn').forEach((button) => {
+    button.addEventListener('click', () => {
+      editForm.action = button.dataset.action || '';
+      if (fields.branchId) fields.branchId.value = button.dataset.branchId || '';
+      fields.firstName.value = button.dataset.firstName || '';
+      fields.lastName.value = button.dataset.lastName || '';
+      fields.email.value = button.dataset.email || '';
+      fields.phone.value = button.dataset.phone || '';
+      fields.gender.value = button.dataset.gender || '';
+      fields.dateOfBirth.value = button.dataset.dateOfBirth || '';
+      fields.joinedAt.value = button.dataset.joinedAt || '';
+      fields.membershipStatus.value = button.dataset.membershipStatus || 'active';
+      fields.notes.value = button.dataset.notes || '';
+      openModal(editModal);
+    });
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeModals();
+  });
+  {% if errors.createMember %}
+    openModal(createModal);
+  {% endif %}
+  {% if errors.importMembers %}
+    openModal(importModal);
+  {% endif %}
+})();
+</script>
+</body>
+</html>

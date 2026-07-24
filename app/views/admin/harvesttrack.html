@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>HarvestTrack - {{ siteName }}</title>
+<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+</head>
+<body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
+<div class="flex h-screen overflow-hidden">
+{% include "partials/admin-sidebar.html" %}
+<main class="flex-1 flex flex-col overflow-hidden">
+{% with title="HarvestTrack", subtitle="Manage evangelism workers, contacts, follow-ups, and reminders", headerIcon="ri-seedling-line" %}{% include "partials/admin-topbar.html" %}{% endwith %}
+
+<div class="flex-1 overflow-y-auto p-5 lg:p-8 space-y-5">
+{% if session.get('success') %}
+<div class="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-4 py-3">{{ session.get('success') }}</div>
+
+{% if error_messages.get('createWorker') %}
+<div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ error_messages.get('createWorker', [''])[0] }}</div>
+{% elif error_messages %}
+<div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ (error_messages.values()|map('first')|list|first if error_messages else '') }}</div>
+{% endif %}
+{% endif %}
+
+<section class="content-card p-4 lg:p-5">
+  <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <div>
+      <h2 class="text-base font-bold text-gray-900">HarvestTrack Overview</h2>
+      <p class="text-xs text-gray-500 mt-0.5">Monitor evangelism workers, contacts, follow-ups, and reminders.</p>
+    </div>
+    {% if isSuper %}
+      <form method="GET" action="{{ url_for('admin_harvesttrack') }}" class="flex items-center gap-2">
+        <select name="branch_id" class="filter-select min-w-56" onchange="this.form.submit()">
+          <option value="">All branches</option>
+          {% for branch in branches %}
+            <option value="{{ branch.id }}" {{ 'selected' if branchId|string == branch.id|string else '' }}>{{ branch.name }}</option>
+          {% endfor %}
+        </select>
+        {% if branchId %}
+          <a href="{{ url_for('admin_harvesttrack') }}" class="h-10 inline-flex items-center rounded-xl border border-gray-200 px-3 text-xs font-bold text-gray-600 hover:text-gray-900">Reset</a>
+        {% endif %}
+      </form>
+
+  </div>
+</section>
+{% endif %}
+
+<div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+  {% set card_values = [
+    ['Workers', stats.get('total_workers', 0), 'ri-user-star-line', 'amber'],
+    ['Contacts', stats.get('contacts', 0), 'ri-contacts-book-line', 'emerald'],
+    ['Due Today', stats.get('due_today', 0), 'ri-notification-3-line', 'rose'],
+    ['Full Members', stats.get('full_members', 0), 'ri-seedling-line', 'violet'],
+    ['Follow-ups Week', stats.get('follow_ups_week', 0), 'ri-book-open-line', 'sky'],
+  ] %}
+  {% for label, value, icon, tone in card_values %}
+    <div class="rounded-xl border border-gray-100 bg-white p-4">
+      {% set toneMap = {
+        'amber': 'bg-amber-50 text-amber-600',
+        'emerald': 'bg-emerald-50 text-emerald-600',
+        'rose': 'bg-rose-50 text-rose-500',
+        'violet': 'bg-violet-50 text-violet-600',
+        'sky': 'bg-sky-50 text-sky-600',
+      } %}
+      <div class="w-9 h-9 flex items-center justify-center rounded-lg {{ toneMap.get(tone, 'bg-primary/10 text-primary') }} mb-3"><i class="{{ icon }} text-base"></i></div>
+      <p class="text-2xl font-bold text-gray-900">{{ '{:,.0f}'.format(value|int) }}</p>
+      <p class="text-[11px] text-gray-500 mt-0.5">{{ label }}</p>
+    </div>
+  {% endfor %}
+</div>
+
+<section class="content-card p-4 lg:p-5">
+  <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+    <div>
+      <h2 class="text-base font-bold text-gray-900">Workers</h2>
+      <p class="text-xs text-gray-500 mt-0.5">Create mobile app accounts for evangelists and team leaders.</p>
+    </div>
+    <button type="button" data-open-worker-modal class="h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">
+      <i class="ri-user-add-line text-base"></i><span>Add Worker</span>
+    </button>
+  </div>
+  <div class="mt-4 overflow-x-auto">
+    <table class="w-full min-w-[760px] text-sm">
+      <thead><tr class="border-b border-gray-100"><th class="table-header py-3 pr-4">Worker</th><th class="table-header py-3 pr-4">Branch</th><th class="table-header py-3 pr-4">Role</th><th class="table-header py-3 pr-4">Contacts</th><th class="table-header py-3 pr-4">Status</th></tr></thead>
+      <tbody class="divide-y divide-gray-100">
+      {% for worker in workers %}
+
+        <tr class="hover:bg-gray-50/50">
+          <td class="py-3 pr-4"><p class="font-semibold text-gray-900">{{ worker.name }}</p><p class="text-xs text-gray-500">{{ worker.email }}{% if worker.phone %} &middot; {{ worker.phone }}{% endif %}</p></td>
+          <td class="py-3 pr-4 text-gray-600">{{ worker.branch.name or 'Unassigned' }}</td>
+          <td class="py-3 pr-4"><span class="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold uppercase text-gray-600">{{ (worker.role or '')|replace('_', ' ') }}</span></td>
+          <td class="py-3 pr-4 text-gray-700">{{ '{:,.0f}'.format(worker.contacts_count|int) }}</td>
+          <td class="py-3 pr-4"><span class="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase {{ 'bg-emerald-50 text-emerald-600' if worker.is_active else 'bg-red-50 text-red-600' }}">{{ 'Active' if worker.is_active else 'Inactive' }}</span></td>
+        </tr>
+      {% else %}
+
+        <tr><td colspan="5" class="py-10 text-center text-sm text-gray-500">No HarvestTrack workers yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  
+  </div>
+</section>
+
+<section class="content-card p-4 lg:p-5">
+  <div>
+    <h2 class="text-base font-bold text-gray-900">Recent Contacts</h2>
+    <p class="text-xs text-gray-500 mt-0.5">Contacts submitted from the mobile app.</p>
+  </div>
+  <div class="mt-4 overflow-x-auto">
+    <table class="w-full min-w-[820px] text-sm">
+      <thead><tr class="border-b border-gray-100"><th class="table-header py-3 pr-4">Contact</th><th class="table-header py-3 pr-4">Worker</th><th class="table-header py-3 pr-4">Stage</th><th class="table-header py-3 pr-4">Rating</th><th class="table-header py-3 pr-4">Next Follow-up</th><th class="table-header py-3 pr-4">Status</th></tr></thead>
+      <tbody class="divide-y divide-gray-100">
+      {% for contact in contacts %}
+
+        <tr class="hover:bg-gray-50/50">
+          <td class="py-3 pr-4"><p class="font-semibold text-gray-900">{{ contact.name }}</p><p class="text-xs text-gray-500">{{ contact.category or 'No category' }}{% if contact.phone %} &middot; {{ contact.phone }}{% endif %}</p></td>
+          <td class="py-3 pr-4 text-gray-600">{{ contact.worker.name or 'Unassigned' }}</td>
+          <td class="py-3 pr-4 text-gray-700">Stage {{ contact.stage }}</td>
+          <td class="py-3 pr-4 text-gray-700">{{ contact.conversion_rating }}/10</td>
+          <td class="py-3 pr-4 text-gray-500">{{ contact.next_follow_up_at.strftime('M d, g:i A') if contact.next_follow_up_at else 'N/A' }}</td>
+          <td class="py-3 pr-4"><span class="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase text-primary">{{ (contact.status or '')|replace('_', ' ') }}</span></td>
+        </tr>
+      {% else %}
+
+        <tr><td colspan="6" class="py-10 text-center text-sm text-gray-500">No HarvestTrack contacts yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  
+  </div>
+</section>
+</div>
+</main>
+</div>
+
+<div id="worker-modal" class="fixed inset-0 z-50 hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="worker-modal-title">
+  <div class="absolute inset-0 bg-black/50" data-close-worker-modal></div>
+  <div class="absolute inset-x-4 top-10 mx-auto max-w-xl rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+    <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+      <div><h3 class="text-sm font-bold text-gray-900">Add HarvestTrack Worker</h3><p class="text-xs text-gray-500 mt-0.5">This creates a mobile app login.</p></div>
+      <button type="button" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-50" data-close-worker-modal><i class="ri-close-line text-lg"></i></button>
+    </div>
+    <form method="POST" action="{{ url_for('admin_harvesttrack_workers_store') }}" data-confirm="Create this HarvestTrack worker?" class="p-5 space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {% if isSuper %}
+        <label><span class="form-label">Branch</span><select name="branch_id" class="form-input"><option value="">Unassigned</option>{% for branch in branches %}<option value="{{ branch.id }}">{{ branch.name }}</option>{% endfor %}</select></label>
+      {% endif %}
+      <label><span class="form-label">Name</span><input name="name" class="form-input" required></label>
+      <label><span class="form-label">Email</span><input type="email" name="email" class="form-input" required></label>
+      <label><span class="form-label">Phone</span><input name="phone" class="form-input"></label>
+      <label><span class="form-label">Temporary Password</span><input type="password" name="password" class="form-input" minlength="8" placeholder="Leave blank to generate"><span class="mt-1 block text-[11px] text-gray-500">The worker will receive this login by email.</span></label>
+      <label><span class="form-label">Role</span><select name="role" class="form-input" required><option value="evangelist">Evangelist</option><option value="team_leader">Team Leader</option></select></label>
+      <div class="flex justify-end gap-2"><button type="button" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors" data-close-worker-modal>Cancel</button><button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">Create Worker</button></div>
+    </form>
+  </div>
+</div>
+
+<script>
+const workerModal = document.getElementById('worker-modal');
+function openWorkerModal(){ workerModal.classList.remove('hidden'); document.body.style.overflow='hidden'; }
+function closeWorkerModal(){ workerModal.classList.add('hidden'); document.body.style.overflow=''; }
+document.querySelectorAll('[data-open-worker-modal]').forEach(btn => btn.addEventListener('click', openWorkerModal));
+document.querySelectorAll('[data-close-worker-modal]').forEach(btn => btn.addEventListener('click', closeWorkerModal));
+document.addEventListener('keydown', e => { if(e.key==='Escape' && !workerModal.classList.contains('hidden')) closeWorkerModal(); });
+</script>
+</body>
+</html>

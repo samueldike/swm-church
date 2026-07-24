@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Upcoming Events - {{ siteName }}</title>
+<meta name="description" content="Stay connected with {{ siteName }} through our upcoming events, services, and gatherings."/>
+<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
+{% include "partials/site-head-assets.html" %}
+<style>
+  .hero-gradient{background:linear-gradient(to top,rgba(26,26,26,.9),rgba(26,26,26,.4)),url('/images/swm-logo.png');background-size:cover;background-position:center}
+  .event-card{background:#fff;border:1px solid #f3f4f6;border-radius:24px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04),0 4px 12px rgba(0,0,0,.03);transition:all .3s cubic-bezier(.23,1,.32,1)}
+  .event-card:hover{box-shadow:0 4px 6px rgba(0,0,0,.05),0 10px 24px rgba(0,0,0,.06);transform:translateY(-4px)}
+  .event-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+  .event-badge.major{background:#fef3c7;color:#92400e}
+  .event-badge.minor{background:#e0e7ff;color:#3730a3}
+  .event-date-box{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:60px;padding:8px 12px;border-radius:12px;background:#f9fafb;border:1px solid #f3f4f6}
+  .event-date-box .day{font-size:20px;font-weight:700;color:#1a1a1a;line-height:1}
+  .event-date-box .month{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280}
+  .schedule-card{background:rgba(255,255,255,.05);backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:32px;transition:border-color .3s}
+  .schedule-card:hover{border-color:rgba(201,162,39,.5)}
+  .btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 24px;border-radius:12px;background:#1a1a1a;color:#fff;font-size:14px;font-weight:700;text-decoration:none;transition:all .2s;border:none;cursor:pointer}
+  .btn-primary:hover{background:#c9a227}
+  .btn-primary:active{transform:scale(.98)}
+  .btn-outline{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 24px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;color:#1a1a1a;font-size:14px;font-weight:700;text-decoration:none;transition:all .2s;cursor:pointer}
+  .btn-outline:hover{border-color:#c9a227;color:#c9a227}
+  .empty-state{border:1px dashed #e5e7eb;border-radius:24px;padding:48px 32px;text-align:center;color:#9ca3af}
+  @media(prefers-reduced-motion:reduce){.event-card{transition:none}.event-card:hover{transform:none}}
+</style>
+</head>
+<body class="bg-background-light text-secondary font-sans antialiased">
+{% include "partials/site-header.html" %}
+
+<section class="relative flex min-h-[45vh] items-center justify-center overflow-hidden bg-secondary px-6 py-20">
+  <div class="relative z-10 mx-auto max-w-4xl text-center">
+    <p class="mb-4 text-sm font-bold uppercase tracking-[0.22em] text-primary-light md:text-base">Our Calendar</p>
+    <h1 class="mb-6 font-serif text-5xl font-semibold leading-tight text-white md:text-7xl">
+      Upcoming <span class="italic text-primary-light">Events</span>
+    </h1>
+    <p class="mx-auto max-w-2xl text-lg leading-relaxed text-gray-200 font-light">
+      Stay connected and grow through shared experiences. Join our community in worship, learning, and fellowship.
+    </p>
+  </div>
+</section>
+
+<main class="bg-background-light px-6 py-20 lg:px-8">
+  <div class="mx-auto max-w-7xl">
+
+    {# Featured Event #}
+    {% if featured_event %}
+      <section class="mb-24">
+        <div class="relative overflow-hidden rounded-[2.5rem] border border-gray-100 bg-white shadow-soft">
+          <div class="flex flex-col lg:flex-row">
+            <div class="relative flex min-h-[300px] items-center justify-center bg-secondary p-10 lg:w-1/2">
+              <img src="/images/swm-logo.png" alt="{{ siteName }}" class="max-h-32 w-auto object-contain opacity-60">
+              <div class="absolute top-6 left-6 rounded-full bg-primary px-6 py-2 text-xs font-bold tracking-widest uppercase text-white">
+                Featured Event
+              </div>
+            </div>
+            <div class="flex flex-col justify-center p-8 md:p-12 lg:w-1/2 lg:p-16">
+              <div class="mb-6 flex items-center gap-4">
+                <div class="event-date-box">
+                  <span class="day">{{ featured_event.starts_at.strftime('%d') if featured_event.starts_at else '' }}</span>
+                  <span class="month">{{ featured_event.starts_at.strftime('%b') if featured_event.starts_at else '' }}</span>
+                </div>
+                <div>
+                  <span class="event-badge {{ 'major' if featured_event.is_major else 'minor' }}">{{ 'Major Event' if featured_event.is_major else 'Upcoming' }}</span>
+                  <div class="mt-2 flex items-center gap-4 text-sm text-gray-500">
+                    {% if featured_event.starts_at %}
+                      <span class="flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">schedule</span>
+                        {{ featured_event.starts_at.strftime('%I:%M %p') }}
+                      </span>
+                    {% endif %}
+                    {% if featured_event.location %}
+                      <span class="flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">location_on</span>
+                        {{ featured_event.location }}
+                      </span>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+              <h2 class="mb-6 font-serif text-3xl font-bold leading-tight text-secondary md:text-4xl">{{ featured_event.title }}</h2>
+              {% if featured_event.description %}
+                <p class="mb-10 text-lg leading-relaxed text-gray-500">{{ featured_event.description[:200] }}</p>
+              {% endif %}
+              <div class="flex flex-wrap gap-4">
+                <a href="{{ url_for('calendar') }}" class="btn-primary">
+                  <span class="material-symbols-outlined" style="font-size:20px">event</span>
+                  View Calendar
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    {% endif %}
+
+    {# Upcoming Events #}
+    <section class="mb-24">
+      <div class="mb-12 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 class="font-serif text-3xl font-bold text-secondary md:text-4xl">
+            More Upcoming <span class="italic text-primary">Gatherings</span>
+          </h2>
+          <p class="mt-2 text-gray-500">Find a time to join us and experience {{ siteName }}.</p>
+        </div>
+      </div>
+
+      {% if upcoming_events | length > 0 %}
+        <div class="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+          {% for event in upcoming_events %}
+            <article class="event-card flex flex-col">
+              <div class="relative flex min-h-[120px] items-center justify-center bg-gradient-to-br from-secondary to-gray-800 p-6">
+                <img src="/images/swm-logo.png" alt="" class="max-h-16 w-auto object-contain opacity-40">
+                <div class="absolute top-4 right-4 flex flex-col items-center rounded-xl border border-white/10 bg-white/90 px-3 py-1.5 backdrop-blur-sm">
+                  <span class="text-lg font-bold leading-none text-primary">{{ event.starts_at.strftime('%d') if event.starts_at else '' }}</span>
+                  <span class="text-[9px] font-bold uppercase text-secondary">{{ event.starts_at.strftime('%b') if event.starts_at else '' }}</span>
+                </div>
+              </div>
+              <div class="flex flex-col flex-grow p-8">
+                <span class="event-badge {{ 'major' if event.is_major else 'minor' }} mb-3 w-fit">
+                  <span class="material-symbols-outlined" style="font-size:14px">{{ 'star' if event.is_major else 'event' }}</span>
+                  {{ 'Major Event' if event.is_major else 'Event' }}
+                </span>
+                <h3 class="mb-4 font-serif text-xl font-bold leading-snug text-secondary">{{ event.title }}</h3>
+                <div class="mb-6 space-y-2">
+                  {% if event.starts_at %}
+                    <div class="flex items-center gap-2 text-sm font-medium text-gray-500">
+                      <span class="material-symbols-outlined text-lg text-primary">schedule</span>
+                      {{ event.starts_at.strftime('%I:%M %p') }}
+                      {% if event.ends_at %}
+                        - {{ event.ends_at.strftime('%I:%M %p') }}
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                  {% if event.location %}
+                    <div class="flex items-center gap-2 text-sm font-medium text-gray-500">
+                      <span class="material-symbols-outlined text-lg text-primary">location_on</span>
+                      {{ event.location }}
+                    </div>
+                  {% endif %}
+                </div>
+                {% if event.description %}
+                  <p class="mb-8 line-clamp-2 text-sm leading-relaxed text-gray-500">{{ event.description }}</p>
+                {% endif %}
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="empty-state">
+          <span class="material-symbols-outlined mb-4 text-4xl">event_busy</span>
+          <p class="text-lg font-semibold text-gray-600">No upcoming events scheduled</p>
+          <p class="mt-2 text-sm">Check back soon or subscribe to our newsletter for updates.</p>
+        </div>
+      {% endif %}
+    </section>
+
+    {# Weekly Schedule #}
+    <section class="mb-24 rounded-[3rem] bg-secondary p-8 md:p-16 relative overflow-hidden">
+      <div class="absolute -right-32 -top-32 h-64 w-64 rounded-full bg-primary/5"></div>
+      <div class="relative z-10">
+        <div class="mb-16 text-center">
+          <p class="mb-4 text-sm font-bold uppercase tracking-[0.2em] text-primary">Weekly Schedule</p>
+          <h2 class="text-3xl font-bold text-white md:text-5xl font-serif">Our <span class="italic text-primary-light">Regular Services</span></h2>
+        </div>
+        <div class="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
+          <div class="group rounded-3xl border border-white/10 bg-white/5 p-8 backdrop-blur-sm transition-all hover:border-primary/50">
+            <div class="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/20 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+              <span class="material-symbols-outlined">church</span>
+            </div>
+            <h3 class="mb-2 font-serif text-xl font-bold text-white">Sunday Worship</h3>
+            <p class="mb-4 text-sm font-bold text-primary-light">Every Sunday &bull; 08:00 AM</p>
+            <p class="text-sm leading-relaxed text-gray-400">Experience a divine encounter through spirit-led worship and the teaching of the Word.</p>
+          </div>
+          <div class="group rounded-3xl border border-white/10 bg-white/5 p-8 backdrop-blur-sm transition-all hover:border-primary/50">
+            <div class="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/20 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+              <span class="material-symbols-outlined">auto_stories</span>
+            </div>
+            <h3 class="mb-2 font-serif text-xl font-bold text-white">Midweek Bible Study</h3>
+            <p class="mb-4 text-sm font-bold text-primary-light">Every Wednesday &bull; 05:30 PM</p>
+            <p class="text-sm leading-relaxed text-gray-400">Deep dive into the scriptures to gain practical wisdom for daily living and spiritual maturity.</p>
+          </div>
+          <div class="group rounded-3xl border border-white/10 bg-white/5 p-8 backdrop-blur-sm transition-all hover:border-primary/50">
+            <div class="mb-6 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/20 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
+              <span class="material-symbols-outlined">prayer_times</span>
+            </div>
+            <h3 class="mb-2 font-serif text-xl font-bold text-white">Communion &amp; Prayer</h3>
+            <p class="mb-4 text-sm font-bold text-primary-light">1st Friday &bull; 06:00 PM</p>
+            <p class="text-sm leading-relaxed text-gray-400">A special time of fellowship at the Lord's table and corporate prayer for the nation.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {# Volunteer CTA #}
+    <section class="relative overflow-hidden rounded-[3rem] bg-primary/5 px-12 py-24 text-center md:px-20">
+      <div class="absolute -bottom-24 -left-24 h-64 w-64 rounded-full bg-primary/10"></div>
+      <div class="relative z-10 mx-auto max-w-2xl">
+        <h2 class="mb-6 font-serif text-4xl font-bold text-secondary md:text-5xl">Want to <span class="italic text-primary">Volunteer</span> for an Event?</h2>
+        <p class="mb-10 text-lg text-gray-600">
+          Our events are made possible by the selfless service of people like you. Join the crew and help us create an atmosphere of encounter.
+        </p>
+        <div class="flex flex-col justify-center gap-4 sm:flex-row">
+          <a href="{{ url_for('get-involved') }}" class="btn-primary px-10 py-4 text-lg shadow-lg">Volunteer Now</a>
+          <a href="{{ url_for('contact') }}" class="btn-outline border-secondary/20 px-10 py-4 text-lg text-secondary hover:bg-white">Host an Event</a>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+{% include "partials/site-footer.html" %}
+</body>
+</html>

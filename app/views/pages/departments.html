@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Our Departments - {{ siteName }}</title>
+<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
+<link rel="apple-touch-icon" href="/images/swm-logo.png"/>
+
+{% include "partials/site-head-assets.html" %}
+<style>
+  .hero-gradient{background:linear-gradient(to top,rgba(26,26,26,.9),rgba(26,26,26,.4)),url('/images/swm-logo.png');background-size:cover;background-position:center}
+  .dept-card{background:#fff;border:1px solid #f3f4f6;border-radius:24px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,.04),0 4px 12px rgba(0,0,0,.03);transition:all .3s cubic-bezier(.23,1,.32,1)}
+  .dept-card:hover{box-shadow:0 4px 6px rgba(0,0,0,.05),0 10px 24px rgba(0,0,0,.06);transform:translateY(-4px)}
+  @media(prefers-reduced-motion:reduce){.dept-card{transition:none}.dept-card:hover{transform:none}}
+</style>
+
+</head>
+<body class="bg-background-light text-secondary font-sans antialiased">
+{% include "partials/site-header.html" %}
+<section class="relative h-[45vh] min-h-[400px] flex items-center justify-center overflow-hidden hero-gradient">
+<div class="relative z-10 text-center px-6 max-w-4xl mx-auto">
+<span class="text-primary text-sm md:text-base font-bold tracking-[0.2em] uppercase mb-4 block">Serving the Body</span>
+<h1 class="text-white text-5xl md:text-7xl font-serif font-medium leading-tight mb-6">
+            Our <span class="italic text-primary-light">Departments</span>
+</h1>
+<p class="text-gray-200 text-lg md:text-xl font-light max-w-2xl mx-auto leading-relaxed">
+            Discover your place in God's vineyard. We believe in serving and growing together as one vibrant community.
+        </p>
+</div>
+</section>
+<main class="py-20 px-6 lg:px-8 bg-background-light">
+<div class="max-w-7xl mx-auto">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8">
+<div class="group bg-white rounded-3xl p-8 border border-gray-100 shadow-soft dept-card flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center text-primary mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined text-3xl">group</span>
+</div>
+<h3 class="text-xl font-serif font-bold text-secondary mb-3">Heralds (Ushers)</h3>
+<p class="text-gray-500 text-sm leading-relaxed mb-8 flex-grow">Welcoming and organizing the congregation to ensure an orderly and peaceful atmosphere for worship.</p>
+<button class="w-full py-3 rounded-xl border border-gray-100 bg-gray-50 text-secondary font-bold text-sm hover:bg-primary hover:text-white transition-all">Join This Team</button>
+</div>
+<div class="group bg-white rounded-3xl p-8 border border-gray-100 shadow-soft dept-card flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center text-primary mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined text-3xl">music_note</span>
+</div>
+<h3 class="text-xl font-serif font-bold text-secondary mb-3">Still Waters (Choir)</h3>
+<p class="text-gray-500 text-sm leading-relaxed mb-8 flex-grow">Leading the ministry in deep, spirit-filled worship and praise through the power of music.</p>
+<button class="w-full py-3 rounded-xl border border-gray-100 bg-gray-50 text-secondary font-bold text-sm hover:bg-primary hover:text-white transition-all">Join This Team</button>
+</div>
+<div class="group bg-white rounded-3xl p-8 border border-gray-100 shadow-soft dept-card flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center text-primary mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined text-3xl">volunteer_activism</span>
+</div>
+<h3 class="text-xl font-serif font-bold text-secondary mb-3">Epaphras Company (Prayer)</h3>
+<p class="text-gray-500 text-sm leading-relaxed mb-8 flex-grow">The intercessory engine of the ministry, standing in the gap and upholding the vision through prayer.</p>
+<button class="w-full py-3 rounded-xl border border-gray-100 bg-gray-50 text-secondary font-bold text-sm hover:bg-primary hover:text-white transition-all">Join This Team</button>
+</div>
+<div class="group bg-white rounded-3xl p-8 border border-gray-100 shadow-soft dept-card flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center text-primary mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined text-3xl">computer</span>
+</div>
+<h3 class="text-xl font-serif font-bold text-secondary mb-3">Media &amp; ICT</h3>
+<p class="text-gray-500 text-sm leading-relaxed mb-8 flex-grow">Using modern technology to capture, broadcast, and document the word of God for global impact.</p>
+<button class="w-full py-3 rounded-xl border border-gray-100 bg-gray-50 text-secondary font-bold text-sm hover:bg-primary hover:text-white transition-all">Join This Team</button>
+</div>
+<div class="group bg-white rounded-3xl p-8 border border-gray-100 shadow-soft dept-card flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center text-primary mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined text-3xl">child_care</span>
+</div>
+<h3 class="text-xl font-serif font-bold text-secondary mb-3">Kings and Priests</h3>
+<p class="text-gray-500 text-sm leading-relaxed mb-8 flex-grow">Nurturing the next generation in the way of the Lord through creative and biblical children's ministry.</p>
+<button class="w-full py-3 rounded-xl border border-gray-100 bg-gray-50 text-secondary font-bold text-sm hover:bg-primary hover:text-white transition-all">Join This Team</button>
+</div>
+<div class="group bg-white rounded-3xl p-8 border border-gray-100 shadow-soft dept-card flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center text-primary mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined text-3xl">connect_without_contact</span>
+</div>
+<h3 class="text-xl font-serif font-bold text-secondary mb-3">Follow-Up Team</h3>
+<p class="text-gray-500 text-sm leading-relaxed mb-8 flex-grow">Connecting with new visitors and souls to ensure they are integrated and nurtured in the faith.</p>
+<button class="w-full py-3 rounded-xl border border-gray-100 bg-gray-50 text-secondary font-bold text-sm hover:bg-primary hover:text-white transition-all">Join This Team</button>
+</div>
+<div class="group bg-white rounded-3xl p-8 border border-gray-100 shadow-soft dept-card flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center text-primary mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined text-3xl">cleaning_services</span>
+</div>
+<h3 class="text-xl font-serif font-bold text-secondary mb-3">Vineyard Keepers</h3>
+<p class="text-gray-500 text-sm leading-relaxed mb-8 flex-grow">Ensuring the sanctuary and church environment are kept clean and beautiful for the presence of God.</p>
+<button class="w-full py-3 rounded-xl border border-gray-100 bg-gray-50 text-secondary font-bold text-sm hover:bg-primary hover:text-white transition-all">Join This Team</button>
+</div>
+<div class="group bg-white rounded-3xl p-8 border border-gray-100 shadow-soft dept-card flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center text-primary mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined text-3xl">handshake</span>
+</div>
+<h3 class="text-xl font-serif font-bold text-secondary mb-3">The Joseph Ministry</h3>
+<p class="text-gray-500 text-sm leading-relaxed mb-8 flex-grow">Demonstrating the love of Christ through welfare support and providing for the needs of the brethren.</p>
+<button class="w-full py-3 rounded-xl border border-gray-100 bg-gray-50 text-secondary font-bold text-sm hover:bg-primary hover:text-white transition-all">Join This Team</button>
+</div>
+<div class="group bg-white rounded-3xl p-8 border border-gray-100 shadow-soft dept-card flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center text-primary mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined text-3xl">settings_input_component</span>
+</div>
+<h3 class="text-xl font-serif font-bold text-secondary mb-3">Technical Department</h3>
+<p class="text-gray-500 text-sm leading-relaxed mb-8 flex-grow">Managing sound engineering and electrical logistics to provide a seamless technical experience.</p>
+<button class="w-full py-3 rounded-xl border border-gray-100 bg-gray-50 text-secondary font-bold text-sm hover:bg-primary hover:text-white transition-all">Join This Team</button>
+</div>
+<div class="group bg-white rounded-3xl p-8 border border-gray-100 shadow-soft dept-card flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center text-primary mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined text-3xl">verified_user</span>
+</div>
+<h3 class="text-xl font-serif font-bold text-secondary mb-3">Protocol</h3>
+<p class="text-gray-500 text-sm leading-relaxed mb-8 flex-grow">Providing specialized assistance and logistics for our guest ministers and church leadership.</p>
+<button class="w-full py-3 rounded-xl border border-gray-100 bg-gray-50 text-secondary font-bold text-sm hover:bg-primary hover:text-white transition-all">Join This Team</button>
+</div>
+<div class="group bg-white rounded-3xl p-8 border border-gray-100 shadow-soft dept-card flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center text-primary mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined text-3xl">theater_comedy</span>
+</div>
+<h3 class="text-xl font-serif font-bold text-secondary mb-3">Dance &amp; Drama</h3>
+<p class="text-gray-500 text-sm leading-relaxed mb-8 flex-grow">Communicating the gospel through the creative arts of choreography and theatrical performances.</p>
+<button class="w-full py-3 rounded-xl border border-gray-100 bg-gray-50 text-secondary font-bold text-sm hover:bg-primary hover:text-white transition-all">Join This Team</button>
+</div>
+<div class="group bg-white rounded-3xl p-8 border border-gray-100 shadow-soft dept-card flex flex-col items-center text-center">
+<div class="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center text-primary mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
+<span class="material-symbols-outlined text-3xl">emoji_people</span>
+</div>
+<h3 class="text-xl font-serif font-bold text-secondary mb-3">Hosts and Hostesses</h3>
+<p class="text-gray-500 text-sm leading-relaxed mb-8 flex-grow">Providing warm hospitality and specialized care for visitors during our various services and events.</p>
+<button class="w-full py-3 rounded-xl border border-gray-100 bg-gray-50 text-secondary font-bold text-sm hover:bg-primary hover:text-white transition-all">Join This Team</button>
+</div>
+</div>
+</div>
+</main>
+<section class="py-24 px-6 lg:px-8 bg-secondary relative overflow-hidden">
+<div class="absolute inset-0 opacity-10">
+<div class="absolute top-0 left-0 w-full h-full" style="background-image: radial-gradient(circle at 2px 2px, rgba(255,255,255,0.05) 1px, transparent 0); background-size: 40px 40px;"></div>
+</div>
+<div class="max-w-4xl mx-auto text-center relative z-10">
+<h2 class="text-white text-4xl md:text-5xl font-serif font-bold mb-6">Ready to Serve?</h2>
+<p class="text-gray-400 text-lg mb-12 max-w-2xl mx-auto">
+            God has given you unique gifts to bless the body of Christ. Take the first step today and find fulfillment in serving others.
+        </p>
+<div class="flex flex-col sm:flex-row gap-4 justify-center">
+<button class="px-10 py-4 rounded-full bg-primary text-white font-bold text-lg hover:bg-primary-dark transition-all shadow-glow">Apply to Join a Ministry</button>
+<button class="px-10 py-4 rounded-full border border-white/20 text-white font-bold text-lg hover:bg-white/10 transition-all">Contact Ministry Lead</button>
+</div>
+</div>
+</section>
+{% include "partials/site-footer.html" %}
+
+</body></html>
