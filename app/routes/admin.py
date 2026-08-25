@@ -42,6 +42,16 @@ async def _get_admin(request: Request):
     return admin
 
 
+def _public_base_url(request: Request) -> str:
+    """request.base_url is http:// behind an SSL-terminating proxy; honor
+    X-Forwarded-Proto so links shown to admins match what visitors use."""
+    base = str(request.base_url).rstrip("/")
+    proto = request.headers.get("x-forwarded-proto")
+    if proto == "https" and base.startswith("http://"):
+        base = "https://" + base[len("http://"):]
+    return base
+
+
 async def _admin_context(request: Request, db: AsyncSession, active_page: str = "") -> dict:
     from app.models.member import Member
     from app.models.event import Event
@@ -1224,7 +1234,7 @@ async def admin_messages(request: Request, db: AsyncSession = Depends(get_db)):
     platforms = {
         "Telegram": "telegram",
     }
-    feed_url = str(request.base_url).rstrip("/") + "/feed.xml"
+    feed_url = _public_base_url(request) + "/feed.xml"
 
     return await render_template(request, "admin/messages.html", {
         "_db": db, "sermons": sermons, "branches": branches, "platforms": platforms,
@@ -1492,7 +1502,7 @@ async def admin_settings(request: Request, db: AsyncSession = Depends(get_db)):
     }
 
     ctx = await _admin_context(request, db, "admin.settings")
-    feed_url = str(request.base_url).rstrip("/") + "/feed.xml"
+    feed_url = _public_base_url(request) + "/feed.xml"
     return await render_template(request, "admin/settings.html", {
         "_db": db, "settings": settings, "timezones": timezones,
         "themePresets": themePresets, "feed_url": feed_url,

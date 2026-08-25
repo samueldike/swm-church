@@ -35,6 +35,17 @@ def _paginate_url(request: Request, page: int, base_path: str) -> str:
     return f"{base_path}?page={page}"
 
 
+def _public_base_url(request: Request) -> str:
+    """request.base_url as seen by the app is http:// behind an SSL-terminating
+    proxy; honor X-Forwarded-Proto so generated absolute URLs (feed enclosures,
+    links) reflect the scheme visitors actually use."""
+    base = str(request.base_url).rstrip("/")
+    proto = request.headers.get("x-forwarded-proto")
+    if proto == "https" and base.startswith("http://"):
+        base = "https://" + base[len("http://"):]
+    return base
+
+
 @router.get("/", name="home")
 async def home(request: Request, db: AsyncSession = Depends(get_db)):
     from app.models.site_settings import SiteSetting
@@ -107,6 +118,134 @@ async def home(request: Request, db: AsyncSession = Depends(get_db)):
             "branches": branches,
         },
     )
+
+
+@router.get("/home2", name="home2")
+async def home2(request: Request, db: AsyncSession = Depends(get_db)):
+    """Homepage v2 — dark, frame-by-frame scroll design.
+
+    Shares the v1 data contract and adds `gallery`, which is assembled from
+    real uploaded slider artwork rather than placeholder imagery.
+    """
+    from app.models.site_settings import SiteSetting
+    from app.models.slider import Slider
+    from app.models.sermon import Sermon
+
+    sliders = []
+    try:
+        result = await db.execute(
+            select(Slider)
+            .where(Slider.is_active == True)
+            .order_by(Slider.sort_order.asc())
+        )
+        sliders = list(result.scalars().all())
+    except Exception:
+        pass
+
+    settings = {}
+    try:
+        result = await db.execute(select(SiteSetting))
+        settings = {s.key: s.value for s in result.scalars().all()}
+    except Exception:
+        pass
+
+    latest_sermons = []
+    try:
+        result = await db.execute(
+            select(Sermon)
+            .where(Sermon.status == "published")
+            .order_by(Sermon.published_at.desc())
+            .limit(4)
+        )
+        latest_sermons = list(result.scalars().all())
+    except Exception:
+        pass
+
+    featuredStories = []
+    try:
+        from app.models.story import Story
+
+        result = await db.execute(
+            select(Story)
+            .where(Story.status == "published")
+            .order_by(Story.published_at.desc())
+            .limit(3)
+        )
+        featuredStories = list(result.scalars().all())
+    except Exception:
+        pass
+
+    branches = []
+    try:
+        from app.models.branch import Branch
+
+        result = await db.execute(
+            select(Branch).where(Branch.is_active == True).order_by(Branch.name)
+        )
+        branches = list(result.scalars().all())
+    except Exception:
+        pass
+
+    gallery = _build_gallery(sliders, featuredStories)
+
+    return await render_template(
+        request,
+        "pages/home2.html",
+        {
+            "_db": db,
+            "sliders": sliders,
+            "settings": settings,
+            "latest_sermons": latest_sermons,
+            "featuredStories": featuredStories,
+            "branches": branches,
+            "gallery": gallery,
+        },
+    )
+
+
+GALLERY_DIRS = ("images/sliders", "images/stories", "images/gallery")
+GALLERY_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".avif"}
+
+
+def _build_gallery(sliders, stories) -> list[dict]:
+    """Collect real, already-uploaded imagery for the v2 gallery.
+
+    Sources only files the ministry has actually uploaded — no stock or
+    placeholder art. Records referenced by a slider/story come first (they
+    carry a real caption); the remaining uploads in the media folders follow,
+    so the gallery isn't limited to whichever sliders happen to be active.
+
+    A dedicated Gallery model with admin CRUD would supersede this.
+    """
+    from pathlib import Path
+
+    shots: list[dict] = []
+    seen: set[str] = set()
+
+    def add(path: str | None, alt: str) -> None:
+        if not path:
+            return
+        src = path if path.startswith("/") else f"/{path}"
+        if src in seen:
+            return
+        seen.add(src)
+        shots.append({"src": src, "alt": alt})
+
+    for s in sliders:
+        add(s.image_path, (s.title or "Scent of Water Ministry").replace("\n", " "))
+    for s in stories:
+        add(s.featured_image, s.title)
+
+    static_root = Path(__file__).resolve().parents[1] / "static"
+    for rel_dir in GALLERY_DIRS:
+        folder = static_root / rel_dir
+        if not folder.is_dir():
+            continue
+        for f in sorted(folder.iterdir()):
+            if f.is_file() and f.suffix.lower() in GALLERY_EXTS:
+                add(f"{rel_dir}/{f.name}", "Scent of Water Ministry")
+
+    return shots
 
 
 @router.get("/about", name="about")
@@ -258,7 +397,7 @@ async def podcast_feed(request: Request, db: AsyncSession = Depends(get_db)):
 
     site = await get_settings(db)
     site_name = site.get("siteName", "Scent of Water Ministry")
-    base_url = str(request.base_url).rstrip("/")
+    base_url = _public_base_url(request)
 
     result = await db.execute(
         select(Sermon)
