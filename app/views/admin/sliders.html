@@ -5,9 +5,7 @@
 <title>Slider Management - {{ siteName }}</title>
 <link rel="icon" href="/images/swm-logo.png" type="image/png"/>
 <link rel="apple-touch-icon" href="/images/swm-logo.png"/>
-<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+{% include "partials/admin-head-assets.html" %}
 </head>
 <body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
 <div class="flex h-screen overflow-hidden">
@@ -35,8 +33,8 @@
 </div>
 <div class="flex items-center justify-end gap-2">
 <button type="button" class="slider-edit-btn w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50 transition-colors" title="Edit slide"
-data-action="{{ url_for('admin_sliders_update', id=slider.id) }}" data-title="{{ slider.title|e }}" data-description="{{ slider.description|e }}" data-cta-label="{{ slider.cta_label|e }}" data-cta-url="{{ slider.cta_url|e }}" data-sort-order="{{ slider.sort_order }}" data-is-active="{{ 1 if slider.is_active else 0 }}"><i class="ri-edit-line text-base"></i></button>
-<form method="POST" action="{{ url_for('admin_sliders_destroy', id=slider.id) }}" data-confirm="Delete this slide?" data-confirm-title="Delete Slide" data-confirm-accept="Delete"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"> <input type="hidden" name="_method" value="DELETE"><button class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete slide"><i class="ri-delete-bin-line text-base"></i></button></form>
+data-action="{{ url_for('admin_sliders_update', slider_id=slider.id) }}" data-title="{{ slider.title|e }}" data-description="{{ slider.description|e }}" data-cta-label="{{ slider.cta_label|e }}" data-cta-url="{{ slider.cta_url|e }}" data-sort-order="{{ slider.sort_order }}" data-is-active="{{ 1 if slider.is_active else 0 }}"><i class="ri-edit-line text-base"></i></button>
+<form method="POST" action="{{ url_for('admin_sliders_destroy', slider_id=slider.id) }}" data-confirm="Delete this slide?" data-confirm-title="Delete Slide" data-confirm-accept="Delete"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"> <input type="hidden" name="_method" value="DELETE"><button class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete slide"><i class="ri-delete-bin-line text-base"></i></button></form>
 </div>
 </article>
 {% else %}

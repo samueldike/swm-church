@@ -2,9 +2,7 @@
 <html lang="en"><head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Admins - {{ siteName }}</title>
-<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+{% include "partials/admin-head-assets.html" %}
 </head>
 <body class="bg-background-light text-secondary font-sans antialiased overflow-hidden"><div class="flex h-screen overflow-hidden">{% include "partials/admin-sidebar.html" %}
 <main class="flex-1 flex flex-col overflow-hidden">{% with title="Admins", subtitle="Manage super and branch admins" %}{% include "partials/admin-topbar.html" %}{% endwith %}
@@ -32,8 +30,8 @@
 <td class="py-3">
 <div class="flex items-center justify-end gap-2">
   <button type="button" class="admin-edit-btn w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50 transition-colors" title="Edit admin"
-    data-action="{{ url_for('admin.admins.update', id=admin.id) }}" data-name="{{ admin.name|e }}" data-phone="{{ admin.phone|e }}" data-role="{{ admin.role }}" data-branch-id="{{ admin.branch_id }}" data-is-active="{{ 1 if admin.is_active else 0 }}"><i class="ri-edit-line text-base"></i></button>
-  <button type="button" class="admin-password-btn w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50 transition-colors" title="Reset password" data-action="{{ url_for('admin.admins.reset-password', id=admin.id) }}" data-name="{{ admin.name|e }}"><i class="ri-key-2-line text-base"></i></button>
+    data-action="{{ url_for('admin.admins.update', admin.id) }}" data-name="{{ admin.name|e }}" data-phone="{{ admin.phone|e }}" data-role="{{ admin.role }}" data-branch-id="{{ admin.branch_id }}" data-is-active="{{ 1 if admin.is_active else 0 }}"><i class="ri-edit-line text-base"></i></button>
+  <button type="button" class="admin-password-btn w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50 transition-colors" title="Reset password" data-action="{{ url_for('admin.admins.reset-password', admin.id) }}" data-name="{{ admin.name|e }}"><i class="ri-key-2-line text-base"></i></button>
 </div>
 </td>
 </tr>

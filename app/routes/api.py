@@ -143,10 +143,12 @@ def _serialize_event(event, calendar: bool = False) -> dict:
         data = {
             "id": event.id,
             "title": event.title,
+            "description": event.description or '',
             "starts_at": event.starts_at.isoformat() if event.starts_at else None,
             "ends_at": event.ends_at.isoformat() if event.ends_at else None,
             "location": event.location,
             "is_major": event.is_major,
+            "is_published": event.is_published,
         }
     return data
 

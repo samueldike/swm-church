@@ -1,15 +1,15 @@
-{% set weekKeys = ['week1', 'week2', 'week3', 'week4', 'week5', 'others', 'total'] %}
-{% set weekLabels = {'week1': 'Week 1', 'week2': 'Week 2', 'week3': 'Week 3', 'week4': 'Week 4', 'week5': 'Week 5', 'others': 'Others', 'total': 'Total'} %}
-{% set attendanceRows = {'male': 'Male', 'female': 'Female', 'total': 'Total'} %}
+{% set attendanceDays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] %}
+{% set dayLabels = {'sunday': 'Sunday', 'monday': 'Monday', 'tuesday': 'Tuesday', 'wednesday': 'Wednesday', 'thursday': 'Thursday', 'friday': 'Friday', 'saturday': 'Saturday'} %}
+{% set collectionLabels = {'tithe': 'Tithe', 'offering': 'Offering', 'special': 'Special'} %}
 {% set statusTone = {'draft': 'bg-gray-100 text-gray-600', 'submitted': 'bg-amber-50 text-amber-700', 'reviewed': 'bg-emerald-50 text-emerald-700'} %}
-{% set attendanceTotal = (unitReport.attendance.get('total', {}).get('total', 0)) if unitReport.attendance else 0 %}
-{% if not attendanceTotal %}
-{% set attendanceTotal = (unitReport.attendance.get('sunday', {}).get('male', 0) + unitReport.attendance.get('sunday', {}).get('female', 0)) if unitReport.attendance else 0 %}
+{% set ns = namespace(att=0) %}
+{% if unitReport.attendance %}
+  {% for day in attendanceDays %}
+    {% set ns.att = ns.att + ((unitReport.attendance.get(day, 0) or 0)|int) %}
+  {% endfor %}
 {% endif %}
-{% set collectionsTotal = (unitReport.collections.get('total', 0)) if unitReport.collections else 0 %}
-{% if not collectionsTotal %}
-{% set collectionsTotal = 0 %}
-{% endif %}
+{% set attendanceTotal = ns.att %}
+{% set collectionsTotal = unitReport.collections.values()|sum if unitReport.collections else 0 %}
 {% set reviewComplete = (unitReport.resident_pastor_comment or unitReport.senior_pastor_comment) %}
 {% set canReviewHodReport = admin.role in ['super_admin', 'branch_super_admin'] %}
 {# and (int) (admin->branch_id ?? 0) === (int) unitReport->branch_id #}
@@ -22,9 +22,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>{{ unitReport.department.name or 'Unit Report' }} - {{ siteName }}</title>
-<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+{% include "partials/admin-head-assets.html" %}
 </head>
 <body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
 <div class="flex h-screen overflow-hidden">
@@ -42,7 +40,7 @@
       <h1 class="mt-3 text-2xl font-extrabold text-gray-950">{{ unitReport.department.name or 'Department' }} Unit Report</h1>
       <div class="mt-3 flex flex-wrap items-center gap-2 text-sm text-gray-600">
         <span class="inline-flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5"><i class="ri-building-4-line text-gray-400"></i>{{ unitReport.branch.name or 'N/A' }}</span>
-        <span class="inline-flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5"><i class="ri-user-3-line text-gray-400"></i>{{ unitReport.hod.name or 'N/A' }}</span>
+        <span class="inline-flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5"><i class="ri-user-3-line text-gray-400"></i>{{ unitReport.hod_admin.full_name or 'N/A' }}</span>
         <span class="inline-flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5"><i class="ri-calendar-line text-gray-400"></i>{{ unitReport.report_month if unitReport.report_month else 'N/A' }}</span>
       </div>
     </div>
@@ -67,54 +65,58 @@
     <section class="content-card p-5">
       <div class="flex items-center justify-between gap-3">
         <h2 class="text-base font-bold text-gray-900">Attendance Breakdown</h2>
-        <p class="text-xs text-gray-500">Weekly count by gender</p>
+        <p class="text-xs text-gray-500">Daily attendance vs. venue capacity</p>
       </div>
       <div class="mt-4 overflow-x-auto rounded-xl border border-gray-200">
         <table class="w-full min-w-[760px] text-sm">
           <thead>
             <tr class="border-b border-gray-100">
-              <th class="table-header px-3 py-3">Group</th>
-              {% for weekKey in weekKeys %}<th class="table-header px-3 py-3">{{ weekLabels[weekKey] }}</th>{% endfor %}
+              <th class="table-header px-3 py-3">&nbsp;</th>
+              {% for day in attendanceDays %}<th class="table-header px-3 py-3">{{ dayLabels[day] }}</th>{% endfor %}
+              <th class="table-header px-3 py-3">Total</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
-            {% for rowLabel, rowKey in attendanceRows.items() %}
+            <tr>
+              <td class="px-3 py-3 font-semibold text-gray-800">Attendance</td>
+              {% for day in attendanceDays %}<td class="px-3 py-3 text-gray-600">{{ (unitReport.attendance or {}).get(day, 0)|int }}</td>{% endfor %}
+              <td class="px-3 py-3 font-semibold text-gray-800">{{ attendanceTotal }}</td>
+            </tr>
+            <tr>
+              <td class="px-3 py-3 font-semibold text-gray-800">Capacity</td>
+              {% for day in attendanceDays %}<td class="px-3 py-3 text-gray-600">{{ (unitReport.attendance or {}).get(day + '_capacity', 0)|int }}</td>{% endfor %}
+              <td class="px-3 py-3 text-gray-400">&mdash;</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      {% if unitReport.attendance_note %}<p class="mt-3 text-xs text-gray-500">{{ unitReport.attendance_note }}</p>{% endif %}
+    </section>
+
+    <section class="content-card p-5">
+      <div class="flex items-center justify-between gap-3">
+        <h2 class="text-base font-bold text-gray-900">Collections</h2>
+        <p class="text-xs text-gray-500">Financial entries submitted by HOD</p>
+      </div>
+      <div class="mt-4 overflow-x-auto rounded-xl border border-gray-200">
+        <table class="w-full min-w-[420px] text-sm">
+          <thead>
+            <tr class="border-b border-gray-100">
+              <th class="table-header px-3 py-3">Category</th>
+              <th class="table-header px-3 py-3">Amount (NGN)</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {% for key, label in collectionLabels.items() %}
               <tr>
-                <td class="px-3 py-3 font-semibold text-gray-800">{{ rowLabel }}</td>
-                {% for weekKey in weekKeys %}<td class="px-3 py-3 text-gray-600">{{ ((unitReport.attendance or {}).get(rowKey, {}).get(weekKey, 0))|int }}</td>{% endfor %}
+                <td class="px-3 py-3 font-semibold text-gray-800">{{ label }}</td>
+                <td class="px-3 py-3 text-gray-600">{{ '{:,.0f}'.format((unitReport.collections or {}).get(key, 0)|float) }}</td>
               </tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
-    </section>
-
-    <section class="content-card p-5">
-      <div class="flex items-center justify-between gap-3">
-        <h2 class="text-base font-bold text-gray-900">Collections And Dues</h2>
-        <p class="text-xs text-gray-500">Financial entries submitted by HOD</p>
-      </div>
-      <div class="mt-4 overflow-x-auto rounded-xl border border-gray-200">
-        <table class="w-full min-w-[760px] text-sm">
-          <thead>
-            <tr class="border-b border-gray-100">
-              <th class="table-header px-3 py-3">Item</th>
-              {% for weekKey in weekKeys %}<th class="table-header px-3 py-3">{{ weekLabels[weekKey] }}</th>{% endfor %}
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            <tr>
-              <td class="px-3 py-3 font-semibold text-gray-800">Dues</td>
-              {% for weekKey in weekKeys %}<td class="px-3 py-3 text-gray-600">{{ '{:,.0f}'.format((unitReport.collections or {}).get('dues', {}).get(weekKey, 0)|int) }}</td>{% endfor %}
-            </tr>
-            <tr>
-              <td class="px-3 py-3 font-semibold text-gray-800">{{ unitReport.collections['others']['label'] if unitReport.collections['others']['label'] else 'Others' }}</td>
-              {% for weekKey in weekKeys %}<td class="px-3 py-3 text-gray-600">{{ '{:,.0f}'.format((unitReport.collections or {}).get('others', {}).get('weeks', {}).get(weekKey, 0)|int) }}</td>{% endfor %}
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-sm font-bold text-gray-800">Collections Total: {{ ('NGN ' + '{:,}'.format(collectionsTotal)) if collectionsTotal else '-' }}</div>
+      <div class="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-sm font-bold text-gray-800">Collections Total: {{ ('NGN ' + '{:,.0f}'.format(collectionsTotal)) if collectionsTotal else '-' }}</div>
     </section>
 
     <section class="content-card p-5">
@@ -146,9 +148,9 @@
       <dl class="mt-4 space-y-3 text-sm">
         <div class="flex justify-between gap-3"><dt class="text-gray-500">Branch</dt><dd class="font-semibold text-gray-900 text-right">{{ unitReport.branch.name or 'N/A' }}</dd></div>
         <div class="flex justify-between gap-3"><dt class="text-gray-500">Department</dt><dd class="font-semibold text-gray-900 text-right">{{ unitReport.department.name or 'N/A' }}</dd></div>
-        <div class="flex justify-between gap-3"><dt class="text-gray-500">HOD</dt><dd class="font-semibold text-gray-900 text-right">{{ unitReport.hod.name or 'N/A' }}</dd></div>
-        <div class="flex justify-between gap-3"><dt class="text-gray-500">Email</dt><dd class="font-semibold text-gray-900 text-right break-all">{{ unitReport.hod.email or 'N/A' }}</dd></div>
-        <div class="flex justify-between gap-3"><dt class="text-gray-500">Submitted</dt><dd class="font-semibold text-gray-900 text-right">{{ unitReport.submitted_at.strftime('M d, Y h:i A') if unitReport.submitted_at else 'Not submitted' }}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-gray-500">HOD</dt><dd class="font-semibold text-gray-900 text-right">{{ unitReport.hod_admin.full_name or 'N/A' }}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-gray-500">Email</dt><dd class="font-semibold text-gray-900 text-right break-all">{{ unitReport.hod_admin.email or 'N/A' }}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-gray-500">Submitted</dt><dd class="font-semibold text-gray-900 text-right">{{ unitReport.submitted_at.strftime('%b %d, %Y %I:%M %p') if unitReport.submitted_at else 'Not submitted' }}</dd></div>
       </dl>
     </section>
 

@@ -11,6 +11,7 @@ from app.models.harvest import (
 from app.models.site_settings import SiteSetting
 from app.models.slider import Slider
 from app.models.sermon import Sermon
+from app.models.story import Story
 from app.models.contact_inquiry import ContactInquiry
 from app.models.member import Member
 from app.models.department import Department
@@ -35,6 +36,7 @@ __all__ = [
     "SiteSetting",
     "Slider",
     "Sermon",
+    "Story",
     "ContactInquiry",
     "Member",
     "Department",

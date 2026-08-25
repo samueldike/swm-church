@@ -3,7 +3,9 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
 import os
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -28,7 +30,9 @@ def _redirect(request: Request, url: str, flash_msg: str | None = None, flash_ty
     if flash_msg:
         request.session["flash_messages"] = [{"type": flash_type, "message": flash_msg}]
         request.session[flash_type] = flash_msg
-    return RedirectResponse(url=url, status_code=303)
+    resp = RedirectResponse(url=url, status_code=303)
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return resp
 
 
 async def _get_admin(request: Request):
@@ -54,7 +58,7 @@ async def _admin_context(request: Request, db: AsyncSession, active_page: str = 
     is_hod = admin.role == "hod"
     branch_id = admin.branch_id if hasattr(admin, "branch_id") else None
 
-    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    seven_days_ago = datetime.utcnow() - timedelta(days=7)
     badges = {"members": 0, "events": 0, "inquiries": 0, "messages": 0, "unit_reports": 0}
 
     try:
@@ -64,16 +68,16 @@ async def _admin_context(request: Request, db: AsyncSession, active_page: str = 
         q = q.where(Member.created_at >= seven_days_ago)
         badges["members"] = (await db.execute(q)).scalar_one() or 0
     except Exception:
-        pass
+        logging.exception("Unhandled error")
 
     try:
         q = select(func.count()).select_from(Event)
         if not is_super and branch_id:
             q = q.where(Event.branch_id == branch_id)
-        q = q.where(Event.is_published == True, Event.starts_at >= datetime.now(timezone.utc))
+        q = q.where(Event.is_published == True, Event.starts_at >= datetime.utcnow())
         badges["events"] = (await db.execute(q)).scalar_one() or 0
     except Exception:
-        pass
+        logging.exception("Unhandled error")
 
     try:
         q = select(func.count()).select_from(ContactInquiry).where(ContactInquiry.status == "new")
@@ -81,7 +85,7 @@ async def _admin_context(request: Request, db: AsyncSession, active_page: str = 
             q = q.where(ContactInquiry.branch_id == branch_id)
         badges["inquiries"] = (await db.execute(q)).scalar_one() or 0
     except Exception:
-        pass
+        logging.exception("Unhandled error")
 
     try:
         q = select(func.count()).select_from(Sermon).where(Sermon.status == "draft")
@@ -89,7 +93,7 @@ async def _admin_context(request: Request, db: AsyncSession, active_page: str = 
             q = q.where(Sermon.branch_id == branch_id)
         badges["messages"] = (await db.execute(q)).scalar_one() or 0
     except Exception:
-        pass
+        logging.exception("Unhandled error")
 
     try:
         q = select(func.count()).select_from(UnitReport).where(UnitReport.status == "submitted")
@@ -100,7 +104,7 @@ async def _admin_context(request: Request, db: AsyncSession, active_page: str = 
             )
         badges["unit_reports"] = (await db.execute(q)).scalar_one() or 0
     except Exception:
-        pass
+        logging.exception("Unhandled error")
 
     role_label = "Super Admin" if is_super else ("Department HOD" if is_hod else "Branch Admin")
     name = admin.full_name if hasattr(admin, "full_name") else (admin.name if hasattr(admin, "name") else "Admin")
@@ -112,7 +116,7 @@ async def _admin_context(request: Request, db: AsyncSession, active_page: str = 
         settings = await get_settings(db)
         branch_name = settings.get("siteName", site_name)
     except Exception:
-        pass
+        logging.exception("Unhandled error")
 
     try:
         from app.models.branch import Branch
@@ -121,7 +125,7 @@ async def _admin_context(request: Request, db: AsyncSession, active_page: str = 
             if br:
                 branch_name = br.name
     except Exception:
-        pass
+        logging.exception("Unhandled error")
 
     critical_notifications = []
     if is_super:
@@ -130,13 +134,13 @@ async def _admin_context(request: Request, db: AsyncSession, active_page: str = 
             q = (
                 select(AdminAuditLog)
                 .where(AdminAuditLog.reviewed_at == None)
-                .where(AdminAuditLog.created_at >= datetime.now(timezone.utc) - timedelta(days=1))
+                .where(AdminAuditLog.created_at >= datetime.utcnow() - timedelta(days=1))
                 .order_by(AdminAuditLog.created_at.desc())
                 .limit(6)
             )
             critical_notifications = list((await db.execute(q)).scalars().all())
         except Exception:
-            pass
+            logging.exception("Unhandled error")
 
     return {
         "admin": admin,
@@ -229,13 +233,15 @@ async def admin_logout_view(request: Request):
 
 @router.get("/invitation/{token}", name="admin_invitation_accept_page")
 async def admin_invitation_accept_page(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy.orm import selectinload
     from app.models.branch_admin_invitation import BranchAdminInvitation
 
     result = await db.execute(
         select(BranchAdminInvitation)
+        .options(selectinload(BranchAdminInvitation.branch))
         .where(BranchAdminInvitation.token == token)
         .where(BranchAdminInvitation.accepted_at == None)
-        .where(BranchAdminInvitation.expires_at > datetime.now(timezone.utc))
+        .where(BranchAdminInvitation.expires_at > datetime.utcnow())
     )
     invitation = result.scalar_one_or_none()
     if not invitation:
@@ -254,14 +260,16 @@ async def admin_invitation_accept(
     password: str = Form(...), password_confirmation: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
+    from sqlalchemy.orm import selectinload
     from app.models.branch_admin_invitation import BranchAdminInvitation
     from app.models.admin import Admin
 
     result = await db.execute(
         select(BranchAdminInvitation)
+        .options(selectinload(BranchAdminInvitation.branch))
         .where(BranchAdminInvitation.token == token)
         .where(BranchAdminInvitation.accepted_at == None)
-        .where(BranchAdminInvitation.expires_at > datetime.now(timezone.utc))
+        .where(BranchAdminInvitation.expires_at > datetime.utcnow())
     )
     invitation = result.scalar_one_or_none()
     if not invitation:
@@ -290,11 +298,51 @@ async def admin_invitation_accept(
     db.add(admin_user)
     await db.flush()
 
-    invitation.accepted_at = datetime.now(timezone.utc)
+    invitation.accepted_at = datetime.utcnow()
     await db.flush()
 
     login_admin(request, admin_user.id)
     return RedirectResponse(url="/admin/dashboard", status_code=303)
+
+
+async def _giving_trend_data(db: AsyncSession):
+    """Real 6-period giving trend from the `givings` table (tithe/offering/special buckets)."""
+    from app.models.giving import Giving
+
+    now_naive = datetime.utcnow()
+    givingTrend: list[dict] = []
+    maxGiving = 0.0
+    try:
+        for i in range(6):
+            window_end = now_naive - timedelta(days=30 * (5 - i))
+            window_start = window_end - timedelta(days=30)
+            label = window_end.strftime("%b")
+            q = (
+                select(Giving.giving_type, func.sum(Giving.amount))
+                .where(
+                    Giving.status == "success",
+                    Giving.paid_at >= window_start,
+                    Giving.paid_at < window_end,
+                )
+                .group_by(Giving.giving_type)
+            )
+            rows = (await db.execute(q)).all()
+            tithe = offering = special = 0.0
+            for giving_type, total in rows:
+                gt = (giving_type or "").strip().lower()
+                total = float(total or 0)
+                if gt == "tithe":
+                    tithe += total
+                elif gt == "offering":
+                    offering += total
+                else:
+                    special += total
+            givingTrend.append({"label": label, "tithe": tithe, "offering": offering, "special": special})
+            maxGiving = max(maxGiving, tithe, offering, special)
+    except Exception:
+        logging.exception("Failed to compute giving trend")
+    totalThisMonth = sum(g["tithe"] + g["offering"] + g["special"] for g in givingTrend[-1:])
+    return givingTrend, maxGiving, totalThisMonth
 
 
 # ─── Dashboard ─────────────────────────────────────────────────────
@@ -322,12 +370,12 @@ async def admin_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             q = q.where(Member.branch_id == admin.branch_id)
         total_members = (await db.execute(q)).scalar_one() or 0
     except Exception:
-        pass
+        logging.exception("Unhandled error")
 
     try:
         q = (
             select(Event)
-            .where(Event.is_published == True, Event.starts_at >= datetime.now(timezone.utc))
+            .where(Event.is_published == True, Event.starts_at >= datetime.utcnow())
             .order_by(Event.starts_at.asc())
             .limit(5)
         )
@@ -335,7 +383,7 @@ async def admin_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             q = q.where(Event.branch_id == admin.branch_id)
         upcoming_events = list((await db.execute(q)).scalars().all())
     except Exception:
-        pass
+        logging.exception("Unhandled error")
 
     try:
         q = (
@@ -348,22 +396,108 @@ async def admin_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
             q = q.where(ContactInquiry.branch_id == admin.branch_id)
         recent_inquiries = list((await db.execute(q)).scalars().all())
     except Exception:
-        pass
+        logging.exception("Unhandled error")
+
+    # Load real data for dashboard sections
+    from app.models.department import Department
+    from app.models.branch import Branch
+    from app.models.admin import AdminAuditLog
+
+    departmentsCount = 0
+    branchesCount = 0
+    sermonsCount = 0
+    recentMembers = []
+    departmentDistribution = {}
+    branchPerformance = []
+    activityFeed = []
+    upcomingEvents = []
+
+    try:
+        departmentsCount = (await db.execute(select(func.count()).select_from(Department))).scalar_one() or 0
+    except Exception:
+        logging.exception("Unhandled error")
+
+    try:
+        if ctx["is_super"]:
+            branchesCount = (await db.execute(select(func.count()).select_from(Branch))).scalar_one() or 0
+        else:
+            branchesCount = 1 if admin.branch_id else 0
+    except Exception:
+        logging.exception("Unhandled error")
+
+    try:
+        q = select(func.count()).select_from(Sermon)
+        if not ctx["is_super"] and admin.branch_id:
+            q = q.where(Sermon.branch_id == admin.branch_id)
+        sermonsCount = (await db.execute(q)).scalar_one() or 0
+    except Exception:
+        logging.exception("Unhandled error")
+
+    # Recent members
+    try:
+        from sqlalchemy.orm import selectinload
+        q = select(Member).options(selectinload(Member.branch)).order_by(Member.created_at.desc()).limit(10)
+        if not ctx["is_super"] and admin.branch_id:
+            q = q.where(Member.branch_id == admin.branch_id)
+        recentMembers = list((await db.execute(q)).scalars().all())
+    except Exception:
+        logging.exception("Failed to load recent members for dashboard")
+
+    # Department distribution
+    try:
+        q = select(Department.name, func.count(Member.id).label("cnt")).join(Member, Member.branch_id == Department.id, isouter=True).group_by(Department.name).order_by(func.count(Member.id).desc())
+        result = await db.execute(q)
+        rows = result.all()
+        total_dept_members = sum(r.cnt for r in rows) if rows else 1
+        for i, row in enumerate(rows):
+            pct = round(row.cnt / total_dept_members * 100) if total_dept_members else 0
+            departmentDistribution[i] = {"name": row.name, "members_count": row.cnt, "pct": pct}
+    except Exception:
+        logging.exception("Unhandled error")
+
+    # Branch performance
+    try:
+        q = select(Branch.name, func.count(Member.id).label("cnt")).join(Member, Member.branch_id == Branch.id, isouter=True).group_by(Branch.name).order_by(func.count(Member.id).desc())
+        result = await db.execute(q)
+        rows = result.all()
+        max_branch = max((r.cnt for r in rows), default=1) if rows else 1
+        for row in rows:
+            bar_pct = round(row.cnt / max_branch * 100) if max_branch else 0
+            branchPerformance.append({"name": row.name, "members_count": row.cnt, "growth": 0, "bar_pct": bar_pct})
+    except Exception:
+        logging.exception("Unhandled error")
+
+    # Activity feed
+    try:
+        q = select(AdminAuditLog).order_by(AdminAuditLog.created_at.desc()).limit(10)
+        activityFeed = list((await db.execute(q)).scalars().all())
+    except Exception:
+        logging.exception("Unhandled error")
+
+    if ctx.get("is_super"):
+        dashboardScopeLabel = "across all branches"
+    elif admin.branch_id and getattr(admin, "branch", None):
+        dashboardScopeLabel = f"at {admin.branch.name}"
+    else:
+        dashboardScopeLabel = f"at {(await get_settings(db)).get('siteName', 'SWM')} HQ"
+
+    givingTrend, maxGiving, totalThisMonth = await _giving_trend_data(db)
 
     return await render_template(request, "admin/dashboard.html", {
         "_db": db,
         "title": "Dashboard",
         "headerIcon": "ri-dashboard-3-line",
+        "dashboardScopeLabel": dashboardScopeLabel,
         "total_members": total_members,
         "upcoming_events": upcoming_events,
         "recent_inquiries": recent_inquiries,
-        "current_date": datetime.now(timezone.utc).strftime("%A, %b %d, %Y"),
+        "current_date": datetime.utcnow().strftime("%A, %b %d, %Y"),
         "membersCount": total_members,
         "eventsCount": len(upcoming_events),
         "newInquiries": len(recent_inquiries),
-        "departmentsCount": 0,
-        "branchesCount": 0,
-        "sermonsCount": 0,
+        "departmentsCount": departmentsCount,
+        "branchesCount": branchesCount,
+        "sermonsCount": sermonsCount,
         "membersDelta": 0,
         "eventsDelta": 0,
         "inquiriesDelta": 0,
@@ -372,13 +506,13 @@ async def admin_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         "branchesForChart": {},
         "maxAttendance": 0,
         "weeklyAttendance": [],
-        "givingTrend": [],
-        "maxGiving": 0,
-        "totalThisMonth": 0,
-        "recentMembers": [],
-        "departmentDistribution": {},
-        "branchPerformance": [],
-        "activityFeed": [],
+        "givingTrend": givingTrend,
+        "maxGiving": maxGiving,
+        "totalThisMonth": totalThisMonth,
+        "recentMembers": recentMembers,
+        "departmentDistribution": departmentDistribution,
+        "branchPerformance": branchPerformance,
+        "activityFeed": activityFeed,
         "upcomingEvents": upcoming_events,
         "recentMessages": [],
         "recentInquiries": recent_inquiries,
@@ -388,13 +522,113 @@ async def admin_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     })
 
 
-@router.get("/metrics", name="admin_dashboard_metrics")
-async def admin_dashboard_metrics(request: Request, db: AsyncSession = Depends(get_db)):
+@router.get("/metrics", name="admin.dashboard.metrics")
+async def admin_dashboard_metrics(request: Request, db: AsyncSession = Depends(get_db), mode: str = Query("7d"), start_date: str = Query(None), end_date: str = Query(None)):
+    mode = (mode or "7d").lower()
     admin = await _get_admin(request)
     if not admin:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
-
-    return JSONResponse({"ok": True})
+    from app.models.member import Member
+    from app.models.event import Event
+    from app.models.branch import Branch
+    from app.models.department import Department
+    from app.models.sermon import Sermon
+    from app.models.contact_inquiry import ContactInquiry
+    from app.models.unit_report import UnitReport
+    now = datetime.utcnow()
+    now_naive = datetime.utcnow()
+    def _parse(q):
+        try:
+            dt = datetime.fromisoformat(q)
+            if dt.tzinfo is not None:
+                dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+            return dt
+        except:
+            return None
+    sd = _parse(start_date); ed = _parse(end_date)
+    if mode == "7d": sd = now_naive - timedelta(days=7)
+    elif mode == "30d": sd = now_naive - timedelta(days=30)
+    elif mode == "90d": sd = now_naive - timedelta(days=90)
+    elif mode == "1y": sd = now_naive - timedelta(days=365)
+    elif mode == "all": sd = None
+    elif mode == "range":
+        if not sd: sd = now_naive - timedelta(days=7)
+        if not ed: ed = now_naive
+    is_super = admin.role == "super_admin"; branch_id = admin.branch_id
+    def _scope(q, model):
+        if not is_super and branch_id and hasattr(model, "branch_id"):
+            return q.where(model.branch_id == branch_id)
+        return q
+    async def _count(model, extra=None):
+        q = select(func.count()).select_from(model)
+        q = _scope(q, model)
+        if extra is not None:
+            for c in extra: q = q.where(c)
+        if sd and hasattr(model, "created_at"): q = q.where(model.created_at >= sd)
+        if ed and hasattr(model, "created_at"): q = q.where(model.created_at <= ed)
+        try: return (await db.execute(q)).scalar_one() or 0
+        except: return 0
+    membersCount = await _count(Member)
+    eventsCount = await _count(Event, [Event.is_published == True])
+    try:
+        branchesCount = (await db.execute(select(func.count()).select_from(Branch))).scalar_one() or 0 if is_super else 1
+    except: branchesCount = 1 if not is_super else 0
+    try:
+        departmentsCount = (await db.execute(select(func.count()).select_from(Department))).scalar_one() or 0
+    except: departmentsCount = 0
+    sermonsCount = await _count(Sermon)
+    inquiriesCount = await _count(ContactInquiry, [ContactInquiry.status == "new"])
+    try:
+        q = select(func.count()).select_from(Member).where(Member.created_at >= now_naive - timedelta(days=7))
+        q = _scope(q, Member); recent_members = (await db.execute(q)).scalar_one() or 0
+        q2 = select(func.count()).select_from(Member).where(Member.created_at >= now_naive - timedelta(days=14), Member.created_at < now_naive - timedelta(days=7))
+        q2 = _scope(q2, Member); prev_members = (await db.execute(q2)).scalar_one() or 0
+        membersDelta = recent_members - prev_members
+    except: membersDelta = 0
+    try:
+        q = select(func.count()).select_from(Event).where(Event.is_published == True, Event.starts_at >= now_naive)
+        q = _scope(q, Event); eventsDelta = (await db.execute(q)).scalar_one() or 0
+    except: eventsDelta = 0
+    try:
+        q = select(func.count()).select_from(ContactInquiry).where(ContactInquiry.status == "new")
+        q = _scope(q, ContactInquiry); inquiriesDelta = (await db.execute(q)).scalar_one() or 0
+    except: inquiriesDelta = 0
+    try:
+        q = select(func.count()).select_from(Sermon).where(Sermon.status == "draft")
+        q = _scope(q, Sermon); messagesDelta = (await db.execute(q)).scalar_one() or 0
+    except: messagesDelta = 0
+    try:
+        branches_list = list((await db.execute(select(Branch).order_by(Branch.name))).scalars().all())
+    except: branches_list = []
+    palette = ["#c9a227","#34d399","#38bdf8","#a78bfa","#fb923c"]
+    attendanceTrend = []; maxAttendance = 0
+    try:
+        for i in range(6):
+            label_dt = now_naive - timedelta(days=30 * (5 - i)); label = label_dt.strftime("%b"); br_vals = {}
+            for b in branches_list:
+                cnt = 0
+                try:
+                    qr = select(func.count()).select_from(UnitReport).where(UnitReport.branch_id == b.id)
+                    if sd: qr = qr.where(UnitReport.created_at >= sd)
+                    if ed: qr = qr.where(UnitReport.created_at <= ed)
+                    cnt = (await db.execute(qr)).scalar_one() or 0; cnt = cnt * 10
+                except: cnt = 0
+                br_vals[b.name] = cnt; maxAttendance = max(maxAttendance, cnt)
+            attendanceTrend.append({"label": label, "branches": br_vals})
+    except: pass
+    weeklyAttendance = []
+    try:
+        for d in range(7):
+            day = now_naive - timedelta(days=6 - d); label = day.strftime("%a"); att = 0
+            try:
+                q = select(func.count()).select_from(Member).where(func.date(Member.created_at) == day.date())
+                q = _scope(q, Member); att = (await db.execute(q)).scalar_one() or 0
+            except: att = 0
+            cap = max(100, att * 2 or 100); pct = int(att / cap * 100) if cap else 0
+            weeklyAttendance.append({"label": label, "attendance": att, "capacity": cap, "pct": pct})
+    except: pass
+    givingTrend, maxGiving, totalThisMonth = await _giving_trend_data(db)
+    return JSONResponse({"stats": {"members": {"value": membersCount, "delta": membersDelta, "suffix": ""}, "events": {"value": eventsCount, "delta": eventsDelta, "suffix": ""}, "inquiries": {"value": inquiriesCount, "delta": inquiriesDelta, "suffix": ""}, "departments": {"value": departmentsCount, "delta": 0, "suffix": ""}, "branches": {"value": branchesCount, "delta": 0, "suffix": ""}, "messages": {"value": sermonsCount, "delta": messagesDelta, "suffix": ""}}, "attendanceTrend": attendanceTrend, "branches": [b.name for b in branches_list], "palette": palette, "maxAttendance": maxAttendance, "weeklyAttendance": weeklyAttendance, "givingTrend": givingTrend, "maxGiving": maxGiving, "totalThisMonth": totalThisMonth, "range": {"mode": mode}})
 
 
 # ─── Members ───────────────────────────────────────────────────────
@@ -406,7 +640,8 @@ async def admin_members(request: Request, db: AsyncSession = Depends(get_db), q:
         return RedirectResponse(url="/admin", status_code=303)
 
     from app.models.member import Member
-    query = select(Member)
+    from sqlalchemy.orm import selectinload
+    query = select(Member).options(selectinload(Member.branch))
 
     if not admin.role == "super_admin" and admin.branch_id:
         query = query.where(Member.branch_id == admin.branch_id)
@@ -503,13 +738,22 @@ async def admin_hods(request: Request, db: AsyncSession = Depends(get_db)):
     if not admin:
         return RedirectResponse(url="/admin", status_code=303)
 
+    from sqlalchemy.orm import selectinload
     from app.models.admin import Admin as AdminModel
-    result = await db.execute(select(AdminModel).where(AdminModel.role == "hod").order_by(AdminModel.created_at.desc()))
+    result = await db.execute(
+        select(AdminModel)
+        .options(selectinload(AdminModel.branch), selectinload(AdminModel.department))
+        .where(AdminModel.role == "hod")
+        .order_by(AdminModel.created_at.desc())
+    )
     hods = list(result.scalars().all())
 
     from app.models.hod_invitation import HodInvitation
     inv_result = await db.execute(
-        select(HodInvitation).order_by(HodInvitation.created_at.desc()).limit(10)
+        select(HodInvitation)
+        .options(selectinload(HodInvitation.branch), selectinload(HodInvitation.department))
+        .order_by(HodInvitation.created_at.desc())
+        .limit(10)
     )
     invitations = list(inv_result.scalars().all())
 
@@ -547,7 +791,7 @@ async def admin_hods_invite(
         branch_id=branch_id,
         invited_by_admin_id=admin.id,
         token=token,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        expires_at=datetime.utcnow() + timedelta(days=7),
     )
     db.add(invitation)
     await db.flush()
@@ -562,8 +806,13 @@ async def admin_harvesttrack(request: Request, db: AsyncSession = Depends(get_db
     if not admin:
         return RedirectResponse(url="/admin", status_code=303)
 
-    from app.models.harvest import HarvestWorker
-    query = select(HarvestWorker).order_by(HarvestWorker.created_at.desc())
+    from sqlalchemy.orm import selectinload
+    from app.models.harvest import HarvestWorker, HarvestContact
+    query = (
+        select(HarvestWorker)
+        .options(selectinload(HarvestWorker.branch), selectinload(HarvestWorker.contacts))
+        .order_by(HarvestWorker.created_at.desc())
+    )
     if not admin.role == "super_admin" and admin.branch_id:
         query = query.where(HarvestWorker.branch_id == admin.branch_id)
     result = await db.execute(query)
@@ -575,9 +824,20 @@ async def admin_harvesttrack(request: Request, db: AsyncSession = Depends(get_db
         'inactive_workers': len([w for w in workers if not w.is_active]) if workers else 0,
     }
 
+    contacts_query = (
+        select(HarvestContact)
+        .options(selectinload(HarvestContact.worker))
+        .order_by(HarvestContact.created_at.desc())
+        .limit(20)
+    )
+    if not admin.role == "super_admin" and admin.branch_id:
+        worker_ids = [w.id for w in workers]
+        contacts_query = contacts_query.where(HarvestContact.worker_id.in_(worker_ids)) if worker_ids else contacts_query.where(False)
+    contacts = list((await db.execute(contacts_query)).scalars().all())
+
     ctx = await _admin_context(request, db, "admin.harvesttrack")
     return await render_template(request, "admin/harvesttrack.html", {
-        "_db": db, "workers": workers, "stats": stats,
+        "_db": db, "workers": workers, "stats": stats, "contacts": contacts,
         "title": "HarvestTrack", "headerIcon": "ri-seedling-line", **ctx,
     })
 
@@ -616,8 +876,13 @@ async def admin_admins(request: Request, db: AsyncSession = Depends(get_db)):
     if not admin or admin.role != "super_admin":
         return RedirectResponse(url="/admin/dashboard", status_code=303)
 
+    from sqlalchemy.orm import selectinload
     from app.models.admin import Admin as AdminModel
-    result = await db.execute(select(AdminModel).order_by(AdminModel.created_at.desc()))
+    result = await db.execute(
+        select(AdminModel)
+        .options(selectinload(AdminModel.branch))
+        .order_by(AdminModel.created_at.desc())
+    )
     admins_list = list(result.scalars().all())
 
     from app.models.branch import Branch
@@ -659,7 +924,7 @@ async def admin_admins_store(
 # ─── Events ────────────────────────────────────────────────────────
 
 @router.get("/events", name="admin_events")
-async def admin_events(request: Request, db: AsyncSession = Depends(get_db)):
+async def admin_events(request: Request, db: AsyncSession = Depends(get_db), month: str = Query(None)):
     import calendar as cal_mod
     from datetime import date, timedelta
 
@@ -675,7 +940,14 @@ async def admin_events(request: Request, db: AsyncSession = Depends(get_db)):
     events = list(result.scalars().all())
 
     now = datetime.utcnow()
-    currentMonth = date(now.year, now.month, 1)
+    if month:
+        try:
+            parts = month.split("-")
+            currentMonth = date(int(parts[0]), int(parts[1]), 1)
+        except (ValueError, IndexError):
+            currentMonth = date(now.year, now.month, 1)
+    else:
+        currentMonth = date(now.year, now.month, 1)
     prevMonth = (currentMonth - timedelta(days=1)).replace(day=1)
     nextMonth = (currentMonth + timedelta(days=32)).replace(day=1)
 
@@ -741,7 +1013,7 @@ async def admin_events_store(
         title=title.strip(),
         description=description.strip() if description else None,
         location=location.strip() if location else None,
-        starts_at=datetime.fromisoformat(start_date) if start_date else datetime.now(timezone.utc),
+        starts_at=datetime.fromisoformat(start_date) if start_date else datetime.utcnow(),
         ends_at=datetime.fromisoformat(end_date) if end_date else None,
         is_major=is_major,
         is_published=True,
@@ -751,6 +1023,58 @@ async def admin_events_store(
     db.add(event)
     await db.flush()
     return _redirect(request, "/admin/events", "Event created successfully.")
+
+
+@router.post("/events/{event_id}/update", name="admin_events_update")
+async def admin_events_update(
+    event_id: int, request: Request, db: AsyncSession = Depends(get_db),
+    title: str = Form(""), description: str = Form(""),
+    location: str = Form(""), start_date: str = Form(""),
+    end_date: str = Form(""), is_major: bool = Form(False),
+):
+    admin = await _get_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+
+    from app.models.event import Event
+    result = await db.execute(select(Event).where(Event.id == event_id))
+    event = result.scalar_one_or_none()
+    if not event:
+        return _redirect(request, "/admin/events", "Event not found.", "error")
+
+    event.title = title.strip() or event.title
+    event.description = description.strip() if description else None
+    event.location = location.strip() if location else None
+    if start_date:
+        try:
+            event.starts_at = datetime.fromisoformat(start_date)
+        except ValueError:
+            pass
+    if end_date:
+        try:
+            event.ends_at = datetime.fromisoformat(end_date)
+        except ValueError:
+            pass
+    event.is_major = is_major
+    await db.flush()
+    return _redirect(request, "/admin/events", "Event updated successfully.")
+
+
+@router.post("/events/{event_id}/destroy", name="admin_events_destroy")
+async def admin_events_destroy(event_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    admin = await _get_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+
+    from app.models.event import Event
+    result = await db.execute(select(Event).where(Event.id == event_id))
+    event = result.scalar_one_or_none()
+    if not event:
+        return _redirect(request, "/admin/events", "Event not found.", "error")
+
+    await db.delete(event)
+    await db.flush()
+    return _redirect(request, "/admin/events", "Event deleted successfully.")
 
 
 # ─── Departments ───────────────────────────────────────────────────
@@ -782,8 +1106,16 @@ async def admin_departments_store(
         return RedirectResponse(url="/admin", status_code=303)
 
     from app.models.department import Department
+    from slugify import slugify
+    base_slug = slugify(name.strip())
+    slug = base_slug
+    suffix = 2
+    while (await db.execute(select(Department.id).where(Department.slug == slug))).scalar_one_or_none():
+        slug = f"{base_slug}-{suffix}"
+        suffix += 1
     dept = Department(
         name=name.strip(),
+        slug=slug,
         description=description.strip() if description else None,
         created_by_admin_id=admin.id,
     )
@@ -849,7 +1181,13 @@ async def admin_branches_store(
         return RedirectResponse(url="/admin/dashboard", status_code=303)
 
     from app.models.branch import Branch
-    slug = name.strip().lower().replace(" ", "-")
+    from slugify import slugify
+    base_slug = slugify(name.strip())
+    slug = base_slug
+    suffix = 2
+    while (await db.execute(select(Branch.id).where(Branch.slug == slug))).scalar_one_or_none():
+        slug = f"{base_slug}-{suffix}"
+        suffix += 1
     branch = Branch(
         name=name.strip(), slug=slug,
         address=address.strip() if address else None,
@@ -870,7 +1208,8 @@ async def admin_messages(request: Request, db: AsyncSession = Depends(get_db)):
         return RedirectResponse(url="/admin", status_code=303)
 
     from app.models.sermon import Sermon
-    query = select(Sermon).order_by(Sermon.created_at.desc())
+    from sqlalchemy.orm import selectinload
+    query = select(Sermon).options(selectinload(Sermon.branch)).order_by(Sermon.created_at.desc())
     if not admin.role == "super_admin" and admin.branch_id:
         query = query.where(Sermon.branch_id == admin.branch_id)
     result = await db.execute(query)
@@ -884,15 +1223,13 @@ async def admin_messages(request: Request, db: AsyncSession = Depends(get_db)):
     
     platforms = {
         "Telegram": "telegram",
-        "YouTube": "youtube",
-        "Spotify": "spotify",
-        "Apple Podcasts": "apple_podcasts",
-        "SoundCloud": "soundcloud",
     }
-    
+    feed_url = str(request.base_url).rstrip("/") + "/feed.xml"
+
     return await render_template(request, "admin/messages.html", {
         "_db": db, "sermons": sermons, "branches": branches, "platforms": platforms,
-        "current_date_iso": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "current_date_iso": datetime.utcnow().strftime("%Y-%m-%d"),
+        "feed_url": feed_url,
         "title": "Audio Messages", "headerIcon": "ri-message-3-line", **ctx,
     })
 
@@ -905,6 +1242,7 @@ async def admin_messages_store(
     status: str = Form("draft"), published_on: str = Form(""),
     branch_id: int | None = Form(None),
     audio_file: UploadFile | None = File(None),
+    platform_targets: list[str] = Form([]),
 ):
     admin = await _get_admin(request)
     if not admin:
@@ -921,9 +1259,10 @@ async def admin_messages_store(
         preacher=speaker_val,
         description=description.strip() if description else None,
         caption=caption.strip() if caption else None,
-        status=status.strip() or "draft",
+        status=status.strip().lower() or "draft",
         branch_id=branch_id if admin.role == "super_admin" and branch_id else admin.branch_id,
         created_by=admin.id,
+        platform_targets=[p for p in platform_targets if p] or None,
     )
 
     if published_on:
@@ -932,39 +1271,52 @@ async def admin_messages_store(
         except ValueError:
             pass
     elif status == "published":
-        sermon.published_at = datetime.now(timezone.utc)
+        sermon.published_at = datetime.utcnow()
 
     if audio_file and audio_file.filename:
         file_bytes = await audio_file.read()
+        if len(file_bytes) > 50 * 1024 * 1024:
+            return _redirect(request, "/admin/messages", "Audio file too large (max 50MB).", "error")
+        ext = (audio_file.filename or "").rsplit(".", 1)[-1].lower() if "." in (audio_file.filename or "") else ""
+        if audio_file.content_type and not audio_file.content_type.startswith("audio/") and ext not in ["mp3","wav","m4a","ogg","flac","aac","wma","mpga"]:
+            return _redirect(request, "/admin/messages", "Invalid audio format.", "error")
         sermon.original_file_name = audio_file.filename
         sermon.original_file_size = len(file_bytes)
 
-        tg = TelegramDistributor()
-        if await tg.configured():
-            tg_result = await tg.send_audio(
-                file_bytes=file_bytes,
-                filename=audio_file.filename,
-                title=title.strip(),
-                caption=caption.strip() if caption else title.strip(),
-            )
-            if tg_result:
-                sermon.telegram_file_id = tg_result.get("file_id")
-                sermon.telegram_message_id = str(tg_result.get("message_id", ""))
-                sermon.status = "published"
-                if not sermon.published_at:
-                    sermon.published_at = datetime.now(timezone.utc)
+        media_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "media", "sermons")
+        os.makedirs(media_dir, exist_ok=True)
+        stored_filename = f"{secrets.token_hex(16)}.{ext or 'mp3'}"
+        with open(os.path.join(media_dir, stored_filename), "wb") as f:
+            f.write(file_bytes)
+        sermon.audio_file_path = f"media/sermons/{stored_filename}"
+        sermon.media_url = f"/media/sermons/{stored_filename}"
 
-                try:
-                    from app.tasks import transcribe_audio_task
-                    transcribe_audio_task.delay(sermon.id, tg_result["file_id"])
-                except Exception:
-                    pass
+        if sermon.platform_targets and "telegram" in sermon.platform_targets:
+            tg = TelegramDistributor()
+            if await tg.configured():
+                tg_result = await tg.send_audio(
+                    file_bytes=file_bytes,
+                    filename=audio_file.filename,
+                    title=title.strip(),
+                    caption=caption.strip() if caption else title.strip(),
+                )
+                if tg_result:
+                    sermon.telegram_file_id = tg_result.get("file_id")
+                    sermon.telegram_message_id = str(tg_result.get("message_id", ""))
+
+                    try:
+                        from app.tasks import transcribe_audio_task
+                        transcribe_audio_task.delay(sermon.id, tg_result["file_id"])
+                    except Exception:
+                        logging.exception("Unhandled error")
+
+        if not sermon.published_at and sermon.status == "published":
+            sermon.published_at = datetime.utcnow()
 
     db.add(sermon)
     await db.flush()
 
-    flash = "Audio message created and published to Telegram." if sermon.telegram_file_id else "Audio message created."
-    return _redirect(request, "/admin/messages", flash)
+    return _redirect(request, "/admin/messages", "Audio message created successfully.")
 
 
 # ─── Inquiries ─────────────────────────────────────────────────────
@@ -976,15 +1328,22 @@ async def admin_inquiries(request: Request, db: AsyncSession = Depends(get_db)):
         return RedirectResponse(url="/admin", status_code=303)
 
     from app.models.contact_inquiry import ContactInquiry
-    query = select(ContactInquiry).order_by(ContactInquiry.created_at.desc())
+    from app.models.branch import Branch
+    from sqlalchemy.orm import selectinload
+    query = select(ContactInquiry).options(selectinload(ContactInquiry.branch)).order_by(ContactInquiry.created_at.desc())
     if not admin.role == "super_admin" and admin.branch_id:
         query = query.where(ContactInquiry.branch_id == admin.branch_id)
     result = await db.execute(query)
     inquiries = list(result.scalars().all())
-
+    branches = []
+    try:
+        br = await db.execute(select(Branch).order_by(Branch.name))
+        branches = list(br.scalars().all())
+    except Exception:
+        logging.exception("Unhandled error")
     ctx = await _admin_context(request, db, "admin.inquiries")
     return await render_template(request, "admin/inquiries.html", {
-        "_db": db, "inquiries": inquiries,
+        "_db": db, "inquiries": inquiries, "branches": branches,
         "title": "Inquiries", "headerIcon": "ri-question-answer-line", **ctx,
     })
 
@@ -992,19 +1351,21 @@ async def admin_inquiries(request: Request, db: AsyncSession = Depends(get_db)):
 @router.post("/inquiries", name="admin_inquiries_store")
 async def admin_inquiries_store(
     request: Request, db: AsyncSession = Depends(get_db),
-    inquiry_id: int = Form(...), status: str = Form(""),
+    name: str = Form(...), email: str = Form(...), phone: str = Form(""), branch_id: int | None = Form(None),
+    subject: str = Form(...), message: str = Form(...), status: str = Form("new"),
 ):
     admin = await _get_admin(request)
     if not admin:
         return RedirectResponse(url="/admin", status_code=303)
-
     from app.models.contact_inquiry import ContactInquiry
-    result = await db.execute(select(ContactInquiry).where(ContactInquiry.id == inquiry_id))
-    inquiry = result.scalar_one_or_none()
-    if inquiry:
-        inquiry.status = status
-        await db.flush()
-    return _redirect(request, "/admin/inquiries", "Inquiry updated.")
+    inquiry = ContactInquiry(
+        name=name.strip(), email=email.strip(), phone=phone.strip() if phone else None,
+        branch_id=branch_id if admin.role == "super_admin" and branch_id else admin.branch_id,
+        subject=subject.strip(), message=message.strip(), status=status.strip().lower() or "new",
+    )
+    db.add(inquiry)
+    await db.flush()
+    return _redirect(request, "/admin/inquiries", "Inquiry created successfully.")
 
 
 # ─── Unit Reports ──────────────────────────────────────────────────
@@ -1016,7 +1377,16 @@ async def admin_unit_reports(request: Request, db: AsyncSession = Depends(get_db
         return RedirectResponse(url="/admin", status_code=303)
 
     from app.models.unit_report import UnitReport
-    query = select(UnitReport).order_by(UnitReport.created_at.desc())
+    from sqlalchemy.orm import selectinload
+    query = (
+        select(UnitReport)
+        .options(
+            selectinload(UnitReport.branch),
+            selectinload(UnitReport.department),
+            selectinload(UnitReport.hod_admin),
+        )
+        .order_by(UnitReport.created_at.desc())
+    )
     if not admin.role == "super_admin" and admin.branch_id:
         query = query.where(UnitReport.branch_id == admin.branch_id)
     result = await db.execute(query)
@@ -1082,6 +1452,15 @@ async def admin_settings(request: Request, db: AsyncSession = Depends(get_db)):
         return RedirectResponse(url="/admin/dashboard", status_code=303)
 
     settings = await get_settings(db)
+    from app.core.settings_cache import LEGACY_SETTING_KEY_ALIASES
+    for legacy_key, canonical_key in LEGACY_SETTING_KEY_ALIASES.items():
+        if settings.get(canonical_key):
+            settings[legacy_key] = settings[canonical_key]
+    if settings.get("church_accounts"):
+        try:
+            settings["church_accounts"] = json.loads(settings["church_accounts"])
+        except (json.JSONDecodeError, TypeError):
+            settings["church_accounts"] = []
 
     timezones = ['Africa/Lagos', 'Africa/Accra', 'Africa/Nairobi', 'Africa/Johannesburg',
                  'Europe/London', 'Europe/Paris', 'Europe/Berlin',
@@ -1090,16 +1469,33 @@ async def admin_settings(request: Request, db: AsyncSession = Depends(get_db)):
                  'Australia/Sydney', 'Pacific/Auckland', 'UTC']
 
     themePresets = {
-        'default': {'name': 'Default Gold', 'primary': '#c9a227', 'bg': '#f5f3ee', 'text': '#1a1a1a'},
-        'dark': {'name': 'Dark Mode', 'primary': '#c9a227', 'bg': '#1a1a1a', 'text': '#f5f3ee'},
-        'blue': {'name': 'Royal Blue', 'primary': '#2563eb', 'bg': '#f0f4ff', 'text': '#1e293b'},
-        'green': {'name': 'Nature Green', 'primary': '#16a34a', 'bg': '#f0fdf4', 'text': '#14532d'},
+        'default': {
+            'name': 'Default Gold', 'description': 'Warm gold accent on a light cream background.',
+            'primary': '#c9a227', 'primary_dark': '#a5831f', 'primary_light': '#e8d5a3',
+            'secondary': '#1a1a1a', 'background': '#f5f3ee', 'sidebar': '#1a1814',
+        },
+        'dark': {
+            'name': 'Dark Mode', 'description': 'Gold accent on a dark charcoal background.',
+            'primary': '#c9a227', 'primary_dark': '#a5831f', 'primary_light': '#e8d5a3',
+            'secondary': '#f5f3ee', 'background': '#1a1a1a', 'sidebar': '#0f0d0a',
+        },
+        'blue': {
+            'name': 'Royal Blue', 'description': 'Cool royal blue accent for a modern look.',
+            'primary': '#2563eb', 'primary_dark': '#1d4ed8', 'primary_light': '#93c5fd',
+            'secondary': '#1e293b', 'background': '#f0f4ff', 'sidebar': '#0f172a',
+        },
+        'green': {
+            'name': 'Nature Green', 'description': 'Fresh green accent inspired by nature.',
+            'primary': '#16a34a', 'primary_dark': '#15803d', 'primary_light': '#86efac',
+            'secondary': '#14532d', 'background': '#f0fdf4', 'sidebar': '#0f2417',
+        },
     }
 
     ctx = await _admin_context(request, db, "admin.settings")
+    feed_url = str(request.base_url).rstrip("/") + "/feed.xml"
     return await render_template(request, "admin/settings.html", {
         "_db": db, "settings": settings, "timezones": timezones,
-        "themePresets": themePresets,
+        "themePresets": themePresets, "feed_url": feed_url,
         "title": "Settings", "headerIcon": "ri-settings-4-line", **ctx,
     })
 
@@ -1112,12 +1508,85 @@ async def admin_settings_update(request: Request, db: AsyncSession = Depends(get
 
     form = await request.form()
     settings_dict = {}
+    # Map snake_case form keys to camelCase DB keys for compatibility
+    from app.core.settings_cache import LEGACY_SETTING_KEY_ALIASES
+    _key_map = LEGACY_SETTING_KEY_ALIASES
+    account_pattern = re.compile(r"^church_accounts\[(\d+)\]\[(bank_name|account_number|account_name)\]$")
+    church_accounts: dict[int, dict] = {}
     for key in form:
-        if key != "csrf_token":
-            settings_dict[key] = form[key]
+        if key == "csrf_token":
+            continue
+        m = account_pattern.match(key)
+        if m:
+            idx, field = int(m.group(1)), m.group(2)
+            church_accounts.setdefault(idx, {})[field] = form[key]
+            continue
+        db_key = _key_map.get(key, key)
+        settings_dict[db_key] = form[key]
+
+    accounts_list = [church_accounts[i] for i in sorted(church_accounts)]
+    accounts_list = [
+        a for a in accounts_list
+        if any((a.get(f) or "").strip() for f in ("bank_name", "account_number", "account_name"))
+    ]
+    settings_dict["church_accounts"] = json.dumps(accounts_list)
 
     await update_settings(db, settings_dict)
     return _redirect(request, "/admin/settings", "Settings updated successfully.")
+
+
+@router.post("/settings/pastor-photo", name="admin_settings_pastor_photo")
+async def admin_settings_pastor_photo(request: Request, db: AsyncSession = Depends(get_db), photo: UploadFile = File(...)):
+    admin = await _get_admin(request)
+    if not admin or admin.role != "super_admin":
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    if not photo or not photo.filename:
+        return _redirect(request, "/admin/settings", "No file selected.", "error")
+    ext = os.path.splitext(photo.filename or "")[1].lower()
+    if ext not in [".jpg", ".jpeg", ".png", ".webp", ".gif"]:
+        return _redirect(request, "/admin/settings", "Invalid image format. Use JPG/PNG/WEBP/GIF.", "error")
+    content = await photo.read()
+    if len(content) > 5 * 1024 * 1024:
+        return _redirect(request, "/admin/settings", "Image too large (max 5MB).", "error")
+    import uuid
+    filename = f"pastor-{uuid.uuid4()}{ext}"
+    dest_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "images", "pastor")
+    os.makedirs(dest_dir, exist_ok=True)
+    dest = os.path.join(dest_dir, filename)
+    with open(dest, "wb") as f:
+        f.write(content)
+    await update_settings(db, {"pastorPhoto": f"images/pastor/{filename}"})
+    return _redirect(request, "/admin/settings", "Pastor photo updated successfully.")
+
+
+# ─── Page Hero Upload ─────────────────────────────────────────────
+
+@router.post("/settings/page-hero", name="admin_settings_page_hero")
+async def admin_settings_page_hero(
+    request: Request, db: AsyncSession = Depends(get_db),
+    page_key: str = Form(...), image: UploadFile = File(...),
+):
+    admin = await _get_admin(request)
+    if not admin or admin.role != "super_admin":
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    if not image or not image.filename:
+        return _redirect(request, "/admin/settings", "No file selected.", "error")
+    ext = os.path.splitext(image.filename or "")[1].lower()
+    if ext not in [".jpg", ".jpeg", ".png", ".webp", ".gif"]:
+        return _redirect(request, "/admin/settings", "Invalid image format.", "error")
+    content = await image.read()
+    if len(content) > 5 * 1024 * 1024:
+        return _redirect(request, "/admin/settings", "Image too large (max 5MB).", "error")
+    import uuid
+    filename = f"hero-{page_key}-{uuid.uuid4()}{ext}"
+    dest_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "images", "heroes")
+    os.makedirs(dest_dir, exist_ok=True)
+    dest = os.path.join(dest_dir, filename)
+    with open(dest, "wb") as f:
+        f.write(content)
+    setting_key = f"pageHero_{page_key}" if page_key != "default" else "defaultPageHero"
+    await update_settings(db, {setting_key: f"images/heroes/{filename}"})
+    return _redirect(request, "/admin/settings", f"Hero image for {page_key} updated successfully.")
 
 
 # ─── Security Logs ─────────────────────────────────────────────────
@@ -1167,7 +1636,7 @@ async def admin_security_logs_bulk_review(request: Request, db: AsyncSession = D
     )
     logs = result.scalars().all()
     for log_entry in logs:
-        log_entry.reviewed_at = datetime.now(timezone.utc)
+        log_entry.reviewed_at = datetime.utcnow()
     await db.flush()
     return _redirect(request, "/admin/security-logs", f"{len(logs)} logs marked as reviewed.")
 
@@ -1275,6 +1744,9 @@ async def hod_reports_store(
     if not admin:
         return RedirectResponse(url="/admin", status_code=303)
 
+    if not introduction or not introduction.strip():
+        return _redirect(request, "/hod/reports", "Please add an introduction before submitting the report.", "error")
+
     from app.models.unit_report import UnitReport
 
     try:
@@ -1285,12 +1757,12 @@ async def hod_reports_store(
 
     report = UnitReport(
         report_month=report_month.strip(),
-        introduction=introduction.strip() if introduction else None,
+        introduction=introduction.strip(),
         attendance=attendance_data,
         collections=collections_data,
         status="submitted",
         branch_id=admin.branch_id,
-        department_id=None,
+        department_id=admin.department_id,
         hod_admin_id=admin.id,
     )
     db.add(report)
@@ -1300,13 +1772,15 @@ async def hod_reports_store(
 
 @router.get("/hod/invitation/{token}", name="hod_invitation_accept_page")
 async def hod_invitation_accept_page(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy.orm import selectinload
     from app.models.hod_invitation import HodInvitation
 
     result = await db.execute(
         select(HodInvitation)
+        .options(selectinload(HodInvitation.branch), selectinload(HodInvitation.department))
         .where(HodInvitation.token == token)
         .where(HodInvitation.accepted_at == None)
-        .where(HodInvitation.expires_at > datetime.now(timezone.utc))
+        .where(HodInvitation.expires_at > datetime.utcnow())
     )
     invitation = result.scalar_one_or_none()
     if not invitation:
@@ -1325,14 +1799,16 @@ async def hod_invitation_accept(
     password: str = Form(...), password_confirmation: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
+    from sqlalchemy.orm import selectinload
     from app.models.hod_invitation import HodInvitation
     from app.models.admin import Admin
 
     result = await db.execute(
         select(HodInvitation)
+        .options(selectinload(HodInvitation.branch), selectinload(HodInvitation.department))
         .where(HodInvitation.token == token)
         .where(HodInvitation.accepted_at == None)
-        .where(HodInvitation.expires_at > datetime.now(timezone.utc))
+        .where(HodInvitation.expires_at > datetime.utcnow())
     )
     invitation = result.scalar_one_or_none()
     if not invitation:
@@ -1355,7 +1831,7 @@ async def hod_invitation_accept(
     db.add(admin_user)
     await db.flush()
 
-    invitation.accepted_at = datetime.now(timezone.utc)
+    invitation.accepted_at = datetime.utcnow()
     await db.flush()
 
     login_admin(request, admin_user.id)
@@ -1529,6 +2005,7 @@ async def admin_messages_update(
     caption: str = Form(""), summary: str = Form(""),
     status: str = Form("draft"), published_on: str = Form(""),
     branch_id: int = Form(None),
+    platform_targets: list[str] = Form([]),
 ):
     admin = await _get_admin(request)
     if not admin:
@@ -1545,6 +2022,7 @@ async def admin_messages_update(
     sermon.caption = caption.strip() if caption else sermon.caption
     sermon.description = summary.strip() if summary else sermon.description
     sermon.status = status.strip() or sermon.status
+    sermon.platform_targets = [p for p in platform_targets if p] or None
 
     if published_on:
         try:
@@ -1552,7 +2030,7 @@ async def admin_messages_update(
         except ValueError:
             pass
     elif status == "published" and not sermon.published_at:
-        sermon.published_at = datetime.now(timezone.utc)
+        sermon.published_at = datetime.utcnow()
 
     if admin.role == "super_admin" and branch_id:
         sermon.branch_id = branch_id
@@ -1627,6 +2105,23 @@ async def admin_transcriptions_show(sermon_id: int, request: Request, db: AsyncS
     })
 
 
+@router.post("/transcriptions/{sermon_id}/update", name="admin_transcriptions_update")
+async def admin_transcriptions_update(sermon_id: int, request: Request, db: AsyncSession = Depends(get_db), transcript: str = Form(...)):
+    admin = await _get_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+    from app.models.sermon import Sermon
+    result = await db.execute(select(Sermon).where(Sermon.id == sermon_id))
+    sermon = result.scalar_one_or_none()
+    if not sermon:
+        return _redirect(request, "/admin/transcriptions", "Sermon not found.", "error")
+    sermon.transcript = transcript.strip() if transcript else None
+    sermon.transcription_status = "completed" if sermon.transcript else "none"
+    if sermon.transcript:
+        sermon.transcription_completed_at = datetime.utcnow()
+    await db.flush()
+    return _redirect(request, f"/admin/transcriptions/{sermon_id}", "Transcript saved successfully.")
+
 @router.post("/transcriptions/{sermon_id}/retranscribe", name="admin_transcriptions_retranscribe")
 async def admin_transcriptions_retranscribe(sermon_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     admin = await _get_admin(request)
@@ -1650,7 +2145,7 @@ async def admin_transcriptions_retranscribe(sermon_id: int, request: Request, db
         from app.tasks import transcribe_audio_task
         transcribe_audio_task.delay(sermon.id, sermon.telegram_file_id)
     except Exception:
-        pass
+        logging.exception("Unhandled error")
 
     return _redirect(request, f"/admin/transcriptions/{sermon_id}", "Retranscription queued.")
 
@@ -1797,7 +2292,7 @@ async def admin_security_logs_review(
     result = await db.execute(select(AdminAuditLog).where(AdminAuditLog.id == log_id))
     log_entry = result.scalar_one_or_none()
     if log_entry:
-        log_entry.reviewed_at = datetime.now(timezone.utc)
+        log_entry.reviewed_at = datetime.utcnow()
         await db.flush()
     return _redirect(request, "/admin/security-logs", "Log marked as reviewed.")
 
@@ -1867,7 +2362,7 @@ async def admin_hod_invitations_resend(invitation_id: int, request: Request, db:
     result = await db.execute(select(HodInvitation).where(HodInvitation.id == invitation_id))
     invitation = result.scalar_one_or_none()
     if invitation:
-        invitation.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        invitation.expires_at = datetime.utcnow() + timedelta(days=7)
         await db.flush()
     return _redirect(request, "/admin/hods", "Invitation resent successfully.")
 
@@ -1895,6 +2390,7 @@ async def admin_branch_view(branch_id: int, request: Request, db: AsyncSession =
     )
     invitations = list(inv_result.scalars().all())
 
+    from sqlalchemy.orm import selectinload
     from app.models.member import Member
     from app.models.event import Event
     from app.models.sermon import Sermon
@@ -1909,8 +2405,8 @@ async def admin_branch_view(branch_id: int, request: Request, db: AsyncSession =
     branch_inquiries_count = (await db.execute(select(func.count()).select_from(ContactInquiry).where(ContactInquiry.branch_id == branch_id))).scalar_one() or 0
     departments = list((await db.execute(select(Department).order_by(Department.name))).scalars().all())
     recent_inquiries = list((await db.execute(select(ContactInquiry).where(ContactInquiry.branch_id == branch_id).order_by(ContactInquiry.created_at.desc()).limit(5))).scalars().all())
-    recent_reports = list((await db.execute(select(UnitReport).where(UnitReport.branch_id == branch_id).order_by(UnitReport.created_at.desc()).limit(5))).scalars().all())
-    branch_admins = list((await db.execute(select(Admin).where(Admin.branch_id == branch_id).order_by(Admin.created_at.desc()))).scalars().all())
+    recent_reports = list((await db.execute(select(UnitReport).options(selectinload(UnitReport.department)).where(UnitReport.branch_id == branch_id).order_by(UnitReport.created_at.desc()).limit(5))).scalars().all())
+    branch_admins = list((await db.execute(select(Admin).options(selectinload(Admin.department)).where(Admin.branch_id == branch_id).order_by(Admin.created_at.desc()))).scalars().all())
 
     activeMembers = (await db.execute(select(func.count()).select_from(Member).where(Member.branch_id == branch_id, Member.membership_status == "active"))).scalar_one() or 0
     inactiveMembers = branch_members_count - activeMembers
@@ -1919,7 +2415,7 @@ async def admin_branch_view(branch_id: int, request: Request, db: AsyncSession =
     givingGrowthRate = 0
     latestAttendanceTotal = 0
 
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.utcnow()
     upcomingEvents = list((await db.execute(select(Event).where(Event.branch_id == branch_id, Event.starts_at >= now_utc, Event.is_published == True).order_by(Event.starts_at).limit(10))).scalars().all())
 
     from sqlalchemy import literal_column
@@ -2021,7 +2517,7 @@ async def admin_branch_invitations_resend(
     )
     invitation = result.scalar_one_or_none()
     if invitation:
-        invitation.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        invitation.expires_at = datetime.utcnow() + timedelta(days=7)
         await db.flush()
     return _redirect(request, f"/admin/branches/{branch_id}", "Invitation resent successfully.")
 
@@ -2034,9 +2530,16 @@ async def admin_unit_reports_show(report_id: int, request: Request, db: AsyncSes
     if not admin:
         return RedirectResponse(url="/admin", status_code=303)
 
+    from sqlalchemy.orm import selectinload
     from app.models.unit_report import UnitReport
     result = await db.execute(
-        select(UnitReport).where(UnitReport.id == report_id)
+        select(UnitReport)
+        .options(
+            selectinload(UnitReport.branch),
+            selectinload(UnitReport.department),
+            selectinload(UnitReport.hod_admin),
+        )
+        .where(UnitReport.id == report_id)
     )
     unit_report = result.scalar_one_or_none()
     if not unit_report:
@@ -2106,9 +2609,12 @@ async def admin_hod_reports_update(
     if not report:
         return _redirect(request, "/hod/reports", "Report not found.", "error")
 
+    if not introduction or not introduction.strip():
+        return _redirect(request, "/hod/reports", "Please add an introduction before saving the report.", "error")
+
     if report_month:
         report.report_month = report_month.strip()
-    report.introduction = introduction.strip() if introduction else None
+    report.introduction = introduction.strip()
     try:
         if attendance:
             report.attendance = json.loads(attendance)
@@ -2138,3 +2644,112 @@ async def admin_hod_reports_edit(report_id: int, request: Request, db: AsyncSess
         "_db": db, "report": report, "hod": admin,
         "title": "Edit Report", "headerIcon": "ri-file-chart-line", **ctx,
     })
+
+
+# --- Stories ---
+async def _unique_story_slug(db, base_slug: str, exclude_id: int | None = None) -> str:
+    from app.models.story import Story
+    slug = base_slug
+    suffix = 2
+    while True:
+        q = select(Story.id).where(Story.slug == slug)
+        if exclude_id is not None:
+            q = q.where(Story.id != exclude_id)
+        existing = (await db.execute(q)).scalar_one_or_none()
+        if not existing:
+            return slug
+        slug = f"{base_slug}-{suffix}"
+        suffix += 1
+async def _save_story_image(image) -> str:
+    import uuid, os
+    ext = os.path.splitext(image.filename or "")[1] or ".jpg"
+    if ext.lower() not in [".jpg",".jpeg",".png",".webp",".gif"]:
+        ext = ".jpg"
+    filename = f"story-{uuid.uuid4()}{ext}"
+    dest_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "images", "stories")
+    os.makedirs(dest_dir, exist_ok=True)
+    dest = os.path.join(dest_dir, filename)
+    content = await image.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise ValueError("too large")
+    with open(dest, "wb") as f:
+        f.write(content)
+    return f"images/stories/{filename}"
+@router.get("/stories", name="admin_stories")
+async def admin_stories(request: Request, db: AsyncSession = Depends(get_db), q: str = Query("")):
+    admin = await _get_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+    from app.models.story import Story
+    query = select(Story).order_by(Story.created_at.desc())
+    if q:
+        pat = f"%{q}%"
+        query = query.where(or_(Story.title.ilike(pat), Story.excerpt.ilike(pat)))
+    result = await db.execute(query)
+    stories = list(result.scalars().all())
+    ctx = await _admin_context(request, db, "admin.stories")
+    return await render_template(request, "admin/stories.html", {"_db": db, "stories": stories, "search": q, "title": "Stories", "headerIcon": "ri-quill-pen-line", **ctx})
+@router.post("/stories", name="admin_stories_store")
+async def admin_stories_store(request: Request, db: AsyncSession = Depends(get_db), title: str = Form(...), excerpt: str = Form(""), content: str = Form(""), category: str = Form(""), author_name: str = Form(""), status: str = Form("draft"), is_featured: str | None = Form(None), image: UploadFile | None = File(None)):
+    admin = await _get_admin(request)
+    if not admin or admin.role != "super_admin":
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from app.models.story import Story
+    from slugify import slugify
+    slug = await _unique_story_slug(db, slugify(title.strip()))
+    feat = is_featured in ("1","true","on","True")
+    st = status.strip().lower() or "draft"
+    story = Story(title=title.strip(), slug=slug, excerpt=excerpt.strip() if excerpt else None, content=content.strip() if content else None, category=category.strip() if category else None, author_name=author_name.strip() if author_name else None, status=st, is_featured=feat, created_by=admin.id)
+    if st == "published":
+        story.published_at = datetime.utcnow()
+    if image and image.filename:
+        try:
+            story.featured_image = await _save_story_image(image)
+        except ValueError:
+            return _redirect(request, "/admin/stories", "Image too large (max 5MB).", "error")
+    db.add(story)
+    await db.flush()
+    return _redirect(request, "/admin/stories", "Story created successfully.")
+@router.post("/stories/{story_id}/update", name="admin_stories_update")
+async def admin_stories_update(story_id: int, request: Request, db: AsyncSession = Depends(get_db), title: str = Form(""), excerpt: str = Form(""), content: str = Form(""), category: str = Form(""), author_name: str = Form(""), status: str = Form("draft"), is_featured: str | None = Form(None), image: UploadFile | None = File(None)):
+    admin = await _get_admin(request)
+    if not admin or admin.role != "super_admin":
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from app.models.story import Story
+    from slugify import slugify
+    result = await db.execute(select(Story).where(Story.id == story_id))
+    story = result.scalar_one_or_none()
+    if not story:
+        return _redirect(request, "/admin/stories", "Story not found.", "error")
+    was_published = story.status == "published"
+    if title.strip() and title.strip() != story.title:
+        story.title = title.strip()
+        story.slug = await _unique_story_slug(db, slugify(story.title), exclude_id=story.id)
+    story.excerpt = excerpt.strip() if excerpt else None
+    story.content = content.strip() if content else None
+    story.category = category.strip() if category else None
+    story.author_name = author_name.strip() if author_name else None
+    story.status = status.strip().lower() or "draft"
+    story.is_featured = is_featured in ("1","true","on","True")
+    if story.status == "published" and not was_published:
+        story.published_at = datetime.utcnow()
+    if image and image.filename:
+        try:
+            story.featured_image = await _save_story_image(image)
+        except ValueError:
+            return _redirect(request, "/admin/stories", "Image too large.", "error")
+    await db.flush()
+    return _redirect(request, "/admin/stories", "Story updated successfully.")
+@router.post("/stories/{story_id}/destroy", name="admin_stories_destroy")
+async def admin_stories_destroy(story_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    admin = await _get_admin(request)
+    if not admin or admin.role != "super_admin":
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from app.models.story import Story
+    result = await db.execute(select(Story).where(Story.id == story_id))
+    story = result.scalar_one_or_none()
+    if not story:
+        return _redirect(request, "/admin/stories", "Story not found.", "error")
+    await db.delete(story)
+    await db.flush()
+    return _redirect(request, "/admin/stories", "Story deleted successfully.")

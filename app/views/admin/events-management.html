@@ -4,9 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Calendar - {{ siteName }}</title>
-<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+{% include "partials/admin-head-assets.html" %}
 </head>
 <body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
 <div class="flex h-screen overflow-hidden">
@@ -28,9 +26,9 @@
     </div>
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
       <div class="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1">
-        <a href="{{ url_for('admin_events') }}" class="h-9 w-9 inline-flex items-center justify-center rounded-lg text-gray-600 hover:bg-white hover:text-gray-900" aria-label="Previous month"><i class="ri-arrow-left-s-line text-lg"></i></a>
+        <a href="{{ url_for('admin_events') }}?month={{ prevMonth.strftime('%Y-%m') }}" class="h-9 w-9 inline-flex items-center justify-center rounded-lg text-gray-600 hover:bg-white hover:text-gray-900" aria-label="Previous month"><i class="ri-arrow-left-s-line text-lg"></i></a>
         <a href="{{ url_for('admin_events') }}" class="h-9 inline-flex items-center justify-center rounded-lg px-3 text-xs font-bold text-gray-600 hover:bg-white hover:text-gray-900">Today</a>
-        <a href="{{ url_for('admin_events') }}" class="h-9 w-9 inline-flex items-center justify-center rounded-lg text-gray-600 hover:bg-white hover:text-gray-900" aria-label="Next month"><i class="ri-arrow-right-s-line text-lg"></i></a>
+        <a href="{{ url_for('admin_events') }}?month={{ nextMonth.strftime('%Y-%m') }}" class="h-9 w-9 inline-flex items-center justify-center rounded-lg text-gray-600 hover:bg-white hover:text-gray-900" aria-label="Next month"><i class="ri-arrow-right-s-line text-lg"></i></a>
       </div>
       <a href="{{ url_for('admin.events_create') }}" class="h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors"><i class="ri-calendar-event-line text-base"></i><span>Add Program</span></a>
     </div>
@@ -54,7 +52,7 @@
           {% for ev in dayPrograms[:3] %}
             {% set eventLabel = 'Major Program' if ev.is_major else 'Minor Program' %}
             <button type="button" class="event-edit-btn w-full rounded-lg border px-2 py-1.5 text-left transition hover:border-primary/40 {{ 'border-primary/30 bg-primary/10 text-gray-900' if ev.is_major else 'border-gray-200 bg-gray-50 text-gray-700' }}"
-              data-action="{{ url_for('admin_events_create') }}"
+              data-action="{{ url_for('admin_events_update', event_id=ev.id) }}" data-event-id="{{ ev.id }}"
               data-title="{{ ev.title|e }}"
               data-location="{{ (ev.location or '')|e }}"
               data-start-date="{{ ev.starts_at.strftime('%Y-%m-%d') if ev.starts_at else '' }}"
@@ -90,7 +88,7 @@
           <td class="py-3 pr-4 text-gray-500">{{ event.starts_at.strftime('%b %d, %Y') if event.starts_at else 'N/A' }}</td>
           <td class="py-3 pr-4 text-gray-500">{{ event.starts_at.strftime('%H:%M') if event.starts_at else 'N/A' }}</td>
           <td class="py-3"><div class="flex items-center justify-end gap-2">
-            <a href="{{ url_for('admin_events_create') }}" class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50 transition-colors" title="View program"><i class="ri-eye-line text-base"></i></a>
+            <button type="button" class="event-edit-btn w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50 transition-colors" title="Edit program" data-action="{{ url_for('admin_events_update', event_id=event.id) }}" data-event-id="{{ event.id }}" data-title="{{ event.title|e }}" data-location="{{ (event.location or '')|e }}" data-start-date="{{ event.starts_at.strftime('%Y-%m-%d') if event.starts_at else '' }}" data-end-date="{{ event.ends_at.strftime('%Y-%m-%d') if event.ends_at else '' }}" data-is-major="{{ 'true' if event.is_major else 'false' }}" data-description="{{ (event.description or '')|e }}"><i class="ri-edit-line text-base"></i></button><form method="POST" action="{{ url_for('admin_events_destroy', event_id=event.id) }}" onsubmit="return confirm('Delete this event?')" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button type="submit" class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50" title="Delete"><i class="ri-delete-bin-line text-base"></i></button></form>
           </div></td>
         </tr>
       {% else %}

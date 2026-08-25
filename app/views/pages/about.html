@@ -11,20 +11,10 @@
 </head>
 <body class="bg-background-light dark:bg-background-dark text-secondary font-sans antialiased overflow-x-hidden selection:bg-primary selection:text-white">
 {% include "partials/site-header.html" %}
-<section class="relative h-[60vh] min-h-[500px] flex items-center justify-center overflow-hidden">
-<div class="absolute inset-0 bg-cover bg-center" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDqHbDKEblCOL-2zMFOeCympsppkKYFhq35Ly2nki6Vecz1o22K2Tnlb1v9cCdxkBbuF_mtIIMnHNHY0GjRtvFvf91QjoE1Wb2wMoF2pC4RWvGCDEveRQZ7jC-qIxRBp9c5W_wNBKe_N8fy3AX5rDtLSARotb6GW6kRRKu6aAChGjvATzK7jk3CjhdPIOS5rsHgzmT6I2FeEP9xwP6o9f-cv0d331NxLq0geaciroc4YpEESLYQTj-0aJt_Piu3pyNIcO236wcOa-A');"></div>
-<div class="absolute inset-0 bg-secondary/80 mix-blend-multiply"></div>
-<div class="absolute inset-0 bg-gradient-to-t from-secondary via-transparent to-secondary/30"></div>
-<div class="relative z-10 text-center px-6 max-w-4xl mx-auto">
-<span class="text-primary text-sm md:text-base font-bold tracking-[0.2em] uppercase mb-4 block animate-[fadeInUp_1s_ease-out_0.5s_forwards] opacity-0">Who We Are</span>
-<h1 class="text-white text-5xl md:text-7xl lg:text-8xl font-serif font-medium leading-tight mb-6 animate-[fadeInUp_1s_ease-out_0.7s_forwards] opacity-0">
-            About <span class="italic text-primary-light">Us</span>
-</h1>
-<p class="text-gray-200 text-lg md:text-xl font-light max-w-2xl mx-auto leading-relaxed animate-[fadeInUp_1s_ease-out_0.9s_forwards] opacity-0">
-            A community of grace, restoration, and destiny.
-        </p>
-</div>
-</section>
+{% set heroTitle = 'About <span class="italic text-primary-light">Us</span>' %}
+{% set heroSubtitle = 'Who We Are' %}
+{% set heroBgImage = settings.get('pageHero_about', '') if settings else '' %}
+{% include "partials/site-page-hero.html" %}
 <section class="py-24 px-6 lg:px-8 bg-white overflow-hidden">
 <div class="max-w-7xl mx-auto">
 <div class="flex flex-col lg:flex-row gap-16 items-center">
@@ -173,11 +163,11 @@
 <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16 items-start">
 <div class="lg:col-span-5 relative">
 <div class="relative rounded-2xl overflow-hidden shadow-2xl aspect-[3/4] group">
-<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAm5swjEY-jVISdFB4_b7IwRjO4eVm9FnyDPZAIJRDhk44ifjS0N0IdURAuy97PSZDkGijBiY3jiSSJ_1wPBVvbVofYdqXDIyuewY66QYYsXs4-mSYFsrUWXb3eFtySdGRI4XO-Qn_UTm7UKim-hKygKt-_rAfu8DI3SJP_P-2dmbNbYJ_o2kBooOI1qG29yQigSXgGne79w_T4sKVcvsclXnLNDGQjqj1IKMb6EFyH-nkdcqv4o0iLTDBRoDqi_VldjbEmfrPMM7E')"></div>
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" style="background-image: url('{{ url_for('static', path=pastorPhoto) }}')"></div>
 <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
 <div class="absolute bottom-8 left-8 text-white">
 <p class="text-primary font-bold uppercase tracking-widest text-xs mb-2">Founder &amp; Senior Pastor</p>
-<h3 class="text-3xl font-serif font-bold">Samuel Inyeneabasi</h3>
+<h3 class="text-3xl font-serif font-bold">{{ pastorName }}</h3>
 </div>
 </div>
 <div class="absolute -bottom-6 -right-6 w-32 h-32 bg-primary rounded-full flex items-center justify-center shadow-lg hidden md:flex">
@@ -232,9 +222,9 @@
 <p class="text-gray-300 text-xl font-light leading-relaxed mb-10">
             We are more than just a congregation; we are a family. {{ siteName }} is built on the stories of real people facing real struggles, finding a real God who restores. We invite you to be part of this unfolding story of grace.
         </p>
-<button class="h-14 px-10 rounded-full bg-white text-secondary hover:bg-primary hover:text-white font-bold text-base transition-all duration-300 shadow-lg transform hover:-translate-y-1">
+<a href="{{ url_for('contact') }}" class="h-14 px-10 rounded-full bg-white text-secondary hover:bg-primary hover:text-white font-bold text-base transition-all duration-300 shadow-lg transform hover:-translate-y-1 inline-flex items-center justify-center">
             Join the Journey
-        </button>
+        </a>
 </div>
 </section>
 <section class="py-24 px-6 lg:px-8 bg-background-light">

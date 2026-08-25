@@ -13,7 +13,9 @@ async def _load_admin(admin_id: int):
 
     async with async_session() as db:
         result = await db.execute(
-            select(Admin).where(Admin.id == admin_id).options(
+            select(Admin)
+            .where(Admin.id == admin_id)
+            .options(
                 selectinload(Admin.branch),
                 selectinload(Admin.department),
             )
@@ -32,9 +34,24 @@ async def get_current_admin(request: Request):
     if last_activity:
         if isinstance(last_activity, str):
             last_activity = datetime.fromisoformat(last_activity)
-        if (datetime.now(timezone.utc) - last_activity).total_seconds() > 1800:
+        try:
+            from app.core.settings_cache import get_setting
+            from app.database import async_session as _sess
+
+            timeout_min = 30
+            async with _sess() as _db:
+                val = await get_setting(_db, "admin_session_timeout_minutes", "30")
+                timeout_min = int(val) if str(val).isdigit() else 30
+        except Exception:
+            timeout_min = 30
+        if (
+            datetime.now(timezone.utc) - last_activity
+        ).total_seconds() > timeout_min * 60:
             logout_admin(request)
             return None
+        request.session["admin_last_activity_at"] = datetime.now(
+            timezone.utc
+        ).isoformat()
 
     admin = await _load_admin(admin_id)
     if not admin:
@@ -69,6 +86,4 @@ def login_admin(request: Request, admin_id: int) -> None:
 
 
 def logout_admin(request: Request) -> None:
-    request.session.pop("admin_id", None)
-    request.session.pop("admin_authenticated", None)
-    request.session.pop("admin_last_activity_at", None)
+    request.session.clear()

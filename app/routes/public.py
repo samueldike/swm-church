@@ -17,11 +17,18 @@ from app.core.template import render_template
 router = APIRouter(tags=["public"])
 
 
-def _redirect(request: Request, url: str, flash_msg: str | None = None, flash_type: str = "success") -> RedirectResponse:
+def _redirect(
+    request: Request,
+    url: str,
+    flash_msg: str | None = None,
+    flash_type: str = "success",
+) -> RedirectResponse:
     if flash_msg:
         request.session["flash_messages"] = [{"type": flash_type, "message": flash_msg}]
         request.session[flash_type] = flash_msg
-    return RedirectResponse(url=url, status_code=303)
+    resp = RedirectResponse(url=url, status_code=303)
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return resp
 
 
 def _paginate_url(request: Request, page: int, base_path: str) -> str:
@@ -36,7 +43,11 @@ async def home(request: Request, db: AsyncSession = Depends(get_db)):
 
     sliders = []
     try:
-        result = await db.execute(select(Slider).where(Slider.is_active == True).order_by(Slider.sort_order.asc()))
+        result = await db.execute(
+            select(Slider)
+            .where(Slider.is_active == True)
+            .order_by(Slider.sort_order.asc())
+        )
         sliders = list(result.scalars().all())
     except Exception:
         pass
@@ -60,22 +71,64 @@ async def home(request: Request, db: AsyncSession = Depends(get_db)):
     except Exception:
         pass
 
-    return await render_template(request, "pages/home.html", {
-        "_db": db,
-        "sliders": sliders,
-        "settings": settings,
-        "latest_sermons": latest_sermons,
-    })
+    featuredStories = []
+    try:
+        from app.models.story import Story
+
+        result = await db.execute(
+            select(Story)
+            .where(Story.status == "published")
+            .order_by(Story.published_at.desc())
+            .limit(3)
+        )
+        featuredStories = list(result.scalars().all())
+    except Exception:
+        pass
+
+    branches = []
+    try:
+        from app.models.branch import Branch
+        result = await db.execute(
+            select(Branch).where(Branch.is_active == True).order_by(Branch.name)
+        )
+        branches = list(result.scalars().all())
+    except Exception:
+        pass
+
+    return await render_template(
+        request,
+        "pages/home.html",
+        {
+            "_db": db,
+            "sliders": sliders,
+            "settings": settings,
+            "latest_sermons": latest_sermons,
+            "featuredStories": featuredStories,
+            "branches": branches,
+        },
+    )
 
 
 @router.get("/about", name="about")
-async def about(request: Request):
-    return await render_template(request, "pages/about.html")
+async def about(request: Request, db: AsyncSession = Depends(get_db)):
+    return await render_template(request, "pages/about.html", {"_db": db})
 
 
 @router.get("/departments", name="departments")
-async def departments(request: Request):
-    return await render_template(request, "pages/departments.html")
+async def departments(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.models.department import Department
+    departments_list = []
+    try:
+        result = await db.execute(
+            select(Department).where(Department.is_active == True).order_by(Department.name)
+        )
+        departments_list = list(result.scalars().all())
+    except Exception:
+        pass
+    return await render_template(request, "pages/departments.html", {
+        "_db": db,
+        "departments_list": departments_list,
+    })
 
 
 @router.get("/messages", name="messages")
@@ -87,7 +140,11 @@ async def messages_list(
 ):
     from app.models.sermon import Sermon
 
-    query = select(Sermon).where(Sermon.status == "published").options(selectinload(Sermon.branch))
+    query = (
+        select(Sermon)
+        .where(Sermon.status == "published")
+        .options(selectinload(Sermon.branch))
+    )
 
     if search:
         search_pattern = f"%{search}%"
@@ -125,20 +182,34 @@ async def messages_list(
             break
 
     base_path = "/messages"
-    pagination["prev_url"] = _paginate_url(request, pagination["page"] - 1, base_path) if pagination["has_prev"] else None
-    pagination["next_url"] = _paginate_url(request, pagination["page"] + 1, base_path) if pagination["has_next"] else None
+    pagination["prev_url"] = (
+        _paginate_url(request, pagination["page"] - 1, base_path)
+        if pagination["has_prev"]
+        else None
+    )
+    pagination["next_url"] = (
+        _paginate_url(request, pagination["page"] + 1, base_path)
+        if pagination["has_next"]
+        else None
+    )
 
-    return await render_template(request, "pages/messages.html", {
-        "_db": db,
-        "sermons": sermons,
-        "featured_sermon": featured_sermon,
-        "search": search,
-        "pagination": pagination,
-    })
+    return await render_template(
+        request,
+        "pages/messages.html",
+        {
+            "_db": db,
+            "sermons": sermons,
+            "featured_sermon": featured_sermon,
+            "search": search,
+            "pagination": pagination,
+        },
+    )
 
 
 @router.get("/messages/{slug}", name="messages_show")
-async def sermon_detail(slug: str, request: Request, db: AsyncSession = Depends(get_db)):
+async def sermon_detail(
+    slug: str, request: Request, db: AsyncSession = Depends(get_db)
+):
     from app.models.sermon import Sermon
 
     result = await db.execute(
@@ -160,15 +231,84 @@ async def sermon_detail(slug: str, request: Request, db: AsyncSession = Depends(
     except Exception:
         pass
 
-    return await render_template(request, "pages/messages_show.html", {
-        "_db": db,
-        "sermon": sermon,
-        "related": related,
-    })
+    return await render_template(
+        request,
+        "pages/messages_show.html",
+        {
+            "_db": db,
+            "sermon": sermon,
+            "related": related,
+        },
+    )
+
+
+@router.get("/feed.xml", name="podcast_feed")
+async def podcast_feed(request: Request, db: AsyncSession = Depends(get_db)):
+    """Podcast-standard RSS 2.0 + iTunes feed of published audio messages.
+
+    This is the single-point-of-distribution artifact: submit this one URL to
+    Spotify for Podcasters / Apple Podcasts Connect once, and every future
+    published sermon propagates automatically — no per-platform integration.
+    """
+    import xml.etree.ElementTree as ET
+    from email.utils import format_datetime
+
+    from app.models.sermon import Sermon
+    from app.core.settings_cache import get_settings
+
+    site = await get_settings(db)
+    site_name = site.get("siteName", "Scent of Water Ministry")
+    base_url = str(request.base_url).rstrip("/")
+
+    result = await db.execute(
+        select(Sermon)
+        .where(Sermon.status == "published")
+        .where(or_(Sermon.media_url.isnot(None), Sermon.telegram_file_id.isnot(None)))
+        .order_by(Sermon.published_at.desc())
+        .limit(200)
+    )
+    sermons = list(result.scalars().all())
+
+    ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
+    ET.register_namespace("itunes", ITUNES_NS)
+
+    rss = ET.Element("rss", {"version": "2.0"})
+    channel = ET.SubElement(rss, "channel")
+    ET.SubElement(channel, "title").text = f"{site_name} — Audio Messages"
+    ET.SubElement(channel, "link").text = f"{base_url}/messages"
+    ET.SubElement(channel, "description").text = f"Sermon audio messages from {site_name}."
+    ET.SubElement(channel, "language").text = "en-us"
+    ET.SubElement(channel, f"{{{ITUNES_NS}}}author").text = site_name
+
+    for sermon in sermons:
+        item = ET.SubElement(channel, "item")
+        ET.SubElement(item, "title").text = sermon.title
+        ET.SubElement(item, "link").text = f"{base_url}/messages/{sermon.slug}"
+        ET.SubElement(item, "guid", {"isPermaLink": "false"}).text = f"sermon-{sermon.id}"
+        if sermon.caption or sermon.description:
+            ET.SubElement(item, "description").text = sermon.caption or sermon.description
+        if sermon.preacher:
+            ET.SubElement(item, f"{{{ITUNES_NS}}}author").text = sermon.preacher
+        if sermon.published_at:
+            ET.SubElement(item, "pubDate").text = format_datetime(sermon.published_at)
+        if sermon.media_url:
+            enclosure_url = sermon.media_url if sermon.media_url.startswith("http") else f"{base_url}{sermon.media_url}"
+        else:
+            enclosure_url = f"{base_url}/messages/{sermon.id}/stream"
+        ET.SubElement(item, "enclosure", {
+            "url": enclosure_url,
+            "type": "audio/mpeg",
+            "length": str(sermon.original_file_size or 0),
+        })
+
+    xml_bytes = ET.tostring(rss, encoding="utf-8", xml_declaration=True)
+    return HTMLResponse(content=xml_bytes, media_type="application/rss+xml")
 
 
 @router.get("/messages/{sermon_id}/stream", name="messages_stream")
-async def stream_sermon(sermon_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+async def stream_sermon(
+    sermon_id: int, request: Request, db: AsyncSession = Depends(get_db)
+):
     from app.models.sermon import Sermon
     from app.core.telegram import TelegramDistributor
 
@@ -177,7 +317,13 @@ async def stream_sermon(sermon_id: int, request: Request, db: AsyncSession = Dep
     )
     sermon = result.scalar_one_or_none()
 
-    if not sermon or not sermon.telegram_file_id:
+    if not sermon:
+        return HTMLResponse("Audio not found", status_code=404)
+
+    if sermon.media_url:
+        return RedirectResponse(url=sermon.media_url, status_code=302)
+
+    if not sermon.telegram_file_id:
         return HTMLResponse("Audio not found", status_code=404)
 
     tg = TelegramDistributor()
@@ -211,7 +357,9 @@ async def stream_sermon(sermon_id: int, request: Request, db: AsyncSession = Dep
 
 
 @router.get("/messages/{sermon_id}/download", name="messages_download")
-async def download_sermon(sermon_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+async def download_sermon(
+    sermon_id: int, request: Request, db: AsyncSession = Depends(get_db)
+):
     from app.models.sermon import Sermon
     from app.core.telegram import TelegramDistributor
 
@@ -220,7 +368,23 @@ async def download_sermon(sermon_id: int, request: Request, db: AsyncSession = D
     )
     sermon = result.scalar_one_or_none()
 
-    if not sermon or not sermon.telegram_file_id:
+    if not sermon:
+        return HTMLResponse("Audio not found", status_code=404)
+
+    safe_title = (sermon.title or "sermon").replace('"', "_").replace("/", "_")
+
+    if sermon.audio_file_path:
+        import os
+        from fastapi.responses import FileResponse
+
+        file_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), sermon.audio_file_path
+        )
+        if os.path.exists(file_path):
+            ext = os.path.splitext(file_path)[1] or ".mp3"
+            return FileResponse(file_path, media_type="audio/mpeg", filename=f"{safe_title}{ext}")
+
+    if not sermon.telegram_file_id:
         return HTMLResponse("Audio not found", status_code=404)
 
     tg = TelegramDistributor()
@@ -236,7 +400,6 @@ async def download_sermon(sermon_id: int, request: Request, db: AsyncSession = D
                 async for chunk in upstream.aiter_bytes(chunk_size=65536):
                     yield chunk
 
-    safe_title = (sermon.title or "sermon").replace('"', "_").replace("/", "_")
     return StreamingResponse(
         audio_download(),
         media_type="audio/mpeg",
@@ -258,7 +421,10 @@ async def events_page(request: Request, db: AsyncSession = Depends(get_db)):
     try:
         result = await db.execute(
             select(Event)
-            .where(Event.is_published == True, Event.starts_at >= datetime.now(timezone.utc))
+            .where(
+                Event.is_published == True,
+                Event.starts_at >= datetime.utcnow(),
+            )
             .order_by(Event.starts_at.asc())
             .limit(6)
         )
@@ -270,7 +436,7 @@ async def events_page(request: Request, db: AsyncSession = Depends(get_db)):
         result = await db.execute(
             select(Event)
             .where(Event.is_published == True, Event.is_major == True)
-            .where(Event.starts_at >= datetime.now(timezone.utc))
+            .where(Event.starts_at >= datetime.utcnow())
             .order_by(Event.starts_at.asc())
             .limit(1)
         )
@@ -289,27 +455,31 @@ async def events_page(request: Request, db: AsyncSession = Depends(get_db)):
     except Exception:
         pass
 
-    return await render_template(request, "pages/events.html", {
-        "_db": db,
-        "upcoming_events": upcoming_events,
-        "featured_event": featured_event,
-        "recent_events": recent_events,
-    })
+    return await render_template(
+        request,
+        "pages/events.html",
+        {
+            "_db": db,
+            "upcoming_events": upcoming_events,
+            "featured_event": featured_event,
+            "recent_events": recent_events,
+        },
+    )
 
 
 @router.get("/calendar", name="calendar")
-async def calendar(request: Request):
-    return await render_template(request, "pages/calendar.html")
+async def calendar(request: Request, db: AsyncSession = Depends(get_db)):
+    return await render_template(request, "pages/calendar.html", {"_db": db})
 
 
 @router.get("/casom", name="casom")
-async def casom(request: Request):
-    return await render_template(request, "pages/casom.html")
+async def casom(request: Request, db: AsyncSession = Depends(get_db)):
+    return await render_template(request, "pages/casom.html", {"_db": db})
 
 
 @router.get("/contact", name="contact")
-async def contact(request: Request):
-    return await render_template(request, "pages/contact.html")
+async def contact(request: Request, db: AsyncSession = Depends(get_db)):
+    return await render_template(request, "pages/contact.html", {"_db": db})
 
 
 @router.post("/contact", name="contact_store")
@@ -325,7 +495,9 @@ async def contact_store(
     from app.models.contact_inquiry import ContactInquiry
 
     if not name.strip() or not email.strip() or not message.strip():
-        return _redirect(request, "/contact", "Please fill in all required fields.", "error")
+        return _redirect(
+            request, "/contact", "Please fill in all required fields.", "error"
+        )
 
     inquiry = ContactInquiry(
         name=name.strip(),
@@ -337,17 +509,21 @@ async def contact_store(
     db.add(inquiry)
     await db.flush()
 
-    return _redirect(request, "/contact", "Thank you for reaching out! We will get back to you shortly.")
+    return _redirect(
+        request,
+        "/contact",
+        "Thank you for reaching out! We will get back to you shortly.",
+    )
 
 
 @router.get("/get-involved", name="get_involved")
-async def get_involved(request: Request):
-    return await render_template(request, "pages/get-involved.html")
+async def get_involved(request: Request, db: AsyncSession = Depends(get_db)):
+    return await render_template(request, "pages/get-involved.html", {"_db": db})
 
 
 @router.get("/give", name="give")
-async def give(request: Request):
-    return await render_template(request, "pages/give.html")
+async def give(request: Request, db: AsyncSession = Depends(get_db)):
+    return await render_template(request, "pages/give.html", {"_db": db})
 
 
 @router.post("/give/checkout", name="give_checkout")
@@ -357,7 +533,8 @@ async def give_checkout(
     email: str = Form(...),
     full_name: str = Form(""),
     phone: str = Form(""),
-    giving_type: str = Form("tithe"),
+    purpose: str = Form("Tithe"),
+    purpose_text: str = Form(""),
     anonymous: bool = Form(False),
     dedication: str = Form(""),
     payment_gateway: str = Form("paystack"),
@@ -365,10 +542,17 @@ async def give_checkout(
 ):
     from app.config import settings as app_settings
     from app.core.payment import initialize_paystack, initialize_flutterwave
+    from app.core.settings_cache import get_settings
     from app.models.giving import Giving
 
     if amount <= 0:
         return _redirect(request, "/give", "Please enter a valid amount.", "error")
+
+    site_settings = await get_settings(db)
+    payment_gateway = (site_settings.get("active_giving_gateway") or payment_gateway or "paystack").strip()
+    giving_type = purpose.strip() or "Tithe"
+    if giving_type == "Others" and purpose_text.strip():
+        giving_type = purpose_text.strip()
 
     amount_kobo = int(amount * 100)
 
@@ -407,7 +591,7 @@ async def give_checkout(
                 "title": "Scent of Water Ministry - Giving",
                 "description": f"Donation: {giving_type}",
             },
-            secret_key=app_settings.FLUTTERWAVE_SECRET_KEY,
+            secret_key=site_settings.get("flutterwave_secret_key") or app_settings.FLUTTERWAVE_SECRET_KEY,
         )
     else:
         authorization_url = await initialize_paystack(
@@ -422,11 +606,13 @@ async def give_checkout(
                 "anonymous": anonymous,
                 "dedication": dedication,
             },
-            secret_key=app_settings.PAYSTACK_SECRET_KEY,
+            secret_key=site_settings.get("paystack_secret_key") or app_settings.PAYSTACK_SECRET_KEY,
         )
 
     if not authorization_url:
-        return _redirect(request, "/give", "Unable to initialize payment. Please try again.", "error")
+        return _redirect(
+            request, "/give", "Unable to initialize payment. Please try again.", "error"
+        )
 
     return RedirectResponse(url=authorization_url, status_code=303)
 
@@ -443,16 +629,14 @@ async def give_callback(
 
     actual_ref = trxref or reference
 
-    result = await db.execute(
-        select(Giving).where(Giving.reference == actual_ref)
-    )
+    result = await db.execute(select(Giving).where(Giving.reference == actual_ref))
     giving = result.scalar_one_or_none()
 
     if giving:
         normalized = status.lower() if status else "abandoned"
         if normalized == "successful" or normalized == "success":
             giving.status = "completed"
-            giving.paid_at = datetime.now(timezone.utc)
+            giving.paid_at = datetime.utcnow()
         elif normalized in ("abandoned", "cancelled", "failed"):
             giving.status = "failed"
         else:
@@ -461,8 +645,11 @@ async def give_callback(
         await db.flush()
 
     return _redirect(
-        request, "/give",
-        "Thank you for your generous giving! God bless you." if giving and giving.status == "completed" else "Payment could not be confirmed. Please try again.",
+        request,
+        "/give",
+        "Thank you for your generous giving! God bless you."
+        if giving and giving.status == "completed"
+        else "Payment could not be confirmed. Please try again.",
         "success" if giving and giving.status == "completed" else "error",
     )
 
@@ -472,10 +659,14 @@ async def privacy_policy(request: Request, db: AsyncSession = Depends(get_db)):
     from app.core.settings_cache import get_setting
 
     content = await get_setting(db, "privacy_policy", "")
-    return await render_template(request, "pages/privacy-policy.html", {
-        "_db": db,
-        "content": content,
-    })
+    return await render_template(
+        request,
+        "pages/privacy-policy.html",
+        {
+            "_db": db,
+            "content": content,
+        },
+    )
 
 
 @router.get("/terms-of-service", name="terms_of_service")
@@ -483,10 +674,14 @@ async def terms_of_service(request: Request, db: AsyncSession = Depends(get_db))
     from app.core.settings_cache import get_setting
 
     content = await get_setting(db, "terms_of_service", "")
-    return await render_template(request, "pages/terms-of-service.html", {
-        "_db": db,
-        "content": content,
-    })
+    return await render_template(
+        request,
+        "pages/terms-of-service.html",
+        {
+            "_db": db,
+            "content": content,
+        },
+    )
 
 
 @router.get("/sitemap", name="sitemap")
@@ -500,13 +695,80 @@ async def coming_soon(request: Request):
 
 
 @router.get("/stories", name="stories")
-async def stories(request: Request):
-    return await render_template(request, "pages/stories.html")
+async def stories(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    search: str = Query("", alias="search"),
+    page: int = Query(1, ge=1),
+):
+    from app.models.story import Story
+
+    query = select(Story).where(Story.status == "published")
+    if search:
+        pat = f"%{search}%"
+        query = query.where(
+            or_(
+                Story.title.ilike(pat),
+                Story.excerpt.ilike(pat),
+                Story.content.ilike(pat),
+            )
+        )
+    query = query.order_by(Story.published_at.desc())
+    pagination = await paginate(db, query, page=page, per_page=9)
+    pagination["prev_url"] = (
+        f"/stories?search={search}&page={page - 1}" if pagination["has_prev"] else None
+    )
+    pagination["next_url"] = (
+        f"/stories?search={search}&page={page + 1}" if pagination["has_next"] else None
+    )
+    stories_list = pagination["items"]
+    return await render_template(
+        request,
+        "pages/stories.html",
+        {
+            "_db": db,
+            "stories": stories_list,
+            "search": search,
+            "pagination": pagination,
+        },
+    )
+
+
+@router.get("/stories/{slug}", name="story_detail")
+async def story_detail(slug: str, request: Request, db: AsyncSession = Depends(get_db)):
+    from app.models.story import Story
+
+    result = await db.execute(
+        select(Story).where(Story.slug == slug, Story.status == "published")
+    )
+    story = result.scalar_one_or_none()
+    if not story:
+        return HTMLResponse("Story not found", status_code=404)
+    related = []
+    try:
+        result = await db.execute(
+            select(Story)
+            .where(Story.status == "published", Story.id != story.id)
+            .order_by(Story.published_at.desc())
+            .limit(3)
+        )
+        related = list(result.scalars().all())
+    except Exception:
+        pass
+    return await render_template(
+        request,
+        "pages/stories_show.html",
+        {
+            "_db": db,
+            "story": story,
+            "related": related,
+        },
+    )
 
 
 @router.get("/prayer", name="prayer")
-async def prayer(request: Request):
-    return await render_template(request, "pages/prayer.html")
+async def prayer(request: Request, db: AsyncSession = Depends(get_db)):
+    return await render_template(request, "pages/prayer.html", {"_db": db})
 
 
 @router.post("/prayer", name="prayer_store")
@@ -522,7 +784,9 @@ async def prayer_store(
     from app.models.prayer_request import PrayerRequest
 
     if not full_name.strip() or not prayer_request.strip():
-        return _redirect(request, "/prayer", "Please fill in all required fields.", "error")
+        return _redirect(
+            request, "/prayer", "Please fill in all required fields.", "error"
+        )
 
     req = PrayerRequest(
         full_name=full_name.strip(),
@@ -535,12 +799,16 @@ async def prayer_store(
     db.add(req)
     await db.flush()
 
-    return _redirect(request, "/prayer", "Your prayer request has been submitted. We are standing with you in prayer!")
+    return _redirect(
+        request,
+        "/prayer",
+        "Your prayer request has been submitted. We are standing with you in prayer!",
+    )
 
 
 @router.get("/watch", name="watch")
-async def watch(request: Request):
-    return await render_template(request, "pages/watch.html")
+async def watch(request: Request, db: AsyncSession = Depends(get_db)):
+    return await render_template(request, "pages/watch.html", {"_db": db})
 
 
 @router.post("/newsletter", name="newsletter_subscribe")
@@ -572,7 +840,9 @@ async def newsletter_subscribe(
         existing.is_active = True
         existing.unsubscribed_at = None
         await db.flush()
-        return _redirect(request, ref, "Welcome back! Your subscription has been reactivated.")
+        return _redirect(
+            request, ref, "Welcome back! Your subscription has been reactivated."
+        )
 
     subscriber = NewsletterSubscriber(
         email=email_lower,
@@ -581,4 +851,6 @@ async def newsletter_subscribe(
     db.add(subscriber)
     await db.flush()
 
-    return _redirect(request, ref, "Thank you for subscribing! You will receive updates from us.")
+    return _redirect(
+        request, ref, "Thank you for subscribing! You will receive updates from us."
+    )

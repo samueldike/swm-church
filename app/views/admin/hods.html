@@ -4,9 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Department HODs - {{ siteName }}</title>
-<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+{% include "partials/admin-head-assets.html" %}
 </head>
 <body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
 <div class="flex h-screen overflow-hidden">
@@ -34,7 +32,7 @@
 <td class="py-3 pr-4 text-gray-500">{{ hod.branch.name or 'N/A' }}</td>
 <td class="py-3 pr-4"><span class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide {{ 'bg-emerald-50 text-emerald-600' if hod.is_active else 'bg-gray-100 text-gray-500' }}">{{ 'Active' if hod.is_active else 'Disabled' }}</span></td>
 <td class="py-3 text-right"><button type="button" class="hod-edit-btn w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50 transition-colors" title="Edit HOD"
-data-action="{{ url_for('admin_hods_update', id=hod.id) }}" data-name="{{ hod.name|e }}" data-phone="{{ hod.phone|e }}" data-department-id="{{ hod.department_id }}" data-is-active="{{ 1 if hod.is_active else 0 }}"><i class="ri-edit-line text-base"></i></button></td>
+data-action="{{ url_for('admin_hods_update', hod_id=hod.id) }}" data-name="{{ hod.name|e }}" data-phone="{{ hod.phone|e }}" data-department-id="{{ hod.department_id }}" data-is-active="{{ 1 if hod.is_active else 0 }}"><i class="ri-edit-line text-base"></i></button></td>
 </tr>
 {% else %}
 
@@ -52,7 +50,7 @@ data-action="{{ url_for('admin_hods_update', id=hod.id) }}" data-name="{{ hod.na
 
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl border border-gray-100 p-3">
 <div class="min-w-0"><p class="font-semibold text-sm text-gray-900 truncate">{{ inv.name }} <span class="text-xs text-gray-500">({{ inv.email }})</span></p><p class="text-xs text-gray-500 truncate">{{ inv.department.name }} <span class="text-gray-300">&middot;</span> {{ inv.branch.name }} <span class="text-gray-300">&middot;</span> {{ 'Accepted' if inv.accepted_at else 'Pending' }}</p></div>
-{% if not inv.accepted_at %}<form method="POST" action="{{ url_for('admin_hod_invitations_resend', id=inv.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="text-xs font-bold text-primary hover:text-primary-dark transition-colors">Resend</button></form>{% endif %}
+{% if not inv.accepted_at %}<form method="POST" action="{{ url_for('admin_hod_invitations_resend', invitation_id=inv.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="text-xs font-bold text-primary hover:text-primary-dark transition-colors">Resend</button></form>{% endif %}
 </div>
 {% else %}
 

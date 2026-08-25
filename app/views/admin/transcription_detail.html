@@ -4,9 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>{{ title }} - {{ siteName }}</title>
-<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+{% include "partials/admin-head-assets.html" %}
 <style>
   .transcript-text { white-space: pre-wrap; word-wrap: break-word; line-height: 1.8; }
   .copy-toast { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); background: #1a1814; color: #c9a227; padding: 0.75rem 1.5rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 9999; }
@@ -55,9 +53,10 @@
 </div>
 
 <div class="content-card p-5 lg:p-6">
-  <h3 class="text-sm font-bold text-gray-900 mb-3">Transcript</h3>
+  <div class="flex items-center justify-between mb-3"><h3 class="text-sm font-bold text-gray-900">Transcript</h3>{% if sermon.transcript %}<button id="edit-transcript-toggle" class="text-xs font-bold text-primary hover:text-primary-dark"><i class="ri-edit-line"></i> Edit</button>{% endif %}</div>
   {% if sermon.transcript %}
-    <div id="transcript-content" class="transcript-text text-sm text-gray-700 bg-gray-50 rounded-xl p-5 max-h-[60vh] overflow-y-auto">{{ sermon.transcript }}</div>
+    <div id="transcript-view" class="transcript-text text-sm text-gray-700 bg-gray-50 rounded-xl p-5 max-h-[60vh] overflow-y-auto">{{ sermon.transcript }}</div>
+    <form id="transcript-edit-form" method="POST" action="{{ url_for('admin_transcriptions_update', sermon_id=sermon.id) }}" class="hidden space-y-3"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><textarea name="transcript" rows="12" class="form-input transcript-text">{{ sermon.transcript }}</textarea><div class="flex gap-2 justify-end"><button type="button" id="cancel-edit" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold">Cancel</button><button type="submit" class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814]">Save Transcript</button></div></form>
   {% elif sermon.transcription_status == 'processing' %}
     <div class="flex items-center gap-3 p-5 bg-blue-50 rounded-xl text-blue-700 text-sm">
       <i class="ri-loader-4-line animate-spin text-lg"></i>
@@ -81,7 +80,7 @@
         <p class="font-semibold">Transcription failed</p>
         <p class="text-red-600 text-xs mt-0.5">An error occurred during transcription.</p>
         {% if sermon.telegram_file_id %}
-          <form method="POST" action="{{ url_for('admin_transcriptions_retranscribe', id=sermon.id) }}" class="mt-2 inline">
+          <form method="POST" action="{{ url_for('admin_transcriptions_retranscribe', sermon_id=sermon.id) }}" class="mt-2 inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button type="submit" class="text-xs font-semibold text-red-700 hover:text-red-900 underline">Retry transcription</button>
           </form>
@@ -126,5 +125,7 @@ function downloadTranscript() {
 {% if sermon.transcription_status == 'processing' %}
 setTimeout(() => location.reload(), 10000);
 {% endif %}
+document.getElementById('edit-transcript-toggle')?.addEventListener('click',()=>{document.getElementById('transcript-view').classList.add('hidden');document.getElementById('transcript-edit-form').classList.remove('hidden');});
+document.getElementById('cancel-edit')?.addEventListener('click',()=>{document.getElementById('transcript-edit-form').classList.add('hidden');document.getElementById('transcript-view').classList.remove('hidden');});
 </script>
 </body></html>

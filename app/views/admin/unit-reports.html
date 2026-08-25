@@ -4,9 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Unit Reports - {{ siteName }}</title>
-<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+{% include "partials/admin-head-assets.html" %}
 </head>
 <body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
 <div class="flex h-screen overflow-hidden">
@@ -67,24 +65,31 @@
       <tbody class="divide-y divide-gray-100">
       {% for report in reports %}
 
-        {% set attendanceTotal = report.attendance.total.total|int if report.attendance else 0 %}
-{% set collectionsTotal = report.collections['total'] %}
+        {% set attendanceDays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] %}
+{% set ns = namespace(att=0) %}
+{% if report.attendance %}
+  {% for day in attendanceDays %}
+    {% set ns.att = ns.att + (report.attendance.get(day, 0) or 0) %}
+  {% endfor %}
+{% endif %}
+{% set attendanceTotal = ns.att %}
+{% set collectionsTotal = report.collections.values()|sum if report.collections else none %}
 {% set reviewMissing = not report.resident_pastor_comment and not report.senior_pastor_comment %}
 {% set showRoute = url_for('admin.unit-reports.show', report.id) %}
         <tr class="cursor-pointer hover:bg-gray-50/50 transition-colors" data-report-row="{{ showRoute }}" tabindex="0" aria-label="Open {{ report.department.name or 'report' }} details">
           <td class="py-3 pr-4">
             <p class="font-semibold text-gray-900">{{ report.department.name or 'N/A' }}</p>
-            <p class="text-xs text-gray-500">{{ report.report_month.strftime('F Y') }}</p>
+            <p class="text-xs text-gray-500">{{ report.report_month or 'N/A' }}</p>
           </td>
           <td class="py-3 pr-4 text-gray-600">{{ report.branch.name or 'N/A' }}</td>
-          <td class="py-3 pr-4"><p class="text-gray-700 font-medium">{{ report.hod.name or 'N/A' }}</p><p class="text-xs text-gray-500">{{ report.hod.email }}</p></td>
+          <td class="py-3 pr-4"><p class="text-gray-700 font-medium">{{ report.hod_admin.full_name or 'N/A' }}</p><p class="text-xs text-gray-500">{{ report.hod_admin.email }}</p></td>
           <td class="py-3 pr-4 text-gray-600">{{ '{:,.0f}'.format(attendanceTotal) }}</td>
           <td class="py-3 pr-4 text-gray-600">{{ "NGN {:,}".format(collectionsTotal|float) if collectionsTotal is not none else "N/A" }}</td>
           <td class="py-3 pr-4">
             <span class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide {{ statusTone.get(report.status, 'bg-gray-100 text-gray-500') }}">{{ (report.status or '')|capitalize }}</span>
             {% if reviewMissing %}<span class="ml-1 inline-flex rounded-full bg-rose-50 px-2 py-1 text-[10px] font-bold uppercase text-rose-500">No comments</span>{% endif %}
           </td>
-          <td class="py-3 pr-4 text-gray-500">{{ report.submitted_at.strftime('M d, Y h:i A') if report.submitted_at else 'Not submitted' }}</td>
+          <td class="py-3 pr-4 text-gray-500">{{ report.submitted_at.strftime('%b %d, %Y %I:%M %p') if report.submitted_at else 'Not submitted' }}</td>
           <td class="py-3 text-right">
             <div class="relative inline-flex" data-row-menu>
               <button type="button" class="row-menu-btn h-8 w-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Report actions"><i class="ri-more-2-fill text-lg"></i></button>

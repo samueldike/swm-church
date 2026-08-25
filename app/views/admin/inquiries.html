@@ -2,9 +2,7 @@
 <html lang="en"><head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Inquiries - {{ siteName }}</title>
-<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+{% include "partials/admin-head-assets.html" %}
 </head>
 <body class="bg-background-light text-secondary font-sans antialiased overflow-hidden"><div class="flex h-screen overflow-hidden">{% include "partials/admin-sidebar.html" %}
 <main class="flex-1 flex flex-col overflow-hidden">{% with title="Inquiries", subtitle="Track and resolve contact messages" %}{% include "partials/admin-topbar.html" %}{% endwith %}
@@ -29,12 +27,12 @@
 
 <tr class="hover:bg-gray-50/50 transition-colors">
 <td class="py-3 pr-4"><p class="font-semibold text-gray-900">{{ inquiry.name }}</p><p class="text-xs text-gray-500">{{ inquiry.email }}</p></td>
-<td class="py-3 pr-4 text-gray-500">{{ inquiry.branch.name or 'Unassigned' }}</td>
+<td class="py-3 pr-4 text-gray-500">{{ inquiry.branch.name if inquiry.branch else 'Unassigned' }}</td>
 <td class="py-3 pr-4"><p class="font-medium text-gray-800">{{ inquiry.subject }}</p><p class="text-xs text-gray-500">{{ inquiry.message[:100] ~ ('...' if inquiry.message|length > 100 else '') }}</p></td>
 <td class="py-3 pr-4"><span class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide {{ 'bg-emerald-50 text-emerald-600' if inquiry.status == 'resolved' else ('bg-amber-50 text-amber-600' if inquiry.status == 'in_progress' else 'bg-rose-50 text-rose-500') }}">{{ (inquiry.status or '')|replace('_', ' ')|capitalize }}</span></td>
 <td class="py-3"><div class="flex items-center justify-end gap-2">
-<button type="button" class="inquiry-status-btn w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50 transition-colors" title="Update status" data-action="{{ url_for('admin_inquiries_update', id=inquiry.id) }}" data-status="{{ inquiry.status }}"><i class="ri-edit-line text-base"></i></button>
-<form method="POST" action="{{ url_for('admin_inquiries_destroy', id=inquiry.id) }}" data-confirm="Delete this inquiry?" data-confirm-title="Delete Inquiry" data-confirm-accept="Delete"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"> <input type="hidden" name="_method" value="DELETE"><button class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete inquiry"><i class="ri-delete-bin-line text-base"></i></button></form>
+<button type="button" class="inquiry-status-btn w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50 transition-colors" title="Update status" data-action="{{ url_for('admin_inquiries_update', inquiry_id=inquiry.id) }}" data-status="{{ inquiry.status }}"><i class="ri-edit-line text-base"></i></button>
+<form method="POST" action="{{ url_for('admin_inquiries_destroy', inquiry_id=inquiry.id) }}" data-confirm="Delete this inquiry?" data-confirm-title="Delete Inquiry" data-confirm-accept="Delete"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"> <input type="hidden" name="_method" value="DELETE"><button class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete inquiry"><i class="ri-delete-bin-line text-base"></i></button></form>
 </div></td></tr>
 {% else %}
 

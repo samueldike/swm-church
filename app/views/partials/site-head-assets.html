@@ -1,10 +1,36 @@
-<script>document.documentElement.style.visibility='hidden';</script>
-<script defer src="{{ url_for('static', path='js/tailwind-browser.global.js') }}" onload="document.documentElement.style.visibility='visible';"></script>
+<script>
+    document.documentElement.style.visibility = 'hidden';
+    window.__swmReady = { tailwind: false, fonts: false };
+    window.__swmReveal = function (key) {
+        window.__swmReady[key] = true;
+        if (window.__swmReady.tailwind && window.__swmReady.fonts) {
+            document.documentElement.style.visibility = 'visible';
+        }
+    };
+    setTimeout(function () { document.documentElement.style.visibility = 'visible'; }, 2000);
+    if (window.document && document.fonts && document.fonts.load) {
+        Promise.all([
+            document.fonts.load('24px "Material Symbols Outlined"'),
+            document.fonts.ready
+        ]).catch(function () {}).then(function () { window.__swmReveal('fonts'); });
+    } else {
+        window.__swmReveal('fonts');
+    }
+</script>
+<script defer src="{{ url_for('static', path='js/tailwind-browser.global.js') }}" onload="window.__swmReveal('tailwind');"></script>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+    @font-face {
+        font-family: 'Material Symbols Outlined';
+        font-style: normal;
+        font-weight: 100 700;
+        font-display: block;
+        src: url("{{ url_for('static', path='fonts/material-symbols-outlined.woff2') }}") format('woff2');
+    }
+</style>
 <script>
     tailwind.config = {
         darkMode: "class",

@@ -26,8 +26,9 @@ def _timesince(value) -> str:
     if not value:
         return ""
     from datetime import datetime, timezone
+
     now = datetime.now(timezone.utc)
-    if hasattr(value, 'tzinfo') and value.tzinfo is None:
+    if hasattr(value, "tzinfo") and value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     diff = now - value
     seconds = diff.total_seconds()
@@ -108,6 +109,31 @@ async def render_template(
     ctx.setdefault("siteHeadquartersAddress", site.get("siteHeadquartersAddress", ""))
     ctx.setdefault("siteSupportPhone", site.get("siteSupportPhone", ""))
     ctx.setdefault("siteContactEmail", site.get("siteContactEmail", ""))
+    ctx.setdefault("defaultPageHero", site.get("defaultPageHero", "/images/general-page-header.jpg"))
+    _map_embed_url = (site.get("mapEmbedUrl") or "").strip()
+    if not _map_embed_url and ctx.get("siteHeadquartersAddress"):
+        from urllib.parse import quote
+
+        _map_embed_url = f"https://www.google.com/maps?q={quote(ctx['siteHeadquartersAddress'])}&output=embed"
+    ctx.setdefault("mapEmbedUrl", _map_embed_url)
+    if "settings" not in ctx:
+        ctx["settings"] = site
+    ctx.setdefault(
+        "pastorName", site.get("pastorName", "Pastor Samuel Daniel Inyeneabasi")
+    )
+    ctx.setdefault("pastorTitle", site.get("pastorTitle", "Senior Pastor"))
+    ctx.setdefault(
+        "pastorPhoto", site.get("pastorPhoto", "images/pastor-samuel-inyeneabasi.png")
+    )
+    ctx.setdefault(
+        "pastorBio",
+        site.get(
+            "pastorBio",
+            "Pastor Samuel Daniel Inyeneabasi is a dynamic teacher of God's word, a revivalist, and a visionary "
+            "leader. He carries a specific mandate to reposition men for God's very best through the teaching of "
+            "the Word of Faith and the demonstration of the Spirit and Power.",
+        ),
+    )
 
     def url_for(route_name: str, *args, **path_params: Any) -> str:
         if route_name == "static":
@@ -116,9 +142,11 @@ async def render_template(
         normalized = route_name.replace(".", "_").replace("-", "_")
         router = request.app.router
         for route in router.routes:
-            if getattr(route, "name", None) == normalized:
+            route_name_norm = str(getattr(route, "name", "")).replace(".", "_").replace("-", "_")
+            if route_name_norm == normalized:
                 path = getattr(route, "path", "")
                 import re
+
                 route_params = re.findall(r"\{(\w+)\}", path)
                 if args and route_params:
                     for i, val in enumerate(args):
@@ -137,7 +165,11 @@ async def render_template(
             body = await request.body()
             if body:
                 from urllib.parse import parse_qs
-                form_data = {k: v[0] if len(v) == 1 else v for k, v in parse_qs(body.decode()).items()}
+
+                form_data = {
+                    k: v[0] if len(v) == 1 else v
+                    for k, v in parse_qs(body.decode()).items()
+                }
         except Exception:
             pass
     ctx["request"] = TemplateRequest(request, form_data)
@@ -145,12 +177,23 @@ async def render_template(
     ctx["csrf_token"] = request.session.get("csrf_token", "")
     if not ctx["csrf_token"]:
         import secrets
+
         ctx["csrf_token"] = secrets.token_hex(32)
         request.session["csrf_token"] = ctx["csrf_token"]
 
-    flash_messages = request.session.pop("flash_messages", [])
+    flash_messages = request.session.get("flash_messages", [])
     if "flash_messages" not in ctx:
-        ctx["flash_messages"] = flash_messages
+        ctx["flash_messages"] = list(flash_messages)
+    else:
+        ctx["flash_messages"] = list(flash_messages) + list(ctx["flash_messages"])
+    for _k in ("success", "error", "status", "info"):
+        if _k in request.session:
+            if not any(
+                m.get("message") == request.session[_k] for m in ctx["flash_messages"]
+            ):
+                ctx["flash_messages"].append(
+                    {"type": _k, "message": request.session[_k]}
+                )
 
     ctx["current_page"] = request.url.path
     ctx.setdefault("error_messages", {})
@@ -159,4 +202,9 @@ async def render_template(
 
     template = _env.get_template(template_name)
     html = template.render(ctx)
-    return HTMLResponse(content=html)
+    request.session.pop("flash_messages", None)
+    for _k in ("success", "error", "status", "info"):
+        request.session.pop(_k, None)
+    response = HTMLResponse(content=html)
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return response

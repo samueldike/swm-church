@@ -6,14 +6,7 @@
 <link rel="icon" href="/images/swm-logo.png" type="image/png"/>
 <link rel="apple-touch-icon" href="/images/swm-logo.png"/>
 
-<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
-<link href="https://fonts.googleapis.com" rel="preconnect"/>
-<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&amp;display=swap" rel="stylesheet"/>
-
-
+{% include "partials/admin-head-assets.html" %}
 </head>
 <body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
 <div class="flex h-screen overflow-hidden">
@@ -76,6 +69,10 @@ Email Delivery
 <i class="ri-broadcast-line text-base"></i>
 Audio Distribution
 </button>
+<button type="button" class="settings-tab" data-settings-tab="pages">
+<i class="ri-image-line h-4 w-4"></i>
+Page Headers
+</button>
 <button type="button" class="settings-tab" data-settings-tab="legal">
 <i class="ri-file-text-line h-4 w-4"></i>
 Legal Pages
@@ -107,6 +104,11 @@ Legal Pages
 <label class="form-label">Headquarters Address</label>
 <input class="form-input" name="headquarters_address" value="{{ request.form.get('headquarters_address', settings['headquarters_address']) }}" />
 </div>
+<div class="md:col-span-2">
+<label class="form-label">Map Embed URL (optional)</label>
+<input class="form-input" name="mapEmbedUrl" type="url" value="{{ request.form.get('mapEmbedUrl', settings['mapEmbedUrl']) }}" placeholder="https://www.google.com/maps/embed?pb=..." />
+<p class="mt-1 text-[11px] text-gray-500">Powers the map on the Home page "Visit Us" section and the Contact page. Get this from Google Maps: Share &rarr; Embed a map &rarr; copy the <code>src</code> URL. Leave blank to auto-generate a map from the Headquarters Address above.</p>
+</div>
 <div>
 <label class="form-label">Timezone</label>
 <select class="form-input" name="timezone" required>
@@ -115,9 +117,52 @@ Legal Pages
 {% endfor %}
 </select>
 </div>
+<div class="md:col-span-2 pt-4 border-t border-gray-100">
+<h3 class="text-sm font-bold text-gray-900 mb-3">Social Links (shown in the footer and Contact page — left blank icons are hidden)</h3>
+</div>
+<div>
+<label class="form-label">Facebook URL</label>
+<input class="form-input" name="facebook_url" type="url" value="{{ request.form.get('facebook_url', settings['facebook_url']) }}" placeholder="https://facebook.com/..." />
+</div>
+<div>
+<label class="form-label">Instagram URL</label>
+<input class="form-input" name="instagram_url" type="url" value="{{ request.form.get('instagram_url', settings['instagram_url']) }}" placeholder="https://instagram.com/..." />
+</div>
+<div>
+<label class="form-label">YouTube URL</label>
+<input class="form-input" name="youtube_url" type="url" value="{{ request.form.get('youtube_url', settings['youtube_url']) }}" placeholder="https://youtube.com/@..." />
+</div>
+<div>
+<label class="form-label">X (Twitter) URL</label>
+<input class="form-input" name="x_url" type="url" value="{{ request.form.get('x_url', settings['x_url']) }}" placeholder="https://x.com/..." />
+</div>
+<div class="md:col-span-2 pt-4 border-t border-gray-100">
+<h3 class="text-sm font-bold text-gray-900 mb-3">Pastor Profile (shown on Home &amp; About)</h3>
+</div>
+<div>
+<label class="form-label">Pastor Name</label>
+<input class="form-input" name="pastorName" value="{{ request.form.get('pastorName', settings['pastorName'] or 'Pastor Samuel Daniel Inyeneabasi') }}" />
+</div>
+<div>
+<label class="form-label">Pastor Title</label>
+<input class="form-input" name="pastorTitle" value="{{ request.form.get('pastorTitle', settings['pastorTitle'] or 'Senior Pastor') }}" />
+</div>
+<div class="md:col-span-2">
+<label class="form-label">Pastor Bio</label>
+<textarea class="form-input min-h-24" name="pastorBio">{{ request.form.get('pastorBio', settings['pastorBio'] or '') }}</textarea>
+</div>
+<div class="md:col-span-2 pt-4 border-t border-gray-100">
+<h3 class="text-sm font-bold text-gray-900 mb-3">Pastor Photo</h3>
+<div class="flex items-center gap-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
+<img src="{{ url_for('static', path=settings.get('pastorPhoto', 'images/pastor-samuel-inyeneabasi.png')) }}" alt="Pastor Photo" class="w-20 h-20 rounded-xl object-cover border border-gray-200" onerror="this.style.display='none'"/>
+<div>
+<p class="text-xs font-semibold text-gray-900">Current: {{ settings.get('pastorPhoto', 'images/pastor-samuel-inyeneabasi.png') }}</p>
+<p class="text-[11px] text-gray-500">Shown on Home &amp; About. Use the Upload Photo form below to change.</p>
+</div>
+</div>
+</div>
 </div>
 </section>
-
 <section class="content-card settings-panel hidden" data-settings-panel="appearance">
 <h2 class="section-title">Admin Appearance</h2>
 {% set themeMode = request.form.get('admin_theme_mode', settings['admin_theme_mode']) %}
@@ -134,7 +179,7 @@ Legal Pages
 <input type="hidden" name="admin_theme_preset" value="{{ selectedPreset }}" data-theme-preset-input>
 
 <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-{% for theme, key in themePresets.items() %}
+{% for key, theme in themePresets.items() %}
 <button type="button"
   class="theme-preset-option rounded-2xl border p-4 text-left transition-all {{ 'border-primary bg-primary/5 ring-2 ring-primary/20' if themeMode == 'preset' and selectedPreset == key else 'border-gray-200 bg-white hover:border-primary/40' }}"
   data-theme-preset="{{ key }}"
@@ -318,42 +363,75 @@ Allow remember me on admin login
 
 <section class="content-card settings-panel hidden" data-settings-panel="audio">
 <h2 class="section-title">Audio Message Distribution</h2>
-<p class="text-xs text-gray-500 mb-5">Super admins manage delivery credentials here. Audio files are sent to external platforms from the temporary upload and are not saved in the site project folder.</p>
+<p class="text-xs text-gray-500 mb-5">Uploaded audio is stored on this server and served from the website. Telegram is an optional extra delivery channel per message.</p>
+<div class="mb-5 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5">
+<i class="ri-rss-line text-primary text-base"></i>
+<div class="min-w-0 flex-1">
+<p class="text-xs font-bold text-gray-800">Podcast Feed URL — this is the single point of distribution</p>
+<p class="text-[11px] text-gray-500">Submit this URL once to Spotify for Podcasters and Apple Podcasts Connect. Every audio message you publish is added automatically — no per-platform upload needed.</p>
+</div>
+<input readonly value="{{ feed_url }}" class="hidden sm:block w-64 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600" onclick="this.select()">
+</div>
 <div class="grid md:grid-cols-2 gap-5">
 <div>
 <label class="form-label">Telegram Bot Token</label>
 <input class="form-input" name="telegram_bot_token" value="{{ request.form.get('telegram_bot_token', settings['telegram_bot_token']) }}" autocomplete="off" placeholder="123456:ABC..." />
-<p class="mt-1 text-[11px] text-gray-500">Stored encrypted. Required for Telegram delivery and website background downloads.</p>
+<p class="mt-1 text-[11px] text-gray-500">Stored encrypted. Only needed if you check "Telegram" as a delivery target when uploading a message.</p>
 </div>
 <div>
 <label class="form-label">Telegram Audio Chat / Channel ID</label>
 <input class="form-input" name="telegram_audio_chat_id" value="{{ request.form.get('telegram_audio_chat_id', settings['telegram_audio_chat_id']) }}" placeholder="@channelname or -100..." />
 </div>
-<div>
-<label class="form-label">Audiomack API Key</label>
-<input class="form-input" name="audiomack_api_key" value="{{ request.form.get('audiomack_api_key', settings['audiomack_api_key']) }}" autocomplete="off" />
-<p class="mt-1 text-[11px] text-gray-500">Stored encrypted. Used when an Audiomack API integration is connected.</p>
+<div class="md:col-span-2 pt-2 border-t border-gray-100">
+<h3 class="text-sm font-bold text-gray-900 mb-1">Public listen links (optional)</h3>
+<p class="text-[11px] text-gray-500 mb-3">These are just informational links shown to visitors after you've manually submitted the Podcast Feed URL above to each platform. They do not upload or sync anything automatically.</p>
 </div>
 <div>
-<label class="form-label">Audiomack Profile URL</label>
-<input class="form-input" name="audiomack_profile_url" type="url" value="{{ request.form.get('audiomack_profile_url', settings['audiomack_profile_url']) }}" placeholder="https://audiomack.com/..." />
-</div>
-<div>
-<label class="form-label">Spotify / Podcast RSS URL</label>
-<input class="form-input" name="spotify_rss_url" type="url" value="{{ request.form.get('spotify_rss_url', settings['spotify_rss_url']) }}" />
+<label class="form-label">Spotify Show URL</label>
+<input class="form-input" name="spotify_rss_url" type="url" value="{{ request.form.get('spotify_rss_url', settings['spotify_rss_url']) }}" placeholder="https://open.spotify.com/show/..." />
 </div>
 <div>
 <label class="form-label">Apple Podcasts URL</label>
 <input class="form-input" name="apple_podcasts_url" type="url" value="{{ request.form.get('apple_podcasts_url', settings['apple_podcasts_url']) }}" />
 </div>
-<div>
-<label class="form-label">YouTube Music URL</label>
-<input class="form-input" name="youtube_music_url" type="url" value="{{ request.form.get('youtube_music_url', settings['youtube_music_url']) }}" />
 </div>
-<div class="md:col-span-2">
-<label class="form-label">Other Platform Notes / Credentials Reference</label>
-<textarea class="form-input min-h-28" name="other_audio_platform_notes">{{ request.form.get('other_audio_platform_notes', settings['other_audio_platform_notes']) }}</textarea>
+</section>
+
+<section class="content-card settings-panel hidden" data-settings-panel="pages">
+<h2 class="section-title">Page Headers</h2>
+<p class="text-xs text-gray-500 mb-5">Configure the hero background image for each public page. Click any thumbnail to replace it. The default applies to every page unless a page-specific image is set.</p>
+<input type="hidden" name="page_key" id="pageHeroKeyInput">
+<input type="file" name="image" id="pageHeroFileInput" accept="image/*" class="hidden">
+<button type="submit" formaction="{{ url_for('admin_settings_page_hero') }}" formenctype="multipart/form-data" formnovalidate id="pageHeroSubmitBtn" class="hidden"></button>
+<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+{% set pageKeys = [
+  {'key': 'default', 'label': 'Default Hero (all pages)'},
+  {'key': 'about', 'label': 'About Page'},
+  {'key': 'departments', 'label': 'Departments Page'},
+  {'key': 'messages', 'label': 'Audio Messages Page'},
+  {'key': 'events', 'label': 'Events Page'},
+  {'key': 'calendar', 'label': 'Calendar Page'},
+  {'key': 'contact', 'label': 'Contact Page'},
+  {'key': 'casom', 'label': 'CASOM Page'},
+  {'key': 'give', 'label': 'Give Page'},
+  {'key': 'stories', 'label': 'Stories Page'},
+  {'key': 'get-involved', 'label': 'Get Involved Page'},
+  {'key': 'prayer', 'label': 'Prayer Page'},
+  {'key': 'watch', 'label': 'Watch Page'},
+] %}
+{% for pk in pageKeys %}
+{% set pkSettingKey = 'defaultPageHero' if pk.key == 'default' else 'pageHero_' + pk.key %}
+{% set pkImage = settings.get(pkSettingKey) or settings.get('defaultPageHero', '/images/general-page-header.jpg') %}
+<div class="p-3 bg-gray-50 rounded-xl border border-gray-200">
+<button type="button" class="page-hero-thumb-btn block w-full relative group" data-page-hero-key="{{ pk.key }}" title="Click to change {{ pk.label }} hero image">
+<img src="{{ pkImage }}" alt="{{ pk.label }}" class="w-full h-24 rounded-lg object-cover border border-gray-200" onerror="this.style.display='none'"/>
+<span class="absolute inset-0 rounded-lg bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100"><i class="ri-upload-2-line text-white text-lg"></i></span>
+</button>
+<p class="text-sm font-semibold text-gray-800 mt-2">{{ pk.label }}</p>
+<p class="text-[10px] text-gray-400">{{ 'Applies to every page by default' if pk.key == 'default' else ('Custom image set' if settings.get(pkSettingKey) else 'Uses default') }}</p>
+<input type="file" accept="image/*" class="hidden page-hero-picker" id="pageHeroPicker-{{ pk.key }}" data-page-key="{{ pk.key }}">
 </div>
+{% endfor %}
 </div>
 </section>
 
@@ -372,12 +450,21 @@ Allow remember me on admin login
 </section>
 
 <div class="flex justify-end">
-<button type="submit" class="action-btn primary">
+<button type="submit" class="w-full h-12 rounded-xl bg-primary px-6 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">
 Save All Settings
 </button>
 </div>
 </div>
 </div>
+</form>
+<form action="{{ url_for('admin_settings_pastor_photo') }}" method="POST" enctype="multipart/form-data" class="content-card p-5 flex items-center gap-4 mt-4">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<div>
+<h3 class="text-sm font-bold text-gray-900">Pastor Photo</h3>
+<p class="text-xs text-gray-500">Current: {{ settings.get('pastorPhoto', 'images/pastor-samuel-inyeneabasi.png') }}</p>
+</div>
+<input type="file" name="photo" accept="image/*" required class="form-input text-sm">
+<button type="submit" class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814]">Upload Photo</button>
 </form>
 </div>
 </main>
@@ -385,7 +472,7 @@ Save All Settings
 <script>
 (() => {
 function initializeSettingsPage() {
-    window.__swmSettingsPageAbort.abort();
+    window.__swmSettingsPageAbort?.abort();
     const controller = new AbortController();
     window.__swmSettingsPageAbort = controller;
     const listenerOptions = { signal: controller.signal };
@@ -456,20 +543,20 @@ function initializeSettingsPage() {
     function customThemeValues() {
         const valueFor = (key) => customColorInputs.find((input) => input.dataset.customColor === key)?.value;
         return {
-            primary: valueFor('primary') or '#c9a227',
-            primaryDark: valueFor('primaryDark') or '#a5831f',
-            primaryLight: valueFor('primaryLight') or '#e8d5a3',
-            secondary: valueFor('secondary') or '#1a1a1a',
-            background: valueFor('background') or '#f8f8f7',
-            sidebar: valueFor('sidebar') or '#1a1814',
+            primary: valueFor('primary') || '#c9a227',
+            primaryDark: valueFor('primaryDark') || '#a5831f',
+            primaryLight: valueFor('primaryLight') || '#e8d5a3',
+            secondary: valueFor('secondary') || '#1a1a1a',
+            background: valueFor('background') || '#f8f8f7',
+            sidebar: valueFor('sidebar') || '#1a1814',
         };
     }
 
     function syncThemeControls() {
-        const mode = themeModeInput.value or 'preset';
-        const preset = themePresetInput.value or 'gold';
+        const mode = themeModeInput.value || 'preset';
+        const preset = themePresetInput.value || 'default';
         themePresetButtons.forEach((button) => {
-            const active = mode === 'preset' and button.dataset.themePreset === preset;
+            const active = mode === 'preset' && button.dataset.themePreset === preset;
             button.classList.toggle('border-primary', active);
             button.classList.toggle('bg-primary/5', active);
             button.classList.toggle('ring-2', active);
@@ -575,6 +662,30 @@ function initializeSettingsPage() {
         renumberAccountRows();
     }, listenerOptions);
     renumberAccountRows();
+
+    const pageHeroKeyInput = document.getElementById('pageHeroKeyInput');
+    const pageHeroFileInput = document.getElementById('pageHeroFileInput');
+    const pageHeroSubmitBtn = document.getElementById('pageHeroSubmitBtn');
+
+    document.querySelectorAll('.page-hero-thumb-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            document.getElementById('pageHeroPicker-' + btn.dataset.pageHeroKey)?.click();
+        }, listenerOptions);
+    });
+
+    document.querySelectorAll('.page-hero-picker').forEach((picker) => {
+        picker.addEventListener('change', () => {
+            const file = picker.files && picker.files[0];
+            if (!file || !pageHeroKeyInput || !pageHeroFileInput || !pageHeroSubmitBtn) {
+                return;
+            }
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            pageHeroFileInput.files = dt.files;
+            pageHeroKeyInput.value = picker.dataset.pageKey;
+            pageHeroSubmitBtn.click();
+        }, listenerOptions);
+    });
 
     activateTab('general');
 }

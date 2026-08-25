@@ -14,13 +14,13 @@
   .audio-player audio::-webkit-media-controls-play-button{color:#1a1a1a}
   .audio-player audio::-webkit-media-controls-time-display{color:#374151;font-size:12px}
   .btn-download{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:9999px;background:#1a1a1a;color:#fff;font-size:13px;font-weight:700;text-decoration:none;transition:background .2s}
-  .btn-download:hover{background:#c9a227}
+  .btn-download:hover{background:var(--swm-primary)}
   .featured-audio-player{display:flex;align-items:center;gap:12px;padding:16px 20px;background:rgba(255,255,255,.08);border-radius:12px;border:1px solid rgba(255,255,255,.12);margin-top:20px}
   .featured-audio-player audio{flex:1;height:44px;border-radius:8px}
   .featured-audio-player audio::-webkit-media-controls-panel{background:rgba(255,255,255,.1)}
   .featured-audio-player audio::-webkit-media-controls-play-button{color:#fff}
   .featured-audio-player audio::-webkit-media-controls-time-display{color:rgba(255,255,255,.8);font-size:12px}
-  .btn-download-featured{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;border-radius:9999px;background:#c9a227;color:#fff;font-size:14px;font-weight:700;text-decoration:none;transition:background .2s}
+  .btn-download-featured{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;border-radius:9999px;background:var(--swm-primary);color:#fff;font-size:14px;font-weight:700;text-decoration:none;transition:background .2s}
   .btn-download-featured:hover{background:#b38b2e}
   @media(max-width:640px){
     .audio-player{flex-direction:column;align-items:stretch}
@@ -33,13 +33,11 @@
 <body class="bg-background-light text-secondary font-sans antialiased">
 {% include "partials/site-header.html" %}
 
-<section class="bg-secondary px-6 py-20 text-white lg:px-8">
-  <div class="mx-auto max-w-7xl">
-    <p class="text-sm font-bold uppercase tracking-[0.22em] text-primary-light">Audio Archive</p>
-    <h1 class="mt-4 max-w-3xl font-serif text-5xl font-semibold leading-tight md:text-6xl">Audio Messages</h1>
-    <p class="mt-5 max-w-2xl text-lg leading-8 text-gray-200">Stream sermon information from our archive and download audio delivered through our external distribution channels.</p>
-  </div>
-</section>
+{% set heroTitle = 'Audio Messages' %}
+{% set heroSubtitle = 'Audio Archive' %}
+{% set heroDescription = 'Stream sermons from our archive, download for offline listening, or subscribe with your favorite podcast app.' %}
+{% set heroBgImage = settings.get('pageHero_messages', '') if settings else '' %}
+{% include "partials/site-page-hero.html" %}
 
 <main class="px-6 py-12 lg:px-8">
   <div class="mx-auto max-w-7xl space-y-10">
@@ -65,7 +63,7 @@
               {% if featured_sermon.preacher %}<span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-base text-primary">person</span>{{ featured_sermon.preacher }}</span>{% endif %}
               {% if featured_sermon.published_at %}<span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-base text-primary">calendar_month</span>{{ featured_sermon.published_at.strftime('%B %d, %Y') }}</span>{% endif %}
             </div>
-            {% if featured_sermon.telegram_file_id %}
+            {% if featured_sermon.telegram_file_id or featured_sermon.media_url %}
               <div class="featured-audio-player">
                 <audio controls preload="metadata" src="{{ url_for('messages_stream', sermon_id=featured_sermon.id) }}"></audio>
                 <a href="{{ url_for('messages_download', sermon_id=featured_sermon.id) }}" class="btn-download-featured"><span class="material-symbols-outlined" style="font-size:18px">download</span>Download</a>
@@ -88,7 +86,7 @@
             {% if sermon.preacher %}<p class="flex items-center gap-2"><span class="material-symbols-outlined text-base text-primary">person</span>{{ sermon.preacher }}</p>{% endif %}
             {% if sermon.published_at %}<p class="flex items-center gap-2"><span class="material-symbols-outlined text-base text-primary">calendar_month</span>{{ sermon.published_at.strftime('%b %d, %Y') }}</p>{% endif %}
           </div>
-          {% if sermon.telegram_file_id %}
+          {% if sermon.telegram_file_id or sermon.media_url %}
             <div class="audio-player">
               <audio controls preload="metadata" src="{{ url_for('messages_stream', sermon_id=sermon.id) }}"></audio>
               <a href="{{ url_for('messages_download', sermon_id=sermon.id) }}" class="btn-download"><span class="material-symbols-outlined" style="font-size:16px">download</span></a>

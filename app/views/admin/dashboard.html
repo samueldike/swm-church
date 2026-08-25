@@ -5,9 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Dashboard Overview | {{ siteName }}</title>
 <link rel="icon" href="/images/swm-logo.png" type="image/png"/>
-<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+{% include "partials/admin-head-assets.html" %}
 </head>
 <body class="m-0 bg-[#f7f6f3] text-gray-900 font-sans antialiased overflow-hidden">
 <div class="flex h-screen bg-[#f7f6f3] overflow-hidden">
@@ -41,10 +39,6 @@
 </section>
 {% endif %}
 
-{% set dashboardScopeLabel = isSuper %}
-{# ? 'across all branches' #}
-{# : (admin?->branch ? 'at '.admin->branch->name : 'at '.siteName.' HQ') #}
-
 <section class="relative overflow-hidden rounded-2xl bg-[#1a1814] p-6">
   <div class="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
   <div class="absolute bottom-0 left-0 w-48 h-48 bg-primary/5 rounded-full translate-y-1/2 -translate-x-1/4 pointer-events-none"></div>
@@ -66,7 +60,7 @@
           {% if nextEvent %}
             {% set isToday = nextEvent.start_date.isToday() %}
 {% set isTomorrow = nextEvent.start_date.isTomorrow() %}
-{% set when = 'Today' if isToday else ('Tomorrow' if isTomorrow else nextEvent.start_date.strftime('M d')) %}
+{% set when = 'Today' if isToday else ('Tomorrow' if isTomorrow else nextEvent.start_date.strftime('%b %d')) %}
             {{ when }}{% if nextEvent.start_time %}, {{ nextEvent.start_time.strftime('%I:%M %p') }}{% endif %}
           {% else %}
             None scheduled
@@ -260,13 +254,7 @@
 
               {% set initials = ((member.first_name or 'M')[:1] ~ (member.last_name or '')[:1])|upper %}
 {% set statusTone = 'bg-emerald-50 text-emerald-600' if member.membership_status == 'active' else 'bg-gray-100 text-gray-500' %}
-{% if member.role == 'hod' %}
-  {% set roleTone = 'bg-primary/10 text-primary' %}
-{% elif member.role in ['pastor', 'leader'] %}
-  {% set roleTone = 'bg-violet-50 text-violet-600' %}
-{% else %}
-  {% set roleTone = 'bg-gray-100 text-gray-500' %}
-{% endif %}
+{% set roleTone = 'bg-gray-100 text-gray-500' %}
               <tr class="hover:bg-gray-50/50 transition-colors cursor-pointer">
                 <td class="px-5 py-3">
                   <div class="flex items-center gap-3 min-w-0">
@@ -277,11 +265,11 @@
                     </div>
                   </div>
                 </td>
-                <td class="px-5 py-3 text-xs text-gray-600 hidden sm:table-cell">{{ member.branch.name or 'N/A' }}</td>
-                <td class="px-5 py-3 text-xs text-gray-600 hidden md:table-cell">{{ member.department.name or 'N/A' }}</td>
-                <td class="px-5 py-3 hidden md:table-cell"><span class="text-[10px] font-semibold px-2 py-0.5 rounded-full {{ roleTone }}">{{ (member.role or 'member')|capitalize }}</span></td>
+                <td class="px-5 py-3 text-xs text-gray-600 hidden sm:table-cell">{{ member.branch.name if member.branch else 'N/A' }}</td>
+                <td class="px-5 py-3 text-xs text-gray-600 hidden md:table-cell">Member</td>
+                <td class="px-5 py-3 hidden md:table-cell"><span class="text-[10px] font-semibold px-2 py-0.5 rounded-full {{ roleTone }}">Member</span></td>
                 <td class="px-5 py-3"><span class="text-[10px] font-semibold px-2 py-0.5 rounded-full {{ statusTone }}">{{ (member.membership_status or 'unknown')|capitalize }}</span></td>
-                <td class="px-5 py-3 text-[11px] text-gray-400 hidden lg:table-cell">{{ member.joined_at.strftime('M d, Y') if member.joined_at else member.created_at.strftime('M d, Y') }}</td>
+                <td class="px-5 py-3 text-[11px] text-gray-400 hidden lg:table-cell">{{ member.joined_at.strftime('%b %d, %Y') if member.joined_at else member.created_at.strftime('%b %d, %Y') }}</td>
               </tr>
             {% else %}
 
@@ -368,8 +356,8 @@
   {% set tone = 'bg-gray-50 text-gray-500' %}
 {% endif %}
 {% set verb = action %}
-{% set target = log.extra_data.get('target_label', '') %}
-          <div class="flex items-start gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"><div class="w-8 h-8 flex items-center justify-center rounded-lg flex-shrink-0 {{ tone }}"><i class="{{ icon }} text-sm"></i></div><div class="flex-1 min-w-0"><p class="text-xs text-gray-700 leading-relaxed"><span class="font-semibold">{{ log.admin.name or 'System' }}</span> {{ verb }} {% if target %}<span class="font-medium text-gray-800">{{ target }}</span>{% endif %}</p><p class="text-[10px] text-gray-400 mt-0.5">{{ log.created_at|timesince }}</p></div></div>
+{% set target = log.extra_data.get('target_label', '') if log.extra_data else '' %}
+          <div class="flex items-start gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"><div class="w-8 h-8 flex items-center justify-center rounded-lg flex-shrink-0 {{ tone }}"><i class="{{ icon }} text-sm"></i></div><div class="flex-1 min-w-0"><p class="text-xs text-gray-700 leading-relaxed"><span class="font-semibold">Admin #{{ log.admin_id }}</span> {{ verb }} {% if target %}<span class="font-medium text-gray-800">{{ target }}</span>{% endif %}</p><p class="text-[10px] text-gray-400 mt-0.5">{{ log.created_at|timesince }}</p></div></div>
         {% else %}
 
           <p class="text-xs text-gray-500 px-2 py-3">No recent activity.</p>
@@ -395,8 +383,8 @@
       <div class="p-3 space-y-1">
         {% for msg in recentMessages %}
 
-          {% set parts = (msg.speaker or '').split() %}{% set speakerInitials = ((parts[0][:1] ~ parts[1][:1])|upper if parts|length > 1 else ((parts[0][:1])|upper if parts else 'SP')) %}
-          <div class="flex items-start gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer {{ 'bg-amber-50/30' if msg.status == 'draft' else '' }}"><div class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-[10px] font-bold flex-shrink-0">{{ speakerInitials or 'SP' }}</div><div class="flex-1 min-w-0"><p class="text-xs font-semibold text-gray-800 truncate flex items-center gap-2">{{ msg.speaker }} {% if msg.status == 'draft' %}<span class="w-1.5 h-1.5 bg-primary rounded-full flex-shrink-0"></span>{% endif %}</p><p class="text-[10px] text-gray-500 truncate">{{ msg.title }}</p><p class="text-[10px] text-gray-400 mt-0.5">{{ (msg.published_at or msg.created_at)|timesince }}</p></div></div>
+          {% set parts = (msg.preacher or '').split() %}{% set speakerInitials = ((parts[0][:1] ~ parts[1][:1])|upper if parts|length > 1 else ((parts[0][:1])|upper if parts else 'SP')) %}
+          <div class="flex items-start gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer {{ 'bg-amber-50/30' if msg.status == 'draft' else '' }}"><div class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-[10px] font-bold flex-shrink-0">{{ speakerInitials or 'SP' }}</div><div class="flex-1 min-w-0"><p class="text-xs font-semibold text-gray-800 truncate flex items-center gap-2">{{ msg.preacher }} {% if msg.status == 'draft' %}<span class="w-1.5 h-1.5 bg-primary rounded-full flex-shrink-0"></span>{% endif %}</p><p class="text-[10px] text-gray-500 truncate">{{ msg.title }}</p><p class="text-[10px] text-gray-400 mt-0.5">{{ (msg.published_at or msg.created_at)|timesince }}</p></div></div>
         {% else %}
 
           <p class="text-xs text-gray-500 px-2 py-3">No audio messages yet.</p>
@@ -633,7 +621,7 @@
     setLoading(true);
     animateOut();
     try {
-      const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      const response = await fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
       if (!response.ok) throw new Error(await response.text());
       const payload = await response.json();
       renderStats(payload.stats);

@@ -4,9 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Security Logs - {{ siteName }}</title>
-<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+{% include "partials/admin-head-assets.html" %}
 
 
 </head>
@@ -120,7 +118,7 @@
 
 <tr class="border-b last:border-0 align-top">
 <td class="py-3 pr-3"><input type="checkbox" name="log_ids[]" value="{{ log.id }}" form="bulk-review-form" class="log-checkbox rounded border-gray-300"></td>
-<td class="py-3 pr-3 text-xs text-gray-600">{{ log.created_at.strftime('M d, Y h:i:s A') }}</td>
+<td class="py-3 pr-3 text-xs text-gray-600">{{ log.created_at.strftime('%b %d, %Y %I:%M:%S %p') }}</td>
 <td class="py-3 pr-3">
 <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-primary/10 text-primary">{{ log.action }}</span>
 </td>
@@ -134,7 +132,7 @@
 {% if log.reviewed_at %}
   <div class="space-y-1">
     <span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-600">REVIEWED</span>
-    <p class="text-gray-500">{{ log.reviewed_at.strftime('M d, Y h:i A') }}</p>
+    <p class="text-gray-500">{{ log.reviewed_at.strftime('%b %d, %Y %I:%M %p') }}</p>
     {% if log.reviewedBy %}
       <p class="text-gray-500">by {{ log.reviewedBy.name }}</p>
     {% endif %}
@@ -153,7 +151,7 @@
 <td class="py-3 pr-3 text-xs">
   {% if log.assignedTo %}
     <p class="font-semibold text-secondary">{{ log.assignedTo.name }}</p>
-    <p class="text-gray-500">{{ (log.assigned_at.strftime('M d, h:i A') if log.assigned_at else '') }}</p>
+    <p class="text-gray-500">{{ (log.assigned_at.strftime('%b %d, %I:%M %p') if log.assigned_at else '') }}</p>
   {% endif %}
   <form method="POST" action="{{ url_for('admin_security_logs_assign', log_id=log.id) }}" class="mt-1 flex items-center gap-1">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

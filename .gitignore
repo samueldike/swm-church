@@ -14,7 +14,6 @@ node_modules/
 # Temp/test files
 temp/
 temp_*.py
-test_*.py
 check_*.py
 fix_*.py
 migrate_data.py
@@ -22,11 +21,23 @@ extract_mysql.py
 run_server.py
 seed_admin.py
 *.pyc
+!tests/test_*.py
+
+# One-off VPS scratch scripts with hardcoded credentials — never commit these
+deploy.py
+deploy[0-9]*.py
+ssh_exec.py
+vps_deploy.py
+ins_audit.py
+stage-*.json
+.freebuff/
+nul
 
 # Legacy Laravel files
 public/
 html-templates/
 .phpunit.result.cache
+churchaly/
 
 # Backup
 swm-backup/

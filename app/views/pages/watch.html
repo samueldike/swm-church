@@ -16,14 +16,16 @@
 </head>
 <body class="bg-background-light dark:bg-background-dark text-secondary font-sans antialiased overflow-x-hidden selection:bg-primary selection:text-white">
 {% include "partials/site-header.html" %}
+{% set heroTitle = 'Watch Online' %}
+{% set heroSubtitle = 'Live & On Demand' %}
+{% set heroDescription = 'Catch up on services, special events, and video messages.' %}
+{% set heroBgImage = settings.get('pageHero_watch', '') if settings else '' %}
+{% include "partials/site-page-hero.html" %}
 
 <main class="bg-background-light">
   <section class="relative overflow-hidden bg-secondary text-white">
-    <div class="max-w-7xl mx-auto px-6 lg:px-8 py-20">
-      <span class="text-primary text-sm font-bold tracking-[0.2em] uppercase">Live & On Demand</span>
-      <h1 class="text-white text-4xl md:text-6xl font-serif font-medium leading-tight mt-4">Watch Online</h1>
-      <p class="text-gray-200 text-lg mt-6 max-w-2xl">Catch up on services, special events, and video messages.</p>
-      <div class="mt-8 flex flex-wrap gap-4">
+    <div class="max-w-7xl mx-auto px-6 lg:px-8 py-10">
+      <div class="flex flex-wrap gap-4">
         <a class="h-12 px-6 rounded-full bg-primary text-white font-bold text-sm hover:bg-white hover:text-primary transition-all" href="{{ url_for('contact') }}">Contact Us</a>
         <a class="h-12 px-6 rounded-full border border-white/40 text-white font-bold text-sm hover:border-primary hover:text-primary transition-all" href="{{ url_for('get-involved') }}">Get Involved</a>
       </div>

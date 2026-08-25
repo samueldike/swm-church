@@ -29,3 +29,7 @@ class Member(Base):
     )
 
     branch = relationship("Branch", back_populates="members")
+
+    @property
+    def full_name(self) -> str:
+        return f"{self.first_name or ''} {self.last_name or ''}".strip()

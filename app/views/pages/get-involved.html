@@ -16,16 +16,17 @@
 </head>
 <body class="bg-background-light dark:bg-background-dark text-secondary font-sans antialiased overflow-x-hidden selection:bg-primary selection:text-white">
 {% include "partials/site-header.html" %}
+{% set heroTitle = 'Get Involved' %}
+{% set heroSubtitle = 'Serve With Us' %}
+{% set heroDescription = 'Discover ways to serve, join a team, and grow in community with ' + siteName + '.' %}
+{% set heroBgImage = settings.get('pageHero_get-involved', '') if settings else '' %}
+{% include "partials/site-page-hero.html" %}
 
 <main class="bg-background-light">
   <section class="relative overflow-hidden bg-secondary text-white">
-    <div class="max-w-7xl mx-auto px-6 lg:px-8 py-20">
-      <span class="text-primary text-sm font-bold tracking-[0.2em] uppercase">Serve With Us</span>
-      <h1 class="text-white text-4xl md:text-6xl font-serif font-medium leading-tight mt-4">Get Involved</h1>
-      <p class="text-gray-200 text-lg mt-6 max-w-2xl">Discover ways to serve, join a team, and grow in community with {{ siteName }}.</p>
-      <div class="mt-8 flex flex-wrap gap-4">
+    <div class="max-w-7xl mx-auto px-6 lg:px-8 py-10">
+      <div class="flex flex-wrap gap-4">
         <a class="h-12 px-6 rounded-full bg-primary text-white font-bold text-sm hover:bg-white hover:text-primary transition-all" href="{{ url_for('contact') }}">Contact Us</a>
-        <a class="h-12 px-6 rounded-full border border-white/40 text-white font-bold text-sm hover:border-primary hover:text-primary transition-all" href="{{ url_for('get-involved') }}">Get Involved</a>
       </div>
     </div>
   </section>

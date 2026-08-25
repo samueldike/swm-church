@@ -8,30 +8,25 @@
 
 {% include "partials/site-head-assets.html" %}
 <style>
-  .hero-gradient{background:linear-gradient(to right,rgba(26,26,26,.9),rgba(26,26,26,.5)),url('/images/swm-logo.png');background-size:cover;background-position:center}
   .calendar-grid{display:grid;grid-template-columns:repeat(7,1fr)}
   .calendar-day{min-height:120px;border-right:1px solid #f3f4f6;border-bottom:1px solid #f3f4f6;padding:12px;transition:background .2s}
-  .calendar-day:hover{background:rgba(201,162,39,.03)}
+  .calendar-day:hover{background:rgba(179,139,46,.03)}
   .event-badge-calendar{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:700;text-transform:uppercase;margin-bottom:4px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .event-weekly{background:rgba(201,162,39,.1);color:#92400e;border-left:2px solid #c9a227}
+  .event-weekly{background:rgba(179,139,46,.1);color:#92400e;border-left:2px solid var(--swm-primary)}
   .event-special{background:#1a1a1a;color:#fff;border-left:2px solid #d4af37}
   .event-outreach{background:#eff6ff;color:#1d4ed8;border-left:2px solid #3b82f6}
-  .event-casom{background:#c9a227;color:#fff;border-left:2px solid #1a1a1a}
+  .event-casom{background:var(--swm-primary);color:#fff;border-left:2px solid #1a1a1a}
   @media(prefers-reduced-motion:reduce){.calendar-day{transition:none}}
 </style>
 
 </head>
 <body class="bg-background-light text-secondary font-sans antialiased">
 {% include "partials/site-header.html" %}
-<section class="relative h-[50vh] flex items-center overflow-hidden hero-gradient">
-<div class="relative z-10 px-6 lg:px-20 max-w-7xl mx-auto w-full text-center">
-<span class="text-primary-light text-sm md:text-base font-bold tracking-[0.3em] uppercase mb-4 block">Our Schedule</span>
-<h1 class="text-white text-5xl md:text-7xl font-serif font-medium leading-tight mb-6">Church <span class="italic text-primary-light">Calendar</span></h1>
-<p class="text-gray-200 text-lg md:text-xl font-light max-w-2xl mx-auto leading-relaxed">
-            Plan your season around His presence. Join us for our weekly services and special monthly programs.
-        </p>
-</div>
-</section>
+{% set heroTitle = 'Church <span class="italic text-primary-light">Calendar</span>' %}
+{% set heroSubtitle = 'Our Schedule' %}
+{% set heroDescription = 'Plan your season around His presence. Join us for our weekly services and special monthly programs.' %}
+{% set heroBgImage = settings.get('pageHero_calendar', '') if settings else '' %}
+{% include "partials/site-page-hero.html" %}
 <section class="py-16 px-6 lg:px-8 bg-background-light">
 <div class="max-w-7xl mx-auto">
 <div class="flex flex-col lg:flex-row gap-12">
@@ -65,16 +60,7 @@
 <!-- Calendar days will be populated by JavaScript -->
 </div>
 </div>
-<div class="mt-8 flex flex-wrap gap-4">
-<button class="flex items-center gap-3 px-8 py-4 bg-primary text-white rounded-2xl font-bold hover:bg-primary-dark transition-all shadow-glow">
-<span class="material-symbols-outlined">download</span>
-                        Download Annual Calendar (PDF)
-                    </button>
-<button class="flex items-center gap-3 px-8 py-4 border border-secondary text-secondary rounded-2xl font-bold hover:bg-secondary hover:text-white transition-all">
-<span class="material-symbols-outlined">calendar_add_on</span>
-                        Subscribe to iCal/Google
-                    </button>
-</div>
+
 </div>
 <aside class="w-full lg:w-80 flex flex-col gap-8">
 <div class="bg-white p-8 rounded-3xl shadow-soft border border-gray-100">
@@ -118,6 +104,7 @@
 
     // Load events when page loads
     document.addEventListener('DOMContentLoaded', function() {
+        renderCalendar(currentMonth, currentYear);
         loadEvents();
     });
 
@@ -125,10 +112,23 @@
     async function loadEvents() {
         try {
             const response = await fetch('/api/events/calendar');
-            events = await response.json();
+            if (!response.ok) throw new Error('calendar fetch failed');
+            const raw = await response.json();
+            events = Array.isArray(raw) ? raw : (raw.items || raw.events || []);
+            events = events.map(e => ({
+                ...e,
+                start_date: e.start_date || (e.starts_at ? e.starts_at.split('T')[0] : null),
+                start_time: e.start_time || (e.starts_at ? e.starts_at.split('T')[1]?.slice(0,5) : null),
+                title: e.title || '',
+                description: e.description || '',
+                event_type: e.event_type || (e.is_major ? 'special' : 'weekly'),
+                status: e.status || (e.is_published ? 'published' : 'draft'),
+            }));
+        } catch (error) {
+            events = [];
+        } finally {
             renderCalendar(currentMonth, currentYear);
             renderUpcomingEvents();
-        } catch (error) {
         }
     }
 
@@ -195,7 +195,7 @@
                     let timeText = '';
                     if (event.start_time) {
                         const time = formatTime(event.start_time);
-                        timeText = ` â€¢ ${time}`;
+                        timeText = ` • ${time}`;
                     }
                     
                     eventBadge.textContent = `${event.title}${timeText}`;

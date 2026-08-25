@@ -1,15 +1,11 @@
-{% set editMode = report is defined %}{% set action = url_for('hod.reports.update', id=report.id) if editMode else url_for('hod.reports.store') %}{% set attendance = report.attendance if editMode and report.attendance else {} %}{% set collections = report.collections if editMode and report.collections else {} %}{% set weekKeys = ['week1','week2','week3','week4','week5','others','total'] %}{% set weekLabels = {'week1': '1', 'week2': '2', 'week3': '3', 'week4': '4', 'week5': '5', 'others': 'Others', 'total': 'Total'} %}
+{% set editMode = report is defined and report %}{% set action = url_for('hod.reports.update', report.id) if editMode else url_for('hod.reports.store') %}{% set attendance = report.attendance if editMode and report.attendance else {} %}{% set collections = report.collections if editMode and report.collections else {} %}{% set weekKeys = ['week1','week2','week3','week4','week5','others','total'] %}{% set weekLabels = {'week1': '1', 'week2': '2', 'week3': '3', 'week4': '4', 'week5': '5', 'others': 'Others', 'total': 'Total'} %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>{{ 'Edit' if editMode else 'Submit' }} Monthly Unit Report - {{ siteName }}</title>
-<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
-
+{% include "partials/admin-head-assets.html" %}
 </head>
 <body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
 <div class="flex h-screen overflow-hidden">

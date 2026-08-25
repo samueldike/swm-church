@@ -53,7 +53,7 @@
   <div class="mx-auto max-w-4xl space-y-10">
 
     <div class="rounded-3xl border border-gray-100 bg-white p-8 shadow-soft">
-      {% if sermon.telegram_file_id %}
+      {% if sermon.telegram_file_id or sermon.media_url %}
         <div class="mb-6">
           <div class="sermon-player-full">
             <audio controls preload="metadata" src="{{ url_for('messages_stream', sermon_id=sermon.id) }}"></audio>
@@ -93,7 +93,7 @@
     </div>
     {% endif %}
 
-    {% if sermon.telegram_file_id %}
+    {% if sermon.telegram_file_id or sermon.media_url %}
     <div class="rounded-3xl bg-secondary p-8 text-white">
       <div class="flex items-center gap-4 mb-6">
         <div class="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
@@ -143,7 +143,7 @@
             {% if r.preacher and r.published_at %}<span class="w-1 h-1 rounded-full bg-gray-300"></span>{% endif %}
             {% if r.published_at %}<span>{{ r.published_at.strftime('%b %d, %Y') }}</span>{% endif %}
           </div>
-          {% if r.telegram_file_id %}
+          {% if r.telegram_file_id or r.media_url %}
           <div class="mt-4 flex items-center gap-1 text-xs text-primary font-semibold">
             <span class="material-symbols-outlined text-sm">headphones</span> Listen Now
           </div>

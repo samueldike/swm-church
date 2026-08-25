@@ -27,6 +27,7 @@ class HarvestWorker(Base):
     tokens = relationship("HarvestWorkerToken", back_populates="worker", cascade="all, delete-orphan")
     contacts = relationship("HarvestContact", back_populates="worker", cascade="all, delete-orphan")
     reminders = relationship("HarvestReminder", back_populates="worker", cascade="all, delete-orphan")
+    branch = relationship("Branch", back_populates="harvest_workers")
 
 
 class HarvestWorkerToken(Base):

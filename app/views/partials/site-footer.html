@@ -13,22 +13,33 @@
                     {{ siteTagline }}. Join us as we grow together in Christ and impact our world.
                 </p>
 <div class="flex gap-4">
-<a class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-primary hover:text-white transition-all duration-300 text-gray-400" href="{{ url_for('contact') }}">
-<span class="material-symbols-outlined text-sm">public</span>
-</a>
-<a class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-primary hover:text-white transition-all duration-300 text-gray-400" href="{{ url_for('contact') }}">
+{% if settings and settings.get('facebook_url') %}
+<a class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-primary hover:text-white transition-all duration-300 text-gray-400" href="{{ settings.get('facebook_url') }}" target="_blank" rel="noopener" aria-label="Facebook">
 <span class="material-symbols-outlined text-sm">thumb_up</span>
 </a>
-<a class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-primary hover:text-white transition-all duration-300 text-gray-400" href="{{ url_for('contact') }}">
+{% endif %}
+{% if settings and settings.get('instagram_url') %}
+<a class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-primary hover:text-white transition-all duration-300 text-gray-400" href="{{ settings.get('instagram_url') }}" target="_blank" rel="noopener" aria-label="Instagram">
 <span class="material-symbols-outlined text-sm">photo_camera</span>
 </a>
+{% endif %}
+{% if settings and settings.get('youtube_url') %}
+<a class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-primary hover:text-white transition-all duration-300 text-gray-400" href="{{ settings.get('youtube_url') }}" target="_blank" rel="noopener" aria-label="YouTube">
+<span class="material-symbols-outlined text-sm">smart_display</span>
+</a>
+{% endif %}
+{% if settings and settings.get('x_url') %}
+<a class="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-primary hover:text-white transition-all duration-300 text-gray-400" href="{{ settings.get('x_url') }}" target="_blank" rel="noopener" aria-label="X (Twitter)">
+<span class="material-symbols-outlined text-sm">tag</span>
+</a>
+{% endif %}
 </div>
 </div>
 <div>
 <h3 class="font-serif font-bold text-lg mb-8 text-white relative inline-block after:absolute after:bottom-[-8px] after:left-0 after:w-10 after:h-[2px] after:bg-primary">Quick Links</h3>
 <ul class="flex flex-col gap-4 text-gray-400 text-sm">
 <li><a class="hover:text-primary transition-colors flex items-center gap-2 group" href="{{ url_for('about') }}"><span class="w-1 h-1 rounded-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity"></span>About Us</a></li>
-<li><a class="hover:text-primary transition-colors flex items-center gap-2 group" href="{{ url_for('departments') }}"><span class="w-1 h-1 rounded-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity"></span>Our Ministries</a></li>
+<li><a class="hover:text-primary transition-colors flex items-center gap-2 group" href="{{ url_for('departments') }}"><span class="w-1 h-1 rounded-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity"></span>Departments</a></li>
 <li><a class="hover:text-primary transition-colors flex items-center gap-2 group" href="{{ url_for('messages') }}"><span class="w-1 h-1 rounded-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity"></span>Audio Messages</a></li>
 <li><a class="hover:text-primary transition-colors flex items-center gap-2 group" href="{{ url_for('events') }}"><span class="w-1 h-1 rounded-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity"></span>Events Calendar</a></li>
 <li><a class="hover:text-primary transition-colors flex items-center gap-2 group" href="{{ url_for('contact') }}"><span class="w-1 h-1 rounded-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity"></span>Contact</a></li>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>{{ story.title }} - {{ siteName }}</title>
+<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
+{% include "partials/site-head-assets.html" %}
+</head>
+<body class="bg-background-light text-secondary font-sans antialiased">
+{% include "partials/site-header.html" %}
+<main class="max-w-4xl mx-auto px-6 lg:px-8 py-12">
+<a href="{{ url_for('stories') }}" class="inline-flex items-center gap-2 text-sm font-bold text-primary hover:text-secondary mb-8">
+<span class="material-symbols-outlined text-sm">arrow_back</span> Back to Stories
+</a>
+{% if story.featured_image %}
+<div class="rounded-2xl overflow-hidden mb-8">
+<img src="{{ url_for('static', path=story.featured_image) }}" alt="{{ story.title }}" class="w-full object-cover max-h-[480px]"/>
+</div>
+{% endif %}
+{% if story.category %}
+<span class="inline-block bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full mb-4">{{ story.category }}</span>
+{% endif %}
+<h1 class="font-serif text-4xl md:text-5xl font-bold text-secondary leading-tight">{{ story.title }}</h1>
+<div class="flex items-center gap-3 text-sm text-gray-400 mt-4">
+{% if story.published_at %}<span class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">calendar_today</span> {{ story.published_at.strftime('%B %d, %Y') }}</span>{% endif %}
+{% if story.author_name %}<span class="w-1 h-1 rounded-full bg-gray-300"></span><span>By {{ story.author_name }}</span>{% endif %}
+</div>
+{% if story.excerpt %}
+<p class="text-xl text-gray-600 leading-relaxed mt-6 italic border-l-4 border-primary pl-6">{{ story.excerpt }}</p>
+{% endif %}
+<div class="prose prose-lg max-w-none mt-8 text-gray-700 leading-relaxed whitespace-pre-wrap">{{ story.content }}</div>
+{% if related and related|length > 0 %}
+<section class="mt-16 pt-10 border-t border-gray-100">
+<h3 class="font-serif text-2xl font-bold text-secondary mb-6">More Stories</h3>
+<div class="grid md:grid-cols-3 gap-6">
+{% for r in related %}
+<a href="{{ url_for('story_detail', slug=r.slug) }}" class="group bg-white rounded-2xl border border-gray-100 p-6 hover:border-primary/30 transition-all">
+{% if r.category %}<span class="text-[10px] font-bold uppercase tracking-wider text-primary">{{ r.category }}</span>{% endif %}
+<h4 class="font-bold text-secondary group-hover:text-primary mt-2 line-clamp-2">{{ r.title }}</h4>
+{% if r.excerpt %}<p class="text-sm text-gray-500 mt-2 line-clamp-2">{{ r.excerpt }}</p>{% endif %}
+</a>
+{% endfor %}
+</div>
+</section>
+{% endif %}
+</main>
+{% include "partials/site-footer.html" %}
+</body></html>

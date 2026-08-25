@@ -8,7 +8,6 @@
 <link rel="icon" href="/images/swm-logo.png" type="image/png"/>
 {% include "partials/site-head-assets.html" %}
 <style>
-  .hero-gradient{background:linear-gradient(to top,rgba(26,26,26,.9),rgba(26,26,26,.4)),url('/images/swm-logo.png');background-size:cover;background-position:center}
   .event-card{background:#fff;border:1px solid #f3f4f6;border-radius:24px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.04),0 4px 12px rgba(0,0,0,.03);transition:all .3s cubic-bezier(.23,1,.32,1)}
   .event-card:hover{box-shadow:0 4px 6px rgba(0,0,0,.05),0 10px 24px rgba(0,0,0,.06);transform:translateY(-4px)}
   .event-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
@@ -18,12 +17,12 @@
   .event-date-box .day{font-size:20px;font-weight:700;color:#1a1a1a;line-height:1}
   .event-date-box .month{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280}
   .schedule-card{background:rgba(255,255,255,.05);backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:32px;transition:border-color .3s}
-  .schedule-card:hover{border-color:rgba(201,162,39,.5)}
+  .schedule-card:hover{border-color:rgba(179,139,46,.5)}
   .btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 24px;border-radius:12px;background:#1a1a1a;color:#fff;font-size:14px;font-weight:700;text-decoration:none;transition:all .2s;border:none;cursor:pointer}
-  .btn-primary:hover{background:#c9a227}
+  .btn-primary:hover{background:var(--swm-primary)}
   .btn-primary:active{transform:scale(.98)}
   .btn-outline{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:12px 24px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;color:#1a1a1a;font-size:14px;font-weight:700;text-decoration:none;transition:all .2s;cursor:pointer}
-  .btn-outline:hover{border-color:#c9a227;color:#c9a227}
+  .btn-outline:hover{border-color:var(--swm-primary);color:var(--swm-primary)}
   .empty-state{border:1px dashed #e5e7eb;border-radius:24px;padding:48px 32px;text-align:center;color:#9ca3af}
   @media(prefers-reduced-motion:reduce){.event-card{transition:none}.event-card:hover{transform:none}}
 </style>
@@ -31,17 +30,11 @@
 <body class="bg-background-light text-secondary font-sans antialiased">
 {% include "partials/site-header.html" %}
 
-<section class="relative flex min-h-[45vh] items-center justify-center overflow-hidden bg-secondary px-6 py-20">
-  <div class="relative z-10 mx-auto max-w-4xl text-center">
-    <p class="mb-4 text-sm font-bold uppercase tracking-[0.22em] text-primary-light md:text-base">Our Calendar</p>
-    <h1 class="mb-6 font-serif text-5xl font-semibold leading-tight text-white md:text-7xl">
-      Upcoming <span class="italic text-primary-light">Events</span>
-    </h1>
-    <p class="mx-auto max-w-2xl text-lg leading-relaxed text-gray-200 font-light">
-      Stay connected and grow through shared experiences. Join our community in worship, learning, and fellowship.
-    </p>
-  </div>
-</section>
+{% set heroTitle = 'Upcoming <span class="italic text-primary-light">Events</span>' %}
+{% set heroSubtitle = 'Our Calendar' %}
+{% set heroDescription = 'Stay connected and grow through shared experiences. Join our community in worship, learning, and fellowship.' %}
+{% set heroBgImage = settings.get('pageHero_events', '') if settings else '' %}
+{% include "partials/site-page-hero.html" %}
 
 <main class="bg-background-light px-6 py-20 lg:px-8">
   <div class="mx-auto max-w-7xl">

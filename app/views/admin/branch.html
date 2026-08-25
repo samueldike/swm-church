@@ -4,9 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>{{ branch.name }} - {{ siteName }}</title>
-<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+{% include "partials/admin-head-assets.html" %}
 </head>
 <body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
 <div class="flex h-screen overflow-hidden">
@@ -164,7 +162,7 @@
           <td class="py-3 pr-4 font-semibold text-gray-900">{{ department['name'] }}</td>
           <td class="py-3 pr-4 text-gray-600">{{ "{:,}".format(department['members']) }}</td>
           <td class="py-3 pr-4 text-gray-600">{{ department.get('hod', {}).get('name', 'Unassigned') if department.get('hod') else 'Unassigned' }}</td>
-          <td class="py-3 pr-4 text-gray-500">{{ department['latest_report_month'].strftime('M d, Y') if department.get('latest_report_month') else 'No report' }}</td>
+          <td class="py-3 pr-4 text-gray-500">{{ department['latest_report_month'].strftime('%b %d, %Y') if department.get('latest_report_month') else 'No report' }}</td>
           <td class="py-3 pr-4"><span class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide {{ 'bg-emerald-50 text-emerald-600' if department['hod'] else 'bg-amber-50 text-amber-600' }}">{{ 'Covered' if department['hod'] else 'Needs HOD' }}</span></td>
         </tr>
       {% endfor %}
@@ -181,7 +179,7 @@
 
         <div class="rounded-xl border border-gray-100 p-3">
           <p class="truncate text-sm font-bold text-gray-900">{{ member.full_name }}</p>
-          <p class="mt-0.5 text-xs text-gray-500">{{ member.department.name or 'No department' }} - {{ (member.membership_status or '')|capitalize }}</p>
+          <p class="mt-0.5 text-xs text-gray-500">{{ member.email or member.phone or 'No contact info' }} &middot; {{ (member.membership_status or '')|capitalize }}</p>
         </div>
       {% else %}
 
@@ -197,7 +195,7 @@
 
         <div class="rounded-xl border border-gray-100 p-3">
           <p class="truncate text-sm font-bold text-gray-900">{{ event.title }}</p>
-          <p class="mt-0.5 text-xs text-gray-500">{{ event.starts_at.strftime('M d, Y') if event.starts_at else 'TBD' }} - {{ ('Major' if event.is_major else 'Regular') }} - {{ ('Published' if event.is_published else 'Draft') }}</p>
+          <p class="mt-0.5 text-xs text-gray-500">{{ event.starts_at.strftime('%b %d, %Y') if event.starts_at else 'TBD' }} - {{ ('Major' if event.is_major else 'Regular') }} - {{ ('Published' if event.is_published else 'Draft') }}</p>
         </div>
       {% else %}
 
@@ -266,7 +264,7 @@
             </div>
             <span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase {{ 'bg-emerald-50 text-emerald-600' if invitation.accepted_at else 'bg-amber-50 text-amber-600' }}">{{ 'Accepted' if invitation.accepted_at else 'Pending' }}</span>
           </div>
-          <p class="mt-2 text-xs text-gray-500">Expires {{ invitation.expires_at.strftime('M d, Y h:i A') }}</p>
+          <p class="mt-2 text-xs text-gray-500">Expires {{ invitation.expires_at.strftime('%b %d, %Y %I:%M %p') }}</p>
           {% if not invitation.accepted_at %}
             <form method="POST" action="{{ url_for('admin.branch.invitations.resend', branch_id=branch.id, invitation_id=invitation.id) }}" class="mt-2"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="text-xs font-bold text-primary hover:text-primary-dark transition-colors">Resend Invitation</button></form>
           {% endif %}

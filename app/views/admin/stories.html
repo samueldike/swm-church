@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Stories - {{ siteName }}</title>
+{% include "partials/admin-head-assets.html" %}
+</head>
+<body class="bg-background-light text-secondary font-sans antialiased overflow-hidden"><div class="flex h-screen overflow-hidden">{% include "partials/admin-sidebar.html" %}
+<main class="flex-1 flex flex-col overflow-hidden">{% with title="Stories", subtitle="WordPress-like post publication and management" %}{% include "partials/admin-topbar.html" %}{% endwith %}
+<div class="flex-1 overflow-y-auto p-5 lg:p-8 space-y-4">
+{% if session.get('success') %}<div class="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-4 py-3 flash-auto-dismiss">{{ session.get('success') }}</div>{% endif %}
+{% for fm in flash_messages %}{% if fm.type == 'success' and not session.get('success') %}<div class="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-4 py-3 flash-auto-dismiss">{{ fm.message }}</div>{% endif %}{% endfor %}
+<section class="content-card p-4 lg:p-5">
+<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+<div><h2 class="text-base font-bold text-gray-900">Stories</h2><p class="text-xs text-gray-500 mt-0.5">{{ "{:,}".format(stories|length) }} posts • Displayed at Home &amp; /stories when Published</p></div>
+<div class="flex gap-2"><a href="{{ url_for('stories') }}" target="_blank" class="h-10 inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 text-sm font-semibold text-gray-600 hover:text-gray-900"><i class="ri-external-link-line"></i>View Site</a><button type="button" data-open-create-story class="h-10 inline-flex items-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-[#1a1814] hover:bg-primary-dark"><i class="ri-quill-pen-line"></i> New Story</button></div>
+</div>
+<div class="mt-4 overflow-x-auto"><table class="w-full min-w-[900px] text-sm"><thead><tr class="border-b border-gray-100"><th class="table-header py-3 pr-4">Post</th><th class="table-header py-3 pr-4">Author</th><th class="table-header py-3 pr-4">Status</th><th class="table-header py-3 pr-4">Date</th><th class="table-header py-3 text-right">Actions</th></tr></thead><tbody class="divide-y divide-gray-100">
+{% for story in stories %}
+<tr class="hover:bg-gray-50/50">
+<td class="py-3 pr-4"><div class="flex gap-3"><img src="{{ url_for('static', path=story.featured_image) if story.featured_image else '/images/swm-logo.png' }}" class="w-12 h-12 rounded-lg object-cover border border-gray-100" onerror="this.style.display='none'"/><div><p class="font-semibold text-gray-900">{{ story.title }}</p><p class="text-xs text-gray-500 line-clamp-1">{{ story.excerpt or story.content[:80] if story.content else '' }}</p><p class="text-[10px] text-primary font-mono">{{ story.slug }}</p></div></div></td>
+<td class="py-3 pr-4 text-gray-500">{{ story.author_name or '—' }}</td>
+<td class="py-3 pr-4"><span class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide {{ 'bg-emerald-50 text-emerald-600' if story.status == 'published' else 'bg-amber-50 text-amber-600' }}">{{ story.status }}</span>{% if story.is_featured %}<span class="ml-1 inline-flex rounded-full bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary">Featured</span>{% endif %}</td>
+<td class="py-3 pr-4 text-xs text-gray-500">{{ story.published_at.strftime('%b %d, %Y') if story.published_at else story.created_at.strftime('%b %d, %Y') }}</td>
+<td class="py-3"><div class="flex items-center justify-end gap-1">
+{% if story.status == 'published' %}<a href="{{ url_for('story_detail', slug=story.slug) }}" target="_blank" class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50" title="View"><i class="ri-eye-line"></i></a>{% endif %}
+<button type="button" class="story-edit-btn w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50" title="Edit" data-action="{{ url_for('admin_stories_update', story_id=story.id) }}" data-title="{{ story.title|e }}" data-excerpt="{{ story.excerpt|e }}" data-content="{{ story.content|e }}" data-category="{{ story.category|e }}" data-author="{{ story.author_name|e }}" data-status="{{ story.status }}" data-featured="{{ '1' if story.is_featured else '0' }}"><i class="ri-edit-line"></i></button>
+<form method="POST" action="{{ url_for('admin_stories_destroy', story_id=story.id) }}" data-confirm="Delete this story?" data-confirm-title="Delete Story"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50" title="Delete"><i class="ri-delete-bin-line"></i></button></form>
+</div></td></tr>
+{% else %}
+<tr><td colspan="5" class="py-10 text-center text-sm text-gray-500">No stories yet. Create your first post.</td></tr>
+{% endfor %}
+</tbody></table></div>
+</section>
+</div></main></div>
+<div id="create-story-modal" class="fixed inset-0 z-50 hidden"><div class="absolute inset-0 bg-black/50" data-close-story-modal></div><div class="absolute inset-x-4 top-6 mx-auto max-w-3xl rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4"><h3 class="text-sm font-bold text-gray-900">New Story</h3><button type="button" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-50" data-close-story-modal><i class="ri-close-line text-lg"></i></button></div>
+<form method="POST" action="{{ url_for('admin_stories_store') }}" enctype="multipart/form-data" class="p-5 grid gap-3 max-h-[80vh] overflow-y-auto"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label><span class="form-label">Title *</span><input name="title" class="form-input" required></label>
+<label><span class="form-label">Excerpt</span><textarea name="excerpt" rows="2" class="form-input" placeholder="Short summary for cards"></textarea></label>
+<label><span class="form-label">Content *</span><textarea name="content" rows="8" class="form-input richtext" required></textarea></label>
+<div class="grid grid-cols-2 gap-3"><label><span class="form-label">Category</span><input name="category" class="form-input" placeholder="Testimony, News..."></label><label><span class="form-label">Author</span><input name="author_name" class="form-input"></label></div>
+<div class="grid grid-cols-2 gap-3"><label><span class="form-label">Status</span><select name="status" class="form-input"><option value="draft">Draft</option><option value="published">Published</option></select></label><label class="flex items-center gap-2 pt-6"><input type="checkbox" name="is_featured" value="1" class="rounded border-gray-300 text-primary"> <span class="text-sm font-semibold">Featured</span></label></div>
+<label><span class="form-label">Featured Image</span><input type="file" name="image" accept="image/*" class="form-input"></label>
+<div class="flex justify-end gap-2 pt-2"><button type="button" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold" data-close-story-modal>Cancel</button><button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814]">Publish</button></div>
+</form></div></div>
+<div id="edit-story-modal" class="fixed inset-0 z-50 hidden"><div class="absolute inset-0 bg-black/50" data-close-story-modal></div><div class="absolute inset-x-4 top-6 mx-auto max-w-3xl rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4"><h3 class="text-sm font-bold text-gray-900">Edit Story</h3><button type="button" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-50" data-close-story-modal><i class="ri-close-line text-lg"></i></button></div>
+<form id="edit-story-form" method="POST" action="" enctype="multipart/form-data" class="p-5 grid gap-3 max-h-[80vh] overflow-y-auto"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label><span class="form-label">Title</span><input id="edit-story-title" name="title" class="form-input" required></label>
+<label><span class="form-label">Excerpt</span><textarea id="edit-story-excerpt" name="excerpt" rows="2" class="form-input"></textarea></label>
+<label><span class="form-label">Content</span><textarea id="edit-story-content" name="content" rows="8" class="form-input richtext"></textarea></label>
+<div class="grid grid-cols-2 gap-3"><label><span class="form-label">Category</span><input id="edit-story-category" name="category" class="form-input"></label><label><span class="form-label">Author</span><input id="edit-story-author" name="author_name" class="form-input"></label></div>
+<div class="grid grid-cols-2 gap-3"><label><span class="form-label">Status</span><select id="edit-story-status" name="status" class="form-input"><option value="draft">Draft</option><option value="published">Published</option></select></label><label class="flex items-center gap-2 pt-6"><input id="edit-story-featured" type="checkbox" name="is_featured" value="1" class="rounded border-gray-300 text-primary"> <span class="text-sm font-semibold">Featured</span></label></div>
+<label><span class="form-label">Replace Image</span><input type="file" name="image" accept="image/*" class="form-input"></label>
+<div class="flex justify-end gap-2 pt-2"><button type="button" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold" data-close-story-modal>Cancel</button><button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814]">Save Changes</button></div>
+</form></div></div>
+<script>
+(() => {
+const body=document.body, create=document.getElementById('create-story-modal'), edit=document.getElementById('edit-story-modal'), editForm=document.getElementById('edit-story-form');
+const open=m=>{m.classList.remove('hidden');body.classList.add('overflow-hidden')};
+const close=()=>{[create,edit].forEach(m=>m.classList.add('hidden'));body.classList.remove('overflow-hidden')};
+document.querySelector('[data-open-create-story]')?.addEventListener('click',()=>open(create));
+document.querySelectorAll('[data-close-story-modal]').forEach(el=>el.addEventListener('click',close));
+document.querySelectorAll('.story-edit-btn').forEach(btn=>btn.addEventListener('click',()=>{
+editForm.action=btn.dataset.action||'';
+document.getElementById('edit-story-title').value=btn.dataset.title||'';
+document.getElementById('edit-story-excerpt').value=btn.dataset.excerpt||'';
+document.getElementById('edit-story-content').value=btn.dataset.content||'';
+document.getElementById('edit-story-category').value=btn.dataset.category||'';
+document.getElementById('edit-story-author').value=btn.dataset.author||'';
+document.getElementById('edit-story-status').value=btn.dataset.status||'draft';
+document.getElementById('edit-story-featured').checked=btn.dataset.featured==='1';
+open(edit);
+}));
+document.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
+document.querySelectorAll('.flash-auto-dismiss').forEach(el=>setTimeout(()=>el.remove(),4000));
+})();
+</script>
+</body></html>

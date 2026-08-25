@@ -4,9 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Departments - {{ siteName }}</title>
-<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+{% include "partials/admin-head-assets.html" %}
 </head>
 <body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
 <div class="flex h-screen overflow-hidden">
@@ -60,13 +58,13 @@
             <div class="flex items-center justify-end gap-2">
               <button type="button" class="department-edit-btn w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50 transition-colors"
                 title="Edit department"
-                data-action="{{ url_for('admin.departments.update', id=department.id) }}"
+                data-action="{{ url_for('admin.departments.update', department.id) }}"
                 data-name="{{ department.name|e }}"
                 data-description="{{ department.description|e }}"
                 data-is-active="{{ 1 if department.is_active else 0 }}">
                 <i class="ri-edit-line text-base"></i>
               </button>
-              <form method="POST" action="{{ url_for('admin.departments.destroy', id=department.id) }}" data-confirm="Delete this department? This action cannot be undone." data-confirm-title="Delete Department" data-confirm-accept="Delete">
+              <form method="POST" action="{{ url_for('admin.departments.destroy', department.id) }}" data-confirm="Delete this department? This action cannot be undone." data-confirm-title="Delete Department" data-confirm-accept="Delete">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}"> <input type="hidden" name="_method" value="DELETE">
                 <button class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete department">
                   <i class="ri-delete-bin-line text-base"></i>

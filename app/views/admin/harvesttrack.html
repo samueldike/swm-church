@@ -4,9 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>HarvestTrack - {{ siteName }}</title>
-<link rel="stylesheet" href="{{ url_for('static', path='css/admin.css') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.5.0/remixicon.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+{% include "partials/admin-head-assets.html" %}
 </head>
 <body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
 <div class="flex h-screen overflow-hidden">
@@ -89,10 +87,10 @@
       {% for worker in workers %}
 
         <tr class="hover:bg-gray-50/50">
-          <td class="py-3 pr-4"><p class="font-semibold text-gray-900">{{ worker.name }}</p><p class="text-xs text-gray-500">{{ worker.email }}{% if worker.phone %} &middot; {{ worker.phone }}{% endif %}</p></td>
+          <td class="py-3 pr-4"><p class="font-semibold text-gray-900">{{ worker.full_name }}</p><p class="text-xs text-gray-500">{{ worker.email }}{% if worker.phone %} &middot; {{ worker.phone }}{% endif %}</p></td>
           <td class="py-3 pr-4 text-gray-600">{{ worker.branch.name or 'Unassigned' }}</td>
-          <td class="py-3 pr-4"><span class="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold uppercase text-gray-600">{{ (worker.role or '')|replace('_', ' ') }}</span></td>
-          <td class="py-3 pr-4 text-gray-700">{{ '{:,.0f}'.format(worker.contacts_count|int) }}</td>
+          <td class="py-3 pr-4"><span class="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold uppercase text-gray-600">Worker</span></td>
+          <td class="py-3 pr-4 text-gray-700">{{ '{:,.0f}'.format(worker.contacts|length) }}</td>
           <td class="py-3 pr-4"><span class="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase {{ 'bg-emerald-50 text-emerald-600' if worker.is_active else 'bg-red-50 text-red-600' }}">{{ 'Active' if worker.is_active else 'Inactive' }}</span></td>
         </tr>
       {% else %}
@@ -118,11 +116,11 @@
       {% for contact in contacts %}
 
         <tr class="hover:bg-gray-50/50">
-          <td class="py-3 pr-4"><p class="font-semibold text-gray-900">{{ contact.name }}</p><p class="text-xs text-gray-500">{{ contact.category or 'No category' }}{% if contact.phone %} &middot; {{ contact.phone }}{% endif %}</p></td>
-          <td class="py-3 pr-4 text-gray-600">{{ contact.worker.name or 'Unassigned' }}</td>
-          <td class="py-3 pr-4 text-gray-700">Stage {{ contact.stage }}</td>
-          <td class="py-3 pr-4 text-gray-700">{{ contact.conversion_rating }}/10</td>
-          <td class="py-3 pr-4 text-gray-500">{{ contact.next_follow_up_at.strftime('M d, g:i A') if contact.next_follow_up_at else 'N/A' }}</td>
+          <td class="py-3 pr-4"><p class="font-semibold text-gray-900">{{ contact.full_name }}</p><p class="text-xs text-gray-500">{{ contact.address or 'No address' }}{% if contact.phone %} &middot; {{ contact.phone }}{% endif %}</p></td>
+          <td class="py-3 pr-4 text-gray-600">{{ contact.worker.full_name or 'Unassigned' }}</td>
+          <td class="py-3 pr-4 text-gray-700">&mdash;</td>
+          <td class="py-3 pr-4 text-gray-700">&mdash;</td>
+          <td class="py-3 pr-4 text-gray-500">&mdash;</td>
           <td class="py-3 pr-4"><span class="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase text-primary">{{ (contact.status or '')|replace('_', ' ') }}</span></td>
         </tr>
       {% else %}

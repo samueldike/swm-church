@@ -11,17 +11,10 @@ from app.database import async_session
 class TelegramDistributor:
 
     async def _get_credentials(self) -> tuple[str, str]:
-        from app.models.site_settings import SiteSetting
+        from app.core.settings_cache import get_settings
 
         async with async_session() as db:
-            result = await db.execute(
-                select(SiteSetting).where(
-                    SiteSetting.key.in_(
-                        ["telegram_bot_token", "telegram_audio_chat_id"]
-                    )
-                )
-            )
-            settings = {s.key: s.value for s in result.scalars().all()}
+            settings = await get_settings(db)
 
         return (
             settings.get("telegram_bot_token", ""),
