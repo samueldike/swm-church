@@ -325,8 +325,16 @@
         align-items: center;
         justify-content: center;
         direction: ltr;
+        white-space: nowrap;
         -webkit-font-feature-settings: 'liga';
         font-feature-settings: 'liga';
+        /* The icon glyph is an OpenType ligature substituted for the literal
+           name text (e.g. "arrow_upward" -> ↑). font-feature-settings alone
+           is not always enough inside interactive elements — form-control UA
+           stylesheets and some CSS resets set font-variant-ligatures: none on
+           button/input/select, which silently wins and leaves the raw text
+           showing instead of the icon. Force it back on explicitly. */
+        font-variant-ligatures: normal;
         -webkit-font-smoothing: antialiased;
     }
 
