@@ -1,17 +1,116 @@
 {% set pageKey = 'calendar' %}
 {% set pageEyebrow = 'Calendar' %}
-{% set pageTitle = 'When this house gathers.' %}
-{% set pageLede = 'Weekly services, prayer and study — plus the programmes that punctuate the year.' %}
+{% set pageTitle = 'The church calendar.' %}
+{% set pageLede = 'Every service and programme an admin has published — browse the year, not just this week.' %}
 {% include "partials/theme-page-open.html" %}
 
+<section class="band band-dark">
+    <div class="shell">
+        <div class="cal-head">
+            <div>
+                <p class="mono eyebrow"><span class="rule"></span>{{ currentMonth.strftime('%Y') }}</p>
+                <h2 class="t-h2" style="margin-top:0.6rem;">{{ currentMonth.strftime('%B') }}</h2>
+            </div>
+            <nav class="cal-nav" aria-label="Change month">
+                <a href="{{ url_for('calendar') }}?month={{ prevMonth.strftime('%Y-%m') }}" class="cal-arrow" aria-label="Previous month">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                </a>
+                {% if not isCurrentMonth %}
+                <a href="{{ url_for('calendar') }}" class="lnk" style="margin-inline:0.3rem;">Today</a>
+                {% endif %}
+                <a href="{{ url_for('calendar') }}?month={{ nextMonth.strftime('%Y-%m') }}" class="cal-arrow" aria-label="Next month">
+                    <span class="material-symbols-outlined">chevron_right</span>
+                </a>
+            </nav>
+        </div>
+
+        {# A whole-year rail, since this is meant to be browsed as a year, not
+           clicked through one month at a time. #}
+        <div class="cal-year-rail-wrap">
+            <a href="{{ url_for('calendar') }}?month={{ prevYear.strftime('%Y-%m') }}" class="cal-arrow cal-arrow-sm" aria-label="Previous year">
+                <span class="material-symbols-outlined" style="font-size:18px">keyboard_double_arrow_left</span>
+            </a>
+            <div class="cal-year-rail no-scrollbar" role="tablist" aria-label="Jump to month">
+                {% for m in yearMonths %}
+                <a href="{{ url_for('calendar') }}?month={{ m.ym }}"
+                   class="cal-month-chip {{ 'is-current' if m.current else '' }}"
+                   role="tab" aria-selected="{{ 'true' if m.current else 'false' }}">{{ m.label }}</a>
+                {% endfor %}
+            </div>
+            <a href="{{ url_for('calendar') }}?month={{ nextYear.strftime('%Y-%m') }}" class="cal-arrow cal-arrow-sm" aria-label="Next year">
+                <span class="material-symbols-outlined" style="font-size:18px">keyboard_double_arrow_right</span>
+            </a>
+        </div>
+
+        <div class="cal-grid">
+            {% for wd in ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] %}
+            <div class="cal-wd mono">{{ wd }}</div>
+            {% endfor %}
+            {% for day in calendarDays %}
+            {% set dateKey = day.isoformat() %}
+            {% set dayEvents = eventsByDate.get(dateKey, []) %}
+            <div class="cal-day {{ 'is-out' if day.month != currentMonth.month else '' }} {{ 'is-today' if dateKey == today else '' }}">
+                <span class="cal-daynum mono">{{ day.day }}</span>
+                {% if dayEvents %}
+                <div class="cal-dots">
+                    {% for ev in dayEvents[:2] %}
+                    <span class="cal-pill {{ 'is-major' if ev.is_major else '' }}"
+                          title="{{ ev.title }}{% if ev.starts_at %} — {{ ev.starts_at.strftime('%I:%M %p')|replace(' 0',' ') }}{% endif %}">{{ ev.title }}</span>
+                    {% endfor %}
+                    {% if dayEvents|length > 2 %}
+                    <span class="cal-more mono">+{{ dayEvents|length - 2 }} more</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
 <section class="band band-light">
+    <div class="shell">
+        <div class="head">
+            <div>
+                <p class="mono eyebrow"><span class="rule"></span>This month</p>
+                <h2 class="t-h2" style="margin-top:1rem;">{{ currentMonth.strftime('%B %Y') }}</h2>
+            </div>
+            <a href="{{ url_for('events') }}" class="lnk">All upcoming programmes</a>
+        </div>
+
+        {% if monthOnlyEvents %}
+        <ul class="rows" style="margin-top:2rem;">
+            {% for ev in monthOnlyEvents %}
+            <li class="row">
+                <span class="row-in">
+                    <span class="mono row-i {{ 'gold' if ev.is_major else 'faint' }}" style="min-width:5.5rem;">{{ ev.starts_at.strftime('%d %b')|upper }}</span>
+                    <span class="row-main">
+                        <span class="t-h3">{{ ev.title }}</span>
+                        {% if ev.location %}<span class="t-sm row-sub">{{ ev.location }}</span>{% endif %}
+                    </span>
+                    <span class="row-meta mono {{ 'gold' if ev.is_major else 'faint' }}">
+                        {{ ev.starts_at.strftime('%I:%M %p')|replace(' 0',' ') }}
+                        {% if ev.ends_at and ev.ends_at.date() != ev.starts_at.date() %}<br/>to {{ ev.ends_at.strftime('%d %b') }}{% endif %}
+                    </span>
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty" style="margin-top:2rem;">
+            <p class="t-body">Nothing has been published for {{ currentMonth.strftime('%B %Y') }} yet.</p>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<section class="band band-dark">
     <div class="shell">
         <div class="head">
             <div>
                 <p class="mono eyebrow"><span class="rule"></span>Every week</p>
                 <h2 class="t-h2" style="margin-top:1rem;">The weekly rhythm</h2>
             </div>
-            <a href="{{ url_for('events') }}" class="lnk">Upcoming programmes</a>
         </div>
 
         {% set services = [
@@ -44,7 +143,7 @@
     </div>
 </section>
 
-<section class="band band-dark">
+<section class="band band-light">
     <div class="shell">
         <p class="mono eyebrow"><span class="rule"></span>Through the year</p>
         <h2 class="t-h2" style="margin-top:1rem;max-width:20ch;">Annual outreaches</h2>
@@ -77,5 +176,112 @@
         </div>
     </div>
 </section>
+
+<style>
+    .cal-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap; }
+    .cal-nav { display: flex; align-items: center; }
+    .cal-arrow {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 2.75rem; height: 2.75rem;
+        border: 1px solid var(--line-2);
+        color: var(--fg);
+        transition: border-color 260ms var(--ease), color 260ms var(--ease);
+    }
+    .cal-arrow:hover { border-color: var(--gold); color: var(--gold); }
+    .cal-arrow-sm { width: 2.1rem; height: 2.1rem; flex-shrink: 0; }
+    .cal-nav .lnk { min-height: 2.75rem; min-width: 2.75rem; padding: 0.7rem 0.9rem; display: inline-flex; align-items: center; justify-content: center; }
+
+    .cal-year-rail-wrap { display: flex; align-items: center; gap: 0.6rem; margin-top: 1.8rem; }
+    .cal-year-rail { display: flex; gap: 0.5rem; overflow-x: auto; scroll-snap-type: x proximity; padding-block: 0.2rem; }
+    .cal-month-chip {
+        flex: 0 0 auto;
+        scroll-snap-align: start;
+        padding: 0.5rem 0.95rem;
+        border: 1px solid var(--line);
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: var(--fg-dim);
+        white-space: nowrap;
+        transition: border-color 260ms var(--ease), color 260ms var(--ease), background-color 260ms var(--ease);
+    }
+    .cal-month-chip:hover { border-color: var(--line-2); color: var(--fg); }
+    .cal-month-chip.is-current { background: var(--gold); border-color: var(--gold); color: var(--ink); font-weight: 600; }
+
+    .cal-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 1px;
+        margin-top: 1.8rem;
+        background: var(--line);
+        border: 1px solid var(--line);
+    }
+    .cal-wd {
+        background: var(--ink);
+        text-align: center;
+        padding-block: 0.7rem;
+        font-size: 0.62rem;
+        letter-spacing: 0.16em;
+        color: var(--fg-faint);
+    }
+    .cal-day {
+        background: var(--ground);
+        min-height: 6.4rem;
+        padding: 0.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+    }
+    .cal-day.is-out { background: var(--ink); }
+    .cal-day.is-out .cal-daynum { color: var(--fg-faint); opacity: 0.5; }
+    .cal-daynum { font-size: 0.7rem; color: var(--fg-dim); }
+    .cal-day.is-today { box-shadow: inset 0 0 0 1.5px var(--gold); }
+    .cal-day.is-today .cal-daynum {
+        color: var(--ink);
+        background: var(--gold);
+        width: 1.4rem; height: 1.4rem;
+        border-radius: 999px;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-weight: 700;
+    }
+    .cal-dots { display: flex; flex-direction: column; gap: 0.3rem; }
+    .cal-pill {
+        font-size: 0.66rem;
+        line-height: 1.3;
+        padding: 0.2rem 0.4rem;
+        background: var(--surface);
+        border-left: 2px solid var(--gold-deep);
+        color: var(--fg-dim);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .cal-pill.is-major { border-left-color: var(--gold); color: var(--gold-lt); }
+    .cal-more { font-size: 0.6rem; color: var(--fg-faint); }
+
+    /* Mobile: cramming full event-title pills into 7 narrow columns is the
+       "shrunk desktop" trap, not a mobile design. Cells become small square
+       day markers with dots (the pattern every native calendar app uses at
+       this size) — what each dot IS gets read from the "This month" list
+       below, so nothing is lost, just laid out the way a thumb wants it. */
+    @media (max-width: 767.98px) {
+        .cal-day { min-height: 3.2rem; padding: 0.4rem 0.3rem; align-items: center; gap: 0.28rem; }
+        .cal-daynum { font-size: 0.72rem; }
+        .cal-dots { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 3px; }
+        .cal-pill {
+            font-size: 0;
+            width: 5px; height: 5px;
+            padding: 0;
+            border: 0;
+            border-radius: 999px;
+            background: var(--gold-deep);
+        }
+        .cal-pill.is-major { background: var(--gold); }
+        .cal-more { display: none; }
+
+        .cal-month-chip { min-height: 44px; display: inline-flex; align-items: center; }
+        .cal-arrow-sm { width: 2.75rem; height: 2.75rem; }
+        .cal-arrow { width: 2.75rem; height: 2.75rem; }
+    }
+</style>
 
 {% include "partials/theme-page-close.html" %}

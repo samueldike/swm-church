@@ -636,8 +636,80 @@ async def events_page(request: Request, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/calendar", name="calendar")
-async def calendar(request: Request, db: AsyncSession = Depends(get_db)):
-    return await render_template(request, "pages/calendar.html", {"_db": db})
+async def calendar(request: Request, db: AsyncSession = Depends(get_db), month: str = Query(None)):
+    """The public yearly calendar — a real month grid over whatever events an
+    admin has published, not a hand-typed schedule. Mirrors the month-grid
+    math in admin_events (app/routes/admin.py) but restricted to
+    is_published == True and with no create/edit affordances."""
+    import calendar as cal_mod
+    from datetime import date, timedelta
+    from app.models.event import Event
+
+    now = datetime.utcnow()
+    if month:
+        try:
+            y, m = month.split("-")
+            currentMonth = date(int(y), int(m), 1)
+        except (ValueError, IndexError):
+            currentMonth = date(now.year, now.month, 1)
+    else:
+        currentMonth = date(now.year, now.month, 1)
+    prevMonth = (currentMonth - timedelta(days=1)).replace(day=1)
+    nextMonth = (currentMonth + timedelta(days=32)).replace(day=1)
+
+    cal = cal_mod.Calendar(firstweekday=6)  # Sunday-first, matching the site's service week
+    calendarDays = [d for week in cal.monthdatescalendar(currentMonth.year, currentMonth.month) for d in week]
+
+    monthOnlyEvents = []
+    eventsByDate: dict[str, list] = {}
+    try:
+        range_start = calendarDays[0]
+        range_end = calendarDays[-1] + timedelta(days=1)
+        result = await db.execute(
+            select(Event)
+            .where(
+                Event.is_published == True,
+                Event.starts_at >= range_start,
+                Event.starts_at < range_end,
+            )
+            .order_by(Event.starts_at.asc())
+        )
+        grid_events = list(result.scalars().all())
+        for ev in grid_events:
+            eventsByDate.setdefault(ev.starts_at.strftime("%Y-%m-%d"), []).append(ev)
+            # The grid pads in a few days from the adjacent months to fill full
+            # weeks; the list below the grid should only show this month's own.
+            if ev.starts_at.month == currentMonth.month and ev.starts_at.year == currentMonth.year:
+                monthOnlyEvents.append(ev)
+    except Exception:
+        pass
+
+    # A scrollable rail of the 12 months in the viewed year, for jumping
+    # around within the "yearly" calendar rather than clicking prev/next
+    # eleven times.
+    yearMonths = [
+        {
+            "label": date(currentMonth.year, mo, 1).strftime("%b"),
+            "ym": f"{currentMonth.year}-{mo:02d}",
+            "current": mo == currentMonth.month,
+        }
+        for mo in range(1, 13)
+    ]
+
+    return await render_template(request, "pages/calendar.html", {
+        "_db": db,
+        "calendarDays": calendarDays,
+        "eventsByDate": eventsByDate,
+        "monthOnlyEvents": monthOnlyEvents,
+        "currentMonth": currentMonth,
+        "prevMonth": prevMonth,
+        "nextMonth": nextMonth,
+        "prevYear": currentMonth.replace(year=currentMonth.year - 1),
+        "nextYear": currentMonth.replace(year=currentMonth.year + 1),
+        "yearMonths": yearMonths,
+        "today": date.today().isoformat(),
+        "isCurrentMonth": currentMonth.year == now.year and currentMonth.month == now.month,
+    })
 
 
 @router.get("/casom", name="casom")
