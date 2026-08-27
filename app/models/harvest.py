@@ -6,6 +6,20 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 
+class HarvestTeam(Base):
+    __tablename__ = "harvest_teams"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    branch_id: Mapped[int | None] = mapped_column(ForeignKey("branches.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(
+        default=lambda: datetime.utcnow()
+    )
+
+    branch = relationship("Branch", back_populates="harvest_teams")
+    workers = relationship("HarvestWorker", back_populates="team")
+
+
 class HarvestWorker(Base):
     __tablename__ = "harvest_workers"
 
@@ -15,6 +29,10 @@ class HarvestWorker(Base):
     phone: Mapped[str | None] = mapped_column(String(50))
     password_hash: Mapped[str] = mapped_column(String(255))
     branch_id: Mapped[int | None] = mapped_column(ForeignKey("branches.id", ondelete="SET NULL"))
+    # Mobile-app-facing role (field_member/team_lead/admin) — unrelated to the
+    # church Admin.role that gates access to this web dashboard.
+    role: Mapped[str] = mapped_column(String(20), default="field_member")
+    team_id: Mapped[int | None] = mapped_column(ForeignKey("harvest_teams.id", ondelete="SET NULL"))
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.utcnow()
@@ -28,6 +46,7 @@ class HarvestWorker(Base):
     contacts = relationship("HarvestContact", back_populates="worker", cascade="all, delete-orphan")
     reminders = relationship("HarvestReminder", back_populates="worker", cascade="all, delete-orphan")
     branch = relationship("Branch", back_populates="harvest_workers")
+    team = relationship("HarvestTeam", back_populates="workers")
 
 
 class HarvestWorkerToken(Base):
@@ -55,6 +74,16 @@ class HarvestContact(Base):
     address: Mapped[str | None] = mapped_column(String(500))
     notes: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(50), default="active")
+    # PRD funnel fields — kept separate from the legacy `status` column above
+    # (which the existing mobile API still reads/writes) so that API is
+    # untouched. New nullable/defaulted columns are safe for existing rows.
+    source: Mapped[str | None] = mapped_column(String(20))
+    current_stage: Mapped[str] = mapped_column(String(30), default="new")
+    # Naive (no timezone=True), matching created_at/updated_at below — these
+    # are compared directly against HarvestFollowUp.created_at in the admin
+    # dashboard's drop-off/retention math, which is also naive.
+    next_follow_up_at: Mapped[datetime | None] = mapped_column(DateTime())
+    committed_at: Mapped[datetime | None] = mapped_column(DateTime())
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.utcnow()
     )

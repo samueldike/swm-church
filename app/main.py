@@ -88,7 +88,7 @@ async def _seed_defaults():
             if count == 0:
                 defaults = {
                     "siteName": "Scent of Water Ministry",
-                    "siteTagline": "Dominion By Knowledge",
+                    "siteTagline": "Repositioning men for God's best",
                     "siteHeadquartersAddress": "#1 Scent Close off Barr. Otta Ewa Road, Beside the Remand Home, Mile 50, Abakaliki, Ebonyi State, Nigeria",
                     "siteSupportPhone": "07037736698",
                     "siteContactEmail": "",

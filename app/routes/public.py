@@ -48,6 +48,7 @@ def _public_base_url(request: Request) -> str:
 
 @router.get("/", name="home")
 async def home(request: Request, db: AsyncSession = Depends(get_db)):
+    """Homepage — dark, frame-by-frame scroll design."""
     from app.models.site_settings import SiteSetting
     from app.models.slider import Slider
     from app.models.sermon import Sermon
@@ -76,7 +77,7 @@ async def home(request: Request, db: AsyncSession = Depends(get_db)):
             select(Sermon)
             .where(Sermon.status == "published")
             .order_by(Sermon.published_at.desc())
-            .limit(3)
+            .limit(HOME2_MESSAGE_LIMIT)
         )
         latest_sermons = list(result.scalars().all())
     except Exception:
@@ -99,12 +100,16 @@ async def home(request: Request, db: AsyncSession = Depends(get_db)):
     branches = []
     try:
         from app.models.branch import Branch
+
         result = await db.execute(
             select(Branch).where(Branch.is_active == True).order_by(Branch.name)
         )
         branches = list(result.scalars().all())
     except Exception:
         pass
+
+    gallery = await _photos(db, "gallery") or _build_gallery(sliders, featuredStories)
+    outreach = await _photos(db, "outreach")
 
     return await render_template(
         request,
@@ -116,104 +121,47 @@ async def home(request: Request, db: AsyncSession = Depends(get_db)):
             "latest_sermons": latest_sermons,
             "featuredStories": featuredStories,
             "branches": branches,
-        },
-    )
-
-
-@router.get("/home2", name="home2")
-async def home2(request: Request, db: AsyncSession = Depends(get_db)):
-    """Homepage v2 — dark, frame-by-frame scroll design.
-
-    Shares the v1 data contract and adds `gallery`, which is assembled from
-    real uploaded slider artwork rather than placeholder imagery.
-    """
-    from app.models.site_settings import SiteSetting
-    from app.models.slider import Slider
-    from app.models.sermon import Sermon
-
-    sliders = []
-    try:
-        result = await db.execute(
-            select(Slider)
-            .where(Slider.is_active == True)
-            .order_by(Slider.sort_order.asc())
-        )
-        sliders = list(result.scalars().all())
-    except Exception:
-        pass
-
-    settings = {}
-    try:
-        result = await db.execute(select(SiteSetting))
-        settings = {s.key: s.value for s in result.scalars().all()}
-    except Exception:
-        pass
-
-    latest_sermons = []
-    try:
-        result = await db.execute(
-            select(Sermon)
-            .where(Sermon.status == "published")
-            .order_by(Sermon.published_at.desc())
-            .limit(4)
-        )
-        latest_sermons = list(result.scalars().all())
-    except Exception:
-        pass
-
-    featuredStories = []
-    try:
-        from app.models.story import Story
-
-        result = await db.execute(
-            select(Story)
-            .where(Story.status == "published")
-            .order_by(Story.published_at.desc())
-            .limit(3)
-        )
-        featuredStories = list(result.scalars().all())
-    except Exception:
-        pass
-
-    branches = []
-    try:
-        from app.models.branch import Branch
-
-        result = await db.execute(
-            select(Branch).where(Branch.is_active == True).order_by(Branch.name)
-        )
-        branches = list(result.scalars().all())
-    except Exception:
-        pass
-
-    gallery = _build_gallery(sliders, featuredStories)
-
-    return await render_template(
-        request,
-        "pages/home2.html",
-        {
-            "_db": db,
-            "sliders": sliders,
-            "settings": settings,
-            "latest_sermons": latest_sermons,
-            "featuredStories": featuredStories,
-            "branches": branches,
             "gallery": gallery,
+            "outreach": outreach,
         },
     )
+
+
+HOME2_MESSAGE_LIMIT = 5
+
+
+async def _photos(db: AsyncSession, collection: str) -> list[dict]:
+    """Active photos for one admin-managed collection, in display order."""
+    from app.models.photo import Photo
+
+    try:
+        result = await db.execute(
+            select(Photo)
+            .where(Photo.collection == collection, Photo.is_active == True)
+            .order_by(Photo.sort_order.asc(), Photo.id.asc())
+        )
+        return [
+            {"src": p.src, "alt": p.caption or "Scent of Water Ministry", "caption": p.caption}
+            for p in result.scalars().all()
+        ]
+    except Exception:
+        return []
 
 
 GALLERY_DIRS = ("images/sliders", "images/stories", "images/gallery")
 GALLERY_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".avif"}
 
+# Shipped by seed_content.py as demo artwork — generic stock crowds that are
+# not this congregation. Never surface them as the ministry's own photography.
+GALLERY_PLACEHOLDERS = {"slide-1.jpg", "slide-2.jpg", "slide-3.jpg"}
+
 
 def _build_gallery(sliders, stories) -> list[dict]:
     """Collect real, already-uploaded imagery for the v2 gallery.
 
-    Sources only files the ministry has actually uploaded — no stock or
-    placeholder art. Records referenced by a slider/story come first (they
-    carry a real caption); the remaining uploads in the media folders follow,
-    so the gallery isn't limited to whichever sliders happen to be active.
+    `images/gallery` is the curated folder and wins outright when populated.
+    Only if it is empty do we fall back to slider/story artwork, so the
+    gallery never mixes curated photography with hero crops or seed art.
 
     A dedicated Gallery model with admin CRUD would supersede this.
     """
@@ -231,21 +179,102 @@ def _build_gallery(sliders, stories) -> list[dict]:
         seen.add(src)
         shots.append({"src": src, "alt": alt})
 
+    static_root = Path(__file__).resolve().parents[1] / "static"
+
+    curated = static_root / "images/gallery"
+    if curated.is_dir():
+        for f in sorted(curated.iterdir()):
+            if f.is_file() and f.suffix.lower() in GALLERY_EXTS:
+                add(f"images/gallery/{f.name}", "Scent of Water Ministry")
+    if shots:
+        return shots
+
     for s in sliders:
         add(s.image_path, (s.title or "Scent of Water Ministry").replace("\n", " "))
     for s in stories:
         add(s.featured_image, s.title)
-
-    static_root = Path(__file__).resolve().parents[1] / "static"
     for rel_dir in GALLERY_DIRS:
         folder = static_root / rel_dir
         if not folder.is_dir():
             continue
         for f in sorted(folder.iterdir()):
-            if f.is_file() and f.suffix.lower() in GALLERY_EXTS:
-                add(f"{rel_dir}/{f.name}", "Scent of Water Ministry")
+            if not f.is_file() or f.suffix.lower() not in GALLERY_EXTS:
+                continue
+            if f.name in GALLERY_PLACEHOLDERS:
+                continue
+            add(f"{rel_dir}/{f.name}", "Scent of Water Ministry")
 
     return shots
+
+
+OUTREACH_PAGES = {
+    "prison": {
+        "eyebrow": "Beyond the walls",
+        "title": "Annual Prison Outreach",
+        "lede": (
+            "Our headquarters sits beside the remand home at Mile 50. Every year we "
+            "walk the short distance from our altar to those the world has written "
+            "off, carrying the same message of restoration we preach on Sunday."
+        ),
+        "points": [
+            ("Who it reaches", "Inmates and awaiting-trial detainees at the remand home beside our Mile 50 headquarters."),
+            ("What we bring", "The preached word, provisions, and follow-up for those approaching release."),
+            ("When it runs", "Annually, coordinated by The Joseph Ministry with volunteers from across our units."),
+        ],
+    },
+    "medical": {
+        "eyebrow": "Beyond the walls",
+        "title": "Free Medical Outreach",
+        "lede": (
+            "A no-cost medical and community outreach for Abakaliki and surrounding "
+            "communities — consultations, treatment and care for families who would "
+            "otherwise go without."
+        ),
+        "points": [
+            ("Who it reaches", "Families and children in Abakaliki and surrounding rural communities in Ebonyi State."),
+            ("What we bring", "Free consultations, medication, and relief materials, staffed by volunteer medical personnel."),
+            ("When it runs", "Annually, as the Annual Community Medical Outreach."),
+        ],
+    },
+}
+
+
+@router.get("/outreach/{kind}", name="outreach_detail")
+async def outreach_detail(kind: str, request: Request, db: AsyncSession = Depends(get_db)):
+    from fastapi import HTTPException
+
+    page = OUTREACH_PAGES.get(kind)
+    if not page:
+        raise HTTPException(status_code=404, detail="Outreach not found")
+
+    return await render_template(
+        request,
+        "pages/outreach.html",
+        {"_db": db, "page": page, "kind": kind, "photos": await _photos(db, "outreach")},
+    )
+
+
+@router.get("/our-pastor", name="our_pastor")
+async def our_pastor(request: Request, db: AsyncSession = Depends(get_db)):
+    """Senior pastor profile. Name, title, photo and bio all come from
+    Admin → Settings, so this page never needs a code change to update."""
+    from app.models.sermon import Sermon
+
+    sermons = []
+    try:
+        result = await db.execute(
+            select(Sermon)
+            .where(Sermon.status == "published")
+            .order_by(Sermon.published_at.desc())
+            .limit(4)
+        )
+        sermons = list(result.scalars().all())
+    except Exception:
+        pass
+
+    return await render_template(
+        request, "pages/our-pastor.html", {"_db": db, "sermons": sermons}
+    )
 
 
 @router.get("/about", name="about")

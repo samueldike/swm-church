@@ -1,49 +1,77 @@
-<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Watch - {{ siteName }}</title>
-<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
-<link rel="apple-touch-icon" href="/images/swm-logo.png"/>
+{% set pageKey = 'watch' %}
+{% set pageEyebrow = 'Watch' %}
+{% set pageTitle = 'Join the service from wherever you are.' %}
+{% set pageLede = 'If you cannot be in the room at Mile 50, be in the room online.' %}
+{% include "partials/theme-page-open.html" %}
 
-{% include "partials/site-head-assets.html" %}
-<style>
-        .text-shadow {
-            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-    </style>
+<section class="band band-dark">
+    <div class="shell">
+        <div class="head">
+            <div>
+                <p class="mono eyebrow"><span class="rule"></span>Live and on demand</p>
+                <h2 class="t-h2" style="margin-top:1rem;max-width:18ch;">Where to watch</h2>
+            </div>
+            <a href="{{ url_for('calendar') }}" class="lnk">Service times</a>
+        </div>
 
-</head>
-<body class="bg-background-light dark:bg-background-dark text-secondary font-sans antialiased overflow-x-hidden selection:bg-primary selection:text-white">
-{% include "partials/site-header.html" %}
-{% set heroTitle = 'Watch Online' %}
-{% set heroSubtitle = 'Live & On Demand' %}
-{% set heroDescription = 'Catch up on services, special events, and video messages.' %}
-{% set heroBgImage = settings.get('pageHero_watch', '') if settings else '' %}
-{% include "partials/site-page-hero.html" %}
+        {% set channels = [
+            (socialYouTube,   'YouTube',   'Live services and full message replays.', 'smart_display'),
+            (socialFacebook,  'Facebook',  'Live streams and clips from recent services.', 'groups'),
+            (socialInstagram, 'Instagram', 'Short clips, highlights and daily encouragement.', 'photo_camera'),
+            (socialTelegram,  'Telegram',  'Audio messages delivered straight to your phone.', 'send')
+        ] %}
+        <ul class="rows" style="margin-top:2rem;">
+            {% for href, label, blurb, icon in channels %}{% if href %}
+            <li class="row row-link">
+                <a href="{{ href }}" target="_blank" rel="noopener">
+                    <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
+                    <span class="row-main">
+                        <span class="t-h3">{{ label }}</span>
+                        <span class="t-sm row-sub">{{ blurb }}</span>
+                    </span>
+                    <span class="row-go material-symbols-outlined">arrow_outward</span>
+                </a>
+            </li>
+            {% endif %}{% endfor %}
+        </ul>
 
-<main class="bg-background-light">
-  <section class="relative overflow-hidden bg-secondary text-white">
-    <div class="max-w-7xl mx-auto px-6 lg:px-8 py-10">
-      <div class="flex flex-wrap gap-4">
-        <a class="h-12 px-6 rounded-full bg-primary text-white font-bold text-sm hover:bg-white hover:text-primary transition-all" href="{{ url_for('contact') }}">Contact Us</a>
-        <a class="h-12 px-6 rounded-full border border-white/40 text-white font-bold text-sm hover:border-primary hover:text-primary transition-all" href="{{ url_for('get-involved') }}">Get Involved</a>
-      </div>
+        {% if not (socialYouTube or socialFacebook or socialInstagram or socialTelegram) %}
+        <div class="empty" style="margin-top:2rem;">
+            <p class="t-body">Streaming links have not been set yet. Add them under Admin → Settings → Social Links.</p>
+        </div>
+        {% endif %}
     </div>
-  </section>
-  <section class="max-w-6xl mx-auto px-6 lg:px-8 py-16">
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-soft p-8 md:p-10">
-      
-<h2 class="text-2xl font-serif font-bold text-secondary">Watch Services</h2>
-<p class="text-gray-600 mt-4">Video streaming links will be available soon. For now, you can listen to audio messages and see upcoming events.</p>
-<div class="mt-6 flex flex-wrap gap-4">
-  <a class="h-12 px-6 rounded-full bg-secondary text-white font-bold text-sm hover:bg-primary transition-all" href="{{ url_for('messages') }}">Audio Messages</a>
-  <a class="h-12 px-6 rounded-full border border-gray-200 text-secondary font-bold text-sm hover:bg-primary hover:text-white transition-all" href="{{ url_for('events') }}">Upcoming Events</a>
-</div>
+</section>
 
+<section class="band band-light">
+    <div class="shell">
+        <div class="head">
+            <div>
+                <p class="mono eyebrow"><span class="rule"></span>When we are live</p>
+                <h2 class="t-h2" style="margin-top:1rem;">Set your reminder</h2>
+            </div>
+            <a href="{{ url_for('messages') }}" class="lnk">Listen to the archive</a>
+        </div>
+        <table class="sched" style="margin-top:2rem;">
+            <tbody>
+                <tr class="lead"><td class="s-day mono">Sunday</td><td class="s-name t-h3">First Service</td><td class="s-time mono">7:00 — 9:30 am</td></tr>
+                <tr class="lead"><td class="s-day mono">Sunday</td><td class="s-name t-h3">Second Service</td><td class="s-time mono">9:30 am — 12:00 pm</td></tr>
+                <tr><td class="s-day mono">Wednesday</td><td class="s-name t-h3">Midweek Bible Study</td><td class="s-time mono">5:00 pm</td></tr>
+                <tr><td class="s-day mono">Last Friday</td><td class="s-name t-h3">Monthly Vigil</td><td class="s-time mono">from 9:00 pm</td></tr>
+            </tbody>
+        </table>
+        <p class="mono faint" style="margin-top:1.4rem;">All times West Africa Time (WAT).</p>
     </div>
-  </section>
-</main>
+</section>
 
-{% include "partials/site-footer.html" %}
-</body></html>
+<section class="band band-dark">
+    <div class="shell" style="text-align:center;">
+        <h2 class="t-h2" style="max-width:24ch;margin-inline:auto;">Watching is good. Being here is better.</h2>
+        <div class="flex flex-wrap items-center justify-center gap-3" style="margin-top:1.8rem;">
+            <a href="{{ url_for('contact') }}" class="btn btn-gold">Plan your visit</a>
+            <a href="{{ url_for('prayer') }}" class="btn btn-ghost">Request prayer</a>
+        </div>
+    </div>
+</section>
+
+{% include "partials/theme-page-close.html" %}

@@ -104,6 +104,44 @@ Legal Pages
 <label class="form-label">Headquarters Address</label>
 <input class="form-input" name="headquarters_address" value="{{ request.form.get('headquarters_address', settings['headquarters_address']) }}" />
 </div>
+<div class="md:col-span-2 mt-2 pt-4 border-t border-gray-100">
+<h3 class="text-sm font-bold text-gray-900 mb-1">Counselling</h3>
+<p class="text-[11px] text-gray-500 mb-3">Shown in the "Take a next step" section on the Home page. Leave the number blank to hide the whole block.</p>
+</div>
+<div>
+<label class="form-label">Counselling Phone</label>
+<input class="form-input" name="counsellingPhone" value="{{ request.form.get('counsellingPhone', settings.get('counsellingPhone', '')) }}" placeholder="+234 703 773 6698" />
+</div>
+<div>
+<label class="form-label">Counselling Availability</label>
+<input class="form-input" name="counsellingHours" value="{{ request.form.get('counsellingHours', settings.get('counsellingHours', '')) }}" placeholder="Monday to Friday, 9:00 am — 5:00 pm" />
+</div>
+
+<div class="md:col-span-2 mt-2 pt-4 border-t border-gray-100">
+<h3 class="text-sm font-bold text-gray-900 mb-1">Social Links</h3>
+<p class="text-[11px] text-gray-500 mb-3">Shown in the site footer. Leave a field blank to hide that link everywhere.</p>
+</div>
+<div>
+<label class="form-label">Facebook URL</label>
+<input class="form-input" name="socialFacebook" type="url" value="{{ request.form.get('socialFacebook', settings.get('socialFacebook', '')) }}" placeholder="https://www.facebook.com/swmnigeria" />
+</div>
+<div>
+<label class="form-label">Instagram URL</label>
+<input class="form-input" name="socialInstagram" type="url" value="{{ request.form.get('socialInstagram', settings.get('socialInstagram', '')) }}" placeholder="https://www.instagram.com/swm_nigeria/" />
+</div>
+<div>
+<label class="form-label">X (Twitter) URL</label>
+<input class="form-input" name="socialX" type="url" value="{{ request.form.get('socialX', settings.get('socialX', '')) }}" placeholder="https://x.com/swm_nigeria" />
+</div>
+<div>
+<label class="form-label">YouTube URL</label>
+<input class="form-input" name="socialYouTube" type="url" value="{{ request.form.get('socialYouTube', settings.get('socialYouTube', '')) }}" placeholder="https://www.youtube.com/@..." />
+</div>
+<div class="md:col-span-2">
+<label class="form-label">Telegram URL</label>
+<input class="form-input" name="socialTelegram" type="url" value="{{ request.form.get('socialTelegram', settings.get('socialTelegram', '')) }}" placeholder="https://t.me/..." />
+</div>
+
 <div class="md:col-span-2">
 <label class="form-label">Map Embed URL (optional)</label>
 <input class="form-input" name="mapEmbedUrl" type="url" value="{{ request.form.get('mapEmbedUrl', settings['mapEmbedUrl']) }}" placeholder="https://www.google.com/maps/embed?pb=..." />
@@ -418,6 +456,8 @@ Allow remember me on admin login
   {'key': 'get-involved', 'label': 'Get Involved Page'},
   {'key': 'prayer', 'label': 'Prayer Page'},
   {'key': 'watch', 'label': 'Watch Page'},
+  {'key': 'our-pastor', 'label': 'Our Pastor Page'},
+  {'key': 'outreach', 'label': 'Outreach Pages'},
 ] %}
 {% for pk in pageKeys %}
 {% set pkSettingKey = 'defaultPageHero' if pk.key == 'default' else 'pageHero_' + pk.key %}

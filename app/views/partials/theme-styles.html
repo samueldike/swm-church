@@ -1,0 +1,681 @@
+<style>
+    /* ══ shared ════════════════════════════════════════════════════════════ */
+    .head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 2rem;
+        flex-wrap: wrap;
+    }
+    .two-col { display: grid; gap: clamp(2rem, 5vw, 4.5rem); grid-template-columns: 1fr; align-items: start; }
+    @media (min-width: 900px) { .two-col { grid-template-columns: 1.25fr 0.75fr; } }
+
+    .empty { border-top: 1px solid var(--line); padding-top: 1.6rem; margin-top: 2rem; }
+
+    /* ══ ruled rows — the page's core list primitive ═══════════════════════ */
+    /* Used for values, messages, units, outreach, stories and next steps.
+       Rules and rhythm carry the structure; no card chrome anywhere. */
+    .rows { border-top: 1px solid var(--line); }
+    .row { border-bottom: 1px solid var(--line); }
+    /* Every row has exactly one inner wrapper — an <a> when it links, a
+       .row-in when it does not — so the column grid lands on the wrapper
+       rather than on each individual cell. */
+    .row > .row-in, .row > a {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        align-items: baseline;
+        gap: 0 1rem;
+        padding-block: 0.8rem;
+    }
+    .row-i { align-self: start; padding-top: 0.2rem; min-width: 1.6rem; }
+    .row-main { display: flex; flex-direction: column; gap: 0.22rem; min-width: 0; }
+    .row-sub { color: var(--fg-faint); }
+    .row-meta { display: none; text-align: right; white-space: nowrap; }
+    .row-go {
+        display: none;
+        font-size: 17px;
+        color: var(--fg-faint);
+        align-self: center;
+        transition: color 300ms var(--ease), transform 300ms var(--ease);
+    }
+
+    /* Play glyph gets its own column right after the index, so it sits beside
+       the numbering and the title starts at a consistent x. */
+    .rows-play .row > a { grid-template-columns: auto auto 1fr; }
+
+    @media (min-width: 760px) {
+        .row > .row-in, .row > a { grid-template-columns: auto 1fr auto auto; }
+        /* index | play | title (fills) | speaker | arrow — speaker sits at the
+           far right of the row, hard against the arrow. */
+        .rows-play .row > a { grid-template-columns: auto auto 1fr auto auto; }
+        .row-meta { display: block; align-self: center; }
+        .row-go { display: inline-flex; }
+    }
+
+    /* On mobile the meta (speaker, role, time) drops under the title instead of
+       being hidden — losing information is not a mobile design, it is a
+       casualty of one. Rows also grow to a comfortable tap height. */
+    @media (max-width: 767.98px) {
+        .row > .row-in, .row > a {
+            grid-template-columns: auto 1fr;
+            padding-block: 1rem;
+            min-height: 44px;
+            align-items: start;
+        }
+        .rows-play .row > a { grid-template-columns: auto auto 1fr; }
+        .row-meta {
+            display: block;
+            grid-column: 2 / -1;
+            text-align: left;
+            white-space: normal;
+            margin-top: 0.35rem;
+        }
+        .rows-play .row > a .row-meta { grid-column: 3 / -1; }
+        .row-go { display: none; }
+        .row-link:hover a { padding-left: 0; }
+    }
+
+    .row-link a { transition: padding-left 380ms var(--ease); }
+    .row-link:hover a { padding-left: 0.7rem; }
+    .row-link:hover .t-h3 { color: var(--gold); }
+    .row-link:hover .row-go { color: var(--gold); transform: translate(2px, -2px); }
+    .row .t-h3 { transition: color 300ms var(--ease); }
+
+    /* Units: two columns of rows on wide screens, so twelve fit one frame. */
+    @media (min-width: 900px) {
+        .units {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            column-gap: 3.5rem;
+            border-top: 0;
+        }
+        .units .row:nth-child(-n + 2) { border-top: 1px solid var(--line); }
+    }
+
+    /* ══ 04 schedule ══════════════════════════════════════════════════════ */
+    .sched { width: 100%; border-collapse: collapse; }
+    .sched tr { border-bottom: 1px solid var(--line); }
+    .sched tr:first-child { border-top: 1px solid var(--line); }
+    .sched td { padding-block: 0.9rem; vertical-align: baseline; }
+    .sched .s-day { width: 8.5rem; color: var(--fg-faint); }
+    .sched tr.lead .s-day { color: var(--gold); }
+    .sched .s-name { transition: color 300ms var(--ease); }
+    .sched .s-time { text-align: right; color: var(--fg-dim); letter-spacing: 0.08em; white-space: nowrap; }
+    .sched tr:hover .s-name { color: var(--gold); }
+
+    /* A three-column timetable cannot survive 390px — cramming it collides the
+       day into the service name. On mobile each service becomes a two-line
+       block: DAY … TIME on the meta line, the service name below it. */
+    @media (max-width: 767.98px) {
+        .sched tr {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 0.3rem 1rem;
+            padding-block: 1.05rem;
+        }
+        .sched td { padding-block: 0; }
+        /* Rows are explicit: DOM order is day → name → time, so without pinning
+           rows the auto-placer drops the time onto a third line of its own. */
+        .sched .s-day  { width: auto; grid-column: 1; grid-row: 1; }
+        .sched .s-time { grid-column: 2; grid-row: 1; text-align: right; }
+        .sched .s-name { grid-column: 1 / -1; grid-row: 2; }
+    }
+
+    /* ══ 01 hero ══════════════════════════════════════════════════════════ */
+    .hero-bed { position: absolute; inset: 0; overflow: hidden; }
+    .hero-plate {
+        position: absolute;
+        inset: 0;
+        background-size: cover;
+        background-position: center;
+        opacity: 0;
+        transition: opacity 1400ms var(--ease);
+    }
+    /* Stage lighting in the source photos runs magenta/blue, which fights the
+       gold. Pulling saturation down lets the one accent stay the only colour. */
+    .hero-plate { filter: grayscale(0.45) contrast(1.05); }
+    .hero-plate.on { opacity: 1; }
+    .hero-veil {
+        position: absolute;
+        inset: 0;
+        background:
+            linear-gradient(90deg, rgba(14,14,16,0.97) 0%, rgba(14,14,16,0.86) 40%, rgba(14,14,16,0.20) 100%),
+            linear-gradient(0deg, var(--ground) 0%, transparent 38%);
+    }
+    .hero-in { position: relative; z-index: 2; }
+
+    /* Portrait hero: the desktop veil fades left-to-right, which on a phone
+       drops copy straight onto the subject's face. Bottom-up instead, with the
+       content anchored low so the photograph gets the top half to itself. */
+    @media (max-width: 767.98px) {
+        .frame-hero {
+            justify-content: flex-end;
+            min-height: 92svh;
+            padding-bottom: 2.75rem;
+        }
+        .hero-veil {
+            background:
+                linear-gradient(0deg, var(--ground) 6%, rgba(14,14,16,0.94) 34%, rgba(14,14,16,0.55) 62%, rgba(14,14,16,0.30) 100%);
+        }
+        .hero-plate { filter: grayscale(0.35) contrast(1.06); }
+        .hero-in .eyebrow { flex-wrap: wrap; }
+        .hero-in .t-body { max-width: 34ch; }
+        .plate-dots { margin-top: 2rem; }
+        .plate-dot { padding: 12px 0; }
+        .rail { display: none; }
+    }
+
+    .plate-dots { display: flex; gap: 0.5rem; margin-top: 2.4rem; }
+    .plate-dot { padding: 6px 0; cursor: pointer; }
+    .plate-dot i {
+        display: block;
+        width: 30px;
+        height: 2px;
+        background: var(--line-2);
+        transition: background-color 380ms var(--ease), width 380ms var(--ease);
+    }
+    .plate-dot.on i { background: var(--gold); width: 48px; }
+    .plate-dot:hover i { background: var(--gold-lt); }
+
+    /* ══ 02 anchor scripture ══════════════════════════════════════════════ */
+    .has-crest { position: relative; overflow: hidden; }
+
+    /* The sprout is Job 14 made literal. Two markup shapes are supported so
+       this frame renders whether it uses a single .crest div or the layered
+       .sprout-bed: both resolve to the same treated, edge-weighted backdrop. */
+    .crest {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+            linear-gradient(90deg, var(--ink) 0%, rgba(10,10,11,0.94) 46%, rgba(10,10,11,0.62) 100%),
+            linear-gradient(0deg, var(--ink) 0%, transparent 34%),
+            72% center/cover no-repeat url('/images/young-green-sprout-growing-from-dark-soil.jpg');
+    }
+    @media (max-width: 900px) {
+        .crest {
+            background:
+                linear-gradient(0deg, var(--ink) 12%, rgba(10,10,11,0.86) 100%),
+                72% center/cover no-repeat url('/images/young-green-sprout-growing-from-dark-soil.jpg');
+        }
+    }
+
+    .sprout-bed { position: absolute; inset: 0; pointer-events: none; }
+    .sprout-bed img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: 72% center;
+        display: block;
+        /* Desaturated toward the gold so the greens don't open a second hue. */
+        filter: grayscale(0.72) sepia(0.22) contrast(1.06) brightness(0.72);
+    }
+    .sprout-veil {
+        position: absolute;
+        inset: 0;
+        display: block;
+        background:
+            linear-gradient(90deg, var(--ink) 0%, rgba(10,10,11,0.94) 46%, rgba(10,10,11,0.62) 100%),
+            linear-gradient(0deg, var(--ink) 0%, transparent 34%);
+    }
+    @media (max-width: 900px) {
+        .sprout-veil { background: linear-gradient(0deg, var(--ink) 12%, rgba(10,10,11,0.86) 100%); }
+    }
+    .scripture-wrap { position: relative; z-index: 1; max-width: 82ch; }
+    .scripture {
+        margin-top: 1.6rem;
+        font-size: clamp(1.12rem, 2.05vw, 1.85rem);
+        line-height: 1.5;
+        letter-spacing: -0.015em;
+        font-weight: 300;
+        color: var(--fg);
+        text-wrap: pretty;
+    }
+    /* Hand-drawn ring around the ministry's own phrase. An SVG ellipse rather
+       than a border-radius box so it reads as annotation, not a chip. */
+    .circled {
+        position: relative;
+        display: inline-block;
+        white-space: nowrap;
+        color: var(--gold-lt);
+        padding: 0 0.18em;
+    }
+    /* The loop is a real SVG path traced with stroke-dashoffset, so the ink
+       follows the ellipse anticlockwise the way a hand would draw it — a
+       clip-path could only ever wipe left-to-right. The <svg> is injected by
+       theme-scripts.html so the markup stays a plain <span>. */
+    .circled .pen {
+        position: absolute;
+        left: -0.34em;
+        right: -0.34em;
+        top: -0.34em;
+        bottom: -0.34em;
+        width: auto;
+        height: auto;
+        overflow: visible;
+        pointer-events: none;
+    }
+    .circled .pen path {
+        fill: none;
+        stroke: var(--gold);
+        stroke-width: 2.2;
+        stroke-linecap: round;
+        /* Keeps the nib an even weight despite the viewBox being stretched. */
+        vector-effect: non-scaling-stroke;
+        stroke-dasharray: var(--len, 400);
+        stroke-dashoffset: var(--len, 400);
+        transition: none;
+    }
+    /* The transition lives ONLY on .drawn, so it inks on when the section is
+       focused and snaps back instantly on exit — reloaded to draw again. */
+    .circled.drawn .pen path {
+        stroke-dashoffset: 0;
+        transition: stroke-dashoffset 1150ms cubic-bezier(0.6, 0.05, 0.3, 1) 240ms;
+    }
+
+    /* ══ 03 mandate ═══════════════════════════════════════════════════════ */
+    .mandate {
+        display: grid;
+        gap: clamp(1.6rem, 4vw, 3.4rem);
+        grid-template-columns: 1fr;
+        margin-top: clamp(1.8rem, 4vh, 2.8rem);
+        align-items: start;
+    }
+    @media (min-width: 860px) { .mandate { grid-template-columns: 0.85fr 1.1fr 1fr; } }
+    .vision {
+        margin-top: 0.9rem;
+        color: var(--gold-lt);
+        max-width: 16ch;
+        line-height: 1.25;
+    }
+
+    /* Vision as the section headline, then mission + values paired beneath. */
+    .mandate-head { margin-top: 1.1rem; max-width: 44ch; }
+    .vision-head {
+        line-height: 1.04;
+        font-size: clamp(1.9rem, 3.6vw, 3.25rem);
+        letter-spacing: -0.032em;
+    }
+    .mandate-cols {
+        display: grid;
+        gap: clamp(1.8rem, 4vw, 3.6rem);
+        grid-template-columns: 1fr;
+        margin-top: clamp(2rem, 5vh, 3.2rem);
+        align-items: start;
+    }
+    @media (min-width: 900px) { .mandate-cols { grid-template-columns: 1fr 1.15fr; } }
+    /* Seven values split 4 + 3 so the block matches the mission list's height.
+       Column flow (not row flow) so the numbering reads 01-04 down the first
+       column and 05-07 down the second, rather than zig-zagging across. */
+    @media (min-width: 620px) {
+        .values-split {
+            display: grid;
+            grid-template-rows: repeat(4, auto);
+            grid-auto-flow: column;
+            grid-auto-columns: 1fr;
+            column-gap: clamp(1.5rem, 3vw, 2.6rem);
+            border-top: 0;
+        }
+        .values-split .row:nth-child(1),
+        .values-split .row:nth-child(5) { border-top: 1px solid var(--line); }
+    }
+
+    /* Vertical scripture rail, right edge of the hero. */
+    .rail {
+        position: absolute;
+        right: clamp(0.85rem, 2.2vw, 1.9rem);
+        bottom: clamp(2.5rem, 8vh, 5rem);
+        z-index: 3;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.9rem;
+    }
+    @media (min-width: 820px) { .rail { display: flex; } }
+    .rail span:first-child {
+        writing-mode: vertical-rl;
+        letter-spacing: 0.4em;
+        color: rgba(242, 242, 240, 0.5);
+    }
+    .rail i { display: block; width: 1px; height: 72px; background: linear-gradient(180deg, var(--gold), transparent); }
+
+    /* ══ 09 stories — blog cards ══════════════════════════════════════════ */
+    /* Image-filling card with the text over a bottom scrim, per the reference. */
+    .blog-grid { display: grid; gap: 1rem; grid-template-columns: 1fr; margin-top: 2rem; }
+    @media (min-width: 700px)  { .blog-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 1024px) { .blog-grid { grid-template-columns: repeat(3, 1fr); } }
+    .blog {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        min-height: clamp(280px, 38svh, 360px);
+        padding: 1.5rem 1.4rem 1.4rem;
+        overflow: hidden;
+        border-radius: 14px;
+        background: var(--surface);
+        isolation: isolate;
+    }
+    .blog-bg { position: absolute; inset: 0; z-index: -2; }
+    .blog-bg img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 900ms var(--ease); }
+    .blog:hover .blog-bg img { transform: scale(1.06); }
+    .blog::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        background: linear-gradient(180deg, rgba(10,10,11,0.15) 0%, rgba(10,10,11,0.72) 52%, rgba(10,10,11,0.95) 100%);
+    }
+    .blog-cat { align-self: flex-start; margin-bottom: 0.75rem; color: var(--gold-lt); }
+    .blog h3 { margin-bottom: 0.5rem; }
+    .blog p { color: rgba(242,242,240,0.8); font-size: 0.88rem; line-height: 1.55; }
+    .blog-cta {
+        align-self: flex-start;
+        margin-top: 1.1rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        height: 2.4rem;
+        padding-inline: 1.1rem;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.14);
+        border: 1px solid rgba(255,255,255,0.18);
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--fg);
+        transition: background-color 300ms var(--ease), color 300ms var(--ease), border-color 300ms var(--ease);
+    }
+    .blog:hover .blog-cta { background: var(--gold); border-color: var(--gold); color: var(--ink); }
+    .blog-link { position: absolute; inset: 0; z-index: 2; }
+
+    /* ══ scroll to top ════════════════════════════════════════════════════ */
+    .totop {
+        position: fixed;
+        right: clamp(1rem, 2.4vw, 1.9rem);
+        bottom: clamp(1rem, 2.4vw, 1.9rem);
+        z-index: 70;
+        width: 2.9rem;
+        height: 2.9rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: rgba(10, 10, 11, 0.82);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid var(--line-2);
+        color: var(--fg);
+        cursor: pointer;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(12px);
+        transition: opacity 320ms var(--ease), transform 320ms var(--ease),
+                    visibility 320ms, background-color 260ms var(--ease),
+                    border-color 260ms var(--ease), color 260ms var(--ease);
+    }
+    .totop.show { opacity: 1; visibility: visible; transform: none; }
+    .totop:hover { background: var(--gold); border-color: var(--gold); color: var(--ink); }
+    /* Progress ring driven by --p (0-1) from the scroll handler. */
+    .totop::before {
+        content: '';
+        position: absolute;
+        inset: -3px;
+        border-radius: 999px;
+        background: conic-gradient(var(--gold) calc(var(--p, 0) * 360deg), transparent 0);
+        -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+        mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+        pointer-events: none;
+    }
+
+    /* ══ 06 gallery belts ═════════════════════════════════════════════════ */
+    .belts { margin-top: 2.2rem; display: flex; flex-direction: column; gap: 0.75rem; }
+    .belt { overflow: hidden; }
+    .belt-track {
+        display: flex;
+        gap: 0.75rem;
+        width: max-content;
+        animation: belt var(--dur, 55s) linear infinite;
+        will-change: transform;
+    }
+    .belt-rev { animation-direction: reverse; }
+    .belt:hover .belt-track, .belt:focus-within .belt-track { animation-play-state: paused; }
+    @keyframes belt { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+    /* Every frame identical by construction — fixed box, image cropped to it. */
+    .shot {
+        flex: 0 0 auto;
+        width: clamp(190px, 21vw, 286px);
+        height: clamp(128px, 14.2vw, 194px);
+        overflow: hidden;
+        cursor: pointer;
+        position: relative;
+        background: var(--surface);
+    }
+    .shot img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        filter: grayscale(0.28) contrast(1.02);
+        transition: transform 700ms var(--ease), filter 500ms var(--ease);
+    }
+    .shot:hover img, .shot:focus-visible img { transform: scale(1.05); filter: grayscale(0) contrast(1); }
+
+    /* Mobile: fewer, larger frames — a phone-width belt of tiny thumbnails
+       reads as clutter. Full colour too, since there is no hover to reveal it. */
+    @media (max-width: 767.98px) {
+        .belts { gap: 0.55rem; margin-top: 1.8rem; }
+        .belt-track { gap: 0.55rem; }
+        .shot { width: 62vw; height: 42vw; }
+        .shot img { filter: none; }
+        .blog { min-height: 62vw; padding: 1.4rem 1.25rem 1.3rem; }
+        .blog-cta { min-height: 44px; }
+        .out-grid { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+        .branch { flex-basis: 82vw; }
+        .map { height: 58vw; }
+        .steps .row > a { min-height: 52px; }
+        .counsel-tel { min-height: 44px; font-size: 1.08rem; }
+        .foot-col a, .foot-links a {
+            min-height: 44px;
+            min-width: 44px;
+            display: inline-flex;
+            align-items: center;
+        }
+        .plate-dot { padding: 0 5px; min-height: 44px; min-width: 44px; align-items: center; display: inline-flex; }
+        .plate-dot i { width: 34px; }
+        .plate-dot.on i { width: 52px; }
+
+        /* Search: the input and its button stack to full width rather than
+           competing for a 360px line, which was pushing the page sideways. */
+        .search-row { flex-wrap: wrap; width: 100%; gap: 0.75rem; }
+        .search-row input {
+            flex: 1 1 100%;
+            min-width: 0;
+            width: 100%;
+            font-size: 1rem;
+            padding-block: 0.7rem;
+        }
+        .search-row .btn { flex: 1 1 auto; height: 2.9rem; }
+
+        /* Quick-amount chips as a proper tap grid. */
+        .chips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+        .chip-amt { min-height: 44px; padding-inline: 0.5rem; }
+        .totop { width: 3.25rem; height: 3.25rem; }
+        .next-split { gap: 2rem; }
+        .values-split { display: block; }
+    }
+
+    /* ══ 07/08/10 splits ══════════════════════════════════════════════════ */
+    .split { display: grid; gap: clamp(1.8rem, 4.5vw, 4rem); grid-template-columns: 1fr; align-items: center; }
+    @media (min-width: 900px) { .split { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 900px) {
+        .split-rev > *:first-child { order: 2; }
+        .split-rev > *:last-child  { order: 1; }
+    }
+    .split-media { position: relative; overflow: hidden; background: var(--surface); }
+
+    /* Outreach slideshow: cross-fading stack + caption, admin-managed.
+       The stack fills its panel absolutely and every frame is cropped to it,
+       so no grey backing shows through whatever aspect the uploads happen
+       to be. The panel itself owns the aspect ratio. */
+    .split-media.has-shots, .split-media:has(.shots) { aspect-ratio: 4 / 3; max-height: 58svh; }
+    .shots { position: absolute; inset: 0; }
+    .shots figure { position: absolute; inset: 0; opacity: 0; transition: opacity 1200ms var(--ease); }
+    .shots figure.on { opacity: 1; }
+    .shots img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    /* Caption sits at the TOP: these photos carry their own watermark badge in
+       the bottom-left corner, and a bottom caption lands right on it. */
+    .shots figcaption {
+        position: absolute;
+        left: 0; right: 4.5rem; top: 0;
+        padding: 0.9rem 1.1rem 2.2rem;
+        background: linear-gradient(180deg, rgba(10,10,11,0.9), transparent);
+        color: rgba(242,242,240,0.92);
+        font-size: 0.78rem;
+        line-height: 1.45;
+    }
+    .shots-dots { position: absolute; right: 0.85rem; top: 1rem; display: flex; gap: 0.3rem; z-index: 2; }
+    .shots-dots i { width: 5px; height: 5px; border-radius: 999px; background: rgba(255,255,255,0.35); transition: background-color 400ms var(--ease); }
+    .shots-dots i.on { background: var(--gold); }
+
+    /* Play glyph between the index and the message title. */
+    .row-play {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.55rem;
+        height: 1.55rem;
+        border-radius: 999px;
+        border: 1px solid var(--line-2);
+        color: var(--fg-dim);
+        font-size: 15px;
+        align-self: center;
+        flex-shrink: 0;
+        transition: background-color 300ms var(--ease), color 300ms var(--ease), border-color 300ms var(--ease);
+    }
+    .row-link:hover .row-play { background: var(--gold); border-color: var(--gold); color: var(--ink); }
+    .split-media img {
+        width: 100%;
+        height: 100%;
+        max-height: 62svh;
+        object-fit: cover;
+        display: block;
+    }
+    .split-media.dev img { object-fit: contain; background: var(--surface); }
+    /* Portraits crop from the top so a head is never cut off by centring. */
+    .split-media.portrait img { object-position: top center; }
+    .plate {
+        position: absolute;
+        left: 0; right: 0; bottom: 0;
+        padding: 2.2rem 1.4rem 1.1rem;
+        background: linear-gradient(180deg, transparent, rgba(10,10,11,0.94));
+    }
+    .pq {
+        margin-top: 1.4rem;
+        padding-left: 1.1rem;
+        border-left: 2px solid var(--gold);
+        font-size: clamp(1rem, 1.35vw, 1.2rem);
+        line-height: 1.45;
+        color: var(--fg);
+    }
+
+    /* ══ 11 visit ═════════════════════════════════════════════════════════ */
+    .branch-rail {
+        display: flex;
+        gap: 0;
+        overflow-x: auto;
+        scroll-snap-type: x proximity;
+        margin-top: 2rem;
+        border-top: 1px solid var(--line);
+    }
+    .branch {
+        flex: 0 0 min(258px, 74vw);
+        scroll-snap-align: start;
+        padding: 1.2rem 1.4rem 1.4rem 0;
+        margin-right: 1.4rem;
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .map {
+        margin-top: 1.5rem;
+        height: clamp(170px, 26svh, 280px);
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background: var(--surface);
+    }
+    /* No invert/hue-rotate: a Google embed can't be restyled from outside and
+       forcing it yields a lurid false-colour map. Damp it instead. */
+    .map iframe { width: 100%; height: 100%; border: 0; filter: grayscale(0.55) brightness(0.8) contrast(1.05); }
+    .map-empty { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+
+    /* ══ 12 next step + counselling ═══════════════════════════════════════ */
+    .next-split { display: grid; gap: clamp(1.6rem, 4vw, 3.2rem); grid-template-columns: 1fr; margin-top: 1.7rem; align-items: start; }
+    @media (min-width: 900px) { .next-split { grid-template-columns: 1.25fr 0.75fr; } }
+    .counsel { border-left: 2px solid var(--gold); padding: 0.15rem 0 0.15rem 1.25rem; }
+    .counsel .t-sm { max-width: 34ch; }
+    .counsel-tel {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 1rem;
+        font-size: 1.02rem;
+        font-weight: 500;
+        letter-spacing: -0.01em;
+        color: var(--gold-lt);
+        transition: color 260ms var(--ease);
+    }
+    .counsel-tel:hover { color: var(--fg); }
+
+    /* ══ 12 footer strip ══════════════════════════════════════════════════ */
+    .foot { margin-top: 2.4rem; padding-top: 1.3rem; border-top: 1px solid var(--line); }
+    .foot-in { display: flex; flex-wrap: wrap; gap: 1rem 1.6rem; align-items: center; justify-content: space-between; }
+    .foot-links { display: flex; flex-wrap: wrap; gap: 1.4rem; }
+    .foot-links a { color: var(--fg-dim); transition: color 260ms var(--ease); }
+    .foot-links a:hover { color: var(--gold); }
+
+    /* ══ lightbox ═════════════════════════════════════════════════════════ */
+    .lb {
+        position: fixed;
+        inset: 0;
+        z-index: 90;
+        background: rgba(10, 10, 11, 0.97);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: clamp(1rem, 5vw, 3rem);
+        opacity: 0;
+        transition: opacity 300ms var(--ease);
+    }
+    .lb.open { opacity: 1; }
+    .lb[hidden] { display: none; }
+    .lb-fig { max-width: min(1150px, 92vw); max-height: 86svh; }
+    .lb-fig img {
+        max-width: 100%;
+        max-height: 86svh;
+        object-fit: contain;
+        display: block;
+        transform: scale(0.98);
+        transition: transform 340ms var(--ease);
+    }
+    .lb.open .lb-fig img { transform: scale(1); }
+    .lb-close { position: absolute; top: 1rem; right: 1.1rem; color: var(--fg); padding: 0.5rem; }
+    .lb-close:hover { color: var(--gold); }
+    .lb-nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 2.8rem;
+        height: 2.8rem;
+        border: 1px solid var(--line-2);
+        color: var(--fg);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: border-color 280ms var(--ease), color 280ms var(--ease);
+    }
+    .lb-nav:hover { border-color: var(--gold); color: var(--gold); }
+    .lb-prev { left: clamp(0.6rem, 2vw, 1.5rem); }
+    .lb-next { right: clamp(0.6rem, 2vw, 1.5rem); }
+</style>

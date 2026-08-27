@@ -1,46 +1,32 @@
-<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Coming Soon - {{ siteName }}</title>
-<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
-<link rel="apple-touch-icon" href="/images/swm-logo.png"/>
+{% set pageEyebrow = 'Coming soon' %}
+{% set pageTitle = 'This part is still being built.' %}
+{% set pageLede = 'It is on its way. In the meantime, here is where else you can go.' %}
+{% include "partials/theme-page-open.html" %}
 
-{% include "partials/site-head-assets.html" %}
-<style>
-        .text-shadow {
-            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-    </style>
-
-</head>
-<body class="bg-background-light dark:bg-background-dark text-secondary font-sans antialiased overflow-x-hidden selection:bg-primary selection:text-white">
-{% include "partials/site-header.html" %}
-
-<main class="bg-background-light">
-  <section class="relative overflow-hidden bg-secondary text-white">
-    <div class="max-w-7xl mx-auto px-6 lg:px-8 py-20">
-      <span class="text-primary text-sm font-bold tracking-[0.2em] uppercase">We Are Building</span>
-      <h1 class="text-white text-4xl md:text-6xl font-serif font-medium leading-tight mt-4">Coming Soon</h1>
-      <p class="text-gray-200 text-lg mt-6 max-w-2xl">This page is under construction. Check back soon for updates and new resources.</p>
-      <div class="mt-8 flex flex-wrap gap-4">
-        <a class="h-12 px-6 rounded-full bg-primary text-white font-bold text-sm hover:bg-white hover:text-primary transition-all" href="{{ url_for('contact') }}">Contact Us</a>
-        <a class="h-12 px-6 rounded-full border border-white/40 text-white font-bold text-sm hover:border-primary hover:text-primary transition-all" href="{{ url_for('get-involved') }}">Get Involved</a>
-      </div>
+<section class="band band-light">
+    <div class="shell" style="max-width:70ch;">
+        <p class="mono eyebrow"><span class="rule"></span>While you wait</p>
+        <ul class="rows" style="margin-top:1.6rem;">
+            {% for route, label, blurb in [
+                ('messages', 'Listen to a message', 'The full archive of what has been preached here.'),
+                ('calendar', 'See service times',   'When this house gathers, every week.'),
+                ('prayer',   'Send a prayer request', 'The prayer team receives every one.'),
+                ('contact',  'Talk to us',          'Plan a visit or ask a question.')
+            ] %}
+            <li class="row row-link">
+                <a href="{{ url_for(route) }}">
+                    <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
+                    <span class="row-main">
+                        <span class="t-h3">{{ label }}</span>
+                        <span class="t-sm row-sub">{{ blurb }}</span>
+                    </span>
+                    <span class="row-go material-symbols-outlined">arrow_outward</span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        <a href="{{ url_for('home') }}" class="btn btn-gold" style="margin-top:2.2rem;">Back home</a>
     </div>
-  </section>
-  <section class="max-w-6xl mx-auto px-6 lg:px-8 py-16">
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-soft p-8 md:p-10">
-      
-<h2 class="text-2xl font-serif font-bold text-secondary">New Content On The Way</h2>
-<p class="text-gray-600 mt-4">We are preparing fresh updates for this section. Stay connected through our services and announcements.</p>
-<div class="mt-6 flex flex-wrap gap-4">
-  <a class="h-12 px-6 rounded-full bg-secondary text-white font-bold text-sm hover:bg-primary transition-all" href="{{ url_for('home') }}">Back To Home</a>
-</div>
+</section>
 
-    </div>
-  </section>
-</main>
-
-{% include "partials/site-footer.html" %}
-</body></html>
+{% include "partials/theme-page-close.html" %}

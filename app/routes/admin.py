@@ -810,44 +810,211 @@ async def admin_hods_invite(
 
 # ─── HarvestTrack ──────────────────────────────────────────────────
 
+HARVEST_STAGES = ["new", "contacted", "connected_to_group", "attending_class", "committed", "inactive"]
+HARVEST_STAGE_LABELS = {
+    "new": "New", "contacted": "Contacted", "connected_to_group": "Connected to Group",
+    "attending_class": "Attending Class", "committed": "Committed", "inactive": "Inactive",
+}
+HARVEST_SOURCES = ["invite", "walk_in", "outreach"]
+HARVEST_SOURCE_LABELS = {"invite": "Invite", "walk_in": "Walk-in", "outreach": "Outreach"}
+HARVEST_ROLES = ["field_member", "team_lead", "admin"]
+HARVEST_ROLE_LABELS = {"field_member": "Field Member", "team_lead": "Team Lead", "admin": "Admin"}
+HARVEST_DROPOFF_DAYS = 14
+HARVEST_RETENTION_WINDOWS = [30, 60, 90]
+
+
+def _harvest_date_range(start_date: str, end_date: str) -> tuple[datetime, datetime]:
+    now = datetime.utcnow()
+    try:
+        sd = datetime.fromisoformat(start_date) if start_date else now - timedelta(days=30)
+    except ValueError:
+        sd = now - timedelta(days=30)
+    try:
+        ed = datetime.fromisoformat(end_date) if end_date else now
+    except ValueError:
+        ed = now
+    if ed < sd:
+        sd, ed = ed, sd
+    ed = ed + timedelta(days=1) - timedelta(seconds=1)
+    return sd, ed
+
+
+def _harvest_last_activity(contact) -> datetime:
+    latest = contact.created_at
+    for f in contact.follow_ups:
+        if f.created_at and f.created_at > latest:
+            latest = f.created_at
+    return latest
+
+
+def _harvest_retained(contact, window_days: int) -> bool:
+    if not contact.committed_at:
+        return False
+    window_end = contact.committed_at + timedelta(days=window_days)
+    for f in contact.follow_ups:
+        if f.created_at and contact.committed_at <= f.created_at <= window_end:
+            return True
+    for r in contact.reminders:
+        if r.is_completed and r.updated_at and contact.committed_at <= r.updated_at <= window_end:
+            return True
+    return False
+
+
 @router.get("/harvesttrack", name="admin_harvesttrack")
-async def admin_harvesttrack(request: Request, db: AsyncSession = Depends(get_db)):
+async def admin_harvesttrack(
+    request: Request, db: AsyncSession = Depends(get_db),
+    tab: str = Query("dashboard"),
+    start_date: str = Query(""), end_date: str = Query(""),
+    team_id: int | None = Query(None), source: str = Query(""),
+    stage: str = Query(""), q: str = Query(""),
+    branch_id: int | None = Query(None),
+):
     admin = await _get_admin(request)
     if not admin:
         return RedirectResponse(url="/admin", status_code=303)
 
     from sqlalchemy.orm import selectinload
-    from app.models.harvest import HarvestWorker, HarvestContact
-    query = (
-        select(HarvestWorker)
-        .options(selectinload(HarvestWorker.branch), selectinload(HarvestWorker.contacts))
-        .order_by(HarvestWorker.created_at.desc())
-    )
-    if not admin.role == "super_admin" and admin.branch_id:
-        query = query.where(HarvestWorker.branch_id == admin.branch_id)
-    result = await db.execute(query)
-    workers = list(result.scalars().all())
+    from app.models.harvest import HarvestWorker, HarvestContact, HarvestTeam
+    from app.models.branch import Branch
 
-    stats = {
-        'total_workers': len(workers) if workers else 0,
-        'active_workers': len([w for w in workers if w.is_active]) if workers else 0,
-        'inactive_workers': len([w for w in workers if not w.is_active]) if workers else 0,
+    is_super = admin.role == "super_admin"
+    scope_branch_id = branch_id if (is_super and branch_id) else (None if is_super else admin.branch_id)
+    now = datetime.utcnow()
+    sd, ed = _harvest_date_range(start_date, end_date)
+
+    branches = []
+    if is_super:
+        branches = list((await db.execute(select(Branch).order_by(Branch.name))).scalars().all())
+
+    teams_query = select(HarvestTeam).options(selectinload(HarvestTeam.branch)).order_by(HarvestTeam.name)
+    if scope_branch_id:
+        teams_query = teams_query.where(HarvestTeam.branch_id == scope_branch_id)
+    teams = list((await db.execute(teams_query)).scalars().all())
+
+    workers_query = select(HarvestWorker).options(
+        selectinload(HarvestWorker.branch), selectinload(HarvestWorker.team), selectinload(HarvestWorker.contacts)
+    ).order_by(HarvestWorker.created_at.desc())
+    if scope_branch_id:
+        workers_query = workers_query.where(HarvestWorker.branch_id == scope_branch_id)
+    workers = list((await db.execute(workers_query)).scalars().all())
+
+    contacts_query = select(HarvestContact).options(
+        selectinload(HarvestContact.worker).selectinload(HarvestWorker.team),
+        selectinload(HarvestContact.follow_ups),
+        selectinload(HarvestContact.reminders),
+    ).order_by(HarvestContact.created_at.desc())
+    if scope_branch_id or team_id:
+        scoped_ids = [w.id for w in workers if not team_id or w.team_id == team_id]
+        contacts_query = contacts_query.where(HarvestContact.worker_id.in_(scoped_ids)) if scoped_ids else contacts_query.where(False)
+    if source:
+        contacts_query = contacts_query.where(HarvestContact.source == source)
+    all_contacts = list((await db.execute(contacts_query)).scalars().all())
+
+    # 7.1 Dashboard
+    total_contacts = len(all_contacts)
+    stage_counts = {s: 0 for s in HARVEST_STAGES}
+    for c in all_contacts:
+        stage_counts[c.current_stage if c.current_stage in HARVEST_STAGES else "new"] += 1
+    committed_count = stage_counts["committed"]
+    conversion_rate = round(committed_count / total_contacts * 100, 1) if total_contacts else 0.0
+    touchpoints_in_range = sum(
+        1 for c in all_contacts for f in c.follow_ups if f.created_at and sd <= f.created_at <= ed
+    )
+
+    # 7.4 Retention (computed here so the Dashboard summary and Retention tab share one pass)
+    committed_contacts = [c for c in all_contacts if c.current_stage == "committed" and c.committed_at]
+    retention = {}
+    for window in HARVEST_RETENTION_WINDOWS:
+        eligible = [c for c in committed_contacts if (now - c.committed_at).days >= window]
+        retained = [c for c in eligible if _harvest_retained(c, window)]
+        retention[window] = {
+            "eligible": len(eligible), "retained": len(retained),
+            "pct": round(len(retained) / len(eligible) * 100, 1) if eligible else None,
+        }
+
+    # 7.2 Team Performance
+    def _worker_metrics(w):
+        assigned = [c for c in all_contacts if c.worker_id == w.id]
+        touchpoints = sum(1 for c in assigned for f in c.follow_ups if f.worker_id == w.id and f.created_at and sd <= f.created_at <= ed)
+        progressed = sum(1 for c in assigned if c.current_stage != "new")
+        committed = sum(1 for c in assigned if c.current_stage == "committed")
+        return {
+            "worker": w, "assigned": len(assigned), "touchpoints": touchpoints,
+            "progressed": progressed, "committed": committed,
+            "conversion_rate": round(committed / len(assigned) * 100, 1) if assigned else 0.0,
+        }
+    worker_performance = [_worker_metrics(w) for w in workers]
+    team_performance = {}
+    for row in worker_performance:
+        key = row["worker"].team_id
+        bucket = team_performance.setdefault(key, {
+            "team": row["worker"].team, "assigned": 0, "touchpoints": 0, "progressed": 0, "committed": 0,
+        })
+        bucket["assigned"] += row["assigned"]
+        bucket["touchpoints"] += row["touchpoints"]
+        bucket["progressed"] += row["progressed"]
+        bucket["committed"] += row["committed"]
+    for bucket in team_performance.values():
+        bucket["conversion_rate"] = round(bucket["committed"] / bucket["assigned"] * 100, 1) if bucket["assigned"] else 0.0
+
+    # 7.3 Drop-off Alerts — active contacts (not inactive, not committed — those are tracked via retention)
+    dropoffs = []
+    for c in all_contacts:
+        if c.current_stage in ("inactive", "committed"):
+            continue
+        last_activity = _harvest_last_activity(c)
+        days_since = (now - last_activity).days
+        if days_since >= HARVEST_DROPOFF_DAYS:
+            dropoffs.append({"contact": c, "last_activity": last_activity, "days_since": days_since})
+    dropoffs.sort(key=lambda d: d["days_since"], reverse=True)
+
+    # Contacts tab — search + stage filter (team/source already applied above)
+    contacts_view = all_contacts
+    if stage:
+        contacts_view = [c for c in contacts_view if c.current_stage == stage]
+    if q:
+        pattern = q.strip().lower()
+        contacts_view = [
+            c for c in contacts_view
+            if pattern in (c.full_name or "").lower() or pattern in (c.phone or "").lower() or pattern in (c.email or "").lower()
+        ]
+
+    from urllib.parse import urlencode
+    base_params = {
+        "start_date": sd.strftime("%Y-%m-%d"),
+        "end_date": (ed - timedelta(days=1) + timedelta(seconds=1)).strftime("%Y-%m-%d"),
     }
-
-    contacts_query = (
-        select(HarvestContact)
-        .options(selectinload(HarvestContact.worker))
-        .order_by(HarvestContact.created_at.desc())
-        .limit(20)
-    )
-    if not admin.role == "super_admin" and admin.branch_id:
-        worker_ids = [w.id for w in workers]
-        contacts_query = contacts_query.where(HarvestContact.worker_id.in_(worker_ids)) if worker_ids else contacts_query.where(False)
-    contacts = list((await db.execute(contacts_query)).scalars().all())
+    if team_id:
+        base_params["team_id"] = team_id
+    if source:
+        base_params["source"] = source
+    if branch_id:
+        base_params["branch_id"] = branch_id
+    tab_urls = {
+        t: "/admin/harvesttrack?" + urlencode({**base_params, "tab": t})
+        for t in ("dashboard", "team", "dropoff", "retention", "contacts", "teams")
+    }
+    export_url = "/admin/harvesttrack/export.csv?" + urlencode(base_params)
 
     ctx = await _admin_context(request, db, "admin.harvesttrack")
     return await render_template(request, "admin/harvesttrack.html", {
-        "_db": db, "workers": workers, "stats": stats, "contacts": contacts,
+        "_db": db,
+        "tab_urls": tab_urls, "export_url": export_url,
+        "tab": tab if tab in ("dashboard", "team", "dropoff", "retention", "contacts", "teams") else "dashboard",
+        "filters": {
+            "start_date": sd.strftime("%Y-%m-%d"), "end_date": (ed - timedelta(days=1) + timedelta(seconds=1)).strftime("%Y-%m-%d"),
+            "team_id": team_id, "source": source, "stage": stage, "q": q, "branch_id": branch_id,
+        },
+        "isSuper": is_super, "branches": branches, "teams": teams, "workers": workers,
+        "stages": HARVEST_STAGES, "stageLabels": HARVEST_STAGE_LABELS,
+        "sources": HARVEST_SOURCES, "sourceLabels": HARVEST_SOURCE_LABELS,
+        "roles": HARVEST_ROLES, "roleLabels": HARVEST_ROLE_LABELS,
+        "totalContacts": total_contacts, "stageCounts": stage_counts,
+        "conversionRate": conversion_rate, "touchpointsInRange": touchpoints_in_range,
+        "retention": retention, "retentionWindows": HARVEST_RETENTION_WINDOWS,
+        "workerPerformance": worker_performance, "teamPerformance": team_performance,
+        "dropoffs": dropoffs, "dropoffDays": HARVEST_DROPOFF_DAYS,
+        "contacts": contacts_view,
         "title": "HarvestTrack", "headerIcon": "ri-seedling-line", **ctx,
     })
 
@@ -857,25 +1024,224 @@ async def admin_harvesttrack_workers_store(
     request: Request, db: AsyncSession = Depends(get_db),
     full_name: str = Form(...), email: str = Form(...),
     phone: str = Form(""), branch_id: int = Form(None),
+    role: str = Form("field_member"), team_id: int | None = Form(None),
+    password: str = Form(""),
 ):
     admin = await _get_admin(request)
     if not admin:
         return RedirectResponse(url="/admin", status_code=303)
 
     from app.models.harvest import HarvestWorker
-    from app.core.security import generate_token
 
-    password = secrets.token_urlsafe(12)
+    generated_password = password.strip() or secrets.token_urlsafe(10)
     worker = HarvestWorker(
         full_name=full_name.strip(),
         email=email.strip().lower(),
         phone=phone.strip() if phone else None,
         branch_id=branch_id or admin.branch_id,
-        password_hash=hash_password(password),
+        role=role if role in HARVEST_ROLES else "field_member",
+        team_id=team_id or None,
+        password_hash=hash_password(generated_password),
     )
     db.add(worker)
     await db.flush()
-    return _redirect(request, "/admin/harvesttrack", "Worker created successfully.")
+    return _redirect(
+        request, "/admin/harvesttrack?tab=teams",
+        f"Worker created. Temporary password: {generated_password} (share this with them securely — it will not be shown again).",
+    )
+
+
+@router.post("/harvesttrack/workers/{worker_id}/update", name="admin_harvesttrack_workers_update")
+async def admin_harvesttrack_workers_update(
+    worker_id: int, request: Request, db: AsyncSession = Depends(get_db),
+    full_name: str = Form(""), phone: str = Form(""), branch_id: int = Form(None),
+    role: str = Form("field_member"), team_id: int | None = Form(None),
+    is_active: bool = Form(False),
+):
+    admin = await _get_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+
+    from app.models.harvest import HarvestWorker
+    result = await db.execute(select(HarvestWorker).where(HarvestWorker.id == worker_id))
+    worker = result.scalar_one_or_none()
+    if not worker:
+        return _redirect(request, "/admin/harvesttrack?tab=teams", "Worker not found.", "error")
+
+    worker.full_name = full_name.strip() or worker.full_name
+    worker.phone = phone.strip() if phone else None
+    if admin.role == "super_admin" and branch_id:
+        worker.branch_id = branch_id
+    worker.role = role if role in HARVEST_ROLES else worker.role
+    worker.team_id = team_id or None
+    worker.is_active = is_active
+    await db.flush()
+    return _redirect(request, "/admin/harvesttrack?tab=teams", "Worker updated successfully.")
+
+
+@router.post("/harvesttrack/teams", name="admin_harvesttrack_teams_store")
+async def admin_harvesttrack_teams_store(
+    request: Request, db: AsyncSession = Depends(get_db),
+    name: str = Form(...), branch_id: int | None = Form(None),
+):
+    admin = await _get_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+
+    from app.models.harvest import HarvestTeam
+    team = HarvestTeam(name=name.strip(), branch_id=branch_id or admin.branch_id)
+    db.add(team)
+    try:
+        await db.flush()
+    except Exception:
+        return _redirect(request, "/admin/harvesttrack?tab=teams", "A team with that name already exists.", "error")
+    return _redirect(request, "/admin/harvesttrack?tab=teams", "Team created successfully.")
+
+
+@router.post("/harvesttrack/teams/{team_id}/update", name="admin_harvesttrack_teams_update")
+async def admin_harvesttrack_teams_update(
+    team_id: int, request: Request, db: AsyncSession = Depends(get_db),
+    name: str = Form(...), branch_id: int | None = Form(None),
+):
+    admin = await _get_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+
+    from app.models.harvest import HarvestTeam
+    result = await db.execute(select(HarvestTeam).where(HarvestTeam.id == team_id))
+    team = result.scalar_one_or_none()
+    if not team:
+        return _redirect(request, "/admin/harvesttrack?tab=teams", "Team not found.", "error")
+
+    team.name = name.strip() or team.name
+    if admin.role == "super_admin":
+        team.branch_id = branch_id or None
+    await db.flush()
+    return _redirect(request, "/admin/harvesttrack?tab=teams", "Team updated successfully.")
+
+
+@router.post("/harvesttrack/teams/{team_id}/destroy", name="admin_harvesttrack_teams_destroy")
+async def admin_harvesttrack_teams_destroy(team_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    admin = await _get_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+
+    from app.models.harvest import HarvestTeam
+    result = await db.execute(select(HarvestTeam).where(HarvestTeam.id == team_id))
+    team = result.scalar_one_or_none()
+    if not team:
+        return _redirect(request, "/admin/harvesttrack?tab=teams", "Team not found.", "error")
+
+    await db.delete(team)
+    await db.flush()
+    return _redirect(request, "/admin/harvesttrack?tab=teams", "Team deleted. Its workers are now unassigned.")
+
+
+@router.post("/harvesttrack/contacts/{contact_id}/reassign", name="admin_harvesttrack_contacts_reassign")
+async def admin_harvesttrack_contacts_reassign(
+    contact_id: int, request: Request, db: AsyncSession = Depends(get_db),
+    worker_id: int = Form(...),
+):
+    admin = await _get_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+
+    from app.models.harvest import HarvestContact
+    result = await db.execute(select(HarvestContact).where(HarvestContact.id == contact_id))
+    contact = result.scalar_one_or_none()
+    if not contact:
+        return _redirect(request, "/admin/harvesttrack?tab=contacts", "Contact not found.", "error")
+
+    contact.worker_id = worker_id
+    await db.flush()
+    return _redirect(request, "/admin/harvesttrack?tab=contacts", "Contact reassigned successfully.")
+
+
+@router.post("/harvesttrack/contacts/{contact_id}/stage", name="admin_harvesttrack_contacts_stage")
+async def admin_harvesttrack_contacts_stage(
+    contact_id: int, request: Request, db: AsyncSession = Depends(get_db),
+    current_stage: str = Form(...),
+):
+    admin = await _get_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+
+    if current_stage not in HARVEST_STAGES:
+        return _redirect(request, "/admin/harvesttrack?tab=contacts", "Invalid stage.", "error")
+
+    from app.models.harvest import HarvestContact
+    result = await db.execute(select(HarvestContact).where(HarvestContact.id == contact_id))
+    contact = result.scalar_one_or_none()
+    if not contact:
+        return _redirect(request, "/admin/harvesttrack?tab=contacts", "Contact not found.", "error")
+
+    contact.current_stage = current_stage
+    if current_stage == "committed" and not contact.committed_at:
+        contact.committed_at = datetime.utcnow()
+    await db.flush()
+    return _redirect(request, "/admin/harvesttrack?tab=contacts", "Contact stage updated successfully.")
+
+
+@router.get("/harvesttrack/export.csv", name="admin_harvesttrack_export")
+async def admin_harvesttrack_export(
+    request: Request, db: AsyncSession = Depends(get_db),
+    start_date: str = Query(""), end_date: str = Query(""),
+    team_id: int | None = Query(None), source: str = Query(""),
+    branch_id: int | None = Query(None),
+):
+    admin = await _get_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+
+    from sqlalchemy.orm import selectinload
+    from app.models.harvest import HarvestWorker, HarvestContact
+
+    is_super = admin.role == "super_admin"
+    scope_branch_id = branch_id if (is_super and branch_id) else (None if is_super else admin.branch_id)
+
+    workers_query = select(HarvestWorker).options(selectinload(HarvestWorker.team))
+    if scope_branch_id:
+        workers_query = workers_query.where(HarvestWorker.branch_id == scope_branch_id)
+    workers = list((await db.execute(workers_query)).scalars().all())
+
+    contacts_query = select(HarvestContact).options(
+        selectinload(HarvestContact.worker).selectinload(HarvestWorker.team),
+        selectinload(HarvestContact.follow_ups),
+    ).order_by(HarvestContact.created_at.desc())
+    if scope_branch_id or team_id:
+        scoped_ids = [w.id for w in workers if not team_id or w.team_id == team_id]
+        contacts_query = contacts_query.where(HarvestContact.worker_id.in_(scoped_ids)) if scoped_ids else contacts_query.where(False)
+    if source:
+        contacts_query = contacts_query.where(HarvestContact.source == source)
+    contacts = list((await db.execute(contacts_query)).scalars().all())
+
+    now = datetime.utcnow()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Contact Name", "Phone", "Email", "Source", "Stage", "Assigned Worker", "Team",
+        "Date Added", "Next Follow-up", "Last Activity", "Days Since Activity", "Touchpoint Count",
+    ])
+    for c in contacts:
+        last_activity = _harvest_last_activity(c)
+        writer.writerow([
+            c.full_name, c.phone or "", c.email or "",
+            HARVEST_SOURCE_LABELS.get(c.source, c.source or ""),
+            HARVEST_STAGE_LABELS.get(c.current_stage, c.current_stage),
+            c.worker.full_name if c.worker else "Unassigned",
+            c.worker.team.name if c.worker and c.worker.team else "",
+            c.created_at.strftime("%Y-%m-%d") if c.created_at else "",
+            c.next_follow_up_at.strftime("%Y-%m-%d") if c.next_follow_up_at else "",
+            last_activity.strftime("%Y-%m-%d") if last_activity else "",
+            (now - last_activity).days if last_activity else "",
+            len(c.follow_ups),
+        ])
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=harvesttrack_export.csv"},
+    )
 
 
 # ─── Admins (super_admin only) ────────────────────────────────────
@@ -1451,6 +1817,144 @@ async def admin_sliders_store(
     db.add(slider)
     await db.flush()
     return _redirect(request, "/admin/sliders", "Slider created successfully.")
+
+
+# ─── Photos (gallery + outreach strips) ────────────────────────────
+
+async def _save_photo_upload(upload: UploadFile, collection: str) -> str:
+    """Persist an uploaded photo and return its web-relative path."""
+    import uuid
+
+    ext = os.path.splitext(upload.filename or "")[1].lower() or ".jpg"
+    filename = f"{collection}-{uuid.uuid4()}{ext}"
+    dest_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "static", "images", collection,
+    )
+    os.makedirs(dest_dir, exist_ok=True)
+    with open(os.path.join(dest_dir, filename), "wb") as f:
+        f.write(await upload.read())
+    return f"images/{collection}/{filename}"
+
+
+def _photo_collection(value: str | None) -> str:
+    from app.models.photo import Photo
+
+    return value if value in Photo.COLLECTIONS else Photo.GALLERY
+
+
+@router.get("/photos", name="admin_photos")
+async def admin_photos(
+    request: Request, db: AsyncSession = Depends(get_db),
+    collection: str = Query("gallery"),
+):
+    admin = await _get_admin(request)
+    if not admin or admin.role != "super_admin":
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+
+    from app.models.photo import Photo
+    collection = _photo_collection(collection)
+    result = await db.execute(
+        select(Photo)
+        .where(Photo.collection == collection)
+        .order_by(Photo.sort_order.asc(), Photo.id.asc())
+    )
+    photos = list(result.scalars().all())
+
+    counts = {}
+    for name in Photo.COLLECTIONS:
+        c = await db.execute(
+            select(func.count()).select_from(Photo).where(Photo.collection == name)
+        )
+        counts[name] = c.scalar_one() or 0
+
+    ctx = await _admin_context(request, db, "admin.photos")
+    return await render_template(request, "admin/photos.html", {
+        "_db": db, "photos": photos, "collection": collection, "counts": counts,
+        "title": "Photos", "headerIcon": "ri-image-line", **ctx,
+    })
+
+
+@router.post("/photos", name="admin_photos_store")
+async def admin_photos_store(
+    request: Request, db: AsyncSession = Depends(get_db),
+    collection: str = Form("gallery"),
+    caption: str = Form(""),
+    sort_order: int = Form(0),
+    is_active: bool = Form(True),
+    images: list[UploadFile] = File(...),
+):
+    admin = await _get_admin(request)
+    if not admin or admin.role != "super_admin":
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+
+    from app.models.photo import Photo
+    collection = _photo_collection(collection)
+
+    uploaded = [i for i in (images or []) if i and i.filename]
+    if not uploaded:
+        return _redirect(request, f"/admin/photos?collection={collection}",
+                         "Choose at least one image.", "error")
+
+    # Bulk upload is the norm for a gallery, so caption/order apply to the
+    # first file and the rest are appended in order for later editing.
+    for offset, upload in enumerate(uploaded):
+        path = await _save_photo_upload(upload, collection)
+        db.add(Photo(
+            collection=collection,
+            image_path=path,
+            caption=(caption.strip() or None) if offset == 0 else None,
+            sort_order=sort_order + offset,
+            is_active=is_active,
+        ))
+    await db.flush()
+    return _redirect(request, f"/admin/photos?collection={collection}",
+                     f"{len(uploaded)} photo(s) uploaded.")
+
+
+@router.post("/photos/{photo_id}/update", name="admin_photos_update")
+async def admin_photos_update(
+    photo_id: int, request: Request, db: AsyncSession = Depends(get_db),
+    caption: str = Form(""), sort_order: int = Form(0),
+    is_active: bool = Form(True), image: UploadFile = File(None),
+):
+    admin = await _get_admin(request)
+    if not admin or admin.role != "super_admin":
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+
+    from app.models.photo import Photo
+    result = await db.execute(select(Photo).where(Photo.id == photo_id))
+    photo = result.scalar_one_or_none()
+    if not photo:
+        return _redirect(request, "/admin/photos", "Photo not found.", "error")
+
+    photo.caption = caption.strip() or None
+    photo.sort_order = sort_order
+    photo.is_active = is_active
+    if image and image.filename:
+        photo.image_path = await _save_photo_upload(image, photo.collection)
+
+    await db.flush()
+    return _redirect(request, f"/admin/photos?collection={photo.collection}",
+                     "Photo updated.")
+
+
+@router.post("/photos/{photo_id}/destroy", name="admin_photos_destroy")
+async def admin_photos_destroy(photo_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    admin = await _get_admin(request)
+    if not admin or admin.role != "super_admin":
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+
+    from app.models.photo import Photo
+    result = await db.execute(select(Photo).where(Photo.id == photo_id))
+    photo = result.scalar_one_or_none()
+    if not photo:
+        return _redirect(request, "/admin/photos", "Photo not found.", "error")
+
+    collection = photo.collection
+    await db.delete(photo)
+    await db.flush()
+    return _redirect(request, f"/admin/photos?collection={collection}", "Photo deleted.")
 
 
 # ─── Settings ──────────────────────────────────────────────────────

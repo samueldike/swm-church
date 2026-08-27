@@ -2,729 +2,624 @@
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>{{ siteName }}</title>
+<title>{{ siteName }} — Repositioning men for God's best</title>
 <link rel="icon" href="/images/swm-logo.png" type="image/png"/>
 <link rel="apple-touch-icon" href="/images/swm-logo.png"/>
-
-{% include "partials/site-head-assets.html" %}
-<style>
-        .text-shadow {
-            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-        .hero-slider {
-            scroll-snap-type: x proximity;
-            -webkit-overflow-scrolling: touch;
-            overflow-x: auto;
-            overflow-y: auto;
-        }
-        .hero-slide {
-            scroll-snap-align: center;
-        }
-</style>
-
+{% set metaTitle = siteName %}
+{% set metaDescription = 'Repositioning men for God\'s best. A message of restoration and hope from Abakaliki — at the scent of water, it will sprout again.' %}
+{% include "partials/theme-meta.html" %}
+{% include "partials/theme-head.html" %}
 </head>
-<body class="home-page bg-background-light dark:bg-background-dark text-secondary font-sans antialiased overflow-x-hidden selection:bg-primary selection:text-white">
-{% include "partials/site-header.html" %}
-<section class="relative w-full min-h-[600px] overflow-hidden bg-secondary" style="height: 85svh;">
-<div class="hero-slider flex overflow-x-auto h-full w-full no-scrollbar touch-pan-y" aria-label="Homepage hero slider">
-{% for slider in sliders %}
-{% set index = loop.index0 %}
-<div class="hero-slide flex-none w-full h-full relative" data-slide="{{ index }}">
-<div class="absolute inset-0 bg-cover bg-center {{ 'animate-[kenburns_20s_infinite_alternate]' if index == 0 else '' }}" style="background-image: linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.4), rgba(0,0,0,0.3)), url('{{ url_for('static', path=slider.image_path) }}'); transform-origin: center;"></div>
-<div class="absolute inset-0 flex flex-col items-center justify-center text-center px-6 max-w-5xl mx-auto pb-12">
-{% if slider.title %}
-<h1 class="text-white text-5xl md:text-7xl lg:text-8xl font-serif font-medium mb-6 drop-shadow-lg animate-[fadeInUp_1s_ease-out_0.7s_forwards]" style="line-height: 78px; font-style: italic; margin-top: 55px;">{{ slider.title | e | nl2br }}</h1>
-{% endif %}
-{% if slider.description %}
-<p class="text-gray-100 text-lg md:text-2xl font-light max-w-2xl leading-relaxed animate-[fadeInUp_1s_ease-out_0.9s_forwards]" style="margin-bottom: 10px;">{{ slider.description }}</p>
-{% endif %}
-{% if slider.cta_label and slider.cta_url %}
-<div class="flex gap-4 animate-[fadeInUp_1s_ease-out_1.1s_forwards]">
-<a class="h-14 px-8 rounded-full bg-primary hover:bg-white hover:text-primary text-white font-bold text-base transition-all duration-300 shadow-glow flex items-center gap-2 group" href="{{ url_for('calendar') }}">
-{{ slider.cta_label }}
-<span class="material-symbols-outlined text-sm transition-transform group-hover:translate-x-1">arrow_forward</span>
-</a>
-</div>
-{% endif %}
-</div>
-</div>
-{% endfor %}
-</div>
-{% if sliders | length > 1 %}
-<div class="absolute bottom-12 left-1/2 -translate-x-1/2 flex gap-4 z-10">
-{% for slider in sliders %}
-{% set index = loop.index0 %}
-<button aria-label="Go to slide {{ loop.index }}" data-slide="{{ index }}" class="hero-dot w-12 h-1 rounded-full {{ 'bg-primary' if index == 0 else 'bg-white/30 hover:bg-white/60' }} transition-all duration-300"></button>
-{% endfor %}
-</div>
-{% endif %}
+<body class="home-page">
+{% include "partials/theme-header.html" %}
+
+<main>
+
+{# ═══ 01 · HERO ═══════════════════════════════════════════════════════════ #}
+<section class="frame frame-hero" id="f-hero" data-frame style="padding-block:0;">
+    <div class="hero-bed" aria-hidden="true">
+        {% for slider in sliders %}
+        <div class="hero-plate {{ 'on' if loop.first else '' }}" data-plate
+             style="background-image:url('/{{ slider.image_path }}')"></div>
+        {% else %}
+        <div class="hero-plate on" data-plate style="background-image:url('/images/general-page-header.jpg')"></div>
+        {% endfor %}
+        <div class="hero-veil"></div>
+    </div>
+
+    <div class="shell hero-in">
+        <p class="mono eyebrow fade" style="--d:120ms">
+            <span class="rule"></span>{{ siteName }} · Abakaliki
+        </p>
+
+        <h1 class="t-display" style="margin-top:1.5rem;max-width:17ch;">
+            <span class="rise"><span style="--d:220ms">Repositioning men</span></span>
+            <span class="rise"><span class="gold-lt" style="--d:310ms">for God's best.</span></span>
+        </h1>
+
+        <p class="t-body fade" style="--d:480ms;margin-top:1.5rem;max-width:48ch;">
+            A message of restoration and hope. Every dead dream can live again —
+            at the scent of water, it will sprout again.
+        </p>
+
+        <div class="flex flex-wrap items-center gap-3 fade" style="--d:580ms;margin-top:2rem;">
+            <a href="{{ url_for('contact') }}" class="btn btn-gold">Plan your visit</a>
+            <a href="{{ url_for('messages') }}" class="btn btn-ghost">Listen to messages</a>
+        </div>
+
+        {% if sliders|length > 1 %}
+        <div class="plate-dots fade" style="--d:680ms" role="tablist" aria-label="Featured slides">
+            {% for slider in sliders %}
+            <button class="plate-dot {{ 'on' if loop.first else '' }}" data-dot data-i="{{ loop.index0 }}"
+                    role="tab" aria-selected="{{ 'true' if loop.first else 'false' }}"
+                    aria-label="Slide {{ loop.index }}"><i></i></button>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    {# Ministry scripture, set vertically down the right edge of the hero. #}
+    <div class="rail mono" aria-hidden="true">
+        <span>JOB 14 : 7-9</span>
+        <i></i>
+    </div>
 </section>
-<section class="py-20 px-10 lg:px-12 bg-secondary border-b border-white/5 relative overflow-hidden">
-<div class="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl -z-10 pointer-events-none"></div>
-<div class="max-w-7xl mx-auto relative z-10">
-<div class="flex flex-col md:flex-row justify-between items-end mb-12 gap-6">
-<div class="max-w-2xl">
-<span class="text-primary text-xs font-bold tracking-[0.2em] uppercase mb-3 block">Listen Anywhere</span>
-<h2 class="text-white text-3xl md:text-4xl font-serif font-medium mb-4">Latest Audio Messages</h2>
-<p class="text-gray-400 text-sm md:text-base font-light">Tune in to our latest sermons and teachings. Feed your spirit on the go.</p>
-</div>
-<a class="group flex items-center justify-center px-6 py-3 rounded-full border border-white/20 text-white font-bold text-sm hover:bg-primary hover:border-primary hover:text-white transition-all duration-300 whitespace-nowrap" href="{{ url_for('messages') }}">
-                Explore Library
-                <span class="material-symbols-outlined text-lg ml-2 group-hover:translate-x-1 transition-transform">arrow_forward</span>
-</a>
-</div>
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-{% for sermon in latest_sermons %}
-<div class="bg-secondary-light p-6 rounded-2xl border border-white/5 hover:border-primary/40 transition-all duration-300 group hover:-translate-y-1 hover:shadow-glow">
-<div class="flex items-center justify-between mb-6">
-<a href="{{ url_for('messages_show', slug=sermon.slug) }}" class="w-12 h-12 rounded-full {{ 'bg-primary text-white shadow-lg' if loop.first else 'bg-white/10 text-white hover:bg-primary' }} flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-<span class="material-symbols-outlined text-2xl ml-0.5">play_arrow</span>
-</a>
-<div class="flex flex-col items-end">
-{% if loop.first %}
-<span class="text-[10px] text-primary font-bold uppercase tracking-widest bg-primary/10 px-2 py-1 rounded-md mb-1">New</span>
-{% endif %}
-{% if sermon.preacher %}
-<span class="text-xs text-gray-500 font-mono">{{ sermon.preacher }}</span>
-{% endif %}
-</div>
-</div>
-<a href="{{ url_for('messages_show', slug=sermon.slug) }}">
-<h3 class="text-white text-xl font-bold font-serif mb-2 leading-tight group-hover:text-primary transition-colors">{{ sermon.title }}</h3>
-</a>
-<p class="text-gray-400 text-xs uppercase tracking-wider mb-4">{% if sermon.preacher %}{{ sermon.preacher }}{% if sermon.published_at %} &bull; {{ sermon.published_at.strftime('%b %d, %Y') }}{% endif %}{% elif sermon.published_at %}{{ sermon.published_at.strftime('%b %d, %Y') }}{% endif %}</p>
-{% if sermon.telegram_file_id or sermon.media_url %}
-<div class="flex items-center gap-3">
-<a href="{{ url_for('messages_stream', sermon_id=sermon.id) }}" class="flex items-center gap-1 text-xs text-primary font-semibold hover:text-white transition-colors" title="Stream audio">
-<span class="material-symbols-outlined text-sm">headphones</span> Listen
-</a>
-<a href="{{ url_for('messages_download', sermon_id=sermon.id) }}" class="flex items-center gap-1 text-xs text-gray-500 font-semibold hover:text-primary transition-colors" title="Download audio">
-<span class="material-symbols-outlined text-sm">download</span> Download
-</a>
-</div>
-{% else %}
-<div class="flex items-end gap-1 h-8 opacity-40 group-hover:opacity-100 transition-opacity">
-<div class="w-1 bg-gray-400 group-hover:bg-primary h-3 rounded-full transition-all duration-300"></div>
-<div class="w-1 bg-gray-400 group-hover:bg-primary h-5 rounded-full transition-all duration-300"></div>
-<div class="w-1 bg-gray-400 group-hover:bg-primary h-8 rounded-full transition-all duration-300"></div>
-<div class="w-1 bg-gray-400 group-hover:bg-primary h-4 rounded-full transition-all duration-300"></div>
-<div class="w-1 bg-gray-400 group-hover:bg-primary h-6 rounded-full transition-all duration-300"></div>
-<div class="w-1 bg-gray-400 group-hover:bg-primary h-3 rounded-full transition-all duration-300"></div>
-<div class="w-1 bg-gray-400 group-hover:bg-primary h-7 rounded-full transition-all duration-300"></div>
-<div class="w-1 bg-gray-400 group-hover:bg-primary h-4 rounded-full transition-all duration-300"></div>
-<div class="w-1 bg-gray-400 group-hover:bg-primary h-2 rounded-full transition-all duration-300"></div>
-<div class="w-1 bg-gray-400 group-hover:bg-primary h-5 rounded-full transition-all duration-300"></div>
-<div class="w-1 bg-gray-400 group-hover:bg-primary h-3 rounded-full transition-all duration-300"></div>
-<div class="w-1 bg-gray-400 group-hover:bg-primary h-6 rounded-full transition-all duration-300"></div>
-</div>
-{% endif %}
-</div>
-{% else %}
-<div class="col-span-full text-center text-gray-500 text-sm py-10">No audio messages published yet.</div>
-{% endfor %}
-</div>
+
+{# ═══ 02 · WHO WE ARE — the anchor scripture ══════════════════════════════ #}
+<section class="frame has-crest" id="f-anchor" data-frame style="background:var(--ink);">
+    {# Ministry crest, held well back so it reads as watermark, not decoration. #}
+    <div class="crest" aria-hidden="true"></div>
+    <div class="shell scripture-wrap">
+        <p class="mono eyebrow"><span class="rule"></span>Who we are</p>
+
+        <blockquote class="scripture fade" style="--d:180ms">
+            “For there is hope for a tree, if it is cut down, that it will sprout again,
+            and that its tender shoots will not cease. Though its root may grow old in
+            the earth, and its stump may die in the ground, yet at the
+            <span class="circled">scent of water</span> it will bud and bring forth
+            branches like a plant.”
+        </blockquote>
+
+        <p class="mono gold fade" style="--d:340ms;margin-top:1.6rem;">Job 14 : 7-9</p>
+
+        <p class="t-body fade" style="--d:420ms;margin-top:1.6rem;max-width:64ch;">
+            Scent of Water Ministry is a divine mandate received from the Lord Jesus
+            Christ — a message of restoration and hope to the downtrodden, the downcast
+            and the weary. We teach and focus only on the grace of God.
+        </p>
+        <a href="{{ url_for('about') }}" class="lnk fade" style="--d:500ms;margin-top:1.7rem;">Read our story</a>
+    </div>
 </section>
-<section class="py-24 px-6 lg:px-8 bg-white overflow-hidden">
-<div class="max-w-7xl mx-auto">
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center">
-<div class="flex flex-col gap-8 relative z-10">
-<div class="inline-block relative">
-<span class="text-primary text-xs font-bold tracking-[0.2em] uppercase pl-12 relative before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-8 before:h-[2px] before:bg-primary">Who We Are</span>
-</div>
-<h2 class="text-secondary text-4xl md:text-6xl font-serif font-medium leading-[1.1] tracking-tight">
-                Welcome to <br/><span class="text-primary italic">{{ siteName }}</span>
-</h2>
-<p class="text-gray-600 text-lg leading-relaxed font-light">
-                We are a community of believers dedicated to spreading the love of Christ. Our ministry is founded on faith, hope, and love. Come as you are and experience the transforming power of God's word in a welcoming environment where every soul matters.
-            </p>
-<div class="pt-4">
-<a href="{{ url_for('about') }}" class="group flex items-center gap-3 text-secondary font-bold text-sm tracking-wide uppercase hover:text-primary transition-colors">
-                    Read Our Story 
-                    <span class="w-8 h-8 rounded-full bg-gray-100 group-hover:bg-primary group-hover:text-white flex items-center justify-center transition-all duration-300">
-<span class="material-symbols-outlined text-sm">arrow_forward</span>
-</span>
-</a>
-</div>
-</div>
-<div class="relative">
-<div class="absolute -top-10 -right-10 w-64 h-64 bg-primary/5 rounded-full blur-3xl -z-10"></div>
-<div class="absolute -bottom-10 -left-10 w-64 h-64 bg-gray-100 rounded-full blur-3xl -z-10"></div>
-<div class="grid grid-cols-2 gap-6">
-<div class="space-y-6 mt-12">
-<div class="bg-gray-100 rounded-2xl h-64 w-full bg-cover bg-center shadow-lg transition-transform hover:-translate-y-2 duration-500" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCzc9ytBvktZpnHBNrbJWy8u-HedXLY11V00hPrXF9xp4fPbKziqHPdqCopU4HKBwpbnsTUyEqgX7UPpRw21f9RbfbcCTvsa5OhblQM4S-k__9Qc53lgkOHdm9ZITqhShxfqKj2IUTYJU8nkIyCd0EQ_c3t8toc10V1C2xuDKMJh0_IJdO5MlnRFkmihG1Dld4T7KbXNtjkMEJ9u3tPYv6gAkuZXj-lVjBWgOW6yqgG4LJjpoAHvgvP9rfXONAMZZZrN_5Yn-uu3G8')"></div>
-<div class="p-6 bg-secondary text-white rounded-2xl shadow-xl">
-<span class="text-primary text-4xl font-serif font-italic">15+</span>
-<p class="text-sm text-gray-400 mt-2 uppercase tracking-wider">Years of Ministry</p>
-</div>
-</div>
-<div class="space-y-6">
-<div class="p-6 bg-white border border-gray-100 rounded-2xl shadow-soft">
-<div class="flex -space-x-3 mb-4">
-<div class="w-10 h-10 rounded-full bg-gray-200 border-2 border-white"></div>
-<div class="w-10 h-10 rounded-full bg-gray-300 border-2 border-white"></div>
-<div class="w-10 h-10 rounded-full bg-gray-400 border-2 border-white"></div>
-<div class="w-10 h-10 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold border-2 border-white">5k+</div>
-</div>
-<p class="text-sm text-gray-500 font-medium">Community Members</p>
-</div>
-<div class="bg-gray-100 rounded-2xl h-64 w-full bg-cover bg-center shadow-lg transition-transform hover:-translate-y-2 duration-500" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDxynxsrpGWdh8w6GDirPa10m0DXHqbDRYWkyegbbDxHYPFDoLAVR-U2cQEqlsXn4cvqFNe8UZcUBXEQneohzu8XKQV8B7kK8lMA5pDPgHwWqXvWMk4y43lIau5ci9gIDBNmcEXad2lUTd42icoA_o52j7o-qQddDEsEGhGcmXGNkcMy_nHxA3Shc0pP8WYhPDYUfg-d0f1GO1Zhh9fregFHxcVa5J2fol1Qw5iBfFPwPhBiWz23iJTc4PFC5iyvKAtGefpdAbeiak')"></div>
-</div>
-</div>
-</div>
-</div>
-<div class="mt-24 w-full">
-<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-<div class="group p-8 rounded-3xl bg-white border border-gray-100 hover:border-primary/20 hover:shadow-soft-hover transition-all duration-300">
-<div class="size-14 rounded-2xl bg-primary/5 group-hover:bg-primary text-primary group-hover:text-white flex items-center justify-center transition-all duration-300 mb-6">
-<span class="material-symbols-outlined text-3xl">visibility</span>
-</div>
-<h3 class="text-secondary text-xl font-bold mb-3 font-serif">Our Vision</h3>
-<p class="text-gray-500 leading-relaxed text-sm">To become a global voice of hope and restoration, bringing living water to thirsty souls across nations.</p>
-</div>
-<div class="group p-8 rounded-3xl bg-white border border-gray-100 hover:border-primary/20 hover:shadow-soft-hover transition-all duration-300">
-<div class="size-14 rounded-2xl bg-primary/5 group-hover:bg-primary text-primary group-hover:text-white flex items-center justify-center transition-all duration-300 mb-6">
-<span class="material-symbols-outlined text-3xl">flag</span>
-</div>
-<h3 class="text-secondary text-xl font-bold mb-3 font-serif">Our Mission</h3>
-<p class="text-gray-500 leading-relaxed text-sm">Raising a generation of Christ-centered believers who impact their world with truth, love, and unwavering faith.</p>
-</div>
-<div class="group p-8 rounded-3xl bg-white border border-gray-100 hover:border-primary/20 hover:shadow-soft-hover transition-all duration-300">
-<div class="size-14 rounded-2xl bg-primary/5 group-hover:bg-primary text-primary group-hover:text-white flex items-center justify-center transition-all duration-300 mb-6">
-<span class="material-symbols-outlined text-3xl">diamond</span>
-</div>
-<h3 class="text-secondary text-xl font-bold mb-3 font-serif">Core Values</h3>
-<p class="text-gray-500 leading-relaxed text-sm">Integrity in action, Excellence in service, Love for all people, and Passion for the presence of God.</p>
-</div>
-</div>
-</div>
-</div>
+
+{# ═══ 03 · VISION, MISSION, VALUES ════════════════════════════════════════ #}
+<section class="frame" id="f-mandate" data-frame>
+    <div class="shell">
+        {# The vision IS "what we are here to do", so it carries the headline
+           rather than sitting in a stub column under a generic one. Mission
+           and values then pair off underneath at matched heights. #}
+        <p class="mono eyebrow"><span class="rule"></span>The mandate</p>
+
+        <div class="mandate-head">
+            <p class="mono faint fade" style="--d:120ms">Vision</p>
+            <h2 class="t-h2 vision-head" style="margin-top:0.8rem;">
+                <span class="rise"><span>Repositioning men</span></span>
+                <span class="rise"><span class="gold-lt" style="--d:90ms">for God’s very best.</span></span>
+            </h2>
+        </div>
+
+        <div class="mandate-cols">
+            <div class="fade" style="--d:260ms">
+                <p class="mono faint">Mission</p>
+                <ul class="rows" style="margin-top:0.9rem;">
+                    {% for m in [
+                        'Equipping men to enjoy their God given inheritance in Christ Jesus.',
+                        'Enforcing God’s Kingdom on earth.',
+                        'Aligning men with destiny.',
+                        'Models of excellence.'
+                    ] %}
+                    <li class="row">
+                        <span class="row-in">
+                            <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
+                            <span class="row-main">{{ m }}</span>
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="fade" style="--d:350ms">
+                <p class="mono faint">Core values</p>
+                {# Seven values in two sub-columns (4 + 3) so this block lands
+                   at roughly the same height as the four-item mission list. #}
+                <ul class="rows values-split" style="margin-top:0.9rem;">
+                    {% for v in ['Faith in God’s Word', 'Passion', 'Love', 'Maximizing the presence of God', 'Excellence', 'Time consciousness', 'Integrity'] %}
+                    <li class="row">
+                        <span class="row-in">
+                            <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
+                            <span class="row-main">{{ v }}</span>
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
 </section>
-<section class="py-24 px-10 lg:px-12 bg-accent/30">
-<div class="max-w-4xl mx-auto flex flex-col gap-12">
-<div class="text-center">
-<span class="text-primary text-xs font-bold tracking-[0.2em] uppercase block mb-3">Weekly Gathering</span>
-<h2 class="text-secondary text-4xl md:text-5xl font-serif font-medium">Join Our Church Life</h2>
-</div>
-<div class="bg-white rounded-3xl shadow-soft overflow-hidden border border-gray-100">
-<div class="divide-y divide-gray-100">
-<div class="group p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between hover:bg-gray-50 transition-colors cursor-default">
-<div class="flex items-center gap-6">
-<div class="flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 text-primary font-bold">
-<span class="text-xs uppercase tracking-wider">Sun</span>
-<span class="text-xl">09</span>
-</div>
-<div>
-<h4 class="text-lg font-bold text-secondary group-hover:text-primary transition-colors">Celebration Service</h4>
-<p class="text-gray-500 text-sm">Main Sanctuary</p>
-</div>
-</div>
-<div class="mt-4 md:mt-0 flex items-center gap-4">
-<span class="text-sm font-semibold text-secondary">9:00 AM</span>
-<a class="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-primary hover:border-primary hover:text-white transition-all" href="{{ url_for('calendar') }}">
-<span class="material-symbols-outlined text-sm">arrow_forward</span>
-</a>
-</div>
-</div>
-<div class="group p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between hover:bg-gray-50 transition-colors cursor-default">
-<div class="flex items-center gap-6">
-<div class="flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-secondary text-white font-bold">
-<span class="text-xs uppercase tracking-wider text-gray-400">Sun</span>
-<span class="text-xl">11</span>
-</div>
-<div>
-<h4 class="text-lg font-bold text-secondary group-hover:text-primary transition-colors">Second Service</h4>
-<p class="text-gray-500 text-sm">Main Sanctuary &amp; Online</p>
-</div>
-</div>
-<div class="mt-4 md:mt-0 flex items-center gap-4">
-<span class="text-sm font-semibold text-secondary">11:00 AM</span>
-<a class="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-primary hover:border-primary hover:text-white transition-all" href="{{ url_for('calendar') }}">
-<span class="material-symbols-outlined text-sm">arrow_forward</span>
-</a>
-</div>
-</div>
-<div class="group p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between hover:bg-gray-50 transition-colors cursor-default">
-<div class="flex items-center gap-6">
-<div class="flex flex-col items-center justify-center w-16 h-16 rounded-2xl bg-gray-100 text-gray-600 font-bold">
-<span class="text-xs uppercase tracking-wider">Wed</span>
-<span class="text-xl">18</span>
-</div>
-<div>
-<h4 class="text-lg font-bold text-secondary group-hover:text-primary transition-colors">Bible Study &amp; Communion</h4>
-<p class="text-gray-500 text-sm">Fellowship Hall</p>
-</div>
-</div>
-<div class="mt-4 md:mt-0 flex items-center gap-4">
-<span class="text-sm font-semibold text-secondary">6:00 PM</span>
-<a class="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-400 hover:bg-primary hover:border-primary hover:text-white transition-all" href="{{ url_for('calendar') }}">
-<span class="material-symbols-outlined text-sm">arrow_forward</span>
-</a>
-</div>
-</div>
-</div>
-<div class="bg-gray-50 p-4 text-center border-t border-gray-100">
-<a class="text-primary text-sm font-bold hover:text-secondary transition-colors uppercase tracking-wide flex items-center justify-center gap-2 mx-auto" href="{{ url_for('calendar') }}">
-                    View Full Calendar <span class="material-symbols-outlined text-base">calendar_month</span>
+
+{# ═══ 03 · MESSAGES ═══════════════════════════════════════════════════════ #}
+<section class="frame" id="f-messages" data-frame>
+    <div class="shell">
+        <div class="head">
+            <div>
+                <p class="mono eyebrow"><span class="rule"></span>The Word</p>
+                <h2 class="t-h2" style="margin-top:1.1rem;">
+                    <span class="rise"><span>Latest messages</span></span>
+                </h2>
+            </div>
+            <a href="{{ url_for('messages') }}" class="lnk fade" style="--d:180ms">All messages</a>
+        </div>
+
+        {% if latest_sermons %}
+        <ul class="rows rows-play fade" style="--d:240ms;margin-top:2rem;">
+            {% for sermon in latest_sermons %}
+            <li class="row row-link">
+                <a href="{{ url_for('messages_show', slug=sermon.slug) }}">
+                    <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
+                    <span class="row-play material-symbols-outlined" aria-hidden="true">play_arrow</span>
+                    <span class="row-main">
+                        <span class="t-h3">{{ sermon.title }}</span>
+                        {% if sermon.caption %}<span class="t-sm row-sub">{{ sermon.caption }}</span>{% endif %}
+                    </span>
+                    <span class="row-meta mono faint">
+                        {% if sermon.preacher %}{{ sermon.preacher }}{% endif %}
+                    </span>
+                    <span class="row-go material-symbols-outlined">arrow_outward</span>
                 </a>
-</div>
-</div>
-</div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty fade" style="--d:240ms">
+            <p class="t-body">New messages are published here after each service.</p>
+            <a href="{{ url_for('messages') }}" class="btn btn-ghost" style="margin-top:1.2rem;">Browse the archive</a>
+        </div>
+        {% endif %}
+    </div>
 </section>
-<section class="py-24 px-10 lg:px-12 bg-secondary text-white relative overflow-hidden">
-<div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5"></div>
-<div class="max-w-7xl mx-auto relative z-10">
-<div class="flex flex-col md:flex-row justify-between items-end mb-16 gap-8">
-<div>
-<span class="text-primary text-xs font-bold tracking-[0.2em] uppercase mb-3 block">Ministries</span>
-<h2 class="text-white text-4xl md:text-5xl font-serif font-medium mb-4">Get Involved</h2>
-<p class="text-gray-400 max-w-xl text-lg font-light">Find your place in our community. Join a team and make a difference.</p>
-</div>
-<a class="bg-white hover:bg-primary hover:text-white text-secondary font-bold py-3 px-8 rounded-full transition-all duration-300 shadow-lg transform hover:-translate-y-1" href="{{ url_for('departments') }}">
-                Join a Team
-            </a>
-</div>
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-<a href="{{ url_for('departments') }}" class="group relative overflow-hidden rounded-2xl aspect-[3/4] cursor-pointer block">
-<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDF2riApXwrUwE2Y_wKVeQleYtNeDqo1U9gN5bOtz0QRTEqBQrAl6HeQZN2Q09IE4hWLFYiwteE7gLcd7HNiHMpb_bBKGvPhf7XOhXmVFbTBqJRPM75G_HutZc_xY5NjJxaUoyi_p6-0WKhPrxhwNq8w1lloJxkFFh9FNphq9tZ6XbHER0Af76YhYjLF8l9a3FkkwMeWlRoi_Vrjvw21jOTCgk87-rhgwSMDUERpzXSAPutEICd7r68orv8cupVqqUFcGlce9T0wJU')"></div>
-<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80 group-hover:opacity-90 transition-opacity"></div>
-<div class="absolute bottom-0 left-0 w-full p-8 translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
-<h3 class="text-white text-2xl font-serif mb-2">Children</h3>
-<div class="h-0.5 w-12 bg-primary mb-3 transition-all duration-300 group-hover:w-full"></div>
-<p class="text-gray-300 text-sm font-light opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">Nurturing the next generation in faith.</p>
-</div>
-</a>
-<a href="{{ url_for('departments') }}" class="group relative overflow-hidden rounded-2xl aspect-[3/4] cursor-pointer block">
-<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBgzhaEnCDFkROnfpX4L5SQ66XSKukHDx6KK51CeFgsC2jkHS_NLCfE51-F4jLNT1cD28yxUlEbBva6PLNss0VuFHTP_GPzP8G1AgtVldInt79D2D-rH-BQwF81ZhytldMKzIBHOTIQ2tEMWoH8LNxKUzjdiALVLTEWcTse_KqkW5EDVxBAH-PqPjnCUq6fFd4s6aCdaT4Bl04t2NKsysbwJcc5HohCEQcEgyq_yfd3WScoqz1aOwIldcSVBtZFO1_tpLXQftwAQTk')"></div>
-<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80 group-hover:opacity-90 transition-opacity"></div>
-<div class="absolute bottom-0 left-0 w-full p-8 translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
-<h3 class="text-white text-2xl font-serif mb-2">Youth</h3>
-<div class="h-0.5 w-12 bg-primary mb-3 transition-all duration-300 group-hover:w-full"></div>
-<p class="text-gray-300 text-sm font-light opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">Empowering young leaders for tomorrow.</p>
-</div>
-</a>
-<a href="{{ url_for('departments') }}" class="group relative overflow-hidden rounded-2xl aspect-[3/4] cursor-pointer block">
-<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCrvECM_aO03vcKEk1YtDQTxKgq7DCHw4tzZDT47FQIAVUZMwwkRWw6y0FNuT6mhldPR0qC_jK-e-5EeDUio3gkgd9ia5SbnEYgwMB6pAN8bShCO16qJHWBN1LsnZ-pcBW8gJ5LcDACTvtKER9NsKBQxQOpnse-OFVMDGXuTrMHmHcrC7WptxqdenOnZ6QEyOu7MBuQMedssCYwDePKE76EpLXakB0pZRpcI9VHmW6fuBr3U6TcVUpiut7_yrzYWR8z-9LNCUkGCco')"></div>
-<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80 group-hover:opacity-90 transition-opacity"></div>
-<div class="absolute bottom-0 left-0 w-full p-8 translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
-<h3 class="text-white text-2xl font-serif mb-2">Worship</h3>
-<div class="h-0.5 w-12 bg-primary mb-3 transition-all duration-300 group-hover:w-full"></div>
-<p class="text-gray-300 text-sm font-light opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">Leading the congregation in praise.</p>
-</div>
-</a>
-<a href="{{ url_for('departments') }}" class="group relative overflow-hidden rounded-2xl aspect-[3/4] cursor-pointer block">
-<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCEA8MJWCQzV0I7k3u8VxZaTLSBq2dtCHm4-O9PUvdUHP1qvOvTYdZaYSV7Q9E5BBffAijhs1IoibdueTF7gzLz7jgHFZbS0tFcUO6SWU5_P5_pmjm1kQqcgOPyYDc9y5xOn8HtSZp7fst8MIo_kAxCL3_WjIe8qAt7OqFYpcCQkjCxTlK4minbBZv1bUp_PWGDNEzlSsQvw3X79_pnOBR7kpcZUhOQGHmS-bh8VQqaBO4gQWhsAkBeUSvmNoijh2aSPYUWEFqsXB4')"></div>
-<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80 group-hover:opacity-90 transition-opacity"></div>
-<div class="absolute bottom-0 left-0 w-full p-8 translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
-<h3 class="text-white text-2xl font-serif mb-2">Outreach</h3>
-<div class="h-0.5 w-12 bg-primary mb-3 transition-all duration-300 group-hover:w-full"></div>
-<p class="text-gray-300 text-sm font-light opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">Serving our local community with love.</p>
-</div>
-</a>
-</div>
-</div>
+
+{# ═══ 04 · WHEN WE GATHER ═════════════════════════════════════════════════ #}
+{# A schedule is tabular data — set it as a table, not as a row of cards. #}
+<section class="frame" id="f-gather" data-frame style="background:var(--ink);">
+    <div class="shell">
+        <div class="head">
+            <div>
+                <p class="mono eyebrow"><span class="rule"></span>Church life</p>
+                <h2 class="t-h2" style="margin-top:1.1rem;">
+                    <span class="rise"><span>When we gather</span></span>
+                </h2>
+            </div>
+            <a href="{{ url_for('calendar') }}" class="lnk fade" style="--d:180ms">Full calendar</a>
+        </div>
+
+        {% set services = [
+            ('Sunday',      'First Service',       '7:00 — 9:30 am',  true),
+            ('Sunday',      'Second Service',      '9:30 am — 12:00 pm', true),
+            ('Monday',      'Prayers',             '4:40 — 6:00 pm',  false),
+            ('Wednesday',   'Midweek Bible Study', '5:00 pm',         false),
+            ('Saturday',    'Preservice Prayer',   '5:00 — 6:00 pm',  false),
+            ('Last Friday', 'Monthly Vigil',       'from 9:00 pm',    false)
+        ] %}
+        <table class="sched fade" style="--d:240ms;margin-top:2rem;">
+            <tbody>
+            {% for day, name, time, lead in services %}
+            <tr class="{{ 'lead' if lead else '' }}">
+                <td class="s-day mono">{{ day }}</td>
+                <td class="s-name t-h3">{{ name }}</td>
+                <td class="s-time mono">{{ time }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        <p class="t-sm fade" style="--d:420ms;margin-top:1.6rem;">
+            {{ siteHeadquartersAddress or '#1 Scent Close, off Barr. Otta Ewa Road, Mile 50, Abakaliki, Ebonyi State' }}
+        </p>
+    </div>
 </section>
-<section class="py-24 px-10 lg:px-12 bg-white">
-<div class="max-w-7xl mx-auto">
-<div class="grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
-<div class="order-2 md:order-1 relative">
-<div class="absolute -top-6 -left-6 w-full h-full border-2 border-primary/20 rounded-2xl"></div>
-<div class="relative rounded-2xl overflow-hidden shadow-2xl aspect-video md:aspect-[4/3]">
-<div class="absolute inset-0 bg-cover bg-center transform transition-transform duration-700 hover:scale-105" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuC921--ukOpV5INi1HnF660P8MPLTDOEqNzvv63ghHCU_uG5G4nJrA5EJ5sQQ1gBpcaPfIVeukd1YKk9Q7lYi-kMi3e-ouKH2zO8wVoswyOuL_Vq4kzLTlTmRJ38gDMRsDU2DOKFJr8uqvvqIeZ9mdQUp3TrGYt8sWdPCBHVQtUvxjOV0SjGjnWjnrwfZpSbSatak2lGlchePUIGZktzxoLmpxQ26_FWTCfqSmB6INiBt6yUborgz4WoPok5S7zUpB7b-l2YsPP2n0')"></div>
-<div class="absolute bottom-0 right-0 bg-white p-6 rounded-tl-2xl shadow-lg">
-<div class="flex flex-col">
-<span class="text-4xl font-bold text-secondary">200+</span>
-<span class="text-xs uppercase tracking-wider text-gray-500">Families Served</span>
-</div>
-</div>
-</div>
-</div>
-<div class="order-1 md:order-2 flex flex-col gap-6">
-<span class="text-primary text-xs font-bold tracking-[0.2em] uppercase">Impact</span>
-<h2 class="text-secondary text-4xl md:text-5xl font-serif font-medium leading-tight">Beyond The Walls</h2>
-<p class="text-gray-600 text-lg leading-relaxed font-light">
-                    The church is not a building; it's a movement. From food drives to prison ministry, we are committed to extending the hands and feet of Jesus to those in need. We believe that true faith is shown through action and service to our neighbors.
-                </p>
-<div class="pt-4">
-<a class="px-8 py-3 rounded-full bg-secondary text-white font-bold text-sm shadow-lg hover:bg-primary hover:-translate-y-1 transition-all duration-300 flex items-center gap-2 w-fit" href="{{ url_for('departments') }}">
-                        Explore Our Outreach
-                        <span class="material-symbols-outlined text-sm">arrow_forward</span>
+
+{# ═══ 05 · SERVE ══════════════════════════════════════════════════════════ #}
+{# Twelve named units. A list reads as a real roster; twelve boxed cards
+   reads as filler. Index + name + role, ruled, two columns. #}
+<section class="frame" id="f-units" data-frame>
+    <div class="shell">
+        <div class="head">
+            <div>
+                <p class="mono eyebrow"><span class="rule"></span>Get involved</p>
+                <h2 class="t-h2" style="margin-top:1.1rem;">
+                    <span class="rise"><span>Find your place to serve</span></span>
+                </h2>
+            </div>
+            <a href="{{ url_for('get_involved') }}" class="lnk fade" style="--d:180ms">Join a unit</a>
+        </div>
+
+        {% set units = [
+            ('The Still Waters',     'Choir'),
+            ('The Epaphras Company', 'Prayer team'),
+            ('Herald',               'Ushers'),
+            ('The Vineyard Keepers', 'Sanitation'),
+            ('Kings and Priests',    "Children's church"),
+            ('The Armor Bearer',     'Protocol'),
+            ('The Joseph Ministry',  'Welfare'),
+            ('The Follow-up Team',   'Discipleship'),
+            ('Media and ICT',        'Communications'),
+            ('The Technical Team',   'Sound and stage'),
+            ('Dance and Drama',      'Creative arts'),
+            ('Host and Hostess',     'Hospitality')
+        ] %}
+        <ul class="rows units fade" style="--d:240ms;margin-top:1.8rem;">
+            {% for name, role in units %}
+            <li class="row">
+                <span class="row-in">
+                    <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
+                    <span class="row-main t-h3">{{ name }}</span>
+                    <span class="row-meta mono faint">{{ role }}</span>
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</section>
+
+{# ═══ 06 · GALLERY ════════════════════════════════════════════════════════ #}
+{# Two counter-scrolling belts of identically sized frames. Equal boxes by
+   construction — fixed width and height, object-fit: cover. #}
+<section class="frame" id="f-gallery" data-frame style="background:var(--ink);">
+    <div class="shell">
+        <div class="head">
+            <div>
+                <p class="mono eyebrow"><span class="rule"></span>In the room</p>
+                <h2 class="t-h2" style="margin-top:1.1rem;">
+                    <span class="rise"><span>Moments of the house</span></span>
+                </h2>
+            </div>
+            <p class="t-sm fade" style="--d:180ms;max-width:26ch;text-align:right;">
+                Worship, teaching and community life at Mile 50.
+            </p>
+        </div>
+    </div>
+
+    {% if gallery %}
+    {% set half = (gallery|length / 2)|round(0, 'ceil')|int %}
+    <div class="belts fade" style="--d:240ms">
+        <div class="belt" data-belt>
+            <div class="belt-track" data-marquee style="--dur:{{ 52 }}s;">
+                {% for pass in [1, 2] %}
+                {% for shot in gallery[:half] %}
+                <button class="shot" data-lightbox data-src="{{ shot.src }}" data-cap="{{ shot.alt }}"
+                        {% if pass == 2 %}aria-hidden="true" tabindex="-1"{% endif %}
+                        aria-label="View photo">
+                    {# Not lazy: inside a transformed marquee the viewport test
+                       never fires for off-screen frames, so they stay blank. #}
+                    <img src="{{ shot.src }}" decoding="async" alt="{{ shot.alt }}"/>
+                </button>
+                {% endfor %}
+                {% endfor %}
+            </div>
+        </div>
+        <div class="belt" data-belt>
+            <div class="belt-track belt-rev" data-marquee style="--dur:{{ 61 }}s;">
+                {% for pass in [1, 2] %}
+                {% for shot in gallery[half:] %}
+                <button class="shot" data-lightbox data-src="{{ shot.src }}" data-cap="{{ shot.alt }}"
+                        {% if pass == 2 %}aria-hidden="true" tabindex="-1"{% endif %}
+                        aria-label="View photo">
+                    {# Not lazy: inside a transformed marquee the viewport test
+                       never fires for off-screen frames, so they stay blank. #}
+                    <img src="{{ shot.src }}" decoding="async" alt="{{ shot.alt }}"/>
+                </button>
+                {% endfor %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="shell"><div class="empty fade"><p class="t-body">Photos from our gatherings will appear here.</p></div></div>
+    {% endif %}
+</section>
+
+{# ═══ 07 · BEYOND THE WALLS ═══════════════════════════════════════════════ #}
+<section class="frame" id="f-casom" data-frame>
+    <div class="shell split">
+        {# Admin-managed slideshow (Photos → Outreach), cross-fading with captions. #}
+        <div class="split-media has-shots wipe">
+            {% if outreach %}
+            <div class="shots" data-shots>
+                {% for shot in outreach %}
+                <figure class="{{ 'on' if loop.first else '' }}" data-shot>
+                    <img src="{{ shot.src }}" alt="{{ shot.alt }}" {{ 'loading=lazy'|safe if not loop.first else '' }} decoding="async"/>
+                    {% if shot.caption %}<figcaption>{{ shot.caption }}</figcaption>{% endif %}
+                </figure>
+                {% endfor %}
+                <div class="shots-dots" aria-hidden="true">
+                    {% for shot in outreach %}<i class="{{ 'on' if loop.first else '' }}" data-shot-dot></i>{% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <img src="/images/general-page-header.jpg" alt="Community outreach" loading="lazy" decoding="async"/>
+            {% endif %}
+        </div>
+        <div>
+            <p class="mono eyebrow"><span class="rule"></span>Beyond the walls</p>
+            <h2 class="t-h2" style="margin-top:1.1rem;max-width:16ch;">
+                <span class="rise"><span>Water carried to dry ground</span></span>
+            </h2>
+            <p class="t-body fade" style="--d:240ms;margin-top:1.2rem;">
+                Our altar does not end at the church hall. We take the same message of
+                restoration to those the world has written off.
+            </p>
+            <ul class="rows" style="margin-top:1.5rem;">
+                <li class="row row-link fade" style="--d:330ms">
+                    <a href="{{ url_for('outreach_detail', kind='prison') }}">
+                        <span class="mono faint row-i">01</span>
+                        <span class="row-main">
+                            <span class="t-h3">Annual Prison Outreach</span>
+                            <span class="t-sm row-sub">At the remand home beside our headquarters.</span>
+                        </span>
+                        <span class="row-go material-symbols-outlined">arrow_outward</span>
                     </a>
-</div>
-</div>
-</div>
-</div>
-</section>
-<section class="py-24 px-10 lg:px-12 bg-background-light">
-<div class="max-w-7xl mx-auto">
-<div class="grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
-<div class="flex flex-col gap-6">
-<span class="text-primary text-xs font-bold tracking-[0.2em] uppercase">Leadership</span>
-<h2 class="text-secondary text-4xl md:text-5xl font-serif font-medium leading-tight">Meet Our <br/>Senior Pastor</h2>
-<p class="text-gray-600 text-lg leading-relaxed font-light">
-                    {{ pastorBio }}
-                </p>
-<div class="pt-4">
-<a class="text-secondary hover:text-primary font-bold border-b-2 border-secondary hover:border-primary pb-1 transition-all duration-300 w-fit" href="{{ url_for('about') }}">
-                        Read Full Bio
+                </li>
+                <li class="row row-link fade" style="--d:410ms">
+                    <a href="{{ url_for('outreach_detail', kind='medical') }}">
+                        <span class="mono faint row-i">02</span>
+                        <span class="row-main">
+                            <span class="t-h3">Free Medical Outreach</span>
+                            <span class="t-sm row-sub">Annual no-cost medical and community care for Abakaliki.</span>
+                        </span>
+                        <span class="row-go material-symbols-outlined">arrow_outward</span>
                     </a>
-</div>
-</div>
-<div class="relative max-w-md mx-auto md:max-w-none w-full">
-<div class="absolute inset-0 bg-primary/10 rounded-full blur-3xl transform translate-x-10 translate-y-10"></div>
-<div class="relative rounded-2xl overflow-hidden shadow-2xl aspect-[3/4] md:aspect-[4/5]">
-<div class="absolute inset-0 bg-cover bg-center" style="background-image: url('{{ url_for('static', path=pastorPhoto) }}')"></div>
-<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-<div class="absolute bottom-8 left-8 text-white">
-<h3 class="text-2xl font-serif font-bold">{{ pastorName }}</h3>
-<p class="text-primary font-medium">{{ pastorTitle }}</p>
-</div>
-</div>
-</div>
-</div>
-</div>
+                </li>
+            </ul>
+        </div>
+    </div>
 </section>
-<section class="py-24 px-10 lg:px-12 bg-white relative">
-<div class="max-w-7xl mx-auto">
-<div class="flex flex-col md:flex-row justify-between items-end mb-16 gap-6">
-<div class="max-w-2xl">
-<span class="text-primary text-xs font-bold tracking-[0.2em] uppercase mb-3 block">Community Voices</span>
-<h2 class="text-secondary text-4xl md:text-5xl font-serif font-medium mb-4">Stories from our Community</h2>
-<p class="text-gray-500 text-lg font-light">Read inspiring testimonies and articles from members of our church family.</p>
-</div>
-<a class="group flex items-center justify-center px-6 py-3 rounded-full border border-gray-200 text-secondary font-bold text-sm hover:bg-primary hover:border-primary hover:text-white transition-all duration-300 whitespace-nowrap" href="{{ url_for('stories') }}">
-                View All Stories
-                <span class="material-symbols-outlined text-lg ml-2 group-hover:translate-x-1 transition-transform">arrow_forward</span>
-</a>
-</div>
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-{% for story in featuredStories %}
-<article class="flex flex-col group h-full">
-<a href="{{ url_for('story_detail', slug=story.slug) }}" class="relative overflow-hidden rounded-2xl mb-6 aspect-[16/10] shadow-sm block">
-{% if story.featured_image %}
-<img alt="{{ story.title }}" class="object-cover w-full h-full transform transition-transform duration-700 group-hover:scale-105" src="{{ url_for('static', path=story.featured_image) }}"/>
-{% else %}
-<img alt="{{ story.title }}" class="object-cover w-full h-full transform transition-transform duration-700 group-hover:scale-105" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDRQLaaYQf6b0bPuX_OxZZVqpMxJCJ5Z8MWuw7t-WSCWtBhs862PYZN-3_mSZ6K-oGDdzUD2ybNwkU0udEXUO29c08LLrtkNI2oF0jsnobkyytnY-M82ZEr-Ze_cBSoS06flOsX7ZKNmFOPIZL5sreW93jSE1VW1kW5oAgMbeRdfceJaP8TiiIiqsbNQFdwclAZu7SKDbszJK2HXF1VrUASX62_ryWA6hvc1SCZdzW0qQct4XN-v3ijeBfpbLP1YdOEY0ff1xVpk4I"/>
-{% endif %}
-{% if story.category %}
-<div class="absolute top-4 left-4">
-<span class="bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-primary shadow-sm">{{ story.category }}</span>
-</div>
-{% endif %}
-</a>
-<div class="flex flex-col flex-1">
-<div class="flex items-center gap-3 text-xs text-gray-400 mb-3 font-medium uppercase tracking-wide">
-<span class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">calendar_today</span> {% if story.published_at %}{{ story.published_at.strftime('%b %d, %Y') }}{% endif %}</span>
-{% if story.author_name %}
-<span class="w-1 h-1 rounded-full bg-gray-300"></span>
-<span>By {{ story.author_name }}</span>
-{% endif %}
-</div>
-<a href="{{ url_for('story_detail', slug=story.slug) }}"><h3 class="text-2xl font-serif font-bold text-secondary mb-3 leading-tight group-hover:text-primary transition-colors">{{ story.title }}</h3></a>
-{% if story.excerpt %}
-<p class="text-gray-500 leading-relaxed mb-6 line-clamp-3 text-sm flex-1">{{ story.excerpt }}</p>
-{% elif story.content %}
-<p class="text-gray-500 leading-relaxed mb-6 line-clamp-3 text-sm flex-1">{{ story.content[:160] }}</p>
-{% endif %}
-<a class="inline-flex items-center text-secondary font-bold text-xs uppercase tracking-widest hover:text-primary transition-colors mt-auto group/btn" href="{{ url_for('story_detail', slug=story.slug) }}">
-                        Read Story <span class="material-symbols-outlined text-sm ml-2 transition-transform group-hover/btn:translate-x-1">arrow_right_alt</span>
-</a>
-</div>
-</article>
-{% else %}
-<div class="col-span-full text-center py-12">
-<p class="text-gray-500">No stories published yet. Check back soon.</p>
-<a href="{{ url_for('contact') }}" class="mt-4 inline-flex text-primary font-bold text-sm hover:underline">Share Your Story</a>
-</div>
-{% endfor %}
-</div>
-</div>
+
+{# ═══ 08 · SENIOR PASTOR ══════════════════════════════════════════════════ #}
+<section class="frame" id="f-pastor" data-frame style="background:var(--ink);">
+    <div class="shell split split-rev">
+        <div>
+            <p class="mono eyebrow"><span class="rule"></span>Leadership</p>
+            <h2 class="t-h2" style="margin-top:1.1rem;max-width:14ch;">
+                <span class="rise"><span>Meet our senior pastor</span></span>
+            </h2>
+            <p class="t-body fade" style="--d:240ms;margin-top:1.2rem;">{{ pastorBio }}</p>
+            <blockquote class="pq fade" style="--d:340ms">
+                We believe every dead dream can live again.
+            </blockquote>
+            <a href="{{ url_for('our_pastor') }}" class="lnk fade" style="--d:430ms;margin-top:1.5rem;">More about our senior pastor</a>
+        </div>
+        <div class="split-media portrait wipe" style="--d:120ms">
+            <img src="{{ pastorPhoto if pastorPhoto.startswith('/') else '/' ~ pastorPhoto }}"
+                 alt="{{ pastorName }}" loading="lazy" decoding="async"/>
+            <div class="plate">
+                <p class="t-h3">{{ pastorName }}</p>
+                <p class="mono faint" style="margin-top:0.3rem;">{{ pastorTitle }}</p>
+            </div>
+        </div>
+    </div>
 </section>
-<section class="py-24 px-10 lg:px-12 bg-secondary relative overflow-hidden">
-<div class="absolute top-0 right-0 w-1/2 h-full bg-secondary-light/30 skew-x-12 translate-x-32"></div>
-<div class="max-w-7xl mx-auto relative z-10">
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-<div class="flex flex-col gap-8 order-2 lg:order-1">
-<div>
-<span class="text-primary text-xs font-bold tracking-[0.2em] uppercase mb-4 block">Daily Inspiration</span>
-<h2 class="text-white text-4xl md:text-5xl font-serif font-medium leading-tight mb-6">
-                        Start Your Day with <br/>
-<span class="text-primary italic">Scent Daily Devotional</span>
-</h2>
-<p class="text-gray-400 text-lg leading-relaxed font-light mb-6">
-                        Discover daily nuggets of wisdom, prayer points, and scriptural insights designed to refresh your spirit. The Scent Daily Devotional is your companion for a deeper walk with God, providing clarity and strength for every day of the year.
-                    </p>
-<div class="flex flex-col sm:flex-row gap-4">
-<button disabled title="Coming soon" class="h-14 px-8 rounded-full bg-primary/50 text-white/60 font-bold text-sm cursor-not-allowed flex items-center justify-center gap-2">
-                            Order Now 
-                            <span class="material-symbols-outlined text-sm">shopping_bag</span>
+
+{# ═══ 09 · STORIES ════════════════════════════════════════════════════════ #}
+<section class="frame" id="f-stories" data-frame>
+    <div class="shell">
+        <div class="head">
+            <div>
+                <p class="mono eyebrow"><span class="rule"></span>Stories</p>
+                <h2 class="t-h2" style="margin-top:1.1rem;">
+                    <span class="rise"><span>From the house</span></span>
+                </h2>
+            </div>
+            <a href="{{ url_for('stories') }}" class="lnk fade" style="--d:180ms">All stories</a>
+        </div>
+
+        {% if featuredStories %}
+        <div class="blog-grid">
+            {% for story in featuredStories %}
+            <article class="blog fade" style="--d:{{ 200 + loop.index0 * 110 }}ms">
+                <div class="blog-bg">
+                    {% if story.featured_image %}
+                    <img src="{{ story.featured_image if story.featured_image.startswith('/') else '/' ~ story.featured_image }}"
+                         alt="" loading="lazy" decoding="async"/>
+                    {% elif gallery %}
+                    {# No cover set: borrow a gallery frame so the card still reads as a card. #}
+                    <img src="{{ gallery[loop.index0 % gallery|length].src }}" alt="" loading="lazy" decoding="async"/>
+                    {% endif %}
+                </div>
+                {% if story.category %}<span class="mono blog-cat">{{ story.category }}</span>{% endif %}
+                <h3 class="t-h3">{{ story.title }}</h3>
+                {% if story.excerpt %}
+                <p>{{ story.excerpt[:104] }}{{ '…' if story.excerpt|length > 104 else '' }}</p>
+                {% endif %}
+                <span class="blog-cta">Learn more</span>
+                <a class="blog-link" href="{{ url_for('story_detail', slug=story.slug) }}">
+                    <span class="sr-only">Read {{ story.title }}</span>
+                </a>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty fade" style="--d:240ms">
+            <p class="t-body">Testimonies from our community will be shared here.</p>
+            <a href="{{ url_for('stories') }}" class="btn btn-ghost" style="margin-top:1.2rem;">Visit the stories page</a>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+{# ═══ 10 · DEVOTIONAL ═════════════════════════════════════════════════════ #}
+<section class="frame" id="f-devotional" data-frame style="background:var(--ink);">
+    <div class="shell split">
+        <div class="split-media dev wipe">
+            <img src="/images/devotional/scent-daily-devotional.png" alt="Scent Daily Devotional" loading="lazy" decoding="async"/>
+        </div>
+        <div>
+            <p class="mono eyebrow"><span class="rule"></span>Daily inspiration</p>
+            <h2 class="t-h2" style="margin-top:1.1rem;max-width:15ch;">
+                <span class="rise"><span>Scent Daily Devotional</span></span>
+            </h2>
+            <p class="t-body fade" style="--d:240ms;margin-top:1.2rem;">
+                Daily nuggets of wisdom, prayer points and scriptural insight — a companion
+                for a deeper walk with God, and clarity for every day of the year.
+            </p>
+            <div class="flex flex-wrap items-center gap-3 fade" style="--d:360ms;margin-top:1.7rem;">
+                <button class="btn btn-gold" disabled title="Coming soon">Order now</button>
+                <span class="mono faint">Coming soon</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ═══ 11 · VISIT ══════════════════════════════════════════════════════════ #}
+<section class="frame" id="f-visit" data-frame>
+    <div class="shell">
+        <div class="head">
+            <div>
+                <p class="mono eyebrow"><span class="rule"></span>Locations</p>
+                <h2 class="t-h2" style="margin-top:1.1rem;">
+                    <span class="rise"><span>Visit us</span></span>
+                </h2>
+            </div>
+            <p class="t-sm fade" style="--d:180ms;text-align:right;">
+                {{ branches|length if branches else 1 }} location{{ 's' if branches and branches|length != 1 else '' }}
+            </p>
+        </div>
+
+        <div class="branch-rail no-scrollbar fade" style="--d:240ms">
+            {% for branch in branches %}
+            <article class="branch">
+                <p class="mono {{ 'gold' if loop.first else 'faint' }}">{{ 'Headquarters' if loop.first else 'Branch' }}</p>
+                <h3 class="t-h3" style="margin-top:0.7rem;">{{ branch.name }}</h3>
+                <p class="t-sm" style="margin-top:0.5rem;">
+                    {{ branch.address or 'Address not available' }}{% if branch.city %}, {{ branch.city }}{% endif %}
+                </p>
+                {% if branch.phone %}<p class="mono faint" style="margin-top:0.5rem;">{{ branch.phone }}</p>{% endif %}
+                {% if branch.address %}
+                <a class="lnk" style="margin-top:0.9rem;" target="_blank" rel="noopener"
+                   href="https://www.google.com/maps/search/?api=1&query={{ (branch.address ~ ' ' ~ (branch.city or '') ~ ' ' ~ (branch.state or '') ~ ' ' ~ (branch.country or ''))|urlencode }}">Directions</a>
+                {% endif %}
+            </article>
+            {% else %}
+            <article class="branch">
+                <p class="mono gold">Headquarters</p>
+                <h3 class="t-h3" style="margin-top:0.7rem;">{{ siteName }}</h3>
+                <p class="t-sm" style="margin-top:0.5rem;">{{ siteHeadquartersAddress or 'Mile 50, Abakaliki, Ebonyi State' }}</p>
+            </article>
+            {% endfor %}
+        </div>
+
+        <div class="map fade" style="--d:340ms">
+            {% if mapEmbedUrl %}
+            <iframe src="{{ mapEmbedUrl }}" title="{{ siteName }} headquarters" loading="lazy"
+                    referrerpolicy="no-referrer-when-downgrade" allowfullscreen=""></iframe>
+            {% else %}
+            <div class="map-empty t-sm">Map unavailable — set a headquarters address in Settings.</div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+{# ═══ 12 · NEXT STEP + FOOTER ═════════════════════════════════════════════ #}
+<section class="frame frame-last" id="f-next" data-frame style="background:var(--ink);">
+    <div class="shell">
+        <p class="mono eyebrow"><span class="rule"></span>Take a next step</p>
+        <h2 class="t-h2" style="margin-top:1.1rem;max-width:18ch;">
+            <span class="rise"><span>Come as you are.</span></span>
+        </h2>
+        <p class="t-body fade" style="--d:200ms;margin-top:1.1rem;">
+            Whatever season you are in, there is a place for you here.
+        </p>
+
+        <div class="next-split">
+            {% set steps = [
+                ('calendar',     'Plan a visit'),
+                ('prayer',       'Request prayer'),
+                ('give',         'Give'),
+                ('watch',        'Watch live'),
+                ('get_involved', 'Volunteer')
+            ] %}
+            <ul class="rows steps fade" style="--d:280ms;">
+                {% for route, label in steps %}
+                <li class="row row-link">
+                    <a href="{{ url_for(route) }}">
+                        <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
+                        <span class="row-main t-h3">{{ label }}</span>
+                        <span class="row-go material-symbols-outlined">arrow_outward</span>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+
+            {% if counsellingPhone %}
+            <aside class="counsel fade" style="--d:400ms">
+                <p class="mono gold">Need to talk to someone?</p>
+                <p class="t-h3" style="margin-top:0.7rem;">Counselling</p>
+                <p class="t-sm" style="margin-top:0.5rem;">
+                    A pastor is available to listen, pray with you, and walk through
+                    whatever you are carrying — in confidence.
+                </p>
+                <a class="counsel-tel" href="tel:{{ counsellingPhone|replace(' ', '') }}">
+                    <span class="material-symbols-outlined" style="font-size:19px">call</span>
+                    {{ counsellingPhone }}
+                </a>
+                {% if counsellingHours %}
+                <p class="mono faint" style="margin-top:0.7rem;">{{ counsellingHours }}</p>
+                {% endif %}
+            </aside>
+            {% endif %}
+        </div>
+
+        {% set socials = [
+            (socialFacebook,  'Facebook'),
+            (socialInstagram, 'Instagram'),
+            (socialX,         'X'),
+            (socialYouTube,   'YouTube'),
+            (socialTelegram,  'Telegram')
+        ] %}
+        <div class="foot fade" style="--d:460ms">
+            <div class="foot-in">
+                <span class="t-sm">© {{ now().year }} {{ siteName }}</span>
+                <nav class="foot-links t-sm">
+                    {% for href, label in socials %}{% if href %}
+                    <a href="{{ href }}" target="_blank" rel="noopener">{{ label }}</a>
+                    {% endif %}{% endfor %}
+                    <a href="{{ url_for('privacy_policy') }}">Privacy</a>
+                    <a href="{{ url_for('terms_of_service') }}">Terms</a>
+                </nav>
+            </div>
+        </div>
+    </div>
+</section>
+
+</main>
+
+{# ═══ LIGHTBOX ════════════════════════════════════════════════════════════ #}
+<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Photo viewer" hidden>
+    <button class="lb-close" id="lb-close" aria-label="Close photo viewer">
+        <span class="material-symbols-outlined" style="font-size:24px">close</span>
+    </button>
+    <button class="lb-nav lb-prev" id="lb-prev" aria-label="Previous photo">
+        <span class="material-symbols-outlined" style="font-size:24px">chevron_left</span>
+    </button>
+    <figure class="lb-fig"><img id="lb-img" alt=""/></figure>
+    <button class="lb-nav lb-next" id="lb-next" aria-label="Next photo">
+        <span class="material-symbols-outlined" style="font-size:24px">chevron_right</span>
+    </button>
+</div>
+
+<button class="totop" id="totop" type="button" aria-label="Back to top" title="Back to top">
+    <span class="material-symbols-outlined" style="font-size:21px">arrow_upward</span>
 </button>
-<button disabled title="Coming soon" class="h-14 px-8 rounded-full border border-white/10 text-white/40 font-bold text-sm cursor-not-allowed flex items-center justify-center gap-2">
-                            Read Sample
-                            <span class="material-symbols-outlined text-sm">menu_book</span>
-</button>
-</div>
-</div>
-<div class="grid grid-cols-2 gap-6 pt-4 border-t border-white/10">
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-primary text-2xl">calendar_today</span>
-<span class="text-gray-300 text-sm font-medium">365 Daily Readings</span>
-</div>
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-primary text-2xl">auto_stories</span>
-<span class="text-gray-300 text-sm font-medium">Bible in 1yr/2yrs</span>
-</div>
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-primary text-2xl">edit_note</span>
-<span class="text-gray-300 text-sm font-medium">Prayers</span>
-</div>
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-primary text-2xl">smartphone</span>
-<span class="text-gray-300 text-sm font-medium">Action Plan</span>
-</div>
-</div>
-</div>
-<div class="relative order-1 lg:order-2">
-<div class="relative z-10 rounded-2xl group">
-<div class="relative">
-<img alt="Scent Daily Devotional Book" class="w-full object-cover transition-transform duration-700 group-hover:scale-105" src="{{ url_for('static', path='images/devotional/scent-daily-devotional.png') }}" style="height: 68%"/>
-<div class="absolute inset-0 bg-gradient-to-t from-secondary via-transparent to-transparent opacity-60"></div>
-<div class="absolute top-6 right-6 bg-primary text-white text-xs font-bold px-4 py-2 rounded-full uppercase tracking-wider shadow-lg">
-                            Best Seller
-                        </div>
-</div>
-</div>
-<div class="absolute -top-10 -right-10 w-full h-full border-2 border-primary/30 rounded-2xl -z-10"></div>
-<div class="absolute -bottom-10 -left-10 w-64 h-64 bg-primary/10 rounded-full blur-3xl -z-10"></div>
-</div>
-</div>
-</section>
-<section class="py-24 px-10 lg:px-12 bg-white relative">
-<div class="max-w-7xl mx-auto">
-<div class="text-center mb-16">
-<span class="text-primary text-xs font-bold tracking-[0.2em] uppercase mb-3 block">Locations</span>
-<h2 class="text-secondary text-4xl md:text-5xl font-serif font-medium">Visit Us</h2>
-</div>
-<div class="relative -mx-10 lg:-mx-12 px-10 lg:px-12">
-<div class="flex gap-6 overflow-x-auto no-scrollbar snap-x snap-mandatory pb-2 scroll-smooth">
-{% for branch in branches %}
-<div class="flex-none w-[300px] sm:w-[340px] snap-start bg-white p-8 rounded-2xl border border-gray-100 shadow-soft hover:shadow-soft-hover hover:-translate-y-1 transition-all duration-300 group flex flex-col">
-<div class="flex items-start justify-between mb-5">
-<div class="p-3.5 bg-primary/10 text-primary rounded-xl group-hover:bg-primary group-hover:text-white transition-colors">
-<span class="material-symbols-outlined">{{ 'church' if loop.first else 'meeting_room' }}</span>
-</div>
-<span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-bold rounded-full uppercase tracking-wide">{{ 'HQ' if loop.first else 'Branch' }}</span>
-</div>
-<h3 class="text-secondary text-xl font-bold font-serif mb-4">{{ branch.name }}</h3>
-<div class="flex flex-col gap-3 mb-6 grow">
-<div class="flex items-start gap-2.5 text-gray-500 text-sm leading-relaxed">
-<span class="material-symbols-outlined text-primary/70 text-lg mt-0.5 shrink-0">location_on</span>
-<span>{{ branch.address or 'Address not available' }}{% if branch.city %}, {{ branch.city }}{% endif %}{% if branch.state %}, {{ branch.state }}{% endif %}</span>
-</div>
-{% if branch.phone %}
-<div class="flex items-center gap-2.5 text-gray-500 text-sm">
-<span class="material-symbols-outlined text-primary/70 text-lg shrink-0">call</span>
-<span>{{ branch.phone }}</span>
-</div>
-{% endif %}
-</div>
-<div class="flex gap-3 pt-5 border-t border-gray-100">
-{% if branch.address %}
-<a href="https://www.google.com/maps/search/?api=1&query={{ (branch.address ~ ' ' ~ (branch.city or '') ~ ' ' ~ (branch.state or '') ~ ' ' ~ (branch.country or ''))|urlencode }}" target="_blank" rel="noopener" class="flex-1 py-2.5 border border-gray-200 text-secondary text-sm font-bold rounded-lg hover:border-primary hover:text-primary transition-colors text-center">Directions</a>
-{% endif %}
-{% if branch.email %}
-<a href="mailto:{{ branch.email }}" class="flex-1 py-2.5 bg-secondary text-white text-sm font-bold rounded-lg hover:bg-primary transition-colors text-center">Contact</a>
-{% endif %}
-</div>
-</div>
-{% else %}
-<div class="flex-none w-[300px] sm:w-[340px] snap-start bg-white p-8 rounded-2xl border border-gray-100 shadow-soft flex flex-col">
-<div class="flex items-start justify-between mb-5">
-<div class="p-3.5 bg-primary/10 text-primary rounded-xl">
-<span class="material-symbols-outlined">church</span>
-</div>
-</div>
-<h3 class="text-secondary text-xl font-bold font-serif mb-4">{{ siteName }}</h3>
-<div class="flex items-start gap-2.5 text-gray-500 text-sm leading-relaxed grow">
-<span class="material-symbols-outlined text-primary/70 text-lg mt-0.5 shrink-0">location_on</span>
-<span>{{ siteHeadquartersAddress or 'Visit us for our services.' }}</span>
-</div>
-</div>
-{% endfor %}
-</div>
-{% if branches and branches|length > 3 %}
-<div class="pointer-events-none absolute top-0 right-10 lg:right-12 bottom-2 w-16 bg-gradient-to-l from-white to-transparent"></div>
-{% endif %}
-</div>
-<div class="mt-8 h-[320px] md:h-[420px] w-full bg-gray-100 rounded-2xl overflow-hidden relative shadow-inner">
-{% if mapEmbedUrl %}
-<iframe allowfullscreen="" class="w-full h-full grayscale hover:grayscale-0 transition-all duration-700" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="{{ mapEmbedUrl }}" style="border:0;" title="{{ siteName }} Headquarters"></iframe>
-{% else %}
-<div class="w-full h-full flex items-center justify-center text-gray-400 text-sm">Map unavailable — set a headquarters address in Settings.</div>
-{% endif %}
-</div>
-</div>
-</section>
-<section class="py-24 px-10 lg:px-12 bg-secondary border-t border-white/5 relative overflow-hidden">
-<div class="absolute -top-40 -right-40 w-96 h-96 bg-primary/10 rounded-full blur-3xl"></div>
-<div class="max-w-7xl mx-auto text-center relative z-10">
-<h2 class="text-white text-3xl md:text-4xl font-serif font-medium mb-16">Take a Next Step</h2>
-<div class="flex flex-wrap justify-center gap-6">
-<a class="flex flex-col items-center gap-4 p-6 w-40 rounded-2xl bg-white/5 border border-white/10 hover:bg-primary hover:border-primary transition-all duration-300 group cursor-pointer" href="{{ url_for('prayer') }}">
-<span class="material-symbols-outlined text-4xl text-gray-400 group-hover:text-white transition-colors">calendar_month</span>
-<span class="font-bold text-white text-sm">Plan Visit</span>
-</a>
-<a class="flex flex-col items-center gap-4 p-6 w-40 rounded-2xl bg-white/5 border border-white/10 hover:bg-primary hover:border-primary transition-all duration-300 group cursor-pointer" href="{{ url_for('watch') }}">
-<span class="material-symbols-outlined text-4xl text-gray-400 group-hover:text-white transition-colors">volunteer_activism</span>
-<span class="font-bold text-white text-sm">Prayer</span>
-</a>
-<a class="flex flex-col items-center gap-4 p-6 w-40 rounded-2xl bg-white/5 border border-white/10 hover:bg-primary hover:border-primary transition-all duration-300 group cursor-pointer" href="{{ url_for('give') }}">
-<span class="material-symbols-outlined text-4xl text-gray-400 group-hover:text-white transition-colors">favorite</span>
-<span class="font-bold text-white text-sm">Give</span>
-</a>
-<a class="flex flex-col items-center gap-4 p-6 w-40 rounded-2xl bg-white/5 border border-white/10 hover:bg-primary hover:border-primary transition-all duration-300 group cursor-pointer" href="{{ url_for('watch') }}">
-<span class="material-symbols-outlined text-4xl text-gray-400 group-hover:text-white transition-colors">play_circle</span>
-<span class="font-bold text-white text-sm">Watch</span>
-</a>
-<a class="flex flex-col items-center gap-4 p-6 w-40 rounded-2xl bg-white/5 border border-white/10 hover:bg-primary hover:border-primary transition-all duration-300 group cursor-pointer" href="{{ url_for('get-involved') }}">
-<span class="material-symbols-outlined text-4xl text-gray-400 group-hover:text-white transition-colors">handshake</span>
-<span class="font-bold text-white text-sm">Volunteer</span>
-</a>
-</div>
-</div>
-</section>
-{% include "partials/site-footer.html" %}
-<script>
-    // Simple script to enhance the slider autoplay functionality
-    document.addEventListener('DOMContentLoaded', () => {
-        const slider = document.querySelector('.hero-slider');
-        const slides = slider ? Array.from(slider.querySelectorAll('.hero-slide')) : [];
-        const dots = Array.from(document.querySelectorAll('.hero-dot'));
-        if (!slider || slides.length === 0) return;
 
-        let activeIndex = 0;
-        let autoplayId = null;
-        const autoplayDelay = 6000;
-
-        const updateDots = (index) => {
-            dots.forEach((dot, i) => {
-                if (i === index) {
-                    dot.classList.remove('bg-white/30');
-                    dot.classList.add('bg-primary');
-                } else {
-                    dot.classList.remove('bg-primary');
-                    dot.classList.add('bg-white/30');
-                }
-            });
-        };
-
-        const scrollToIndex = (index, behavior = 'smooth') => {
-            const clamped = Math.max(0, Math.min(index, slides.length - 1));
-            activeIndex = clamped;
-            slider.scrollTo({
-                left: slider.clientWidth * clamped,
-                behavior,
-            });
-            updateDots(clamped);
-        };
-
-        const startAutoplay = () => {
-            if (autoplayId) return;
-            autoplayId = window.setInterval(() => {
-                const next = (activeIndex + 1) % slides.length;
-                scrollToIndex(next);
-            }, autoplayDelay);
-        };
-
-        const stopAutoplay = () => {
-            if (!autoplayId) return;
-            window.clearInterval(autoplayId);
-            autoplayId = null;
-        };
-
-        dots.forEach((dot) => {
-            dot.addEventListener('click', () => {
-                const index = Number(dot.dataset.slide || 0);
-                scrollToIndex(index);
-                stopAutoplay();
-                startAutoplay();
-            });
-        });
-
-        slider.addEventListener('scroll', () => {
-            const index = Math.round(slider.scrollLeft / slider.clientWidth);
-            if (index !== activeIndex) {
-                activeIndex = index;
-                updateDots(index);
-            }
-        }, { passive: true });
-
-        slider.addEventListener('wheel', (event) => {
-            if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
-                event.preventDefault();
-                slider.scrollLeft += event.deltaX;
-            }
-        }, { passive: false });
-
-        slider.addEventListener('touchstart', stopAutoplay, { passive: true });
-        slider.addEventListener('touchend', startAutoplay, { passive: true });
-
-        scrollToIndex(0, 'auto');
-        startAutoplay();
-
-        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (prefersReducedMotion) return;
-
-        const sections = Array.from(document.querySelectorAll('body.home-page section')).slice(1);
-        const revealNodes = [];
-
-        sections.forEach((section) => {
-            const candidates = new Set();
-
-            section.querySelectorAll(':scope > div > .text-center, :scope > div > .max-w-2xl, :scope > div > .max-w-3xl, :scope > div > .grid > *, :scope > div > .flex > *, :scope > div > h2').forEach((node) => {
-                candidates.add(node);
-            });
-
-            if (candidates.size === 0) {
-                section.querySelectorAll(':scope > div > *').forEach((node) => candidates.add(node));
-            }
-
-            let step = 0;
-            candidates.forEach((node) => {
-                if (!(node instanceof HTMLElement) || node.classList.contains('hero-slide')) return;
-                node.classList.add('reveal-on-scroll');
-                node.style.transitionDelay = `${Math.min(step * 70, 420)}ms`;
-                revealNodes.push(node);
-                step += 1;
-            });
-        });
-
-        const observer = new IntersectionObserver((entries, obs) => {
-            entries.forEach((entry) => {
-                if (!entry.isIntersecting) return;
-                entry.target.classList.add('in-view');
-                obs.unobserve(entry.target);
-            });
-        }, { threshold: 0.18, rootMargin: '0px 0px -8% 0px' });
-
-        revealNodes.forEach((node) => observer.observe(node));
-    });
-</script>
-<style type="text/tailwindcss">
-    @@layer utilities {
-        @@keyframes kenburns {
-            0% { transform: scale(1); }
-            100% { transform: scale(1.1); }
-        }
-        @@keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-    }
-    </style>
-</body></html>
+{% include "partials/theme-styles.html" %}
+{% include "partials/theme-scripts.html" %}
+</body>
+</html>

@@ -1,315 +1,100 @@
-<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Contact Us - {{ siteName }}</title>
-<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
-<link rel="apple-touch-icon" href="/images/swm-logo.png"/>
+{% set pageKey = 'contact' %}
+{% set pageEyebrow = 'Contact' %}
+{% set pageTitle = 'Plan your visit, or just say hello.' %}
+{% set pageLede = 'Whether you are coming for the first time or you need someone to talk to, this reaches a real person at Mile 50.' %}
+{% include "partials/theme-page-open.html" %}
 
-{% include "partials/site-head-assets.html" %}
+<section class="band band-light">
+    <div class="shell contact-split">
+        <div>
+            <p class="mono eyebrow"><span class="rule"></span>Send a message</p>
+            <h2 class="t-h2" style="margin-top:1rem;max-width:18ch;">We read every one.</h2>
 
-</head>
-<body class="bg-background-light dark:bg-background-dark text-secondary font-sans antialiased overflow-x-hidden selection:bg-primary selection:text-white">
-{% include "partials/site-header.html" %}
-{% set heroTitle = 'Contact <span class="italic text-primary-light">Us</span>' %}
-{% set heroSubtitle = 'Reach Out' %}
-{% set heroDescription = "We are here to serve you. Whether you have a question, a prayer request, or just want to say hello, we'd love to hear from you." %}
-{% set heroBgImage = settings.get('pageHero_contact', '') if settings else '' %}
-{% include "partials/site-page-hero.html" %}
-<section class="py-24 px-6 lg:px-8 bg-background-light relative">
-<div class="max-w-7xl mx-auto relative z-10">
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-12 lg:gap-16">
-<div class="lg:col-span-2">
-<div class="bg-white p-8 md:p-12 rounded-3xl border border-gray-100 shadow-soft">
-<h3 class="text-secondary text-3xl font-serif font-bold mb-2">Send us a Message</h3>
-<p class="text-gray-500 mb-8">Fill out the form below and our team will get back to you shortly.</p>
-{% if session.get('success') %}
-<div class="mb-6 rounded-lg border border-green-200 bg-green-50 text-green-700 text-sm px-4 py-3">{{ session.get('success') }}</div>
-{% endif %}
-{% if errors %}
-<div class="mb-6 rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm px-4 py-3">{{ errors | first }}</div>
-{% endif %}
-<form class="space-y-6" method="POST" action="{{ url_for('contact.store') }}">
-<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-<div>
-<label class="block text-sm font-semibold text-secondary mb-2" for="name">Full Name</label>
-<input class="w-full px-4 py-3 rounded-lg border-gray-200 focus:border-primary focus:ring-primary/20 transition-all bg-gray-50/50" id="name" name="name" placeholder="John Doe" type="text" value="{{ request.form.get('name', '') }}"/>
-</div>
-<div>
-<label class="block text-sm font-semibold text-secondary mb-2" for="email">Email Address</label>
-<input class="w-full px-4 py-3 rounded-lg border-gray-200 focus:border-primary focus:ring-primary/20 transition-all bg-gray-50/50" id="email" name="email" placeholder="john@example.com" type="email" value="{{ request.form.get('email', '') }}"/>
-</div>
-</div>
-<div>
-<label class="block text-sm font-semibold text-secondary mb-2" for="phone">Phone</label>
-<input class="w-full px-4 py-3 rounded-lg border-gray-200 focus:border-primary focus:ring-primary/20 transition-all bg-gray-50/50" id="phone" name="phone" placeholder="+234..." type="text" value="{{ request.form.get('phone', '') }}"/>
-</div>
-<div>
-<label class="block text-sm font-semibold text-secondary mb-2" for="subject">Subject</label>
-<select class="w-full px-4 py-3 rounded-lg border-gray-200 focus:border-primary focus:ring-primary/20 transition-all bg-gray-50/50" id="subject" name="subject">
-<option>General Inquiry</option>
-<option>Prayer Request</option>
-<option>Testimony</option>
-<option>Partnership</option>
-<option>Other</option>
-</select>
-</div>
-<div>
-<label class="block text-sm font-semibold text-secondary mb-2" for="message">Message</label>
-<textarea class="w-full px-4 py-3 rounded-lg border-gray-200 focus:border-primary focus:ring-primary/20 transition-all bg-gray-50/50 h-40 resize-none" id="message" name="message" placeholder="How can we help you?">{{ request.form.get('message', '') }}</textarea>
-</div>
-<button class="w-full md:w-auto px-10 py-4 bg-primary text-white font-bold rounded-lg hover:bg-primary-dark transition-all duration-300 shadow-glow transform hover:-translate-y-1" type="submit">
-                            Send Message
-                        </button>
-</form>
-</div>
-</div>
-<div class="lg:col-span-1 space-y-8">
-<div class="bg-secondary text-white p-8 rounded-3xl relative overflow-hidden">
-<div class="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-<h3 class="text-2xl font-serif font-bold mb-6 relative z-10">Contact Information</h3>
-<div class="space-y-6 relative z-10">
-<div class="flex items-start gap-4">
-<div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0 text-primary">
-<span class="material-symbols-outlined">mail</span>
-</div>
-<div>
-<p class="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">General Inquiries</p>
-<a class="text-white hover:text-primary transition-colors" href="mailto:info@scentofwater.org">info@scentofwater.org</a>
-</div>
-</div>
-<div class="flex items-start gap-4">
-<div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0 text-primary">
-<span class="material-symbols-outlined">call</span>
-</div>
-<div>
-<p class="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">Phone</p>
-<a class="text-white hover:text-primary transition-colors block" href="tel:+2345551234567">+234 (555) 123-4567</a>
-<a class="text-white hover:text-primary transition-colors block" href="tel:+2345557654321">+234 (555) 765-4321</a>
-</div>
-</div>
-<div class="flex items-start gap-4">
-<div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0 text-primary">
-<span class="material-symbols-outlined">location_on</span>
-</div>
-<div>
-<p class="text-xs text-gray-400 uppercase tracking-wider font-bold mb-1">Headquarters</p>
-<p class="text-gray-300 leading-relaxed">{{ siteHeadquartersAddress }}</p>
-</div>
-</div>
-</div>
-</div>
-<div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-soft">
-<h3 class="text-xl font-serif font-bold text-secondary mb-4">Connect With Us</h3>
-<p class="text-gray-500 mb-6 text-sm">Follow our social media channels for daily inspiration and updates.</p>
-<div class="flex gap-4">
-{% if settings and settings.get('facebook_url') %}
-<a class="w-12 h-12 rounded-full bg-accent flex items-center justify-center text-secondary hover:bg-primary hover:text-white transition-all duration-300 group" href="{{ settings.get('facebook_url') }}" target="_blank" rel="noopener" aria-label="Facebook">
-<span class="material-symbols-outlined group-hover:scale-110 transition-transform">thumb_up</span>
-</a>
-{% endif %}
-{% if settings and settings.get('instagram_url') %}
-<a class="w-12 h-12 rounded-full bg-accent flex items-center justify-center text-secondary hover:bg-primary hover:text-white transition-all duration-300 group" href="{{ settings.get('instagram_url') }}" target="_blank" rel="noopener" aria-label="Instagram">
-<span class="material-symbols-outlined group-hover:scale-110 transition-transform">photo_camera</span>
-</a>
-{% endif %}
-{% if settings and settings.get('youtube_url') %}
-<a class="w-12 h-12 rounded-full bg-accent flex items-center justify-center text-secondary hover:bg-primary hover:text-white transition-all duration-300 group" href="{{ settings.get('youtube_url') }}" target="_blank" rel="noopener" aria-label="YouTube">
-<span class="material-symbols-outlined group-hover:scale-110 transition-transform">smart_display</span>
-</a>
-{% endif %}
-{% if settings and settings.get('x_url') %}
-<a class="w-12 h-12 rounded-full bg-accent flex items-center justify-center text-secondary hover:bg-primary hover:text-white transition-all duration-300 group" href="{{ settings.get('x_url') }}" target="_blank" rel="noopener" aria-label="X (Twitter)">
-<span class="material-symbols-outlined group-hover:scale-110 transition-transform">tag</span>
-</a>
-{% endif %}
-{% if not (settings and (settings.get('facebook_url') or settings.get('instagram_url') or settings.get('youtube_url') or settings.get('x_url'))) %}
-<p class="text-xs text-gray-400">No social links configured yet.</p>
-{% endif %}
-</div>
-</div>
-<div class="bg-white p-8 rounded-3xl border border-gray-100 shadow-soft">
-<h3 class="text-xl font-serif font-bold text-secondary mb-4">Department Emails</h3>
-<ul class="space-y-3">
-<li class="flex items-center justify-between text-sm border-b border-gray-50 pb-2">
-<span class="text-gray-500">Prayer Team</span>
-<a class="text-primary font-medium hover:underline" href="mailto:prayer@scentofwater.org">prayer@...</a>
-</li>
-<li class="flex items-center justify-between text-sm border-b border-gray-50 pb-2">
-<span class="text-gray-500">Media</span>
-<a class="text-primary font-medium hover:underline" href="mailto:media@scentofwater.org">media@...</a>
-</li>
-<li class="flex items-center justify-between text-sm border-b border-gray-50 pb-2">
-<span class="text-gray-500">Protocol</span>
-<a class="text-primary font-medium hover:underline" href="mailto:protocol@scentofwater.org">protocol@...</a>
-</li>
-<li class="flex items-center justify-between text-sm">
-<span class="text-gray-500">Partnership</span>
-<a class="text-primary font-medium hover:underline" href="mailto:partner@scentofwater.org">partner@...</a>
-</li>
-</ul>
-</div>
-</div>
-</div>
-</div>
+            {% if session.get('success') %}
+            <div class="alert" role="status" style="margin-top:1.6rem;">{{ session.get('success') }}</div>
+            {% endif %}
+            {% if errors %}
+            <div class="alert alert-bad" role="alert" style="margin-top:1.6rem;">{{ errors | first }}</div>
+            {% endif %}
+
+            <form class="form-grid" method="POST" action="{{ url_for('contact_store') }}" style="margin-top:1.8rem;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
+                <label class="field"><span>Your name</span>
+                    <input type="text" name="name" required value="{{ request.form.get('name', '') if request.form else '' }}" placeholder="Full name"/>
+                </label>
+                <label class="field"><span>Email</span>
+                    <input type="email" name="email" required value="{{ request.form.get('email', '') if request.form else '' }}" placeholder="you@example.com"/>
+                </label>
+                <label class="field"><span>Phone <span style="text-transform:none;letter-spacing:0">(optional)</span></span>
+                    <input type="tel" name="phone" value="{{ request.form.get('phone', '') if request.form else '' }}" placeholder="+234…"/>
+                </label>
+                <label class="field"><span>Subject</span>
+                    <input type="text" name="subject" required value="{{ request.form.get('subject', '') if request.form else '' }}" placeholder="What is this about?"/>
+                </label>
+                <label class="field span-2"><span>Message</span>
+                    <textarea name="message" rows="5" required placeholder="Tell us what you need.">{{ request.form.get('message', '') if request.form else '' }}</textarea>
+                </label>
+                <div class="span-2">
+                    <button type="submit" class="btn btn-gold">Send message</button>
+                </div>
+            </form>
+        </div>
+
+        <aside class="contact-aside">
+            <p class="mono eyebrow"><span class="rule"></span>Other ways</p>
+
+            <div class="note" style="margin-top:1.4rem;">
+                <p class="t-h3">Visit us</p>
+                <p class="t-sm" style="margin-top:0.5rem;">{{ siteHeadquartersAddress or 'Mile 50, Abakaliki, Ebonyi State' }}</p>
+            </div>
+
+            {% if counsellingPhone %}
+            <div class="note" style="margin-top:1.6rem;">
+                <p class="t-h3">Counselling</p>
+                <p class="t-sm" style="margin-top:0.5rem;">Speak with a pastor in confidence.</p>
+                <a class="counsel-tel" href="tel:{{ counsellingPhone|replace(' ', '') }}">
+                    <span class="material-symbols-outlined" style="font-size:19px">call</span>{{ counsellingPhone }}
+                </a>
+                {% if counsellingHours %}<p class="mono faint" style="margin-top:0.6rem;">{{ counsellingHours }}</p>{% endif %}
+            </div>
+            {% endif %}
+
+            {% if siteContactEmail %}
+            <div class="note" style="margin-top:1.6rem;">
+                <p class="t-h3">Email</p>
+                <a class="lnk" style="margin-top:0.6rem;" href="mailto:{{ siteContactEmail }}">{{ siteContactEmail }}</a>
+            </div>
+            {% endif %}
+
+            <div class="note" style="margin-top:1.6rem;">
+                <p class="t-h3">Service times</p>
+                <table class="sched" style="margin-top:0.8rem;">
+                    <tbody>
+                        <tr><td class="s-day mono">Sunday</td><td class="s-time mono">7:00 &amp; 9:30 am</td></tr>
+                        <tr><td class="s-day mono">Monday</td><td class="s-time mono">4:40 pm</td></tr>
+                        <tr><td class="s-day mono">Wednesday</td><td class="s-time mono">5:00 pm</td></tr>
+                    </tbody>
+                </table>
+                <a href="{{ url_for('calendar') }}" class="lnk" style="margin-top:1rem;">Full calendar</a>
+            </div>
+        </aside>
+    </div>
 </section>
-<section class="h-[500px] w-full relative bg-gray-200" id="map">
+
 {% if mapEmbedUrl %}
-<iframe allowfullscreen="" class="w-full h-full grayscale hover:grayscale-0 transition-all duration-500" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="{{ mapEmbedUrl }}" style="border:0;" title="{{ siteName }} Headquarters"></iframe>
-{% else %}
-<div class="w-full h-full flex items-center justify-center text-gray-400 text-sm">Map unavailable — set a headquarters address in Settings.</div>
+<section class="band band-dark" style="padding-block:0;">
+    <div class="map" style="margin:0;height:clamp(260px,44svh,420px);border-left:0;border-right:0;">
+        <iframe src="{{ mapEmbedUrl }}" title="{{ siteName }} headquarters" loading="lazy"
+                referrerpolicy="no-referrer-when-downgrade" allowfullscreen=""></iframe>
+    </div>
+</section>
 {% endif %}
-<div class="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white px-8 py-4 rounded-full shadow-xl flex items-center gap-3 animate-bounce hidden md:flex">
-<span class="material-symbols-outlined text-primary">near_me</span>
-<span class="font-bold text-secondary">Find your way to us</span>
-</div>
-</section>
-<section class="py-24 px-6 lg:px-8 bg-secondary text-white relative overflow-hidden">
-<div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5"></div>
-<div class="max-w-7xl mx-auto relative z-10 text-center">
-<span class="text-primary text-xs font-bold tracking-[0.2em] uppercase mb-4 block">Join Us Live</span>
-<h2 class="text-3xl md:text-5xl font-serif font-medium mb-12">Weekly Service Times</h2>
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-<div class="bg-white/5 border border-white/10 p-8 rounded-2xl hover:bg-primary/20 transition-all duration-300 group">
-<span class="material-symbols-outlined text-primary text-4xl mb-4 group-hover:scale-110 transition-transform">sunny</span>
-<h3 class="text-xl font-bold font-serif mb-2">Sunday Service</h3>
-<p class="text-primary font-bold text-lg mb-2">8:00 AM</p>
-<p class="text-gray-400 text-sm">Worship &amp; The Word</p>
-</div>
-<div class="bg-white/5 border border-white/10 p-8 rounded-2xl hover:bg-primary/20 transition-all duration-300 group">
-<span class="material-symbols-outlined text-primary text-4xl mb-4 group-hover:scale-110 transition-transform">water_drop</span>
-<h3 class="text-xl font-bold font-serif mb-2">Wednesday Service</h3>
-<p class="text-primary font-bold text-lg mb-2">5:00 PM</p>
-<p class="text-gray-400 text-sm">Mid-Week Refreshing</p>
-</div>
-<div class="bg-white/5 border border-white/10 p-8 rounded-2xl hover:bg-primary/20 transition-all duration-300 group">
-<span class="material-symbols-outlined text-primary text-4xl mb-4 group-hover:scale-110 transition-transform">radio</span>
-<h3 class="text-xl font-bold font-serif mb-2">Online Stream</h3>
-<p class="text-primary font-bold text-lg mb-2">All Services</p>
-<p class="text-gray-400 text-sm">Facebook &amp; YouTube Live</p>
-</div>
-</div>
-</div>
-</section>
-<section class="py-24 px-6 lg:px-8 bg-white">
-<div class="max-w-7xl mx-auto">
-<div class="text-center mb-12">
-<span class="text-primary text-xs font-bold tracking-[0.2em] uppercase mb-3 block">Our Branches</span>
-<h2 class="text-secondary text-4xl font-serif font-medium">Find a Location Near You</h2>
-</div>
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-<div class="flex items-start gap-4 p-6 rounded-2xl bg-gray-50 border border-gray-100 hover:border-primary/30 hover:shadow-lg transition-all">
-<div class="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-primary shadow-sm shrink-0">
-<span class="material-symbols-outlined">church</span>
-</div>
-<div>
-<h4 class="text-lg font-bold text-secondary mb-2">Ishieke Branch</h4>
-<p class="text-gray-500 text-sm mb-3">Ishieke Main Road, Near Market Square, Ebonyi State.</p>
-<a class="text-primary text-sm font-bold hover:underline flex items-center gap-1" href="{{ url_for('contact') }}#map">
-                        Get Directions <span class="material-symbols-outlined text-sm">arrow_forward</span>
-</a>
-</div>
-</div>
-<div class="flex items-start gap-4 p-6 rounded-2xl bg-gray-50 border border-gray-100 hover:border-primary/30 hover:shadow-lg transition-all">
-<div class="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-primary shadow-sm shrink-0">
-<span class="material-symbols-outlined">church</span>
-</div>
-<div>
-<h4 class="text-lg font-bold text-secondary mb-2">Onuebonyi Branch</h4>
-<p class="text-gray-500 text-sm mb-3">Onuebonyi Junction, Opp. Filling Station, Ebonyi State.</p>
-<a class="text-primary text-sm font-bold hover:underline flex items-center gap-1" href="{{ url_for('contact') }}#map">
-                        Get Directions <span class="material-symbols-outlined text-sm">arrow_forward</span>
-</a>
-</div>
-</div>
-<div class="flex items-start gap-4 p-6 rounded-2xl bg-gray-50 border border-gray-100 hover:border-primary/30 hover:shadow-lg transition-all">
-<div class="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-primary shadow-sm shrink-0">
-<span class="material-symbols-outlined">school</span>
-</div>
-<div>
-<h4 class="text-lg font-bold text-secondary mb-2">Campus Expression</h4>
-<p class="text-gray-500 text-sm mb-3">University Auditorium, Main Campus, EBSU.</p>
-<a class="text-primary text-sm font-bold hover:underline flex items-center gap-1" href="{{ url_for('contact') }}#map">
-                        Get Directions <span class="material-symbols-outlined text-sm">arrow_forward</span>
-</a>
-</div>
-</div>
-</div>
-</div>
-</section>
-<section class="py-24 px-6 lg:px-8 bg-background-light">
-<div class="max-w-4xl mx-auto">
-<div class="text-center mb-12">
-<h2 class="text-secondary text-3xl font-serif font-medium">Frequently Asked Questions</h2>
-</div>
-<div class="space-y-4">
-<div class="bg-white rounded-2xl shadow-sm border border-gray-100">
-<button type="button" class="faq-toggle flex w-full cursor-pointer items-center justify-between gap-1.5 p-6 text-secondary">
-<h3 class="font-bold text-left">What time should I arrive for service?</h3>
-<span class="shrink-0 rounded-full bg-white p-1.5 text-primary sm:p-3">
-<svg class="faq-icon h-5 w-5 shrink-0 transition duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-<path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
-</svg>
-</span>
-</button>
-<div class="faq-answer px-6 pb-6 leading-relaxed text-gray-500 text-sm hidden">
-                        We recommend arriving 15-20 minutes before the service starts to find good parking, check your children into their departments, and find a comfortable seat.
-                    </div>
-</div>
-<div class="bg-white rounded-2xl shadow-sm border border-gray-100">
-<button type="button" class="faq-toggle flex w-full cursor-pointer items-center justify-between gap-1.5 p-6 text-secondary">
-<h3 class="font-bold text-left">Is there a ministry for children?</h3>
-<span class="shrink-0 rounded-full bg-white p-1.5 text-primary sm:p-3">
-<svg class="faq-icon h-5 w-5 shrink-0 transition duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-<path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
-</svg>
-</span>
-</button>
-<div class="faq-answer px-6 pb-6 leading-relaxed text-gray-500 text-sm hidden">
-                        Yes! We have a vibrant Children's Ministry where kids are taught the Word of God in a fun, age-appropriate environment. We also have a Teens Church.
-                    </div>
-</div>
-<div class="bg-white rounded-2xl shadow-sm border border-gray-100">
-<button type="button" class="faq-toggle flex w-full cursor-pointer items-center justify-between gap-1.5 p-6 text-secondary">
-<h3 class="font-bold text-left">How can I become a member?</h3>
-<span class="shrink-0 rounded-full bg-white p-1.5 text-primary sm:p-3">
-<svg class="faq-icon h-5 w-5 shrink-0 transition duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-<path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
-</svg>
-</span>
-</button>
-<div class="faq-answer px-6 pb-6 leading-relaxed text-gray-500 text-sm hidden">
-                        You can join our Membership Class (Foundation School) which runs periodically. Please visit the information desk after service or contact us via the form above for the next schedule.
-                    </div>
-</div>
-<script>
-document.querySelectorAll('.faq-toggle').forEach(function(btn) {
-  btn.addEventListener('click', function() {
-    var answer = btn.nextElementSibling;
-    var icon = btn.querySelector('.faq-icon');
-    answer.classList.toggle('hidden');
-    icon.classList.toggle('-rotate-180');
-  });
-});
-</script>
-</div>
-</div>
-</section>
-{% include "partials/site-footer.html" %}
-<style type="text/tailwindcss">
-    @@layer utilities {
-        @@keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-    }
+
+<style>
+    .contact-split { display: grid; gap: clamp(2.2rem, 5vw, 4.5rem); grid-template-columns: 1fr; align-items: start; }
+    @media (min-width: 940px) { .contact-split { grid-template-columns: 1.35fr 0.65fr; } }
+    .contact-aside .sched td { padding-block: 0.5rem; font-size: 0.78rem; }
+    .contact-aside .sched .s-day { width: 6.5rem; }
 </style>
 
-</body></html>
+{% include "partials/theme-page-close.html" %}

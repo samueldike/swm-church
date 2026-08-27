@@ -1,0 +1,46 @@
+{# Social / SEO metadata, shared by every page.
+
+   A page may set, before including this:
+     metaTitle       – defaults to pageTitle, else the site name
+     metaDescription – defaults to pageMeta / pageLede / the site tagline
+     metaImage       – defaults to the page hero, else the branded share card
+     metaType        – "website" (default) or "article"
+     canonicalUrl    – defaults to the current path (set in template.py)
+
+   Every URL is absolutised via absUrl(): crawlers discard relative og:image
+   and og:url outright, which is the usual reason a pasted link shows nothing. #}
+{%- set _mTitle = (metaTitle or pageTitle or siteName)|string|trim -%}
+{%- set _mFull = _mTitle if _mTitle == siteName else _mTitle ~ ' — ' ~ siteName -%}
+{%- set _mDesc = (metaDescription or pageMeta or pageLede or siteTagline)|string|trim -%}
+{%- set _mImg = absUrl(metaImage or _heroOwn or '/images/social/og-default.jpg') -%}
+{%- set _mUrl = canonicalUrl -%}
+
+<link rel="canonical" href="{{ _mUrl }}"/>
+<meta name="description" content="{{ _mDesc }}"/>
+
+<meta property="og:type" content="{{ metaType or 'website' }}"/>
+<meta property="og:site_name" content="{{ siteName }}"/>
+<meta property="og:locale" content="en_NG"/>
+<meta property="og:title" content="{{ _mFull }}"/>
+<meta property="og:description" content="{{ _mDesc }}"/>
+<meta property="og:url" content="{{ _mUrl }}"/>
+<meta property="og:image" content="{{ _mImg }}"/>
+<meta property="og:image:secure_url" content="{{ _mImg }}"/>
+<meta property="og:image:alt" content="{{ _mTitle }} — {{ siteName }}"/>
+{%- if not (metaImage or _heroOwn) %}
+<meta property="og:image:type" content="image/jpeg"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+{%- endif %}
+
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="{{ _mFull }}"/>
+<meta name="twitter:description" content="{{ _mDesc }}"/>
+<meta name="twitter:image" content="{{ _mImg }}"/>
+<meta name="twitter:image:alt" content="{{ _mTitle }} — {{ siteName }}"/>
+{%- if socialX %}
+<meta name="twitter:site" content="@swm_nigeria"/>
+{%- endif %}
+
+<meta name="theme-color" content="#0A0A0B"/>
+<meta name="robots" content="index, follow, max-image-preview:large"/>

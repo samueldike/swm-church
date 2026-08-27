@@ -1,0 +1,40 @@
+{# Shared opening chrome for every interior page: document head, masthead, and
+   the hero band. Callers set `pageTitle`, `pageEyebrow`, optional `pageLede`,
+   optional `pageMeta` (description), and `pageKey` — which selects the hero
+   image an admin uploaded under Settings → Page Hero Images. Resolution order:
+   explicit `pageHeroImage` → this page's admin upload → the admin default →
+   the shipped fallback. Then continue with <section class="band …"> blocks and
+   close with theme-page-close.html. #}
+{% set _heroKey = 'pageHero_' ~ (pageKey or '') %}
+{# Deliberately chosen for THIS page (an explicit image, or one an admin
+   uploaded against this page key) — as opposed to the generic site-wide
+   fallback. Social cards use this, and drop to the branded share card rather
+   than a generic header crop, so a pasted link is never accidental. #}
+{% set _heroOwn = pageHeroImage or settings.get(_heroKey) %}
+{% set _heroRaw = _heroOwn or defaultPageHero or '/images/general-page-header.jpg' %}
+{% set _hero = _heroRaw if _heroRaw.startswith(('/', 'http')) else '/' ~ _heroRaw %}
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>{{ pageTitle }} — {{ siteName }}</title>
+<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
+<link rel="apple-touch-icon" href="/images/swm-logo.png"/>
+{% include "partials/theme-meta.html" %}
+{% include "partials/theme-head.html" %}
+</head>
+<body>
+{% include "partials/theme-header.html" %}
+
+<main>
+<header class="page-hero">
+    <div class="page-hero-bed" aria-hidden="true">
+        <img src="{{ _hero }}" alt=""/>
+        <div class="page-hero-veil"></div>
+    </div>
+    <div class="shell">
+        {% if pageEyebrow %}<p class="mono eyebrow"><span class="rule"></span>{{ pageEyebrow }}</p>{% endif %}
+        <h1 class="t-display" style="margin-top:1.1rem;max-width:19ch;">{{ pageTitle }}</h1>
+        {% if pageLede %}<p class="t-body" style="margin-top:1.2rem;">{{ pageLede }}</p>{% endif %}
+    </div>
+</header>

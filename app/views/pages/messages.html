@@ -1,121 +1,138 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Audio Messages - {{ siteName }}</title>
-<meta name="description" content="Listen to and download audio sermons from {{ siteName }}."/>
-<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
-{% include "partials/site-head-assets.html" %}
-<style>
-  .audio-player{display:flex;align-items:center;gap:12px;padding:12px 16px;background:#f9fafb;border-radius:12px;border:1px solid #e5e7eb;margin-top:16px}
-  .audio-player audio{flex:1;height:40px;border-radius:8px}
-  .audio-player audio::-webkit-media-controls-panel{background:#f3f4f6}
-  .audio-player audio::-webkit-media-controls-play-button{color:#1a1a1a}
-  .audio-player audio::-webkit-media-controls-time-display{color:#374151;font-size:12px}
-  .btn-download{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:9999px;background:#1a1a1a;color:#fff;font-size:13px;font-weight:700;text-decoration:none;transition:background .2s}
-  .btn-download:hover{background:var(--swm-primary)}
-  .featured-audio-player{display:flex;align-items:center;gap:12px;padding:16px 20px;background:rgba(255,255,255,.08);border-radius:12px;border:1px solid rgba(255,255,255,.12);margin-top:20px}
-  .featured-audio-player audio{flex:1;height:44px;border-radius:8px}
-  .featured-audio-player audio::-webkit-media-controls-panel{background:rgba(255,255,255,.1)}
-  .featured-audio-player audio::-webkit-media-controls-play-button{color:#fff}
-  .featured-audio-player audio::-webkit-media-controls-time-display{color:rgba(255,255,255,.8);font-size:12px}
-  .btn-download-featured{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;border-radius:9999px;background:var(--swm-primary);color:#fff;font-size:14px;font-weight:700;text-decoration:none;transition:background .2s}
-  .btn-download-featured:hover{background:#b38b2e}
-  @media(max-width:640px){
-    .audio-player{flex-direction:column;align-items:stretch}
-    .audio-player audio{width:100%}
-    .featured-audio-player{flex-direction:column;align-items:stretch}
-    .featured-audio-player audio{width:100%}
-  }
-</style>
-</head>
-<body class="bg-background-light text-secondary font-sans antialiased">
-{% include "partials/site-header.html" %}
+{% set pageKey = 'messages' %}
+{% set pageEyebrow = 'Audio messages' %}
+{% set pageTitle = 'The Word, kept and shared.' %}
+{% set pageLede = 'Every message preached in this house, archived so you can return to it — or hear what you missed.' %}
+{% include "partials/theme-page-open.html" %}
 
-{% set heroTitle = 'Audio Messages' %}
-{% set heroSubtitle = 'Audio Archive' %}
-{% set heroDescription = 'Stream sermons from our archive, download for offline listening, or subscribe with your favorite podcast app.' %}
-{% set heroBgImage = settings.get('pageHero_messages', '') if settings else '' %}
-{% include "partials/site-page-hero.html" %}
-
-<main class="px-6 py-12 lg:px-8">
-  <div class="mx-auto max-w-7xl space-y-10">
-    <form method="GET" action="{{ url_for('messages') }}" class="flex flex-col gap-3 border-b border-gray-200 pb-6 sm:flex-row sm:items-center">
-      <input name="search" value="{{ search }}" class="h-12 flex-1 rounded-full border border-gray-200 bg-white px-5 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" placeholder="Search by message title, caption or speaker">
-      <button class="h-12 rounded-full bg-secondary px-6 text-sm font-bold text-white hover:bg-primary">Search</button>
-      {% if search != '' %}<a href="{{ url_for('messages') }}" class="inline-flex h-12 items-center justify-center rounded-full border border-gray-200 px-6 text-sm font-bold text-gray-600 hover:text-gray-900">Reset</a>{% endif %}
-    </form>
-
-    {% if featured_sermon %}
-      <section class="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-soft">
-        <div class="grid lg:grid-cols-[380px_minmax(0,1fr)]">
-          <div class="flex min-h-72 items-center justify-center bg-secondary p-10">
-            <img src="/images/swm-logo.png" alt="{{ siteName }}" class="max-h-40 w-auto object-contain" width="160" height="160">
-          </div>
-          <div class="p-8 lg:p-10">
-            <p class="text-xs font-bold uppercase tracking-[0.2em] text-primary">Featured Audio</p>
-            <a href="{{ url_for('messages_show', slug=featured_sermon.slug) }}">
-            <h2 class="mt-3 font-serif text-3xl font-bold text-secondary md:text-4xl hover:text-primary transition-colors">{{ featured_sermon.title }}</h2>
-            </a>
-            <p class="mt-4 whitespace-pre-line text-sm leading-7 text-gray-600">{{ featured_sermon.caption }}</p>
-            <div class="mt-6 flex flex-wrap items-center gap-3 text-sm text-gray-500">
-              {% if featured_sermon.preacher %}<span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-base text-primary">person</span>{{ featured_sermon.preacher }}</span>{% endif %}
-              {% if featured_sermon.published_at %}<span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-base text-primary">calendar_month</span>{{ featured_sermon.published_at.strftime('%B %d, %Y') }}</span>{% endif %}
-            </div>
-            {% if featured_sermon.telegram_file_id or featured_sermon.media_url %}
-              <div class="featured-audio-player">
-                <audio controls preload="metadata" src="{{ url_for('messages_stream', sermon_id=featured_sermon.id) }}"></audio>
-                <a href="{{ url_for('messages_download', sermon_id=featured_sermon.id) }}" class="btn-download-featured"><span class="material-symbols-outlined" style="font-size:18px">download</span>Download</a>
-              </div>
+{% if featured_sermon %}
+<section class="band band-dark">
+    <div class="shell split">
+        <div>
+            <p class="mono eyebrow"><span class="rule"></span>Featured</p>
+            <h2 class="t-h2" style="margin-top:1rem;max-width:18ch;">{{ featured_sermon.title }}</h2>
+            {% if featured_sermon.caption %}
+            <p class="t-body" style="margin-top:1.2rem;">{{ featured_sermon.caption }}</p>
             {% endif %}
-          </div>
+            <div class="feat-meta">
+                {% if featured_sermon.preacher %}<span class="mono faint">{{ featured_sermon.preacher }}</span>{% endif %}
+                {% if featured_sermon.published_at %}
+                <span class="mono faint">{{ featured_sermon.published_at.strftime('%d %b %Y') }}</span>
+                {% endif %}
+            </div>
+            <div class="flex flex-wrap items-center gap-3" style="margin-top:1.8rem;">
+                <a href="{{ url_for('messages_show', slug=featured_sermon.slug) }}" class="btn btn-gold">
+                    <span class="material-symbols-outlined" style="font-size:18px">play_arrow</span>
+                    Listen now
+                </a>
+                <a href="{{ url_for('watch') }}" class="btn btn-ghost">Watch live</a>
+            </div>
         </div>
-      </section>
-    {% endif %}
-
-    <section class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-      {% for sermon in sermons %}
-        <article class="rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
-          <p class="text-xs font-bold uppercase tracking-[0.18em] text-primary">Audio Message</p>
-          <a href="{{ url_for('messages_show', slug=sermon.slug) }}">
-          <h2 class="mt-3 font-serif text-2xl font-bold text-secondary hover:text-primary transition-colors">{{ sermon.title }}</h2>
-          </a>
-          <p class="mt-3 line-clamp-4 text-sm leading-6 text-gray-600">{{ sermon.caption }}</p>
-          <div class="mt-5 space-y-2 text-sm text-gray-500">
-            {% if sermon.preacher %}<p class="flex items-center gap-2"><span class="material-symbols-outlined text-base text-primary">person</span>{{ sermon.preacher }}</p>{% endif %}
-            {% if sermon.published_at %}<p class="flex items-center gap-2"><span class="material-symbols-outlined text-base text-primary">calendar_month</span>{{ sermon.published_at.strftime('%b %d, %Y') }}</p>{% endif %}
-          </div>
-          {% if sermon.telegram_file_id or sermon.media_url %}
-            <div class="audio-player">
-              <audio controls preload="metadata" src="{{ url_for('messages_stream', sermon_id=sermon.id) }}"></audio>
-              <a href="{{ url_for('messages_download', sermon_id=sermon.id) }}" class="btn-download"><span class="material-symbols-outlined" style="font-size:16px">download</span></a>
-            </div>
-          {% else %}
-            <div class="mt-6 flex items-center justify-between border-t border-gray-100 pt-5">
-              <span class="text-xs font-semibold text-gray-400">{{ sermon.branch.name if sermon.branch else '' }}</span>
-            </div>
-          {% endif %}
-        </article>
-      {% else %}
-        <div class="col-span-full rounded-2xl border border-gray-100 bg-white p-10 text-center text-sm text-gray-500">No audio messages have been published yet.</div>
-      {% endfor %}
-    </section>
-
-    {% if pagination and pagination.pages > 1 %}
-    <div class="flex justify-center gap-2 mt-8">
-      {% if pagination.has_prev %}
-        <a href="{{ pagination.prev_url }}" class="px-4 py-2 rounded-full border border-gray-200 text-sm font-bold hover:bg-gray-50">Previous</a>
-      {% endif %}
-      <span class="px-4 py-2 text-sm text-gray-500">Page {{ pagination.page }} of {{ pagination.pages }}</span>
-      {% if pagination.has_next %}
-        <a href="{{ pagination.next_url }}" class="px-4 py-2 rounded-full border border-gray-200 text-sm font-bold hover:bg-gray-50">Next</a>
-      {% endif %}
+        <div class="feat-art" aria-hidden="true">
+            <span class="material-symbols-outlined">graphic_eq</span>
+        </div>
     </div>
-    {% endif %}
-  </div>
-</main>
+</section>
+{% endif %}
 
-{% include "partials/site-footer.html" %}
-</body>
-</html>
+<section class="band band-light">
+    <div class="shell">
+        <div class="head">
+            <div>
+                <p class="mono eyebrow"><span class="rule"></span>The archive</p>
+                <h2 class="t-h2" style="margin-top:1rem;">
+                    {% if search %}Results for “{{ search }}”{% else %}All messages{% endif %}
+                </h2>
+            </div>
+            <form method="GET" action="{{ url_for('messages') }}" class="search-row" role="search">
+                <label class="sr-only" for="msg-search">Search messages</label>
+                <input id="msg-search" type="search" name="search" value="{{ search or '' }}"
+                       placeholder="Search by title or preacher"/>
+                <button class="btn btn-gold" type="submit">Search</button>
+            </form>
+        </div>
+
+        {% if sermons %}
+        <ul class="rows rows-play" style="margin-top:2rem;">
+            {% for sermon in sermons %}
+            <li class="row row-link">
+                <a href="{{ url_for('messages_show', slug=sermon.slug) }}">
+                    <span class="mono faint row-i">{{ '%02d'|format(loop.index + (((pagination.page if pagination else 1) - 1) * 12)) }}</span>
+                    <span class="row-play material-symbols-outlined" aria-hidden="true">play_arrow</span>
+                    <span class="row-main">
+                        <span class="t-h3">{{ sermon.title }}</span>
+                        {% if sermon.caption %}<span class="t-sm row-sub">{{ sermon.caption }}</span>{% endif %}
+                    </span>
+                    <span class="row-meta mono faint">
+                        {{ sermon.preacher or '' }}
+                        {% if sermon.published_at %}<br/>{{ sermon.published_at.strftime('%d %b %Y') }}{% endif %}
+                    </span>
+                    <span class="row-go material-symbols-outlined">arrow_outward</span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+
+        {% if pagination and (pagination.prev_url or pagination.next_url) %}
+        <nav class="pager" aria-label="Pagination">
+            {% if pagination.prev_url %}
+            <a class="btn btn-ghost" href="{{ pagination.prev_url }}">Previous</a>
+            {% endif %}
+            <span class="mono faint">Page {{ pagination.page }}{% if pagination.pages %} of {{ pagination.pages }}{% endif %}</span>
+            {% if pagination.next_url %}
+            <a class="btn btn-ghost" href="{{ pagination.next_url }}">Next</a>
+            {% endif %}
+        </nav>
+        {% endif %}
+
+        {% elif search %}
+        <div class="empty" style="margin-top:2rem;">
+            <p class="t-body">Nothing matched “{{ search }}”.</p>
+            <a href="{{ url_for('messages') }}" class="btn btn-ghost" style="margin-top:1.2rem;">Clear search</a>
+        </div>
+        {% else %}
+        <div class="empty" style="margin-top:2rem;">
+            <p class="t-body">Messages are published here after each service.</p>
+            <a href="{{ url_for('calendar') }}" class="btn btn-ghost" style="margin-top:1.2rem;">See service times</a>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<section class="band band-dark">
+    <div class="shell" style="text-align:center;">
+        <h2 class="t-h2" style="max-width:24ch;margin-inline:auto;">Hear it live, in the room.</h2>
+        <div class="flex flex-wrap items-center justify-center gap-3" style="margin-top:1.8rem;">
+            <a href="{{ url_for('contact') }}" class="btn btn-gold">Plan your visit</a>
+            <a href="{{ url_for('watch') }}" class="btn btn-ghost">Watch online</a>
+        </div>
+    </div>
+</section>
+
+<style>
+    .feat-art {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        aspect-ratio: 4 / 3;
+        max-height: 44svh;
+        border: 1px solid var(--line);
+        background: linear-gradient(150deg, var(--surface), var(--ink));
+    }
+    .feat-art .material-symbols-outlined { font-size: 78px; color: var(--gold); opacity: 0.55; }
+    .feat-meta { display: flex; flex-wrap: wrap; gap: 1.2rem; margin-top: 1.4rem; }
+    .search-row { display: flex; align-items: flex-end; gap: 0.7rem; }
+    .search-row input {
+        background: transparent;
+        border: 0;
+        border-bottom: 1px solid var(--line-2);
+        color: var(--fg);
+        font: inherit;
+        font-size: 0.92rem;
+        padding: 0.55rem 0;
+        min-width: min(15rem, 52vw);
+    }
+    .search-row input:focus { outline: none; border-bottom-color: var(--gold); }
+    .pager { display: flex; align-items: center; gap: 1.2rem; margin-top: 2.2rem; flex-wrap: wrap; }
+</style>
+
+{% include "partials/theme-page-close.html" %}

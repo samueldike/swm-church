@@ -32,7 +32,9 @@
 </tbody></table></div>
 </section>
 </div></main></div>
-<div id="create-story-modal" class="fixed inset-0 z-50 hidden"><div class="absolute inset-0 bg-black/50" data-close-story-modal></div><div class="absolute inset-x-4 top-6 mx-auto max-w-3xl rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+<div id="create-story-modal" class="fixed inset-0 z-50 hidden"><div class="absolute inset-0 bg-black/50" data-close-story-modal></div><div class="absolute inset-x-4 top-6 mx-auto max-w-3xl rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden" style="
+    max-height: 91vh;
+">
 <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4"><h3 class="text-sm font-bold text-gray-900">New Story</h3><button type="button" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-50" data-close-story-modal><i class="ri-close-line text-lg"></i></button></div>
 <form method="POST" action="{{ url_for('admin_stories_store') }}" enctype="multipart/form-data" class="p-5 grid gap-3 max-h-[80vh] overflow-y-auto"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 <label><span class="form-label">Title *</span><input name="title" class="form-input" required></label>

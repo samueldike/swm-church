@@ -1,59 +1,92 @@
-<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Sitemap - {{ siteName }}</title>
-<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
-<link rel="apple-touch-icon" href="/images/swm-logo.png"/>
+{% set pageEyebrow = 'Sitemap' %}
+{% set pageTitle = 'Everything on this site.' %}
+{% set pageLede = 'One page listing every part of the ministry site.' %}
+{% include "partials/theme-page-open.html" %}
 
-{% include "partials/site-head-assets.html" %}
+{% set groups = [
+    ('The ministry', [
+        ('home',        'Home',            'Where everything starts.'),
+        ('about',       'About',           'Who we are and where the name comes from.'),
+        ('our_pastor',  'Our Pastor',      'The senior pastor and the mandate he carries.'),
+        ('departments', 'Departments',     'The units that carry the work of the house.'),
+        ('casom',       'CASOM',           'Cave of Adullam School of Ministry.')
+    ]),
+    ('The Word', [
+        ('messages', 'Audio Messages', 'The full archive of preached messages.'),
+        ('watch',    'Watch',          'Live services and streaming channels.'),
+        ('stories',  'Stories',        'Testimonies from our community.')
+    ]),
+    ('Gather', [
+        ('calendar', 'Calendar', 'Weekly services and annual programmes.'),
+        ('events',   'Events',   'Upcoming and recent programmes.')
+    ]),
+    ('Take a step', [
+        ('contact',      'Contact',     'Plan a visit or send us a message.'),
+        ('prayer',       'Prayer',      'Send a request to the prayer team.'),
+        ('give',         'Give',        'Support the work of the ministry.'),
+        ('get_involved', 'Volunteer',   'Find your place to serve.')
+    ])
+] %}
+
+<section class="band band-light">
+    <div class="shell sitemap-grid">
+        {% for heading, links in groups %}
+        <div>
+            <p class="mono eyebrow"><span class="rule"></span>{{ heading }}</p>
+            <ul class="rows" style="margin-top:1.2rem;">
+                {% for route, label, blurb in links %}
+                <li class="row row-link">
+                    <a href="{{ url_for(route) }}">
+                        <span class="row-main">
+                            <span class="t-h3">{{ label }}</span>
+                            <span class="t-sm row-sub">{{ blurb }}</span>
+                        </span>
+                        <span class="row-go material-symbols-outlined">arrow_outward</span>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="band band-dark">
+    <div class="shell">
+        <p class="mono eyebrow"><span class="rule"></span>Beyond the walls</p>
+        <ul class="rows" style="margin-top:1.4rem;max-width:60ch;">
+            <li class="row row-link">
+                <a href="{{ url_for('outreach_detail', kind='prison') }}">
+                    <span class="row-main"><span class="t-h3">Annual Prison Outreach</span></span>
+                    <span class="row-go material-symbols-outlined">arrow_outward</span>
+                </a>
+            </li>
+            <li class="row row-link">
+                <a href="{{ url_for('outreach_detail', kind='medical') }}">
+                    <span class="row-main"><span class="t-h3">Free Medical Outreach</span></span>
+                    <span class="row-go material-symbols-outlined">arrow_outward</span>
+                </a>
+            </li>
+            <li class="row row-link">
+                <a href="{{ url_for('privacy_policy') }}">
+                    <span class="row-main"><span class="t-h3">Privacy Policy</span></span>
+                    <span class="row-go material-symbols-outlined">arrow_outward</span>
+                </a>
+            </li>
+            <li class="row row-link">
+                <a href="{{ url_for('terms_of_service') }}">
+                    <span class="row-main"><span class="t-h3">Terms of Service</span></span>
+                    <span class="row-go material-symbols-outlined">arrow_outward</span>
+                </a>
+            </li>
+        </ul>
+    </div>
+</section>
+
 <style>
-        .text-shadow {
-            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-    </style>
+    .sitemap-grid { display: grid; gap: clamp(2rem, 4vw, 3.4rem); grid-template-columns: 1fr; }
+    @media (min-width: 760px)  { .sitemap-grid { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 1120px) { .sitemap-grid { grid-template-columns: repeat(4, 1fr); } }
+</style>
 
-</head>
-<body class="bg-background-light dark:bg-background-dark text-secondary font-sans antialiased overflow-x-hidden selection:bg-primary selection:text-white">
-{% include "partials/site-header.html" %}
-
-<main class="bg-background-light">
-  <section class="relative overflow-hidden bg-secondary text-white">
-    <div class="max-w-7xl mx-auto px-6 lg:px-8 py-20">
-      <span class="text-primary text-sm font-bold tracking-[0.2em] uppercase">Navigate The Site</span>
-      <h1 class="text-white text-4xl md:text-6xl font-serif font-medium leading-tight mt-4">Sitemap</h1>
-      <p class="text-gray-200 text-lg mt-6 max-w-2xl">Quick links to key pages across the {{ siteName }} website.</p>
-      <div class="mt-8 flex flex-wrap gap-4">
-        <a class="h-12 px-6 rounded-full bg-primary text-white font-bold text-sm hover:bg-white hover:text-primary transition-all" href="{{ url_for('contact') }}">Contact Us</a>
-        <a class="h-12 px-6 rounded-full border border-white/40 text-white font-bold text-sm hover:border-primary hover:text-primary transition-all" href="{{ url_for('get-involved') }}">Get Involved</a>
-      </div>
-    </div>
-  </section>
-  <section class="max-w-6xl mx-auto px-6 lg:px-8 py-16">
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-soft p-8 md:p-10">
-      
-<h2 class="text-2xl font-serif font-bold text-secondary">Main Pages</h2>
-<ul class="mt-6 space-y-2 text-gray-600">
-  <li><a class="text-primary hover:underline" href="{{ url_for('home') }}">Home</a></li>
-  <li><a class="text-primary hover:underline" href="{{ url_for('about') }}">About</a></li>
-  <li><a class="text-primary hover:underline" href="{{ url_for('departments') }}">Departments</a></li>
-  <li><a class="text-primary hover:underline" href="{{ url_for('messages') }}">Messages</a></li>
-  <li><a class="text-primary hover:underline" href="{{ url_for('events') }}">Events</a></li>
-  <li><a class="text-primary hover:underline" href="{{ url_for('calendar') }}">Calendar</a></li>
-  <li><a class="text-primary hover:underline" href="{{ url_for('casom') }}">CASOM</a></li>
-  <li><a class="text-primary hover:underline" href="{{ url_for('contact') }}">Contact</a></li>
-  <li><a class="text-primary hover:underline" href="{{ url_for('get-involved') }}">Get Involved</a></li>
-  <li><a class="text-primary hover:underline" href="{{ url_for('give') }}">Give</a></li>
-  <li><a class="text-primary hover:underline" href="{{ url_for('privacy-policy') }}">Privacy Policy</a></li>
-  <li><a class="text-primary hover:underline" href="{{ url_for('terms-of-service') }}">Terms of Service</a></li>
-  <li><a class="text-primary hover:underline" href="{{ url_for('stories') }}">Stories</a></li>
-  <li><a class="text-primary hover:underline" href="{{ url_for('prayer') }}">Prayer</a></li>
-  <li><a class="text-primary hover:underline" href="{{ url_for('watch') }}">Watch</a></li>
-</ul>
-
-    </div>
-  </section>
-</main>
-
-{% include "partials/site-footer.html" %}
-</body></html>
+{% include "partials/theme-page-close.html" %}

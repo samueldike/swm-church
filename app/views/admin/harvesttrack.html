@@ -10,162 +10,415 @@
 <div class="flex h-screen overflow-hidden">
 {% include "partials/admin-sidebar.html" %}
 <main class="flex-1 flex flex-col overflow-hidden">
-{% with title="HarvestTrack", subtitle="Manage evangelism workers, contacts, follow-ups, and reminders", headerIcon="ri-seedling-line" %}{% include "partials/admin-topbar.html" %}{% endwith %}
+{% with title="HarvestTrack", subtitle="Field activity, conversion and retention tracking", headerIcon="ri-seedling-line" %}{% include "partials/admin-topbar.html" %}{% endwith %}
 
 <div class="flex-1 overflow-y-auto p-5 lg:p-8 space-y-5">
 {% if session.get('success') %}
 <div class="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-4 py-3">{{ session.get('success') }}</div>
-
+{% endif %}
+{% if session.get('error') %}
+<div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ session.get('error') }}</div>
+{% endif %}
 {% if error_messages.get('createWorker') %}
 <div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ error_messages.get('createWorker', [''])[0] }}</div>
-{% elif error_messages %}
-<div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ (error_messages.values()|map('first')|list|first if error_messages else '') }}</div>
-{% endif %}
 {% endif %}
 
-<section class="content-card p-4 lg:p-5">
-  <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-    <div>
-      <h2 class="text-base font-bold text-gray-900">HarvestTrack Overview</h2>
-      <p class="text-xs text-gray-500 mt-0.5">Monitor evangelism workers, contacts, follow-ups, and reminders.</p>
-    </div>
-    {% if isSuper %}
-      <form method="GET" action="{{ url_for('admin_harvesttrack') }}" class="flex items-center gap-2">
-        <select name="branch_id" class="filter-select min-w-56" onchange="this.form.submit()">
-          <option value="">All branches</option>
-          {% for branch in branches %}
-            <option value="{{ branch.id }}" {{ 'selected' if branchId|string == branch.id|string else '' }}>{{ branch.name }}</option>
-          {% endfor %}
-        </select>
-        {% if branchId %}
-          <a href="{{ url_for('admin_harvesttrack') }}" class="h-10 inline-flex items-center rounded-xl border border-gray-200 px-3 text-xs font-bold text-gray-600 hover:text-gray-900">Reset</a>
-        {% endif %}
-      </form>
-
-  </div>
-</section>
-{% endif %}
-
-<div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
-  {% set card_values = [
-    ['Workers', stats.get('total_workers', 0), 'ri-user-star-line', 'amber'],
-    ['Contacts', stats.get('contacts', 0), 'ri-contacts-book-line', 'emerald'],
-    ['Due Today', stats.get('due_today', 0), 'ri-notification-3-line', 'rose'],
-    ['Full Members', stats.get('full_members', 0), 'ri-seedling-line', 'violet'],
-    ['Follow-ups Week', stats.get('follow_ups_week', 0), 'ri-book-open-line', 'sky'],
+<!-- Tab nav -->
+<div class="content-card p-1.5 flex flex-wrap gap-1">
+  {% set navTabs = [
+    ('dashboard', 'Dashboard', 'ri-dashboard-3-line'),
+    ('team', 'Team Performance', 'ri-team-line'),
+    ('dropoff', 'Drop-off Alerts', 'ri-alarm-warning-line'),
+    ('retention', 'Retention', 'ri-shield-check-line'),
+    ('contacts', 'Contacts', 'ri-contacts-book-line'),
+    ('teams', 'Teams & Workers', 'ri-group-line'),
   ] %}
-  {% for label, value, icon, tone in card_values %}
+  {% for key, label, icon in navTabs %}
+    <a href="{{ tab_urls[key] }}" class="inline-flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-colors {{ 'bg-primary/10 text-primary' if tab == key else 'text-gray-600 hover:bg-gray-50 hover:text-gray-900' }}"><i class="{{ icon }} text-base"></i>{{ label }}</a>
+  {% endfor %}
+</div>
+
+<!-- Shared filter bar -->
+<section class="content-card p-4 lg:p-5">
+  <form method="GET" action="{{ url_for('admin_harvesttrack') }}" class="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-12">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <label class="min-w-0 xl:col-span-2"><span class="form-label">From</span><input type="date" name="start_date" value="{{ filters.start_date }}" class="form-input"></label>
+    <label class="min-w-0 xl:col-span-2"><span class="form-label">To</span><input type="date" name="end_date" value="{{ filters.end_date }}" class="form-input"></label>
+    <label class="min-w-0 xl:col-span-2"><span class="form-label">Team</span><select name="team_id" class="form-input"><option value="">All teams</option>{% for team in teams %}<option value="{{ team.id }}" {{ 'selected' if filters.team_id|string == team.id|string else '' }}>{{ team.name }}</option>{% endfor %}</select></label>
+    <label class="min-w-0 xl:col-span-2"><span class="form-label">Source</span><select name="source" class="form-input"><option value="">All sources</option>{% for key in sources %}<option value="{{ key }}" {{ 'selected' if filters.source == key else '' }}>{{ sourceLabels[key] }}</option>{% endfor %}</select></label>
+    {% if isSuper %}
+      <label class="min-w-0 xl:col-span-2"><span class="form-label">Branch</span><select name="branch_id" class="form-input"><option value="">All branches</option>{% for branch in branches %}<option value="{{ branch.id }}" {{ 'selected' if filters.branch_id|string == branch.id|string else '' }}>{{ branch.name }}</option>{% endfor %}</select></label>
+    {% endif %}
+    {% if tab == 'contacts' %}
+      <label class="min-w-0 xl:col-span-2"><span class="form-label">Stage</span><select name="stage" class="form-input"><option value="">All stages</option>{% for key in stages %}<option value="{{ key }}" {{ 'selected' if filters.stage == key else '' }}>{{ stageLabels[key] }}</option>{% endfor %}</select></label>
+      <label class="min-w-0 xl:col-span-2"><span class="form-label">Search</span><input name="q" value="{{ filters.q }}" placeholder="Name, phone, email" class="form-input"></label>
+    {% endif %}
+    <div class="flex gap-2 xl:col-span-2">
+      <button class="h-11 flex-1 rounded-xl bg-primary px-4 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">Apply</button>
+      <a href="{{ export_url }}" class="h-11 inline-flex items-center justify-center rounded-xl border border-gray-200 px-4 text-xs font-bold text-gray-600 hover:text-gray-900 transition-colors" title="Export CSV respecting these filters"><i class="ri-download-2-line text-base"></i></a>
+    </div>
+  </form>
+</section>
+
+{% if tab == 'dashboard' %}
+<div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+  {% set cards = [
+    ('Total Contacts', totalContacts, 'ri-contacts-book-line', 'amber'),
+    ('Committed', stageCounts.committed, 'ri-medal-line', 'emerald'),
+    ('Inactive', stageCounts.inactive, 'ri-pause-circle-line', 'rose'),
+    ('Touchpoints (range)', touchpointsInRange, 'ri-phone-line', 'sky'),
+    ('Conversion Rate', conversionRate, 'ri-percent-line', 'violet'),
+  ] %}
+  {% set toneMap = {'amber': 'bg-amber-50 text-amber-600', 'emerald': 'bg-emerald-50 text-emerald-600', 'rose': 'bg-rose-50 text-rose-500', 'sky': 'bg-sky-50 text-sky-600', 'violet': 'bg-violet-50 text-violet-600'} %}
+  {% for label, value, icon, tone in cards %}
     <div class="rounded-xl border border-gray-100 bg-white p-4">
-      {% set toneMap = {
-        'amber': 'bg-amber-50 text-amber-600',
-        'emerald': 'bg-emerald-50 text-emerald-600',
-        'rose': 'bg-rose-50 text-rose-500',
-        'violet': 'bg-violet-50 text-violet-600',
-        'sky': 'bg-sky-50 text-sky-600',
-      } %}
-      <div class="w-9 h-9 flex items-center justify-center rounded-lg {{ toneMap.get(tone, 'bg-primary/10 text-primary') }} mb-3"><i class="{{ icon }} text-base"></i></div>
-      <p class="text-2xl font-bold text-gray-900">{{ '{:,.0f}'.format(value|int) }}</p>
+      <div class="w-9 h-9 flex items-center justify-center rounded-lg {{ toneMap[tone] }} mb-3"><i class="{{ icon }} text-base"></i></div>
+      <p class="text-2xl font-bold text-gray-900">{{ '{:,.0f}'.format(value) if label != 'Conversion Rate' else value }}{{ '%' if label == 'Conversion Rate' else '' }}</p>
       <p class="text-[11px] text-gray-500 mt-0.5">{{ label }}</p>
     </div>
   {% endfor %}
 </div>
 
 <section class="content-card p-4 lg:p-5">
-  <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+  <h2 class="text-base font-bold text-gray-900 mb-4">Funnel</h2>
+  <div class="space-y-3">
+    {% for key in stages %}
+      {% set pct = (stageCounts[key] / totalContacts * 100) if totalContacts else 0 %}
+      <div>
+        <div class="flex items-center justify-between mb-1 text-xs"><span class="font-semibold text-gray-700">{{ stageLabels[key] }}</span><span class="text-gray-500">{{ stageCounts[key] }} ({{ '%.0f'|format(pct) }}%)</span></div>
+        <div class="h-2.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full rounded-full bg-primary" style="width: {{ [pct, 2]|max if stageCounts[key] > 0 else 0 }}%;"></div></div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="content-card p-4 lg:p-5">
+  <h2 class="text-base font-bold text-gray-900 mb-4">Retention Snapshot</h2>
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    {% for window in retentionWindows %}
+      <div class="rounded-xl border border-gray-100 p-4 text-center">
+        <p class="text-2xl font-bold text-gray-900">{{ retention[window].pct }}{{ '%' if retention[window].pct is not none else '' }}</p>
+        <p class="text-[11px] text-gray-500 mt-1">{{ window }}-Day Retention</p>
+        <p class="text-[10px] text-gray-400 mt-1">{{ retention[window].retained }} of {{ retention[window].eligible }} eligible</p>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if tab == 'team' %}
+<section class="content-card p-4 lg:p-5">
+  <h2 class="text-base font-bold text-gray-900 mb-1">Team Aggregates</h2>
+  <p class="text-xs text-gray-500 mb-4">Rolled up from each team's field members.</p>
+  <div class="overflow-x-auto">
+    <table class="w-full min-w-[720px] text-sm">
+      <thead><tr class="border-b border-gray-100"><th class="table-header py-3 pr-4">Team</th><th class="table-header py-3 pr-4">Contacts Assigned</th><th class="table-header py-3 pr-4">Touchpoints</th><th class="table-header py-3 pr-4">Progressed</th><th class="table-header py-3 pr-4">Committed</th><th class="table-header py-3 pr-4">Conversion Rate</th></tr></thead>
+      <tbody class="divide-y divide-gray-100">
+      {% for row in teamPerformance.values() %}
+        <tr class="hover:bg-gray-50/50">
+          <td class="py-3 pr-4 font-semibold text-gray-900">{{ row.team.name if row.team else 'Unassigned' }}</td>
+          <td class="py-3 pr-4 text-gray-600">{{ row.assigned }}</td>
+          <td class="py-3 pr-4 text-gray-600">{{ row.touchpoints }}</td>
+          <td class="py-3 pr-4 text-gray-600">{{ row.progressed }}</td>
+          <td class="py-3 pr-4 text-gray-600">{{ row.committed }}</td>
+          <td class="py-3 pr-4 text-gray-700 font-semibold">{{ row.conversion_rate }}%</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="py-10 text-center text-sm text-gray-500">No teams yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="content-card p-4 lg:p-5">
+  <h2 class="text-base font-bold text-gray-900 mb-4">Per Field Member</h2>
+  <div class="overflow-x-auto">
+    <table class="w-full min-w-[820px] text-sm">
+      <thead><tr class="border-b border-gray-100"><th class="table-header py-3 pr-4">Worker</th><th class="table-header py-3 pr-4">Team</th><th class="table-header py-3 pr-4">Assigned</th><th class="table-header py-3 pr-4">Touchpoints</th><th class="table-header py-3 pr-4">Progressed</th><th class="table-header py-3 pr-4">Conversion Rate</th></tr></thead>
+      <tbody class="divide-y divide-gray-100">
+      {% for row in workerPerformance %}
+        <tr class="hover:bg-gray-50/50">
+          <td class="py-3 pr-4"><p class="font-semibold text-gray-900">{{ row.worker.full_name }}</p><p class="text-xs text-gray-500">{{ roleLabels.get(row.worker.role, row.worker.role) }}</p></td>
+          <td class="py-3 pr-4 text-gray-600">{{ row.worker.team.name if row.worker.team else 'Unassigned' }}</td>
+          <td class="py-3 pr-4 text-gray-600">{{ row.assigned }}</td>
+          <td class="py-3 pr-4 text-gray-600">{{ row.touchpoints }}</td>
+          <td class="py-3 pr-4 text-gray-600">{{ row.progressed }}</td>
+          <td class="py-3 pr-4 text-gray-700 font-semibold">{{ row.conversion_rate }}%</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="py-10 text-center text-sm text-gray-500">No workers yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if tab == 'dropoff' %}
+<section class="content-card p-4 lg:p-5">
+  <h2 class="text-base font-bold text-gray-900 mb-1">Drop-off Alerts</h2>
+  <p class="text-xs text-gray-500 mb-4">Active contacts (not Inactive or Committed) with no touchpoint for {{ dropoffDays }}+ days.</p>
+  <div class="overflow-x-auto">
+    <table class="w-full min-w-[760px] text-sm">
+      <thead><tr class="border-b border-gray-100"><th class="table-header py-3 pr-4">Contact</th><th class="table-header py-3 pr-4">Assigned Worker</th><th class="table-header py-3 pr-4">Stage</th><th class="table-header py-3 pr-4">Last Activity</th><th class="table-header py-3 pr-4">Days Since</th></tr></thead>
+      <tbody class="divide-y divide-gray-100">
+      {% for row in dropoffs %}
+        <tr class="hover:bg-gray-50/50">
+          <td class="py-3 pr-4"><p class="font-semibold text-gray-900">{{ row.contact.full_name }}</p><p class="text-xs text-gray-500">{{ row.contact.phone or 'No phone' }}</p></td>
+          <td class="py-3 pr-4 text-gray-600">{{ row.contact.worker.full_name if row.contact.worker else 'Unassigned' }}</td>
+          <td class="py-3 pr-4"><span class="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold uppercase text-gray-600">{{ stageLabels.get(row.contact.current_stage, row.contact.current_stage) }}</span></td>
+          <td class="py-3 pr-4 text-gray-500">{{ row.last_activity.strftime('%b %d, %Y') }}</td>
+          <td class="py-3 pr-4"><span class="rounded-full bg-rose-50 px-2.5 py-1 text-[10px] font-bold uppercase text-rose-600">{{ row.days_since }} days</span></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="py-10 text-center text-sm text-gray-500">No drop-off alerts — every active contact has recent activity.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if tab == 'retention' %}
+<section class="content-card p-4 lg:p-5">
+  <h2 class="text-base font-bold text-gray-900 mb-1">Retention Tracker</h2>
+  <p class="text-xs text-gray-500 mb-4">Measured from the date a contact enters the Committed stage. Retained = at least one touchpoint or completed reminder within the window.</p>
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    {% for window in retentionWindows %}
+      <div class="rounded-xl border border-gray-100 p-5 text-center">
+        <p class="text-3xl font-bold text-gray-900">{{ retention[window].pct if retention[window].pct is not none else '—' }}{{ '%' if retention[window].pct is not none else '' }}</p>
+        <p class="text-xs text-gray-500 mt-1">{{ window }}-Day Retention</p>
+        <p class="text-[11px] text-gray-400 mt-2">{{ retention[window].retained }} retained of {{ retention[window].eligible }} eligible</p>
+        {% if retention[window].pct is none %}<p class="text-[10px] text-gray-400 mt-1">No committed contacts have reached {{ window }} days yet.</p>{% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if tab == 'contacts' %}
+<section class="content-card p-4 lg:p-5">
+  <div class="flex items-center justify-between mb-4">
+    <div>
+      <h2 class="text-base font-bold text-gray-900">Contacts</h2>
+      <p class="text-xs text-gray-500 mt-0.5">{{ "{:,}".format(contacts|length) }} matching contacts. Contacts are created from the mobile app.</p>
+    </div>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full min-w-[980px] text-sm">
+      <thead><tr class="border-b border-gray-100"><th class="table-header py-3 pr-4">Contact</th><th class="table-header py-3 pr-4">Source</th><th class="table-header py-3 pr-4">Stage</th><th class="table-header py-3 pr-4">Worker</th><th class="table-header py-3 pr-4">Next Follow-up</th><th class="table-header py-3 text-right">Actions</th></tr></thead>
+      <tbody class="divide-y divide-gray-100">
+      {% for contact in contacts %}
+        <tr class="hover:bg-gray-50/50">
+          <td class="py-3 pr-4"><p class="font-semibold text-gray-900">{{ contact.full_name }}</p><p class="text-xs text-gray-500">{{ contact.phone or contact.email or 'No contact info' }}</p></td>
+          <td class="py-3 pr-4 text-gray-600">{{ sourceLabels.get(contact.source, contact.source or 'N/A') }}</td>
+          <td class="py-3 pr-4">
+            <form method="POST" action="{{ url_for('admin_harvesttrack_contacts_stage', contact.id) }}" class="inline-flex items-center gap-1">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <select name="current_stage" onchange="this.form.submit()" class="rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-bold uppercase text-gray-600">
+                {% for key in stages %}<option value="{{ key }}" {{ 'selected' if contact.current_stage == key else '' }}>{{ stageLabels[key] }}</option>{% endfor %}
+              </select>
+            </form>
+          </td>
+          <td class="py-3 pr-4 text-gray-600">{{ contact.worker.full_name if contact.worker else 'Unassigned' }}</td>
+          <td class="py-3 pr-4 text-gray-500">{{ contact.next_follow_up_at.strftime('%b %d, %Y') if contact.next_follow_up_at else '—' }}</td>
+          <td class="py-3 text-right">
+            <form method="POST" action="{{ url_for('admin_harvesttrack_contacts_reassign', contact.id) }}" class="inline-flex items-center gap-1 justify-end">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <select name="worker_id" onchange="this.form.submit()" class="rounded-lg border border-gray-200 px-2 py-1 text-xs">
+                <option value="">Reassign to…</option>
+                {% for worker in workers %}<option value="{{ worker.id }}" {{ 'selected' if contact.worker_id == worker.id else '' }}>{{ worker.full_name }}</option>{% endfor %}
+              </select>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="py-10 text-center text-sm text-gray-500">No contacts match these filters.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if tab == 'teams' %}
+<section class="content-card p-4 lg:p-5">
+  <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-4">
+    <div>
+      <h2 class="text-base font-bold text-gray-900">Teams</h2>
+      <p class="text-xs text-gray-500 mt-0.5">Group field members for team-level reporting.</p>
+    </div>
+    <button type="button" data-open-team-modal class="h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors"><i class="ri-add-line text-base"></i><span>Add Team</span></button>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full min-w-[600px] text-sm">
+      <thead><tr class="border-b border-gray-100"><th class="table-header py-3 pr-4">Team</th><th class="table-header py-3 pr-4">Branch</th><th class="table-header py-3 pr-4">Workers</th><th class="table-header py-3 text-right">Actions</th></tr></thead>
+      <tbody class="divide-y divide-gray-100">
+      {% for team in teams %}
+        <tr class="hover:bg-gray-50/50">
+          <td class="py-3 pr-4 font-semibold text-gray-900">{{ team.name }}</td>
+          <td class="py-3 pr-4 text-gray-600">{{ team.branch.name if team.branch else 'Unassigned' }}</td>
+          <td class="py-3 pr-4 text-gray-600">{{ workers|selectattr('team_id', 'equalto', team.id)|list|length }}</td>
+          <td class="py-3 text-right">
+            <form method="POST" action="{{ url_for('admin_harvesttrack_teams_destroy', team.id) }}" data-confirm="Delete this team? Its workers will become unassigned." class="inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50" title="Delete"><i class="ri-delete-bin-line text-base"></i></button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="py-10 text-center text-sm text-gray-500">No teams yet.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="content-card p-4 lg:p-5">
+  <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between mb-4">
     <div>
       <h2 class="text-base font-bold text-gray-900">Workers</h2>
-      <p class="text-xs text-gray-500 mt-0.5">Create mobile app accounts for evangelists and team leaders.</p>
+      <p class="text-xs text-gray-500 mt-0.5">Create mobile app accounts for field members and team leads.</p>
     </div>
     <button type="button" data-open-worker-modal class="h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">
       <i class="ri-user-add-line text-base"></i><span>Add Worker</span>
     </button>
   </div>
-  <div class="mt-4 overflow-x-auto">
-    <table class="w-full min-w-[760px] text-sm">
-      <thead><tr class="border-b border-gray-100"><th class="table-header py-3 pr-4">Worker</th><th class="table-header py-3 pr-4">Branch</th><th class="table-header py-3 pr-4">Role</th><th class="table-header py-3 pr-4">Contacts</th><th class="table-header py-3 pr-4">Status</th></tr></thead>
+  <div class="overflow-x-auto">
+    <table class="w-full min-w-[820px] text-sm">
+      <thead><tr class="border-b border-gray-100"><th class="table-header py-3 pr-4">Worker</th><th class="table-header py-3 pr-4">Branch</th><th class="table-header py-3 pr-4">Team</th><th class="table-header py-3 pr-4">Role</th><th class="table-header py-3 pr-4">Contacts</th><th class="table-header py-3 pr-4">Status</th><th class="table-header py-3 text-right">Actions</th></tr></thead>
       <tbody class="divide-y divide-gray-100">
       {% for worker in workers %}
-
         <tr class="hover:bg-gray-50/50">
           <td class="py-3 pr-4"><p class="font-semibold text-gray-900">{{ worker.full_name }}</p><p class="text-xs text-gray-500">{{ worker.email }}{% if worker.phone %} &middot; {{ worker.phone }}{% endif %}</p></td>
-          <td class="py-3 pr-4 text-gray-600">{{ worker.branch.name or 'Unassigned' }}</td>
-          <td class="py-3 pr-4"><span class="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold uppercase text-gray-600">Worker</span></td>
+          <td class="py-3 pr-4 text-gray-600">{{ worker.branch.name if worker.branch else 'Unassigned' }}</td>
+          <td class="py-3 pr-4 text-gray-600">{{ worker.team.name if worker.team else 'Unassigned' }}</td>
+          <td class="py-3 pr-4"><span class="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold uppercase text-gray-600">{{ roleLabels.get(worker.role, worker.role) }}</span></td>
           <td class="py-3 pr-4 text-gray-700">{{ '{:,.0f}'.format(worker.contacts|length) }}</td>
           <td class="py-3 pr-4"><span class="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase {{ 'bg-emerald-50 text-emerald-600' if worker.is_active else 'bg-red-50 text-red-600' }}">{{ 'Active' if worker.is_active else 'Inactive' }}</span></td>
+          <td class="py-3 text-right">
+            <button type="button" class="worker-edit-btn w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50" title="Edit"
+              data-action="{{ url_for('admin_harvesttrack_workers_update', worker.id) }}"
+              data-full-name="{{ worker.full_name|e }}" data-phone="{{ worker.phone|e }}"
+              data-branch-id="{{ worker.branch_id }}" data-team-id="{{ worker.team_id }}"
+              data-role="{{ worker.role }}" data-is-active="{{ 1 if worker.is_active else 0 }}">
+              <i class="ri-edit-line text-base"></i>
+            </button>
+          </td>
         </tr>
       {% else %}
-
-        <tr><td colspan="5" class="py-10 text-center text-sm text-gray-500">No HarvestTrack workers yet.</td></tr>
+        <tr><td colspan="7" class="py-10 text-center text-sm text-gray-500">No HarvestTrack workers yet.</td></tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
-  
-  </div>
 </section>
+{% endif %}
 
-<section class="content-card p-4 lg:p-5">
-  <div>
-    <h2 class="text-base font-bold text-gray-900">Recent Contacts</h2>
-    <p class="text-xs text-gray-500 mt-0.5">Contacts submitted from the mobile app.</p>
-  </div>
-  <div class="mt-4 overflow-x-auto">
-    <table class="w-full min-w-[820px] text-sm">
-      <thead><tr class="border-b border-gray-100"><th class="table-header py-3 pr-4">Contact</th><th class="table-header py-3 pr-4">Worker</th><th class="table-header py-3 pr-4">Stage</th><th class="table-header py-3 pr-4">Rating</th><th class="table-header py-3 pr-4">Next Follow-up</th><th class="table-header py-3 pr-4">Status</th></tr></thead>
-      <tbody class="divide-y divide-gray-100">
-      {% for contact in contacts %}
-
-        <tr class="hover:bg-gray-50/50">
-          <td class="py-3 pr-4"><p class="font-semibold text-gray-900">{{ contact.full_name }}</p><p class="text-xs text-gray-500">{{ contact.address or 'No address' }}{% if contact.phone %} &middot; {{ contact.phone }}{% endif %}</p></td>
-          <td class="py-3 pr-4 text-gray-600">{{ contact.worker.full_name or 'Unassigned' }}</td>
-          <td class="py-3 pr-4 text-gray-700">&mdash;</td>
-          <td class="py-3 pr-4 text-gray-700">&mdash;</td>
-          <td class="py-3 pr-4 text-gray-500">&mdash;</td>
-          <td class="py-3 pr-4"><span class="rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase text-primary">{{ (contact.status or '')|replace('_', ' ') }}</span></td>
-        </tr>
-      {% else %}
-
-        <tr><td colspan="6" class="py-10 text-center text-sm text-gray-500">No HarvestTrack contacts yet.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  
-  </div>
-</section>
 </div>
 </main>
 </div>
 
-<div id="worker-modal" class="fixed inset-0 z-50 hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="worker-modal-title">
+<!-- Add Team modal -->
+<div id="team-modal" class="fixed inset-0 z-50 hidden" aria-hidden="true" role="dialog" aria-modal="true">
+  <div class="absolute inset-0 bg-black/50" data-close-team-modal></div>
+  <div class="absolute inset-x-4 top-10 mx-auto max-w-md rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+    <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+      <h3 class="text-sm font-bold text-gray-900">Add Team</h3>
+      <button type="button" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-50" data-close-team-modal><i class="ri-close-line text-lg"></i></button>
+    </div>
+    <form method="POST" action="{{ url_for('admin_harvesttrack_teams_store') }}" class="p-5 space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label><span class="form-label">Team Name</span><input name="name" class="form-input" required></label>
+      {% if isSuper %}
+        <label><span class="form-label">Branch</span><select name="branch_id" class="form-input"><option value="">Unassigned</option>{% for branch in branches %}<option value="{{ branch.id }}">{{ branch.name }}</option>{% endfor %}</select></label>
+      {% endif %}
+      <div class="flex justify-end gap-2"><button type="button" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors" data-close-team-modal>Cancel</button><button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">Create Team</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Add Worker modal -->
+<div id="worker-modal" class="fixed inset-0 z-50 hidden" aria-hidden="true" role="dialog" aria-modal="true">
   <div class="absolute inset-0 bg-black/50" data-close-worker-modal></div>
   <div class="absolute inset-x-4 top-10 mx-auto max-w-xl rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
     <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
       <div><h3 class="text-sm font-bold text-gray-900">Add HarvestTrack Worker</h3><p class="text-xs text-gray-500 mt-0.5">This creates a mobile app login.</p></div>
       <button type="button" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-50" data-close-worker-modal><i class="ri-close-line text-lg"></i></button>
     </div>
-    <form method="POST" action="{{ url_for('admin_harvesttrack_workers_store') }}" data-confirm="Create this HarvestTrack worker?" class="p-5 space-y-4">
+    <form method="POST" action="{{ url_for('admin_harvesttrack_workers_store') }}" class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label class="sm:col-span-2"><span class="form-label">Name</span><input name="full_name" class="form-input" required></label>
+      <label><span class="form-label">Email</span><input type="email" name="email" class="form-input" required></label>
+      <label><span class="form-label">Phone</span><input name="phone" class="form-input"></label>
       {% if isSuper %}
         <label><span class="form-label">Branch</span><select name="branch_id" class="form-input"><option value="">Unassigned</option>{% for branch in branches %}<option value="{{ branch.id }}">{{ branch.name }}</option>{% endfor %}</select></label>
       {% endif %}
-      <label><span class="form-label">Name</span><input name="name" class="form-input" required></label>
-      <label><span class="form-label">Email</span><input type="email" name="email" class="form-input" required></label>
-      <label><span class="form-label">Phone</span><input name="phone" class="form-input"></label>
-      <label><span class="form-label">Temporary Password</span><input type="password" name="password" class="form-input" minlength="8" placeholder="Leave blank to generate"><span class="mt-1 block text-[11px] text-gray-500">The worker will receive this login by email.</span></label>
-      <label><span class="form-label">Role</span><select name="role" class="form-input" required><option value="evangelist">Evangelist</option><option value="team_leader">Team Leader</option></select></label>
-      <div class="flex justify-end gap-2"><button type="button" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors" data-close-worker-modal>Cancel</button><button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">Create Worker</button></div>
+      <label><span class="form-label">Team</span><select name="team_id" class="form-input"><option value="">Unassigned</option>{% for team in teams %}<option value="{{ team.id }}">{{ team.name }}</option>{% endfor %}</select></label>
+      <label><span class="form-label">Role</span><select name="role" class="form-input" required>{% for key in roles %}<option value="{{ key }}" {{ 'selected' if key == 'field_member' else '' }}>{{ roleLabels[key] }}</option>{% endfor %}</select></label>
+      <label class="sm:col-span-2"><span class="form-label">Temporary Password</span><input type="password" name="password" class="form-input" minlength="8" placeholder="Leave blank to auto-generate"><span class="mt-1 block text-[11px] text-gray-500">Shown once after creation — share it with the worker securely.</span></label>
+      <div class="sm:col-span-2 flex justify-end gap-2"><button type="button" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors" data-close-worker-modal>Cancel</button><button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">Create Worker</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- Edit Worker modal -->
+<div id="worker-edit-modal" class="fixed inset-0 z-50 hidden" aria-hidden="true" role="dialog" aria-modal="true">
+  <div class="absolute inset-0 bg-black/50" data-close-worker-edit-modal></div>
+  <div class="absolute inset-x-4 top-10 mx-auto max-w-xl rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
+    <div class="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+      <h3 class="text-sm font-bold text-gray-900">Edit Worker</h3>
+      <button type="button" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-50" data-close-worker-edit-modal><i class="ri-close-line text-lg"></i></button>
+    </div>
+    <form id="worker-edit-form" method="POST" action="" class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label class="sm:col-span-2"><span class="form-label">Name</span><input id="edit-worker-full-name" name="full_name" class="form-input" required></label>
+      <label><span class="form-label">Phone</span><input id="edit-worker-phone" name="phone" class="form-input"></label>
+      {% if isSuper %}
+        <label><span class="form-label">Branch</span><select id="edit-worker-branch-id" name="branch_id" class="form-input"><option value="">Unassigned</option>{% for branch in branches %}<option value="{{ branch.id }}">{{ branch.name }}</option>{% endfor %}</select></label>
+      {% endif %}
+      <label><span class="form-label">Team</span><select id="edit-worker-team-id" name="team_id" class="form-input"><option value="">Unassigned</option>{% for team in teams %}<option value="{{ team.id }}">{{ team.name }}</option>{% endfor %}</select></label>
+      <label><span class="form-label">Role</span><select id="edit-worker-role" name="role" class="form-input" required>{% for key in roles %}<option value="{{ key }}">{{ roleLabels[key] }}</option>{% endfor %}</select></label>
+      <label class="flex items-center gap-3 text-sm font-semibold pt-6"><input type="hidden" name="is_active" value="0"><input id="edit-worker-is-active" type="checkbox" name="is_active" value="1" class="rounded border-gray-300 text-primary focus:ring-primary">Active</label>
+      <div class="sm:col-span-2 flex justify-end gap-2"><button type="button" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors" data-close-worker-edit-modal>Cancel</button><button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">Save Changes</button></div>
     </form>
   </div>
 </div>
 
 <script>
-const workerModal = document.getElementById('worker-modal');
-function openWorkerModal(){ workerModal.classList.remove('hidden'); document.body.style.overflow='hidden'; }
-function closeWorkerModal(){ workerModal.classList.add('hidden'); document.body.style.overflow=''; }
-document.querySelectorAll('[data-open-worker-modal]').forEach(btn => btn.addEventListener('click', openWorkerModal));
-document.querySelectorAll('[data-close-worker-modal]').forEach(btn => btn.addEventListener('click', closeWorkerModal));
-document.addEventListener('keydown', e => { if(e.key==='Escape' && !workerModal.classList.contains('hidden')) closeWorkerModal(); });
+(() => {
+  const teamModal = document.getElementById('team-modal');
+  const workerModal = document.getElementById('worker-modal');
+  const workerEditModal = document.getElementById('worker-edit-modal');
+  const workerEditForm = document.getElementById('worker-edit-form');
+  const body = document.body;
+  const open = (m) => { m.classList.remove('hidden'); body.style.overflow = 'hidden'; };
+  const close = (m) => { m.classList.add('hidden'); body.style.overflow = ''; };
+
+  document.querySelectorAll('[data-open-team-modal]').forEach((btn) => btn.addEventListener('click', () => open(teamModal)));
+  document.querySelectorAll('[data-close-team-modal]').forEach((btn) => btn.addEventListener('click', () => close(teamModal)));
+  document.querySelectorAll('[data-open-worker-modal]').forEach((btn) => btn.addEventListener('click', () => open(workerModal)));
+  document.querySelectorAll('[data-close-worker-modal]').forEach((btn) => btn.addEventListener('click', () => close(workerModal)));
+  document.querySelectorAll('[data-close-worker-edit-modal]').forEach((btn) => btn.addEventListener('click', () => close(workerEditModal)));
+
+  document.querySelectorAll('.worker-edit-btn').forEach((btn) => btn.addEventListener('click', () => {
+    workerEditForm.action = btn.dataset.action || '';
+    document.getElementById('edit-worker-full-name').value = btn.dataset.fullName || '';
+    document.getElementById('edit-worker-phone').value = btn.dataset.phone || '';
+    const branchSelect = document.getElementById('edit-worker-branch-id');
+    if (branchSelect) branchSelect.value = btn.dataset.branchId || '';
+    document.getElementById('edit-worker-team-id').value = btn.dataset.teamId || '';
+    document.getElementById('edit-worker-role').value = btn.dataset.role || 'field_member';
+    document.getElementById('edit-worker-is-active').checked = btn.dataset.isActive === '1';
+    open(workerEditModal);
+  }));
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    [teamModal, workerModal, workerEditModal].forEach((m) => { if (!m.classList.contains('hidden')) close(m); });
+  });
+})();
 </script>
 </body>
 </html>

@@ -1,139 +1,96 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Prayer Request - {{ siteName }}</title>
-<meta name="description" content="Submit a prayer request and our team will stand in faith with you at {{ siteName }}."/>
-<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
-{% include "partials/site-head-assets.html" %}
-<style>
-  .prayer-card{background:#fff;border:1px solid #f3f4f6;border-radius:24px;box-shadow:0 1px 3px rgba(0,0,0,.04),0 4px 12px rgba(0,0,0,.03);padding:32px}
-  .prayer-label{display:block;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6b7280;margin-bottom:8px}
-  .prayer-input{width:100%;padding:12px 16px;border:1px solid #e5e7eb;border-radius:12px;background:#f9fafb;font-size:14px;color:#1a1a1a;outline:none;transition:border-color .2s,box-shadow .2s}
-  .prayer-input:focus{border-color:var(--swm-primary);box-shadow:0 0 0 3px rgba(179,139,46,.12)}
-  .prayer-input::placeholder{color:#9ca3af}
-  .prayer-textarea{min-height:140px;resize:vertical}
-  .prayer-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 24px;border-radius:12px;background:#1a1a1a;color:#fff;font-size:14px;font-weight:700;border:none;cursor:pointer;transition:background .2s,transform .15s}
-  .prayer-btn:hover{background:var(--swm-primary)}
-  .prayer-btn:active{transform:scale(.98)}
-  .checkbox-label{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;color:#374151}
-  .checkbox-label input[type="checkbox"]{width:18px;height:18px;border-radius:6px;border:1.5px solid #d1d5db;accent-color:var(--swm-primary);cursor:pointer}
-  .success-box{display:flex;align-items:flex-start;gap:12px;padding:16px 20px;border-radius:12px;background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46}
-</style>
-</head>
-<body class="bg-background-light text-secondary font-sans antialiased">
-{% include "partials/site-header.html" %}
+{% set pageKey = 'prayer' %}
+{% set pageEyebrow = 'Prayer' %}
+{% set pageTitle = 'Let us carry it with you.' %}
+{% set pageLede = 'The Epaphras Company — our prayer team — receives every request. Nothing is too small, and nothing leaves this room.' %}
+{% include "partials/theme-page-open.html" %}
 
-{% set heroTitle = 'Prayer &amp; Support' %}
-{% set heroSubtitle = 'We Stand With You' %}
-{% set heroDescription = 'Submit a prayer request and our team will stand in faith with you.' %}
-{% set heroBgImage = settings.get('pageHero_prayer', '') if settings else '' %}
-{% include "partials/site-page-hero.html" %}
-
-<main>
-  <section class="mx-auto max-w-6xl px-6 py-16 lg:px-8">
-    {% if session.get('prayer_success') %}
-      <div class="mb-8 success-box">
-        <span class="material-symbols-outlined mt-0.5 text-xl">check_circle</span>
+<section class="band band-light">
+    <div class="shell prayer-split">
         <div>
-          <p class="font-semibold">{{ session.get('prayer_success') }}</p>
-          <p class="mt-1 text-sm opacity-80">You can submit another request below if needed.</p>
-        </div>
-      </div>
-    {% endif %}
+            <p class="mono eyebrow"><span class="rule"></span>Send a request</p>
+            <h2 class="t-h2" style="margin-top:1rem;max-width:18ch;">Tell us what to pray.</h2>
 
-    {% if errors %}
-      <div class="mb-8 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
-        <p class="mb-2 font-semibold">Please fix the following:</p>
-        <ul class="list-disc space-y-1 pl-5">
-          {% for error in errors %}
-            <li>{{ error }}</li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% endif %}
-
-    <div class="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-      <div class="prayer-card">
-        <h2 class="font-serif text-2xl font-bold text-secondary">Submit a Prayer Request</h2>
-        <p class="mt-2 text-sm text-gray-500">Share your prayer need with us. All requests are treated with confidentiality and care.</p>
-
-        <form action="{{ url_for('prayer.store') }}" method="POST" class="mt-8 space-y-5">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-
-          <div class="grid gap-4 md:grid-cols-2">
-            <div>
-              <label class="prayer-label" for="prayer-name">Your Name</label>
-              <input id="prayer-name" name="name" value="{{ request.form.get('name', '') }}" required class="prayer-input" placeholder="John Doe"/>
+            {% if session.get('prayer_success') %}
+            <div class="alert" role="status" style="margin-top:1.6rem;">{{ session.get('prayer_success') }}</div>
+            {% endif %}
+            {% if errors %}
+            <div class="alert alert-bad" role="alert" style="margin-top:1.6rem;">
+                {% for error in errors %}<p>{{ error }}</p>{% endfor %}
             </div>
-            <div>
-              <label class="prayer-label" for="prayer-email">Email (optional)</label>
-              <input id="prayer-email" type="email" name="email" value="{{ request.form.get('email', '') }}" class="prayer-input" placeholder="john@example.com"/>
+            {% endif %}
+
+            <form class="form-grid" method="POST" action="{{ url_for('prayer_store') }}" style="margin-top:1.8rem;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
+                <label class="field"><span>Your name</span>
+                    <input type="text" name="name" placeholder="Full name"/>
+                </label>
+                <label class="field"><span>Email <span style="text-transform:none;letter-spacing:0">(optional)</span></span>
+                    <input type="email" name="email" placeholder="you@example.com"/>
+                </label>
+                <label class="field span-2"><span>Phone <span style="text-transform:none;letter-spacing:0">(optional)</span></span>
+                    <input type="tel" name="phone" placeholder="+234…"/>
+                </label>
+                <label class="field span-2"><span>Your request</span>
+                    <textarea name="request" rows="6" required placeholder="Write as much or as little as you want."></textarea>
+                </label>
+                <div class="span-2" style="display:flex;flex-direction:column;gap:0.7rem;">
+                    <label class="check"><input type="checkbox" name="anonymous" value="1"/> Submit this anonymously</label>
+                    <label class="check"><input type="checkbox" name="notify_me" value="1"/> Let me know when it has been prayed over</label>
+                </div>
+                <div class="span-2">
+                    <button type="submit" class="btn btn-gold">Send request</button>
+                </div>
+            </form>
+        </div>
+
+        <aside>
+            <div class="note">
+                <p class="t-h3">When we pray together</p>
+                <table class="sched" style="margin-top:0.9rem;">
+                    <tbody>
+                        <tr><td class="s-day mono">Monday</td><td class="s-name">Prayers</td><td class="s-time mono">4:40 pm</td></tr>
+                        <tr><td class="s-day mono">Saturday</td><td class="s-name">Preservice</td><td class="s-time mono">5:00 pm</td></tr>
+                        <tr><td class="s-day mono">Last Fri</td><td class="s-name">Vigil</td><td class="s-time mono">9:00 pm</td></tr>
+                    </tbody>
+                </table>
             </div>
-          </div>
 
-          <div>
-            <label class="prayer-label" for="prayer-phone">Phone (optional)</label>
-            <input id="prayer-phone" name="phone" value="{{ request.form.get('phone', '') }}" class="prayer-input" placeholder="0801 234 5678"/>
-          </div>
+            {% if counsellingPhone %}
+            <div class="note" style="margin-top:1.7rem;">
+                <p class="t-h3">Need to speak to someone?</p>
+                <p class="t-sm" style="margin-top:0.5rem;">A pastor is available for confidential counselling.</p>
+                <a class="counsel-tel" href="tel:{{ counsellingPhone|replace(' ', '') }}">
+                    <span class="material-symbols-outlined" style="font-size:19px">call</span>{{ counsellingPhone }}
+                </a>
+            </div>
+            {% endif %}
 
-          <div>
-            <label class="prayer-label" for="prayer-request">Prayer Request</label>
-            <textarea id="prayer-request" name="request" required class="prayer-input prayer-textarea" placeholder="Share your prayer request with us...">{{ request.form.get('request', '') }}</textarea>
-          </div>
-
-          <div class="space-y-3">
-            <label class="checkbox-label">
-              <input type="checkbox" name="anonymous" value="1" {{ 'checked' if request.form.get('') else '' }}/>
-              Submit anonymously (your name will not be displayed)
-            </label>
-            <label class="checkbox-label">
-              <input type="checkbox" name="notify_me" value="1" {{ 'checked' if request.form.get('') else '' }}/>
-              Notify me when my prayer is being prayed for
-            </label>
-          </div>
-
-          <button type="submit" class="prayer-btn">
-            <span class="material-symbols-outlined" style="font-size:20px">volunteer_activism</span>
-            Submit Prayer Request
-          </button>
-        </form>
-      </div>
-
-      <aside class="space-y-6">
-        <div class="prayer-card">
-          <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <span class="material-symbols-outlined">groups</span>
-          </div>
-          <h3 class="mt-4 font-serif text-xl font-bold text-secondary">Our Prayer Team</h3>
-          <p class="mt-2 text-sm text-gray-500">A dedicated group of intercessors who pray regularly for the needs of our community.</p>
-        </div>
-
-        <div class="prayer-card">
-          <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <span class="material-symbols-outlined">lock</span>
-          </div>
-          <h3 class="mt-4 font-serif text-xl font-bold text-secondary">Confidential</h3>
-          <p class="mt-2 text-sm text-gray-500">Your prayer requests are kept confidential and shared only with our prayer team.</p>
-        </div>
-
-        <div class="prayer-card">
-          <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <span class="material-symbols-outlined">chat</span>
-          </div>
-          <h3 class="mt-4 font-serif text-xl font-bold text-secondary">Need to Talk?</h3>
-          <p class="mt-2 text-sm text-gray-500">If you need someone to talk to, reach out to us directly.</p>
-          <a href="{{ url_for('contact') }}" class="mt-4 inline-flex items-center gap-2 text-sm font-bold text-primary hover:text-primary-dark">
-            <span class="material-symbols-outlined" style="font-size:18px">mail</span>
-            Contact Us
-          </a>
-        </div>
-      </aside>
+            <div class="note" style="margin-top:1.7rem;">
+                <p class="t-h3">Job 14 : 7-9</p>
+                <p class="t-sm" style="margin-top:0.5rem;">
+                    “There is hope for a tree, if it is cut down, that it will sprout again…
+                    yet at the scent of water it will bud.”
+                </p>
+            </div>
+        </aside>
     </div>
-  </section>
-</main>
+</section>
 
-{% include "partials/site-footer.html" %}
-</body>
-</html>
+<section class="band band-dark">
+    <div class="shell" style="text-align:center;">
+        <h2 class="t-h2" style="max-width:24ch;margin-inline:auto;">You do not have to carry it alone.</h2>
+        <div class="flex flex-wrap items-center justify-center gap-3" style="margin-top:1.8rem;">
+            <a href="{{ url_for('contact') }}" class="btn btn-gold">Plan a visit</a>
+            <a href="{{ url_for('get_involved') }}" class="btn btn-ghost">Join a unit</a>
+        </div>
+    </div>
+</section>
+
+<style>
+    .prayer-split { display: grid; gap: clamp(2.2rem, 5vw, 4.5rem); grid-template-columns: 1fr; align-items: start; }
+    @media (min-width: 940px) { .prayer-split { grid-template-columns: 1.35fr 0.65fr; } }
+    .prayer-split .sched td { padding-block: 0.55rem; font-size: 0.82rem; }
+    .prayer-split .sched .s-day { width: 5.6rem; }
+</style>
+
+{% include "partials/theme-page-close.html" %}

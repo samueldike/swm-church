@@ -36,3 +36,4 @@ class Branch(Base):
     hod_invitations = relationship("HodInvitation", back_populates="branch", cascade="all, delete-orphan")
     admins = relationship("Admin", back_populates="branch", foreign_keys="Admin.branch_id", cascade="all, delete-orphan")
     harvest_workers = relationship("HarvestWorker", back_populates="branch")
+    harvest_teams = relationship("HarvestTeam", back_populates="branch")

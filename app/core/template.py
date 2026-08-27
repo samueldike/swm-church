@@ -105,7 +105,7 @@ async def render_template(
         site = {}
 
     ctx.setdefault("siteName", site.get("siteName", "Scent of Water Ministry"))
-    ctx.setdefault("siteTagline", site.get("siteTagline", "Dominion By Knowledge"))
+    ctx.setdefault("siteTagline", site.get("siteTagline", "Repositioning men for God's best"))
     ctx.setdefault("siteHeadquartersAddress", site.get("siteHeadquartersAddress", ""))
     ctx.setdefault("siteSupportPhone", site.get("siteSupportPhone", ""))
     ctx.setdefault("siteContactEmail", site.get("siteContactEmail", ""))
@@ -118,22 +118,34 @@ async def render_template(
     ctx.setdefault("mapEmbedUrl", _map_embed_url)
     if "settings" not in ctx:
         ctx["settings"] = site
-    ctx.setdefault(
-        "pastorName", site.get("pastorName", "Pastor Samuel Daniel Inyeneabasi")
-    )
-    ctx.setdefault("pastorTitle", site.get("pastorTitle", "Senior Pastor"))
-    ctx.setdefault(
-        "pastorPhoto", site.get("pastorPhoto", "images/pastor-samuel-inyeneabasi.png")
-    )
-    ctx.setdefault(
-        "pastorBio",
-        site.get(
+    # `or default`, not `.get(key, default)`: these keys exist in the settings
+    # table with empty values, so a plain .get() returns "" and the page renders
+    # a blank heading/paragraph instead of falling back.
+    for key, default in (
+        ("pastorName", "Pastor Samuel Daniel Inyeneabasi"),
+        ("pastorTitle", "Senior Pastor"),
+        ("pastorPhoto", "images/pastor-samuel-inyeneabasi.png"),
+        (
             "pastorBio",
             "Pastor Samuel Daniel Inyeneabasi is a dynamic teacher of God's word, a revivalist, and a visionary "
             "leader. He carries a specific mandate to reposition men for God's very best through the teaching of "
             "the Word of Faith and the demonstration of the Spirit and Power.",
         ),
-    )
+    ):
+        ctx.setdefault(key, (site.get(key) or "").strip() or default)
+
+    # Social + counselling: editable under Admin → Settings, with the
+    # ministry's published handles as defaults so nothing renders empty.
+    for key, default in (
+        ("socialFacebook", "https://www.facebook.com/swmnigeria"),
+        ("socialInstagram", "https://www.instagram.com/swm_nigeria/"),
+        ("socialX", "https://x.com/swm_nigeria"),
+        ("socialYouTube", ""),
+        ("socialTelegram", ""),
+        ("counsellingPhone", site.get("siteSupportPhone", "") or ""),
+        ("counsellingHours", "Monday to Friday, 9:00 am — 5:00 pm"),
+    ):
+        ctx.setdefault(key, (site.get(key) or default))
 
     def url_for(route_name: str, *args, **path_params: Any) -> str:
         if route_name == "static":
@@ -158,6 +170,26 @@ async def render_template(
         return "/"
 
     ctx["url_for"] = url_for
+
+    # ── absolute URLs for social cards ────────────────────────────────────
+    # Crawlers reject relative og:image/og:url, so everything shared has to be
+    # fully qualified. Honour X-Forwarded-Proto so links behind the VPS's TLS
+    # terminator advertise https rather than the http the app itself sees.
+    _base = str(request.base_url).rstrip("/")
+    if request.headers.get("x-forwarded-proto") == "https" and _base.startswith("http://"):
+        _base = "https://" + _base[len("http://"):]
+
+    def abs_url(path: str | None) -> str:
+        if not path:
+            return _base
+        path = str(path)
+        if path.startswith(("http://", "https://")):
+            return path
+        return f"{_base}/{path.lstrip('/')}"
+
+    ctx["siteUrl"] = _base
+    ctx["absUrl"] = abs_url
+    ctx.setdefault("canonicalUrl", abs_url(request.url.path))
 
     form_data: dict = {}
     if request.method == "POST":

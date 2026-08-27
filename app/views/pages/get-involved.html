@@ -1,54 +1,107 @@
-<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Get Involved - {{ siteName }}</title>
-<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
-<link rel="apple-touch-icon" href="/images/swm-logo.png"/>
+{% set pageKey = 'get-involved' %}
+{% set pageEyebrow = 'Get involved' %}
+{% set pageTitle = 'Find your place to serve.' %}
+{% set pageLede = 'Twelve units carry the work of this house. Each one is a door into the life of the ministry — and a place where what you carry is put to use.' %}
+{% include "partials/theme-page-open.html" %}
 
-{% include "partials/site-head-assets.html" %}
-<style>
-        .text-shadow {
-            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-    </style>
+<section class="band band-light">
+    <div class="shell">
+        <div class="head">
+            <div>
+                <p class="mono eyebrow"><span class="rule"></span>The units</p>
+                <h2 class="t-h2" style="margin-top:1rem;">Where you can serve</h2>
+            </div>
+            <a href="{{ url_for('contact') }}" class="lnk">Talk to us first</a>
+        </div>
 
-</head>
-<body class="bg-background-light dark:bg-background-dark text-secondary font-sans antialiased overflow-x-hidden selection:bg-primary selection:text-white">
-{% include "partials/site-header.html" %}
-{% set heroTitle = 'Get Involved' %}
-{% set heroSubtitle = 'Serve With Us' %}
-{% set heroDescription = 'Discover ways to serve, join a team, and grow in community with ' + siteName + '.' %}
-{% set heroBgImage = settings.get('pageHero_get-involved', '') if settings else '' %}
-{% include "partials/site-page-hero.html" %}
-
-<main class="bg-background-light">
-  <section class="relative overflow-hidden bg-secondary text-white">
-    <div class="max-w-7xl mx-auto px-6 lg:px-8 py-10">
-      <div class="flex flex-wrap gap-4">
-        <a class="h-12 px-6 rounded-full bg-primary text-white font-bold text-sm hover:bg-white hover:text-primary transition-all" href="{{ url_for('contact') }}">Contact Us</a>
-      </div>
+        {% set units = [
+            ('The Still Waters',     'Choir',              'Lead the house in worship — voices and instruments.'),
+            ('The Epaphras Company', 'Prayer team',        'Stand in the gap. Intercession before, during and after every service.'),
+            ('Herald',               'Ushers',             'The first face a visitor meets. Order, welcome, seating.'),
+            ('The Vineyard Keepers', 'Sanitation',         'Keep the house of God clean and ready.'),
+            ('Kings and Priests',    "Children's church",  'Teach and shepherd the youngest members of the house.'),
+            ('The Armor Bearer',     'Protocol',           'Security, order and care for ministers and guests.'),
+            ('The Joseph Ministry',  'Welfare',            'Practical care for members and outreach to those in need.'),
+            ('The Follow-up Team',   'Discipleship',       'Walk new members from a first visit into belonging.'),
+            ('Media and ICT',        'Communications',     'Cameras, streaming, design and the ministry’s online voice.'),
+            ('The Technical Team',   'Sound and stage',    'Audio, lighting and everything that makes a service run.'),
+            ('Dance and Drama',      'Creative arts',      'Communicate the message through movement and story.'),
+            ('Host and Hostess',     'Hospitality',        'Receive guests and make the house feel like home.')
+        ] %}
+        <ul class="rows" style="margin-top:2rem;">
+            {% for name, role, blurb in units %}
+            <li class="row">
+                <span class="row-in">
+                    <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
+                    <span class="row-main">
+                        <span class="t-h3">{{ name }}</span>
+                        <span class="t-sm row-sub">{{ blurb }}</span>
+                    </span>
+                    <span class="row-meta mono faint">{{ role }}</span>
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
     </div>
-  </section>
-  <section class="max-w-6xl mx-auto px-6 lg:px-8 py-16">
-    <div class="bg-white rounded-2xl border border-gray-100 shadow-soft p-8 md:p-10">
-      
-<h2 class="text-2xl font-serif font-bold text-secondary">Ways To Serve</h2>
-<p class="text-gray-600 mt-4">We welcome volunteers in worship, media, hospitality, outreach, and discipleship teams. Share your gifts and help us build a caring, faith-filled community.</p>
-<div class="grid md:grid-cols-2 gap-6 mt-8">
-  <div class="p-6 rounded-xl border border-gray-100 bg-accent">
-    <h3 class="text-lg font-semibold text-secondary">Join A Team</h3>
-    <p class="text-gray-600 mt-2">Connect with leaders and start serving this month.</p>
-  </div>
-  <div class="p-6 rounded-xl border border-gray-100 bg-accent">
-    <h3 class="text-lg font-semibold text-secondary">Small Groups</h3>
-    <p class="text-gray-600 mt-2">Build relationships and grow in faith together.</p>
-  </div>
-</div>
+</section>
 
+<section class="band band-dark">
+    <div class="shell">
+        <p class="mono eyebrow"><span class="rule"></span>How to join</p>
+        <h2 class="t-h2" style="margin-top:1rem;max-width:20ch;">Three steps, no forms to chase.</h2>
+
+        <div class="mandate" style="margin-top:2rem;">
+            <div>
+                <p class="mono faint">01</p>
+                <p class="t-h3" style="margin-top:0.7rem;">Come and worship</p>
+                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">Serving flows out of belonging. Start by being in the room on a Sunday.</p>
+            </div>
+            <div>
+                <p class="mono faint">02</p>
+                <p class="t-h3" style="margin-top:0.7rem;">Tell us where you lean</p>
+                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">Speak to a unit head, or send us a message and we will point you to the right team.</p>
+            </div>
+            <div>
+                <p class="mono faint">03</p>
+                <p class="t-h3" style="margin-top:0.7rem;">Be trained, then sent</p>
+                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">Every unit trains its own. You are never dropped into a role unprepared.</p>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3" style="margin-top:2.4rem;">
+            <a href="{{ url_for('contact') }}" class="btn btn-gold">Tell us you are interested</a>
+            <a href="{{ url_for('departments') }}" class="btn btn-ghost">See all departments</a>
+        </div>
     </div>
-  </section>
-</main>
+</section>
 
-{% include "partials/site-footer.html" %}
-</body></html>
+<section class="band band-light">
+    <div class="shell">
+        <p class="mono eyebrow"><span class="rule"></span>Beyond the walls</p>
+        <h2 class="t-h2" style="margin-top:1rem;max-width:20ch;">Serve outside the building</h2>
+        <ul class="rows" style="margin-top:1.8rem;">
+            <li class="row row-link">
+                <a href="{{ url_for('outreach_detail', kind='prison') }}">
+                    <span class="mono faint row-i">01</span>
+                    <span class="row-main">
+                        <span class="t-h3">Annual Prison Outreach</span>
+                        <span class="t-sm row-sub">At the remand home beside our headquarters.</span>
+                    </span>
+                    <span class="row-go material-symbols-outlined">arrow_outward</span>
+                </a>
+            </li>
+            <li class="row row-link">
+                <a href="{{ url_for('outreach_detail', kind='medical') }}">
+                    <span class="mono faint row-i">02</span>
+                    <span class="row-main">
+                        <span class="t-h3">Free Medical Outreach</span>
+                        <span class="t-sm row-sub">Annual no-cost medical and community care for Abakaliki.</span>
+                    </span>
+                    <span class="row-go material-symbols-outlined">arrow_outward</span>
+                </a>
+            </li>
+        </ul>
+    </div>
+</section>
+
+{% include "partials/theme-page-close.html" %}

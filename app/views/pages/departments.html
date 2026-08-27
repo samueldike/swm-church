@@ -1,62 +1,68 @@
-<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Our Departments - {{ siteName }}</title>
-<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
-<link rel="apple-touch-icon" href="/images/swm-logo.png"/>
+{% set pageKey = 'departments' %}
+{% set pageEyebrow = 'Departments' %}
+{% set pageTitle = 'The units that carry this house.' %}
+{% set pageLede = 'Every department is a working part of the body — trained, sent, and answerable for a piece of the ministry.' %}
+{% include "partials/theme-page-open.html" %}
 
-{% include "partials/site-head-assets.html" %}
-<style>
-  .dept-card{background:#fff;border:1px solid #f3f4f6;border-radius:24px;padding:32px;box-shadow:0 1px 3px rgba(0,0,0,.04),0 4px 12px rgba(0,0,0,.03);transition:all .3s cubic-bezier(.23,1,.32,1)}
-  .dept-card:hover{box-shadow:0 4px 6px rgba(0,0,0,.05),0 10px 24px rgba(0,0,0,.06);transform:translateY(-4px)}
-  @media(prefers-reduced-motion:reduce){.dept-card{transition:none}.dept-card:hover{transform:none}}
-</style>
+<section class="band band-light">
+    <div class="shell">
+        <div class="head">
+            <div>
+                <p class="mono eyebrow"><span class="rule"></span>Departments</p>
+                <h2 class="t-h2" style="margin-top:1rem;">Where the work is done</h2>
+            </div>
+            <a href="{{ url_for('get_involved') }}" class="lnk">How to join</a>
+        </div>
 
-</head>
-<body class="bg-background-light text-secondary font-sans antialiased">
-{% include "partials/site-header.html" %}
-{% set heroTitle = 'Our <span class="italic text-primary-light">Departments</span>' %}
-{% set heroSubtitle = 'Serving the Body' %}
-{% set heroBgImage = settings.get('pageHero_departments', '') if settings else '' %}
-{% include "partials/site-page-hero.html" %}
-<main class="py-20 px-6 lg:px-8 bg-background-light">
-<div class="max-w-7xl mx-auto">
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 lg:gap-8">
-{% set deptIcons = ['group', 'music_note', 'volunteer_activism', 'computer', 'child_care', 'connect_without_contact', 'cleaning_services', 'handshake', 'settings_input_component', 'verified_user', 'theater_comedy', 'emoji_people', 'church', 'school', 'groups', 'engineering', 'psychology', 'local_hospital', 'savings', 'celebration', 'design_services'] %}
-{% for dept in departments_list %}
-<div class="group bg-white rounded-3xl p-8 border border-gray-100 shadow-soft dept-card flex flex-col items-center text-center">
-<div class="w-16 h-16 rounded-2xl bg-accent flex items-center justify-center text-primary mb-6 group-hover:bg-primary group-hover:text-white transition-colors">
-<span class="material-symbols-outlined text-3xl">{{ deptIcons[loop.index0 % deptIcons|length] }}</span>
-</div>
-<h3 class="text-xl font-serif font-bold text-secondary mb-3">{{ dept.name }}</h3>
-<p class="text-gray-500 text-sm leading-relaxed mb-8 flex-grow">{{ dept.description or 'Serving the body of Christ with dedication and love.' }}</p>
-<a href="{{ url_for('contact') }}" class="w-full py-3 rounded-xl border border-gray-100 bg-gray-50 text-secondary font-bold text-sm hover:bg-primary hover:text-white transition-all text-center block">Join This Team</a>
-</div>
-{% else %}
-<div class="col-span-full text-center py-16">
-<p class="text-gray-500 text-lg mb-2">No departments available yet.</p>
-<p class="text-gray-400 text-sm">Check back soon or contact us for more information.</p>
-</div>
-{% endfor %}
-</div>
-</div>
-</main>
-<section class="py-24 px-6 lg:px-8 bg-secondary relative overflow-hidden">
-<div class="absolute inset-0 opacity-10">
-<div class="absolute top-0 left-0 w-full h-full" style="background-image: radial-gradient(circle at 2px 2px, rgba(255,255,255,0.05) 1px, transparent 0); background-size: 40px 40px;"></div>
-</div>
-<div class="max-w-4xl mx-auto text-center relative z-10">
-<h2 class="text-white text-4xl md:text-5xl font-serif font-bold mb-6">Ready to Serve?</h2>
-<p class="text-gray-400 text-lg mb-12 max-w-2xl mx-auto">
-            God has given you unique gifts to bless the body of Christ. Take the first step today and find fulfillment in serving others.
-        </p>
-<div class="flex flex-col sm:flex-row gap-4 justify-center">
-<a href="{{ url_for('contact') }}" class="px-10 py-4 rounded-full bg-primary text-white font-bold text-lg hover:bg-primary-dark transition-all shadow-glow inline-flex items-center justify-center">Apply to Join a Ministry</a>
-<a href="{{ url_for('contact') }}" class="px-10 py-4 rounded-full border border-white/20 text-white font-bold text-lg hover:bg-white/10 transition-all inline-flex items-center justify-center">Contact Ministry Lead</a>
-</div>
-</div>
+        {% if departments_list %}
+        <ul class="rows" style="margin-top:2rem;">
+            {% for dept in departments_list %}
+            <li class="row">
+                <span class="row-in">
+                    <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
+                    <span class="row-main">
+                        <span class="t-h3">{{ dept.name }}</span>
+                        {% if dept.description %}<span class="t-sm row-sub">{{ dept.description }}</span>{% endif %}
+                    </span>
+                </span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty" style="margin-top:2rem;">
+            <p class="t-body">Departments will be listed here once they are published from the admin.</p>
+            <a href="{{ url_for('get_involved') }}" class="btn btn-ghost" style="margin-top:1.2rem;">See the twelve units</a>
+        </div>
+        {% endif %}
+    </div>
 </section>
-{% include "partials/site-footer.html" %}
 
-</body></html>
+<section class="band band-dark">
+    <div class="shell">
+        <p class="mono eyebrow"><span class="rule"></span>How a unit works</p>
+        <h2 class="t-h2" style="margin-top:1rem;max-width:20ch;">Trained, then trusted</h2>
+        <div class="mandate" style="margin-top:2rem;">
+            <div>
+                <p class="mono faint">01</p>
+                <p class="t-h3" style="margin-top:0.7rem;">A head who answers</p>
+                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">Each unit has a head of department accountable for its people and its standard.</p>
+            </div>
+            <div>
+                <p class="mono faint">02</p>
+                <p class="t-h3" style="margin-top:0.7rem;">Its own training</p>
+                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">Nobody serves untrained. Every unit brings its new members up to the standard of the house.</p>
+            </div>
+            <div>
+                <p class="mono faint">03</p>
+                <p class="t-h3" style="margin-top:0.7rem;">Reported, not assumed</p>
+                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">Units report on their work, so the whole house can see what is actually happening.</p>
+            </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-3" style="margin-top:2.4rem;">
+            <a href="{{ url_for('get_involved') }}" class="btn btn-gold">Find your place to serve</a>
+            <a href="{{ url_for('contact') }}" class="btn btn-ghost">Ask about a unit</a>
+        </div>
+    </div>
+</section>
+
+{% include "partials/theme-page-close.html" %}

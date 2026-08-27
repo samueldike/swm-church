@@ -2,6 +2,7 @@ from app.models.admin import Admin, AdminAuditLog, admin_branches
 from app.models.branch import Branch
 from app.models.event import Event
 from app.models.harvest import (
+    HarvestTeam,
     HarvestWorker,
     HarvestWorkerToken,
     HarvestContact,
@@ -10,6 +11,7 @@ from app.models.harvest import (
 )
 from app.models.site_settings import SiteSetting
 from app.models.slider import Slider
+from app.models.photo import Photo
 from app.models.sermon import Sermon
 from app.models.story import Story
 from app.models.contact_inquiry import ContactInquiry
@@ -28,6 +30,7 @@ __all__ = [
     "admin_branches",
     "Branch",
     "Event",
+    "HarvestTeam",
     "HarvestWorker",
     "HarvestWorkerToken",
     "HarvestContact",
@@ -35,6 +38,7 @@ __all__ = [
     "HarvestReminder",
     "SiteSetting",
     "Slider",
+    "Photo",
     "Sermon",
     "Story",
     "ContactInquiry",

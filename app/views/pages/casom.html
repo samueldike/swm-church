@@ -1,220 +1,164 @@
-<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>CASOM - Cave of Adullam School of Ministry - {{ siteName }}</title>
-<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
-<link rel="apple-touch-icon" href="/images/swm-logo.png"/>
+{% set pageKey = 'casom' %}
+{% set pageEyebrow = 'CASOM · School of Ministry' %}
+{% set pageTitle = 'Cave of Adullam School of Ministry' %}
+{% set pageLede = 'Raising a genuine breed of ministers for the harvest. Four months of intensive ministerial training — a spiritual furnace, not an academic exercise.' %}
+{% include "partials/theme-page-open.html" %}
 
-{% include "partials/site-head-assets.html" %}
-<style>
-  .glass-card{background:rgba(255,255,255,.05);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.1)}
-</style>
+<section class="band band-light">
+    <div class="shell">
+        <p class="mono eyebrow"><span class="rule"></span>A training ground for spiritual excellence</p>
+        <h2 class="t-h2" style="margin-top:1rem;max-width:22ch;">Four months that reshape a minister.</h2>
+        <p class="t-body" style="margin-top:1.3rem;">
+            CASOM is an intensive four-month ministerial training programme designed to equip
+            the saints for the work of the ministry. It is more than an academic pursuit; it
+            is a spiritual furnace where hearts are forged and spirits are sharpened.
+        </p>
 
-</head>
-<body class="bg-background-light text-secondary font-sans antialiased">
-{% include "partials/site-header.html" %}
-{% set heroTitle = 'Cave of Adullam <span class="italic text-primary-light">School of Ministry</span>' %}
-{% set heroSubtitle = 'School of Ministry' %}
-{% set heroBgImage = settings.get('pageHero_casom', '') if settings else '' %}
-{% include "partials/site-page-hero.html" %}
-<section class="py-16 px-6 lg:px-8 bg-secondary text-center">
-<p class="text-gray-200 text-xl md:text-2xl font-light mb-8 leading-relaxed italic max-w-3xl mx-auto border-l-4 border-primary pl-6 text-left">
-                "Raising a genuine breed of ministers for the harvest."
-            </p>
-<div class="flex flex-wrap gap-5 justify-center">
-<a href="{{ url_for('contact') }}" class="px-10 py-4 rounded-full bg-primary text-white font-bold hover:bg-primary-dark transition-all shadow-glow text-lg inline-flex items-center justify-center">Inquire Now</a>
-<button disabled title="Coming soon" class="px-10 py-4 rounded-full border border-white/30 text-white/40 font-bold text-lg cursor-not-allowed">Download Prospectus</button>
-</div>
+        {% set pillars = [
+            ('Life in the Spirit',   'Deep cultivation of intimacy with the Holy Ghost.'),
+            ('Practical Ministry',   'Hands-on exposure to ministerial operations.'),
+            ('Intensive Curriculum', 'Structured learning across two focused semesters.'),
+            ('Mentorship',           'Direct access to seasoned ministerial leaders.')
+        ] %}
+        <ul class="rows" style="margin-top:2.2rem;">
+            {% for name, blurb in pillars %}
+            <li class="row"><span class="row-in">
+                <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
+                <span class="row-main">
+                    <span class="t-h3">{{ name }}</span>
+                    <span class="t-sm row-sub">{{ blurb }}</span>
+                </span>
+            </span></li>
+            {% endfor %}
+        </ul>
+    </div>
 </section>
-<section class="py-24 px-6 lg:px-8 bg-white relative">
-<div class="max-w-7xl mx-auto">
-<div class="grid lg:grid-cols-2 gap-16 items-center">
-<div class="relative">
-<div class="absolute -top-4 -left-4 w-24 h-24 bg-primary/10 rounded-full"></div>
-<img alt="About CASOM" class="rounded-[2.5rem] shadow-2xl relative z-10 w-full object-cover aspect-[4/5]" src="/images/swm-logo.png"/>
-<div class="absolute -bottom-8 -right-8 bg-secondary p-10 rounded-3xl z-20 shadow-xl hidden md:block">
-<p class="text-primary text-4xl font-serif font-bold italic mb-2">4 Months</p>
-<p class="text-white text-sm tracking-widest uppercase font-bold">Intensive Training</p>
-</div>
-</div>
-<div>
-<h2 class="text-4xl md:text-5xl font-serif font-bold text-secondary mb-8 leading-tight">A Training Ground for <span class="italic text-primary">Spiritual Excellence</span></h2>
-<div class="space-y-6 text-gray-600 text-lg leading-relaxed">
-<p>CASOM is an intensive four-month ministerial training program designed to equip the saints for the work of the ministry. It is more than an academic pursuit; it is a spiritual furnace where hearts are forged and spirits are sharpened.</p>
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-10">
-<div class="flex gap-4">
-<span class="material-symbols-outlined text-primary font-bold">verified_user</span>
-<div>
-<h4 class="font-bold text-secondary">Life in the Spirit</h4>
-<p class="text-sm">Deep cultivation of intimacy with the Holy Ghost.</p>
-</div>
-</div>
-<div class="flex gap-4">
-<span class="material-symbols-outlined text-primary font-bold">work_history</span>
-<div>
-<h4 class="font-bold text-secondary">Practical Ministry</h4>
-<p class="text-sm">Hands-on exposure to ministerial operations.</p>
-</div>
-</div>
-<div class="flex gap-4">
-<span class="material-symbols-outlined text-primary font-bold">menu_book</span>
-<div>
-<h4 class="font-bold text-secondary">Intensive Curriculum</h4>
-<p class="text-sm">Structured learning across two focused semesters.</p>
-</div>
-</div>
-<div class="flex gap-4">
-<span class="material-symbols-outlined text-primary font-bold">groups</span>
-<div>
-<h4 class="font-bold text-secondary">Mentorship</h4>
-<p class="text-sm">Direct access to seasoned ministerial leaders.</p>
-</div>
-</div>
-</div>
-</div>
-</div>
-</div>
-</div>
-</section>
-<section class="py-24 px-6 lg:px-8 bg-secondary text-white relative overflow-hidden">
-<div class="absolute top-0 right-0 opacity-10">
-<span class="material-symbols-outlined text-[30rem] leading-none">format_quote</span>
-</div>
-<div class="max-w-5xl mx-auto text-center relative z-10">
-<span class="text-primary font-bold tracking-[0.3em] uppercase mb-8 block">The Guiding Vision</span>
-<blockquote class="font-serif text-2xl md:text-4xl leading-relaxed italic mb-12">
-            "And he gave some, apostles; and some, prophets; and some, evangelists; and some, pastors and teachers; For the perfecting of the saints, for the work of the ministry, for the edifying of the body of Christ..."
+
+<section class="band band-dark has-crest">
+    <div class="crest" aria-hidden="true"></div>
+    <div class="shell scripture-wrap">
+        <p class="mono eyebrow"><span class="rule"></span>The guiding vision</p>
+        <blockquote class="scripture">
+            “And he gave some, apostles; and some, prophets; and some, evangelists; and some,
+            pastors and teachers; for the perfecting of the saints, for the work of the
+            ministry, for the edifying of the body of Christ…”
         </blockquote>
-<cite class="text-primary text-xl font-bold uppercase tracking-widest not-italic">— Ephesians 4:11-13</cite>
-</div>
+        <p class="mono gold" style="margin-top:1.6rem;">Ephesians 4 : 11-13</p>
+    </div>
 </section>
-<section class="py-24 px-6 lg:px-8 bg-background-light">
-<div class="max-w-7xl mx-auto">
-<div class="text-center mb-20">
-<h2 class="text-4xl md:text-5xl font-serif font-bold text-secondary mb-6">Program <span class="italic text-primary">Structure</span></h2>
-<p class="text-gray-500 max-w-2xl mx-auto text-lg">A comprehensive and balanced approach to ministerial education, divided into two rigorous phases of spiritual and intellectual growth.</p>
-</div>
-<div class="grid md:grid-cols-2 gap-8 mb-20">
-<div class="bg-white p-10 rounded-[2.5rem] shadow-soft border border-gray-100 hover:border-primary/30 transition-all group">
-<div class="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-8 group-hover:bg-primary group-hover:text-white transition-colors">
-<span class="material-symbols-outlined text-3xl">looks_one</span>
-</div>
-<h3 class="text-2xl font-serif font-bold mb-4">First Semester</h3>
-<p class="text-primary font-bold mb-6">6 Weeks of Foundations</p>
-<p class="text-gray-500 mb-8 leading-relaxed">Focusing on the internal architecture of the minister, character formation, and the fundamentals of the faith.</p>
-<div class="space-y-3">
-<div class="flex items-center gap-3 text-secondary font-medium"><span class="w-1.5 h-1.5 rounded-full bg-primary"></span> Biblical Hermeneutics</div>
-<div class="flex items-center gap-3 text-secondary font-medium"><span class="w-1.5 h-1.5 rounded-full bg-primary"></span> Character &amp; Ethics</div>
-<div class="flex items-center gap-3 text-secondary font-medium"><span class="w-1.5 h-1.5 rounded-full bg-primary"></span> Spiritual Disciplines</div>
-</div>
-</div>
-<div class="bg-white p-10 rounded-[2.5rem] shadow-soft border border-gray-100 hover:border-primary/30 transition-all group">
-<div class="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-8 group-hover:bg-primary group-hover:text-white transition-colors">
-<span class="material-symbols-outlined text-3xl">looks_two</span>
-</div>
-<h3 class="text-2xl font-serif font-bold mb-4">Second Semester</h3>
-<p class="text-primary font-bold mb-6">6 Weeks of Core Mastery</p>
-<p class="text-gray-500 mb-8 leading-relaxed">Specialized training in essential life and ministry areas required for holistic success in the vineyard.</p>
-<div class="space-y-3">
-<div class="flex items-center gap-3 text-secondary font-medium"><span class="w-1.5 h-1.5 rounded-full bg-primary"></span> Ministerial Conduct</div>
-<div class="flex items-center gap-3 text-secondary font-medium"><span class="w-1.5 h-1.5 rounded-full bg-primary"></span> Family &amp; Ministry</div>
-<div class="flex items-center gap-3 text-secondary font-medium"><span class="w-1.5 h-1.5 rounded-full bg-primary"></span> Kingdom Finance</div>
-</div>
-</div>
-</div>
-<div class="bg-accent rounded-3xl p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-8 border border-gray-200">
-<div class="flex items-center gap-6">
-<div class="p-4 bg-white rounded-2xl shadow-sm text-primary">
-<span class="material-symbols-outlined text-4xl">assignment_turned_in</span>
-</div>
-<div>
-<h4 class="text-xl font-bold text-secondary">Examination &amp; Evaluation</h4>
-<p class="text-gray-500">Rigorous assessments at the end of each semester to ensure mastery.</p>
-</div>
-</div>
-<div class="flex gap-4">
-<span class="px-5 py-2 bg-white rounded-full text-xs font-bold uppercase tracking-wider text-secondary shadow-sm">Written Tests</span>
-<span class="px-5 py-2 bg-white rounded-full text-xs font-bold uppercase tracking-wider text-secondary shadow-sm">Practical Projects</span>
-</div>
-</div>
-</div>
-</section>
-<section class="py-24 px-6 lg:px-8 bg-white overflow-hidden">
-<div class="max-w-7xl mx-auto">
-<div class="bg-secondary rounded-[3rem] p-12 md:p-20 relative overflow-hidden flex flex-col lg:flex-row items-center gap-16">
-<div class="absolute top-0 right-0 w-1/2 h-full bg-primary opacity-5 transform skew-x-12 translate-x-20"></div>
-<div class="lg:w-1/2 relative z-10 text-white">
-<div class="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-primary text-primary text-xs font-bold uppercase tracking-widest mb-8">
-<span class="material-symbols-outlined text-sm">workspace_premium</span>
-                    Advanced Track
-                </div>
-<h2 class="text-4xl md:text-5xl font-serif font-bold mb-8 leading-tight">Advanced Class for <span class="italic text-primary-light">Ordained Ministers</span></h2>
-<p class="text-gray-300 text-lg leading-relaxed mb-10">
-                    Specifically tailored for seasoned and ordained ministers. This high-level leadership training focuses on church administration, global missions, and the deeper mysteries of ecclesiastical authority.
-                </p>
-<div class="flex flex-col gap-6">
-<div class="flex items-start gap-4">
-<span class="material-symbols-outlined text-primary">verified</span>
-<div>
-<p class="font-bold">Higher Leadership Dynamics</p>
-<p class="text-sm text-gray-400">Managing multi-level organizations and diverse teams.</p>
-</div>
-</div>
-<div class="flex items-start gap-4">
-<span class="material-symbols-outlined text-primary">verified</span>
-<div>
-<p class="font-bold">Ecclesiastical Protocol</p>
-<p class="text-sm text-gray-400">Mastering the order and structure of global ministry.</p>
-</div>
-</div>
-</div>
-</div>
-<div class="lg:w-1/2 relative z-10">
-<img alt="Advanced Class" class="rounded-2xl shadow-2xl grayscale hover:grayscale-0 transition-all duration-700" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCDgVBGyt4A7pzotOTMvQBivFc26_4lYYr3jXgvjOff3sSeMXW5DhOHcWtOvi-qt9IfAwkvssP4vFux0IAWmFayEYk_mVOKcSIKmfPan2zMvr-LYaF42Jm4Pf_hK7GDsfiiF8GHSv5jcd6S5URErwYOcU0uHCIXTIQ83bqdWrnj16mfjo_Tp48qtEkws6o-TYMDdiAxBYR4O3OAMuRezb3y3B1p9LYqUM2QnIw0ekSZkJwtzL-nrUjmNxVV65RIqZYMYTUB0ssr8NE"/>
-</div>
-</div>
-</div>
-</section>
-<section class="py-24 px-6 lg:px-8 bg-background-light">
-<div class="max-w-4xl mx-auto text-center">
-<h2 class="text-4xl font-serif font-bold text-secondary mb-6">Take Your <span class="italic text-primary">Next Step</span></h2>
-<p class="text-gray-500 text-lg mb-12">Applications for the next session are currently being processed. Secure your place in this divine appointment.</p>
-<div class="bg-white p-12 rounded-[3rem] shadow-soft border border-gray-100 text-left mb-16">
-<h3 class="text-2xl font-serif font-bold mb-8 flex items-center gap-3">
-<span class="material-symbols-outlined text-primary">info</span>
-                How to Apply
-            </h3>
-<div class="space-y-8">
-<div class="flex items-start gap-6">
-<div class="w-12 h-12 flex-shrink-0 bg-accent rounded-full flex items-center justify-center font-bold text-secondary">01</div>
-<div>
-<p class="font-bold text-secondary text-lg mb-1">Obtain Application Form</p>
-<p class="text-gray-500">Visit the Church Office at <strong>No. 1 Scent Close</strong> to pick up your application package.</p>
-</div>
-</div>
-<div class="flex items-start gap-6">
-<div class="w-12 h-12 flex-shrink-0 bg-accent rounded-full flex items-center justify-center font-bold text-secondary">02</div>
-<div>
-<p class="font-bold text-secondary text-lg mb-1">Inquiries &amp; Call Backs</p>
-<p class="text-gray-500 mb-4">Contact our admissions office directly for guidance on requirements.</p>
-<div class="flex flex-wrap gap-4">
-<a class="flex items-center gap-2 px-6 py-3 bg-secondary text-white rounded-xl hover:bg-primary transition-all font-bold" href="tel:07037736698">
-<span class="material-symbols-outlined text-sm">call</span>
-                                0703 773 6698
-                            </a>
-<a class="flex items-center gap-2 px-6 py-3 bg-secondary text-white rounded-xl hover:bg-primary transition-all font-bold" href="tel:08035593426">
-<span class="material-symbols-outlined text-sm">call</span>
-                                0803 559 3426
-                            </a>
-</div>
-</div>
-</div>
-</div>
-</div>
-<a href="{{ url_for('contact') }}" class="px-12 py-5 rounded-full bg-primary text-white font-bold text-xl hover:bg-primary-dark transition-all shadow-glow inline-flex items-center justify-center">Visit Our Office Today</a>
-</div>
-</section>
-{% include "partials/site-footer.html" %}
 
-</body></html>
+<section class="band band-light">
+    <div class="shell">
+        <p class="mono eyebrow"><span class="rule"></span>Programme structure</p>
+        <h2 class="t-h2" style="margin-top:1rem;max-width:24ch;">Two rigorous phases</h2>
+        <p class="t-body" style="margin-top:1.2rem;">
+            A comprehensive and balanced approach to ministerial education, divided into two
+            phases of spiritual and intellectual growth.
+        </p>
+
+        <div class="mandate" style="margin-top:2.2rem;">
+            <div>
+                <p class="mono gold">First Semester</p>
+                <p class="t-h3" style="margin-top:0.7rem;">6 weeks of foundations</p>
+                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">
+                    The internal architecture of the minister — character formation and the
+                    fundamentals of the faith.
+                </p>
+                <ul class="rows" style="margin-top:1rem;">
+                    {% for c in ['Biblical Hermeneutics', 'Character & Ethics', 'Spiritual Disciplines'] %}
+                    <li class="row"><span class="row-in"><span class="row-main">{{ c }}</span></span></li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div>
+                <p class="mono gold">Second Semester</p>
+                <p class="t-h3" style="margin-top:0.7rem;">6 weeks of core mastery</p>
+                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">
+                    Specialised training in the life and ministry areas required for holistic
+                    success in the vineyard.
+                </p>
+                <ul class="rows" style="margin-top:1rem;">
+                    {% for c in ['Ministerial Conduct', 'Family & Ministry', 'Kingdom Finance'] %}
+                    <li class="row"><span class="row-in"><span class="row-main">{{ c }}</span></span></li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div>
+                <p class="mono gold">Assessment</p>
+                <p class="t-h3" style="margin-top:0.7rem;">Examination &amp; evaluation</p>
+                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">
+                    Rigorous assessments at the end of each semester to ensure mastery.
+                </p>
+                <ul class="rows" style="margin-top:1rem;">
+                    {% for c in ['Written Tests', 'Practical Projects'] %}
+                    <li class="row"><span class="row-in"><span class="row-main">{{ c }}</span></span></li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="band band-dark">
+    <div class="shell">
+        <p class="mono eyebrow"><span class="rule"></span>Advanced track</p>
+        <h2 class="t-h2" style="margin-top:1rem;max-width:20ch;">Advanced class for ordained ministers</h2>
+        <p class="t-body" style="margin-top:1.2rem;">
+            High-level leadership training for seasoned and ordained ministers — church
+            administration, global missions, and the deeper mysteries of ecclesiastical authority.
+        </p>
+        <ul class="rows" style="margin-top:2rem;">
+            <li class="row"><span class="row-in">
+                <span class="mono faint row-i">01</span>
+                <span class="row-main">
+                    <span class="t-h3">Higher Leadership Dynamics</span>
+                    <span class="t-sm row-sub">Managing multi-level organisations and diverse teams.</span>
+                </span>
+            </span></li>
+            <li class="row"><span class="row-in">
+                <span class="mono faint row-i">02</span>
+                <span class="row-main">
+                    <span class="t-h3">Ecclesiastical Protocol</span>
+                    <span class="t-sm row-sub">Mastering the order and structure of global ministry.</span>
+                </span>
+            </span></li>
+        </ul>
+    </div>
+</section>
+
+<section class="band band-light">
+    <div class="shell">
+        <p class="mono eyebrow"><span class="rule"></span>Take your next step</p>
+        <h2 class="t-h2" style="margin-top:1rem;max-width:22ch;">How to apply</h2>
+        <p class="t-body" style="margin-top:1.2rem;">
+            Applications for the next session are currently being processed.
+        </p>
+        <ul class="rows" style="margin-top:2rem;">
+            <li class="row"><span class="row-in">
+                <span class="mono faint row-i">01</span>
+                <span class="row-main">
+                    <span class="t-h3">Obtain an application form</span>
+                    <span class="t-sm row-sub">
+                        Visit the church office at {{ siteHeadquartersAddress or 'No. 1 Scent Close, Mile 50, Abakaliki' }}
+                        to pick up your application package.
+                    </span>
+                </span>
+            </span></li>
+            <li class="row"><span class="row-in">
+                <span class="mono faint row-i">02</span>
+                <span class="row-main">
+                    <span class="t-h3">Inquiries and call-backs</span>
+                    <span class="t-sm row-sub">Send us a message and the school will get back to you.</span>
+                </span>
+            </span></li>
+        </ul>
+        <div class="flex flex-wrap items-center gap-3" style="margin-top:2.2rem;">
+            <a href="{{ url_for('contact') }}" class="btn btn-gold">Inquire about CASOM</a>
+            {% if counsellingPhone %}
+            <a href="tel:{{ counsellingPhone|replace(' ', '') }}" class="btn btn-ghost">Call the office</a>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+{% include "partials/theme-page-close.html" %}

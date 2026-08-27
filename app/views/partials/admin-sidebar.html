@@ -115,6 +115,10 @@
             <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-slideshow-3-line text-base"></i></div>
             <span class="text-sm font-medium flex-1 whitespace-nowrap">Sliders</span>
           </a>
+          <a href="{{ url_for('admin_photos') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.photos' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
+            <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-image-line text-base"></i></div>
+            <span class="text-sm font-medium flex-1 whitespace-nowrap">Photos</span>
+          </a>
           <a href="{{ url_for('admin_stories') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.stories' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
             <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-quill-pen-line text-base"></i></div>
             <span class="text-sm font-medium flex-1 whitespace-nowrap">Stories</span>

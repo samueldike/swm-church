@@ -1,0 +1,304 @@
+{# Home v2 masthead — overlays the hero (page opens on the image, not on a
+   bar) and scrolls away with it. Not sticky. A top-down scrim keeps the nav
+   legible over whatever colours the hero photo happens to carry. #}
+{% set nav_items = [
+    ('home',        'Home'),
+    ('about',       'About'),
+    ('departments', 'Departments'),
+    ('messages',    'Audio Messages'),
+    ('casom',       'CASOM'),
+    ('events',      'Events'),
+    ('contact',     'Contact')
+] %}
+<style>
+    /* Three states:
+       1. at the top of the page — absolute over the hero, scrim only;
+       2. scrolling down  — pinned but translated out of the way;
+       3. scrolling up    — pinned and visible as a solid bar.
+       The transform only ever animates between 2 and 3; entering/leaving the
+       pinned state is done with transitions off (.instant) so the bar never
+       flashes past on the way in. */
+    .mast {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 30;
+        height: var(--mast-h);
+        display: flex;
+        align-items: center;
+    }
+    .mast.pinned {
+        position: fixed;
+        background: rgba(10, 10, 11, 0.92);
+        backdrop-filter: blur(14px) saturate(1.25);
+        -webkit-backdrop-filter: blur(14px) saturate(1.25);
+        border-bottom: 1px solid var(--line);
+        transition: transform 420ms var(--ease);
+    }
+    .mast.up { transform: translateY(-100%); }
+    .mast.instant { transition: none !important; }
+    /* Scrim, not a solid bar — the hero image stays visible behind it. */
+    .mast::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        bottom: -2.5rem;
+        pointer-events: none;
+        opacity: 1;
+        transition: opacity 300ms var(--ease);
+        background: linear-gradient(180deg, rgba(8, 8, 9, 0.92) 0%, rgba(8, 8, 9, 0.55) 45%, transparent 100%);
+    }
+    .mast.pinned::before { opacity: 0; }
+    @media (prefers-reduced-motion: reduce) {
+        .mast.pinned { transition: none; }
+    }
+    .mast-in {
+        position: relative;
+        width: var(--shell);
+        margin-inline: auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.25rem;
+    }
+
+    .brand { display: flex; align-items: center; gap: 0.7rem; flex-shrink: 0; }
+    .brand img { height: 42px; width: auto; object-fit: contain; }
+    .brand-name {
+        font-size: 0.84rem;
+        font-weight: 600;
+        line-height: 1.15;
+        letter-spacing: -0.005em;
+        color: var(--fg);
+        white-space: nowrap;
+    }
+    @media (max-width: 400px) {
+        .brand img { height: 34px; }
+        .brand-name { font-size: 0.74rem; }
+    }
+
+    /* No drawer: the nav is always present. Below the desktop breakpoint it
+       becomes a horizontally scrollable row rather than collapsing behind a
+       burger, so top-level navigation is never hidden from mobile. */
+    .nav {
+        display: flex;
+        align-items: center;
+        gap: 1.65rem;
+        min-width: 0;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        mask-image: linear-gradient(90deg, #000 88%, transparent 100%);
+        -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent 100%);
+    }
+    .nav::-webkit-scrollbar { display: none; }
+    @media (min-width: 1140px) {
+        .nav { overflow: visible; mask-image: none; -webkit-mask-image: none; }
+    }
+    .nav a {
+        font-size: 0.81rem;
+        white-space: nowrap;
+        color: rgba(242, 242, 240, 0.78);
+        transition: color 260ms var(--ease);
+    }
+    .nav a:hover { color: var(--fg); }
+    .nav a.is-active { color: var(--gold); }
+
+    @media (max-width: 1139px) {
+        .mast-in { gap: 0.9rem; }
+        .nav { gap: 1.15rem; }
+        /* Reclaim room for the nav on small screens. */
+        .brand-name { display: none; }
+        .mast-cta { display: none; }
+    }
+
+    /* ── hamburger + full-screen menu ─────────────────────────────────── */
+    .burger {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        color: var(--fg);
+        background: none;
+        border: 0;
+        cursor: pointer;
+    }
+    @media (max-width: 1139.98px) { .burger { display: inline-flex; } }
+    .burger-bars { position: relative; display: block; width: 22px; height: 12px; }
+    .burger-bars i {
+        position: absolute;
+        left: 0;
+        width: 100%;
+        height: 1.5px;
+        background: currentColor;
+        transition: transform 320ms var(--ease), opacity 200ms var(--ease);
+    }
+    .burger-bars i:first-child { top: 0; }
+    .burger-bars i:last-child  { bottom: 0; }
+    /* Bars converge into a cross when the menu is open. */
+    .burger.is-open .burger-bars i:first-child { transform: translateY(5.25px) rotate(45deg); }
+    .burger.is-open .burger-bars i:last-child  { transform: translateY(-5.25px) rotate(-45deg); }
+
+    .menu {
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        background: var(--ink);
+        display: flex;
+        flex-direction: column;
+        padding: 1.1rem 0 max(1.4rem, env(safe-area-inset-bottom));
+        opacity: 0;
+        transition: opacity 260ms var(--ease);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+    .menu[hidden] { display: none; }
+    .menu.open { opacity: 1; }
+    .menu-top {
+        width: var(--shell);
+        margin-inline: auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+    .menu-top .brand-name { display: block; }
+    .menu-top .brand img { height: 40px; width: auto; object-fit: contain; }
+
+    .menu-nav {
+        width: var(--shell);
+        margin-inline: auto;
+        display: flex;
+        flex-direction: column;
+        margin-top: clamp(1.6rem, 5vh, 3rem);
+        border-top: 1px solid var(--line);
+    }
+    .menu-nav a {
+        display: grid;
+        grid-template-columns: 2.4rem 1fr;
+        align-items: baseline;
+        gap: 0.9rem;
+        padding-block: 1rem;
+        min-height: 56px;
+        font-size: 1.28rem;
+        letter-spacing: -0.02em;
+        color: var(--fg);
+        border-bottom: 1px solid var(--line);
+        /* Each item fades up as the panel opens. */
+        opacity: 0;
+        transform: translateY(10px);
+        transition: opacity 420ms var(--ease), transform 420ms var(--ease), color 220ms var(--ease);
+    }
+    .menu.open .menu-nav a { opacity: 1; transform: none; }
+    .menu-nav a:hover, .menu-nav a.is-active { color: var(--gold); }
+    .menu-i { color: var(--fg-faint); }
+    .menu-nav a.is-active .menu-i { color: var(--gold); }
+
+    .menu-foot {
+        width: var(--shell);
+        margin-inline: auto;
+        margin-top: auto;
+        padding-top: 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.1rem;
+    }
+    .menu-cta { display: flex; flex-wrap: wrap; gap: 0.7rem; }
+    .menu-cta .btn { flex: 1 1 auto; min-width: 9rem; height: 3rem; }
+    .menu-social { display: flex; flex-wrap: wrap; gap: 1.2rem; }
+    .menu-social a {
+        font-size: 0.85rem;
+        color: var(--fg-dim);
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        transition: color 220ms var(--ease);
+    }
+    .menu-social a:hover { color: var(--gold); }
+
+    @media (prefers-reduced-motion: reduce) {
+        .menu, .menu-nav a, .burger-bars i { transition: none; }
+    }
+
+    /* The inline rail is desktop-only now — on smaller screens the hamburger
+       owns navigation, so there is no truncated row competing with it. */
+    @media (max-width: 1139.98px) {
+        .nav { display: none; }
+    }
+</style>
+<header class="mast">
+    <div class="mast-in">
+        <a href="{{ url_for('home') }}" class="brand">
+            <img src="/images/swm-logo.png" alt="" width="110" height="42"/>
+            <span class="brand-name">Scent of Water<br/>Ministry</span>
+            <span class="sr-only">{{ siteName }} — home</span>
+        </a>
+
+        <nav class="nav" aria-label="Primary">
+            {% for route, label in nav_items %}
+            <a class="{{ 'is-active' if request.url.path == url_for(route).path else '' }}"
+               href="{{ url_for(route) }}">{{ label }}</a>
+            {% endfor %}
+        </nav>
+
+        <div class="flex items-center gap-2.5 shrink-0">
+            <a href="{{ url_for('give') }}" class="btn btn-ghost btn-sm">Give</a>
+            <a href="{{ url_for('calendar') }}" class="btn btn-gold btn-sm mast-cta">Calendar</a>
+            <button class="burger" id="burger" type="button"
+                    aria-expanded="false" aria-controls="menu" aria-label="Open menu">
+                <span class="burger-bars" aria-hidden="true"><i></i><i></i></span>
+            </button>
+        </div>
+    </div>
+</header>
+
+{# Full-screen menu, opened by the hamburger at the right of the header. #}
+<div class="menu" id="menu" hidden>
+    <div class="menu-top">
+        <a href="{{ url_for('home') }}" class="brand">
+            <img src="/images/swm-logo.png" alt="" width="110" height="40"/>
+            <span class="brand-name">Scent of Water<br/>Ministry</span>
+        </a>
+        <button class="burger is-open" id="menu-close" type="button" aria-label="Close menu">
+            <span class="burger-bars" aria-hidden="true"><i></i><i></i></span>
+        </button>
+    </div>
+
+    <nav class="menu-nav" aria-label="Menu">
+        {% for route, label in nav_items %}
+        <a href="{{ url_for(route) }}" class="{{ 'is-active' if request.url.path == url_for(route).path else '' }}">
+            <span class="mono menu-i">{{ '%02d'|format(loop.index) }}</span>
+            <span>{{ label }}</span>
+        </a>
+        {% endfor %}
+        <a href="{{ url_for('our_pastor') }}">
+            <span class="mono menu-i">{{ '%02d'|format(nav_items|length + 1) }}</span>
+            <span>Our Pastor</span>
+        </a>
+        <a href="{{ url_for('stories') }}">
+            <span class="mono menu-i">{{ '%02d'|format(nav_items|length + 2) }}</span>
+            <span>Stories</span>
+        </a>
+    </nav>
+
+    <div class="menu-foot">
+        <div class="menu-cta">
+            <a href="{{ url_for('give') }}" class="btn btn-gold">Give</a>
+            <a href="{{ url_for('calendar') }}" class="btn btn-ghost">Church Calendar</a>
+        </div>
+        {% if counsellingPhone %}
+        <a class="counsel-tel" href="tel:{{ counsellingPhone|replace(' ', '') }}">
+            <span class="material-symbols-outlined" style="font-size:19px">call</span>{{ counsellingPhone }}
+        </a>
+        {% endif %}
+        <nav class="menu-social" aria-label="Social">
+            {% for href, label in [(socialFacebook,'Facebook'), (socialInstagram,'Instagram'), (socialX,'X'), (socialYouTube,'YouTube'), (socialTelegram,'Telegram')] %}
+            {%- if href %}<a href="{{ href }}" target="_blank" rel="noopener">{{ label }}</a>{% endif -%}
+            {% endfor %}
+        </nav>
+    </div>
+</div>

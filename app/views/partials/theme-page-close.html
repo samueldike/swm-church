@@ -1,0 +1,77 @@
+{# Shared closing chrome for interior pages: site footer, back-to-top control,
+   and the theme's style/behaviour layers. #}
+{% set socials = [
+    (socialFacebook,  'Facebook'),
+    (socialInstagram, 'Instagram'),
+    (socialX,         'X'),
+    (socialYouTube,   'YouTube'),
+    (socialTelegram,  'Telegram')
+] %}
+<footer class="band band-dark site-foot">
+    <div class="shell">
+        <div class="foot-grid">
+            <div>
+                <a href="{{ url_for('home') }}" class="brand" style="display:inline-flex;">
+                    <img src="/images/swm-logo.png" alt="" width="110" height="42" style="height:42px;width:auto;object-fit:contain;"/>
+                    <span class="brand-name">Scent of Water<br/>Ministry</span>
+                </a>
+                <p class="t-sm" style="margin-top:1.1rem;max-width:34ch;">{{ siteTagline }}</p>
+                {% if siteHeadquartersAddress %}
+                <p class="t-sm" style="margin-top:0.8rem;max-width:34ch;">{{ siteHeadquartersAddress }}</p>
+                {% endif %}
+            </div>
+
+            <nav class="foot-col" aria-label="Explore">
+                <p class="mono gold">Explore</p>
+                <a href="{{ url_for('about') }}">About</a>
+                <a href="{{ url_for('our_pastor') }}">Our Pastor</a>
+                <a href="{{ url_for('departments') }}">Departments</a>
+                <a href="{{ url_for('messages') }}">Audio Messages</a>
+                <a href="{{ url_for('events') }}">Events</a>
+            </nav>
+
+            <nav class="foot-col" aria-label="Connect">
+                <p class="mono gold">Connect</p>
+                <a href="{{ url_for('contact') }}">Contact</a>
+                <a href="{{ url_for('prayer') }}">Prayer</a>
+                <a href="{{ url_for('give') }}">Give</a>
+                <a href="{{ url_for('get_involved') }}">Volunteer</a>
+                <a href="{{ url_for('stories') }}">Stories</a>
+            </nav>
+
+            <nav class="foot-col" aria-label="Follow">
+                <p class="mono gold">Follow</p>
+                {% for href, label in socials %}{% if href %}
+                <a href="{{ href }}" target="_blank" rel="noopener">{{ label }}</a>
+                {% endif %}{% endfor %}
+            </nav>
+        </div>
+
+        <div class="hair" style="margin-block:2rem 1.2rem;"></div>
+        <div class="foot-in">
+            <span class="t-sm">© {{ now().year }} {{ siteName }}</span>
+            <nav class="foot-links t-sm">
+                <a href="{{ url_for('privacy_policy') }}">Privacy</a>
+                <a href="{{ url_for('terms_of_service') }}">Terms</a>
+                <a href="{{ url_for('sitemap') }}">Sitemap</a>
+            </nav>
+        </div>
+    </div>
+</footer>
+</main>
+
+<button class="totop" id="totop" type="button" aria-label="Back to top" title="Back to top">
+    <span class="material-symbols-outlined" style="font-size:21px">arrow_upward</span>
+</button>
+
+{% include "partials/theme-styles.html" %}
+<style>
+    .site-foot .foot-grid { display: grid; gap: 2.2rem; grid-template-columns: 1fr; }
+    @media (min-width: 820px) { .site-foot .foot-grid { grid-template-columns: 1.5fr 1fr 1fr 1fr; } }
+    .foot-col { display: flex; flex-direction: column; gap: 0.6rem; }
+    .foot-col .mono { margin-bottom: 0.25rem; }
+    .foot-col a { font-size: 0.88rem; color: var(--fg-dim); transition: color 260ms var(--ease); }
+    .foot-col a:hover { color: var(--gold); }
+</style>
+{% include "partials/theme-scripts.html" %}
+</body></html>

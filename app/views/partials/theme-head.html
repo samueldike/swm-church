@@ -1,0 +1,446 @@
+{# ── Home v2 design system ────────────────────────────────────────────────
+   Palette: off-black / grey / logo gold. One accent only, sampled from
+   swm-logo.png (core #A87810, highlight #E8C870). No teal, no glows.
+   Type:    Geist + Geist Mono. Hierarchy by weight and colour, not scale.
+   Scroll:  strict one-frame-per-screen snap on desktop; free on mobile.
+   Colour and motion live here, NOT in the Tailwind config — the browser
+   build only reliably ships its built-in layout utilities.
+   ───────────────────────────────────────────────────────────────────────── #}
+<script>
+    document.documentElement.style.visibility = 'hidden';
+    setTimeout(function () { document.documentElement.style.visibility = 'visible'; }, 1600);
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.catch(function () {}).then(function () {
+            document.documentElement.style.visibility = 'visible';
+        });
+    } else {
+        document.documentElement.style.visibility = 'visible';
+    }
+</script>
+<script src="{{ url_for('static', path='js/tailwind-browser.global.js') }}"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap"/>
+<style>
+    @font-face {
+        font-family: 'Material Symbols Outlined';
+        font-style: normal;
+        font-weight: 100 700;
+        font-display: block;
+        src: url("{{ url_for('static', path='fonts/material-symbols-outlined.woff2') }}") format('woff2');
+    }
+
+    /* ── tokens ─────────────────────────────────────────────────────────── */
+    :root {
+        /* Off-black, never #000 — pure black flattens depth on real screens. */
+        --ink:        #0A0A0B;
+        --ground:     #0E0E10;
+        --surface:    #151517;
+        --surface-2:  #1C1C1F;
+        --line:       rgba(255, 255, 255, 0.08);
+        --line-2:     rgba(255, 255, 255, 0.16);
+        --line-gold:  rgba(184, 137, 31, 0.34);
+
+        /* Single accent, sampled from the logo. Saturation held under 80%. */
+        --gold:       #B8891F;
+        --gold-deep:  #8F6A14;
+        --gold-lt:    #E8C870;
+
+        --fg:         #F2F2F0;
+        --fg-dim:     #A3A3A5;
+        --fg-faint:   #6E6E72;
+
+        /* Light surface for interior-page content bands. */
+        --paper:      #F5F4F1;
+        --paper-2:    #EBE9E4;
+        --on-paper:   #16161A;
+        --on-paper-dim: #55555C;
+        --on-paper-faint: #85858E;
+        --paper-line: rgba(0, 0, 0, 0.11);
+
+        --mast-h: 76px;
+        --shell: min(1240px, 100% - 3rem);
+        --ease:  cubic-bezier(0.16, 1, 0.3, 1);
+        --pad:   clamp(1.5rem, 4vh, 3rem);
+    }
+    @media (max-width: 900px) { :root { --mast-h: 64px; } }
+
+    /* ── base ───────────────────────────────────────────────────────────── */
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+        background: var(--ground);
+        color: var(--fg);
+        font-family: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+        font-weight: 300;
+        overflow-x: clip;
+        -webkit-font-smoothing: antialiased;
+    }
+    ::selection { background: var(--gold); color: var(--ink); }
+    :focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+
+    /* Grain: fixed + pointer-events-none only, never on a scrolling layer. */
+    body::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+        pointer-events: none;
+        opacity: 0.028;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* ── type ───────────────────────────────────────────────────────────── */
+    /* Restrained scale: the headline states, it does not shout. Hierarchy
+       comes from weight and colour first, size last. */
+    .t-display {
+        font-size: clamp(2.15rem, 4.1vw, 3.7rem);
+        line-height: 1.02;
+        letter-spacing: -0.035em;
+        font-weight: 400;
+    }
+    .t-h2 {
+        font-size: clamp(1.6rem, 2.7vw, 2.5rem);
+        line-height: 1.06;
+        letter-spacing: -0.03em;
+        font-weight: 400;
+    }
+    .t-h3 {
+        font-size: clamp(1.05rem, 1.5vw, 1.3rem);
+        line-height: 1.2;
+        letter-spacing: -0.018em;
+        font-weight: 500;
+    }
+    .t-body {
+        font-size: clamp(0.92rem, 1.05vw, 1.02rem);
+        line-height: 1.65;
+        color: var(--fg-dim);
+        max-width: 62ch;
+    }
+    .t-sm { font-size: 0.85rem; line-height: 1.55; color: var(--fg-dim); }
+
+    /* Mono for labels, indices and times — the "data" voice of the page. */
+    .mono {
+        font-family: 'Geist Mono', ui-monospace, 'SFMono-Regular', monospace;
+        font-weight: 500;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        font-size: 0.66rem;
+    }
+    .gold { color: var(--gold); }
+    .gold-lt { color: var(--gold-lt); }
+    .dim { color: var(--fg-dim); }
+    .faint { color: var(--fg-faint); }
+
+    .eyebrow { display: flex; align-items: center; gap: 0.8rem; color: var(--gold); }
+    .eyebrow .rule { width: clamp(1.5rem, 3vw, 2.6rem); height: 1px; background: var(--line-gold); }
+
+    /* ── shells & frames ────────────────────────────────────────────────── */
+    .shell { width: var(--shell); margin-inline: auto; }
+
+    /* One frame = one screen. Content is authored to fit; overflow is
+       clipped rather than allowed to break the snap contract. */
+    .frame {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding-block: var(--pad);
+    }
+    /* Full-screen frames are a DESKTOP idea. Forcing 100svh on a phone just
+       manufactures dead space above and below short sections, so on mobile a
+       section is only as tall as its content plus a generous rhythm. */
+    @media (min-width: 768px) { .frame { min-height: 100svh; } }
+    @media (min-width: 1024px) {
+        .frame { height: 100svh; min-height: 0; overflow: hidden; }
+    }
+    /* The masthead overlays the hero, so the hero is a full screen and its
+       content is inset by the bar's height instead of shortened by it. */
+    .frame-hero { padding-top: 95px; }
+    /* Interior pages have no hero for the overlay to sit on. */
+    body:not(.home-page) main > .shell:first-child { padding-top: calc(var(--mast-h) + clamp(2rem, 5vh, 3.5rem)); }
+
+    /* Strict frame-by-frame: mandatory snap, one frame per gesture.
+       Desktop only — mobile content is taller than a phone screen. */
+    @media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
+        html {
+            scroll-snap-type: y mandatory;
+            scroll-behavior: smooth;
+        }
+        .frame { scroll-snap-align: start; scroll-snap-stop: always; }
+    }
+
+    /* ── interior page bands ────────────────────────────────────────────── */
+    /* Interior pages share the masthead and hero, then alternate light and
+       dark content bands. Light bands re-point the same tokens rather than
+       introducing a second set of component classes. */
+    .band { padding-block: clamp(2.8rem, 8vh, 5.25rem); }
+    .band-dark { background: var(--ink); }
+    .band-light {
+        background: var(--paper);
+        color: var(--on-paper);
+        --fg: var(--on-paper);
+        --fg-dim: var(--on-paper-dim);
+        --fg-faint: var(--on-paper-faint);
+        --line: var(--paper-line);
+        --line-2: rgba(0, 0, 0, 0.2);
+        --surface: var(--paper-2);
+        --gold-lt: var(--gold-deep);
+    }
+    .band-light .btn-ghost { border-color: rgba(0, 0, 0, 0.22); }
+    .band-light .btn-gold:hover { background: var(--gold-deep); color: #fff; }
+
+    /* Interior hero: same masthead overlay treatment as home, shorter. */
+    .page-hero {
+        position: relative;
+        display: flex;
+        align-items: flex-end;
+        min-height: clamp(340px, 46svh, 520px);
+        padding-top: var(--mast-h);
+        padding-bottom: clamp(2rem, 5vh, 3.4rem);
+        overflow: hidden;
+        background: var(--ink);
+    }
+    .page-hero-bed { position: absolute; inset: 0; }
+    .page-hero-bed img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        filter: grayscale(0.5) contrast(1.05);
+    }
+    .page-hero-veil {
+        position: absolute;
+        inset: 0;
+        background:
+            linear-gradient(90deg, rgba(14,14,16,0.96) 0%, rgba(14,14,16,0.82) 42%, rgba(14,14,16,0.28) 100%),
+            linear-gradient(0deg, var(--ground) 0%, transparent 46%);
+    }
+    .page-hero .shell { position: relative; z-index: 2; }
+
+    /* ── forms ──────────────────────────────────────────────────────────── */
+    .field { display: flex; flex-direction: column; gap: 0.45rem; }
+    .field > span, .field > label {
+        font-family: 'Geist Mono', ui-monospace, monospace;
+        font-size: 0.66rem;
+        font-weight: 500;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--fg-faint);
+    }
+    .input, .field input, .field textarea, .field select {
+        width: 100%;
+        background: transparent;
+        border: 0;
+        border-bottom: 1px solid var(--line-2);
+        color: var(--fg);
+        font: inherit;
+        font-size: 0.98rem;
+        padding: 0.6rem 0 0.55rem;
+        border-radius: 0;
+        transition: border-color 300ms var(--ease);
+    }
+    .field textarea { resize: vertical; min-height: 6.5rem; }
+    .field input:focus, .field textarea:focus, .field select:focus {
+        outline: none;
+        border-bottom-color: var(--gold);
+    }
+    .field input::placeholder, .field textarea::placeholder { color: var(--fg-faint); }
+    .field select option { background: var(--surface); color: var(--fg); }
+    .band-light .field select option { background: #fff; color: var(--on-paper); }
+    .form-grid { display: grid; gap: 1.5rem 1.4rem; grid-template-columns: 1fr; }
+    @media (min-width: 720px) { .form-grid { grid-template-columns: 1fr 1fr; } .form-grid .span-2 { grid-column: 1 / -1; } }
+    .check { display: flex; align-items: center; gap: 0.6rem; font-size: 0.9rem; color: var(--fg-dim); }
+    .check input { width: 1rem; height: 1rem; accent-color: var(--gold); }
+    .note { border-left: 2px solid var(--gold); padding-left: 1rem; }
+    .alert {
+        border: 1px solid var(--line-2);
+        border-left: 2px solid var(--gold);
+        padding: 0.9rem 1.1rem;
+        font-size: 0.9rem;
+        margin-bottom: 1.6rem;
+    }
+    .alert-bad { border-left-color: #C7513F; }
+
+    /* ── controls ───────────────────────────────────────────────────────── */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.55rem;
+        height: 2.9rem;
+        padding-inline: 1.4rem;
+        border-radius: 2px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: background-color 320ms var(--ease), color 320ms var(--ease),
+                    border-color 320ms var(--ease), transform 160ms var(--ease);
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-gold { background: var(--gold); color: var(--ink); font-weight: 600; }
+    .btn-gold:hover { background: var(--gold-lt); }
+    .btn-ghost { border-color: var(--line-2); color: var(--fg); }
+    .btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
+    .btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+    .btn[disabled]:active { transform: none; }
+    /* Compact chrome button — a class, not an inline height, so the mobile
+       layer can grow it to a proper touch target. */
+    .btn-sm { height: 2.4rem; padding-inline: 1rem; }
+
+    /* Text link with a rule that draws in — no arrow-gap gimmick. */
+    .lnk {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.78rem;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        color: var(--fg);
+        padding-bottom: 0.3rem;
+        position: relative;
+    }
+    .lnk::after {
+        content: '';
+        position: absolute;
+        left: 0; bottom: 0;
+        height: 1px;
+        width: 100%;
+        background: var(--line-2);
+        transform: scaleX(1);
+        transform-origin: left;
+        transition: background-color 320ms var(--ease);
+    }
+    .lnk:hover { color: var(--gold); }
+    .lnk:hover::after { background: var(--gold); }
+
+    .material-symbols-outlined {
+        font-family: 'Material Symbols Outlined';
+        font-weight: normal;
+        font-style: normal;
+        font-size: 24px;
+        line-height: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        direction: ltr;
+        -webkit-font-feature-settings: 'liga';
+        font-feature-settings: 'liga';
+        -webkit-font-smoothing: antialiased;
+    }
+
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    .sr-only {
+        position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+        overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+
+    /* ── motion (transform/opacity only) ────────────────────────────────── */
+    .rise { display: block; overflow: hidden; }
+    .rise > * {
+        display: block;
+        transform: translateY(105%);
+        opacity: 0;
+        transition: transform 900ms var(--ease), opacity 700ms var(--ease);
+        transition-delay: var(--d, 0ms);
+    }
+    .in .rise > * { transform: translateY(0); opacity: 1; }
+
+    .fade {
+        opacity: 0;
+        transform: translateY(16px);
+        transition: opacity 750ms var(--ease), transform 750ms var(--ease);
+        transition-delay: var(--d, 0ms);
+    }
+    .in .fade { opacity: 1; transform: none; }
+
+    .wipe {
+        clip-path: inset(0 0 100% 0);
+        transition: clip-path 1000ms var(--ease);
+        transition-delay: var(--d, 0ms);
+    }
+    .in .wipe { clip-path: inset(0 0 0 0); }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       MOBILE
+       Not the desktop layout shrunk down. Below 768px the page gets its own
+       type scale (absolute, not viewport-derived, so text never gets timid),
+       its own vertical rhythm, full-bleed media, and 44px touch targets.
+       ══════════════════════════════════════════════════════════════════════ */
+    @media (max-width: 767.98px) {
+        :root {
+            --shell: min(100%, 100% - 2.5rem);
+            --pad: 3.25rem;
+            --mast-h: 62px;
+        }
+
+        /* Absolute sizes: a phone held 30cm away wants ~17px body copy, not
+           whatever a vw formula happens to produce at 390px. */
+        .t-display { font-size: 2.35rem; line-height: 1.06; letter-spacing: -0.03em; }
+        .t-h2      { font-size: 1.85rem; line-height: 1.1;  letter-spacing: -0.028em; }
+        .t-h3      { font-size: 1.06rem; line-height: 1.28; }
+        .t-body    { font-size: 1.0625rem; line-height: 1.62; max-width: none; }
+        .t-sm      { font-size: 0.95rem; line-height: 1.55; }
+        .mono      { font-size: 0.7rem; letter-spacing: 0.14em; }
+
+        /* Headings set their own measure on mobile; desktop ch-caps would
+           strand two or three words on a line. */
+        .t-display, .t-h2, .mandate-head, .scripture-wrap { max-width: none !important; }
+        .scripture { font-size: 1.22rem; line-height: 1.52; }
+
+        /* Comfortable, thumb-sized controls. */
+        .btn { height: 3.1rem; padding-inline: 1.5rem; font-size: 0.9rem; }
+        .btn-gold, .btn-ghost { flex: 1 1 auto; min-width: 10rem; }
+        .btn-sm { height: 2.75rem; min-width: 0; flex: 0 0 auto; }
+        .lnk { min-height: 44px; align-items: center; font-size: 0.85rem; }
+        /* Every interactive thing clears 44px, including one-character links
+           like the "X" social label, which is otherwise 9px wide. */
+        .brand { min-height: 44px; min-width: 44px; }
+        a, button { -webkit-tap-highlight-color: rgba(184, 137, 31, 0.18); }
+
+        /* Stack section headers instead of squeezing a title and a link
+           onto one narrow line. */
+        .head { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+        .head > * { width: 100%; }
+        .head .t-sm { text-align: left !important; max-width: none !important; }
+        /* A stacked section link should hug its text — full width would drag
+           its underline right across the column. */
+        .head > .lnk { width: auto; align-self: flex-start; }
+
+        /* One column everywhere; the desktop asymmetry has no room to read. */
+        .two-col, .split, .mandate, .mandate-cols, .form-grid,
+        .sitemap-grid, .contact-split, .prayer-split, .give-split, .msg-split {
+            grid-template-columns: 1fr !important;
+            gap: 2.25rem;
+        }
+        .split-rev > *:first-child, .split-rev > *:last-child { order: 0; }
+
+        /* Media goes full-bleed — edge-to-edge photography reads as designed,
+           an inset rectangle reads as a desktop column that shrank. */
+        .split-media {
+            width: 100vw;
+            margin-inline: calc(50% - 50vw);
+            aspect-ratio: 4 / 3;
+            max-height: none;
+        }
+        .split-media img { max-height: none; }
+        .split-media.dev { width: auto; margin-inline: 0; aspect-ratio: auto; }
+
+        .field input, .field textarea, .field select { font-size: 1rem; padding-block: 0.75rem; }
+        .alert { font-size: 0.95rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; scroll-snap-type: none; }
+        .rise > *, .fade, .wipe {
+            opacity: 1 !important;
+            transform: none !important;
+            clip-path: none !important;
+            transition: none !important;
+        }
+        [data-marquee] { animation: none !important; }
+    }
+</style>

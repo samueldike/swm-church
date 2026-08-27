@@ -1,0 +1,297 @@
+<script>
+(function () {
+    'use strict';
+
+    var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var raf = window.requestAnimationFrame.bind(window);
+
+    /* ── hamburger menu ───────────────────────────────────────────────── */
+    var burger = document.getElementById('burger');
+    var menu = document.getElementById('menu');
+    var menuClose = document.getElementById('menu-close');
+
+    if (burger && menu) {
+        var menuLinks = [].slice.call(menu.querySelectorAll('.menu-nav a'));
+        var lastFocused = null;
+
+        var openMenu = function () {
+            lastFocused = document.activeElement;
+            menu.hidden = false;
+            // Stagger the items so the panel unfolds rather than snapping in.
+            menuLinks.forEach(function (a, i) {
+                a.style.transitionDelay = (reduced ? 0 : 60 + i * 38) + 'ms';
+            });
+            raf(function () { menu.classList.add('open'); });
+            burger.classList.add('is-open');
+            burger.setAttribute('aria-expanded', 'true');
+            document.body.style.overflow = 'hidden';
+            if (menuClose) menuClose.focus();
+        };
+
+        var closeMenu = function () {
+            menu.classList.remove('open');
+            burger.classList.remove('is-open');
+            burger.setAttribute('aria-expanded', 'false');
+            document.body.style.overflow = '';
+            menuLinks.forEach(function (a) { a.style.transitionDelay = '0ms'; });
+            setTimeout(function () { menu.hidden = true; }, reduced ? 0 : 260);
+            if (lastFocused) lastFocused.focus();
+        };
+
+        burger.addEventListener('click', function () {
+            menu.hidden ? openMenu() : closeMenu();
+        });
+        if (menuClose) menuClose.addEventListener('click', closeMenu);
+
+        document.addEventListener('keydown', function (e) {
+            if (menu.hidden) return;
+            if (e.key === 'Escape') { closeMenu(); return; }
+            if (e.key !== 'Tab') return;
+            // Keep focus inside the panel while it is open.
+            var f = [].slice.call(menu.querySelectorAll('a[href], button')).filter(function (el) {
+                return el.offsetParent !== null;
+            });
+            if (!f.length) return;
+            var first = f[0], last = f[f.length - 1];
+            if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        });
+
+        // A resize up to desktop leaves the panel stranded over the page.
+        window.addEventListener('resize', function () {
+            if (!menu.hidden && window.innerWidth >= 1140) closeMenu();
+        });
+    }
+
+    /* ── directional masthead ─────────────────────────────────────────── */
+    /* Reveal on scroll up, tuck away on scroll down, and sit un-pinned over
+       the hero while the page is still near the top. */
+    var mast = document.querySelector('.mast');
+    if (mast) {
+        var TOP_ZONE = 140;      // below this we are "over the hero"
+        var DEADZONE = 6;        // ignore trackpad jitter
+        var lastY = window.scrollY;
+        var mTicking = false;
+
+        // Toggle classes with transitions suppressed for one frame.
+        var setInstant = function (fn) {
+            mast.classList.add('instant');
+            fn();
+            void mast.offsetHeight; // force reflow so `instant` actually applies
+            mast.classList.remove('instant');
+        };
+
+        var onScroll = function () {
+            var y = window.scrollY;
+            var dy = y - lastY;
+
+            if (y <= TOP_ZONE) {
+                if (mast.classList.contains('pinned')) {
+                    setInstant(function () { mast.classList.remove('pinned', 'up'); });
+                }
+            } else {
+                if (!mast.classList.contains('pinned')) {
+                    // Enter pinned already tucked away, so it does not flash by.
+                    setInstant(function () { mast.classList.add('pinned', 'up'); });
+                } else if (Math.abs(dy) > DEADZONE) {
+                    mast.classList.toggle('up', dy > 0);
+                }
+            }
+            lastY = y;
+        };
+
+        window.addEventListener('scroll', function () {
+            if (mTicking) return;
+            mTicking = true;
+            raf(function () { onScroll(); mTicking = false; });
+        }, { passive: true });
+        onScroll();
+    }
+
+    /* ── reveal on enter ──────────────────────────────────────────────── */
+    /* Section-level trigger; .rise/.fade/.wipe children cascade off `.in`. */
+    if ('IntersectionObserver' in window && !reduced) {
+        var io = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) {
+                if (e.isIntersecting) {
+                    e.target.classList.add('in');
+                    io.unobserve(e.target);
+                }
+            });
+        }, { rootMargin: '0px 0px -10% 0px', threshold: 0.06 });
+        document.querySelectorAll('[data-frame]').forEach(function (n) { io.observe(n); });
+    } else {
+        document.querySelectorAll('[data-frame]').forEach(function (n) { n.classList.add('in'); });
+    }
+
+    /* ── pen-stroke annotation ────────────────────────────────────────── */
+    /* Its own observer, deliberately NOT unobserved: the section reveal fires
+       once, but the ring should redraw every time the reader comes back to it. */
+    var circled = [].slice.call(document.querySelectorAll('.circled'));
+
+    /* Build the nib path. It runs top → left → bottom → right → top, which
+       with y pointing down is anticlockwise on screen, and overshoots past
+       the start so the loop closes like a real pen stroke. */
+    var PEN_D = 'M104 5C61 3 18 12 8 27c-9 14 22 27 82 30 52 2 99-8 106-23C203 19 174 8 118 5';
+    var SVG_NS = 'http://www.w3.org/2000/svg';
+    circled.forEach(function (el) {
+        if (el.querySelector('.pen')) return;
+        var svg = document.createElementNS(SVG_NS, 'svg');
+        svg.setAttribute('class', 'pen');
+        svg.setAttribute('viewBox', '0 0 200 62');
+        svg.setAttribute('preserveAspectRatio', 'none');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.setAttribute('focusable', 'false');
+        var path = document.createElementNS(SVG_NS, 'path');
+        path.setAttribute('d', PEN_D);
+        svg.appendChild(path);
+        el.appendChild(svg);
+        try {
+            path.style.setProperty('--len', path.getTotalLength());
+        } catch (e) { /* getTotalLength is unavailable if the SVG never lays out */ }
+    });
+
+    if (circled.length && 'IntersectionObserver' in window && !reduced) {
+        var penObserver = new IntersectionObserver(function (entries) {
+            entries.forEach(function (e) {
+                if (e.isIntersecting) {
+                    e.target.classList.add('drawn');
+                } else {
+                    // Reset only once fully out of view, so a partial scroll
+                    // never wipes a stroke the reader is still looking at.
+                    e.target.classList.remove('drawn');
+                }
+            });
+        }, { threshold: 0.6 });
+        circled.forEach(function (n) { penObserver.observe(n); });
+    } else {
+        circled.forEach(function (n) { n.classList.add('drawn'); });
+    }
+
+    /* ── hero plates ──────────────────────────────────────────────────── */
+    var plates = [].slice.call(document.querySelectorAll('[data-plate]'));
+    var dots = [].slice.call(document.querySelectorAll('[data-dot]'));
+    if (plates.length > 1) {
+        var pi = 0, timer = null, DELAY = 6000;
+        var show = function (i) {
+            pi = (i + plates.length) % plates.length;
+            plates.forEach(function (p, n) { p.classList.toggle('on', n === pi); });
+            dots.forEach(function (d, n) {
+                d.classList.toggle('on', n === pi);
+                d.setAttribute('aria-selected', String(n === pi));
+            });
+        };
+        var start = function () { if (!timer && !reduced) timer = setInterval(function () { show(pi + 1); }, DELAY); };
+        var stop = function () { clearInterval(timer); timer = null; };
+        dots.forEach(function (d) {
+            d.addEventListener('click', function () { show(+d.dataset.i); stop(); start(); });
+        });
+        document.addEventListener('visibilitychange', function () { document.hidden ? stop() : start(); });
+        start();
+    }
+
+    /* ── outreach slideshow ───────────────────────────────────────────── */
+    var shotsBox = document.querySelector('[data-shots]');
+    if (shotsBox) {
+        var figs = [].slice.call(shotsBox.querySelectorAll('[data-shot]'));
+        var sdots = [].slice.call(shotsBox.querySelectorAll('[data-shot-dot]'));
+        if (figs.length > 1 && !reduced) {
+            var si = 0, stimer = null;
+            var advance = function () {
+                si = (si + 1) % figs.length;
+                figs.forEach(function (f, n) { f.classList.toggle('on', n === si); });
+                sdots.forEach(function (d, n) { d.classList.toggle('on', n === si); });
+            };
+            var sStart = function () { if (!stimer) stimer = setInterval(advance, 5200); };
+            var sStop = function () { clearInterval(stimer); stimer = null; };
+            // Only run while the section is actually on screen.
+            if ('IntersectionObserver' in window) {
+                new IntersectionObserver(function (es) {
+                    es.forEach(function (e) { e.isIntersecting ? sStart() : sStop(); });
+                }, { threshold: 0.25 }).observe(shotsBox);
+            } else {
+                sStart();
+            }
+            document.addEventListener('visibilitychange', function () { document.hidden ? sStop() : sStart(); });
+        }
+    }
+
+    /* ── back to top ──────────────────────────────────────────────────── */
+    /* Appears past one screen, tracks read progress in its ring, and hands
+       focus back to the top of the document so keyboard users aren't stranded. */
+    var toTop = document.getElementById('totop');
+    if (toTop) {
+        var tTicking = false;
+        var sync = function () {
+            var doc = document.documentElement;
+            var max = doc.scrollHeight - window.innerHeight;
+            var y = window.scrollY;
+            toTop.classList.toggle('show', y > window.innerHeight * 0.9);
+            toTop.style.setProperty('--p', max > 0 ? Math.min(1, y / max) : 0);
+        };
+        window.addEventListener('scroll', function () {
+            if (tTicking) return;
+            tTicking = true;
+            raf(function () { sync(); tTicking = false; });
+        }, { passive: true });
+        toTop.addEventListener('click', function () {
+            window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
+            var first = document.querySelector('.mast a, h1');
+            if (first) {
+                first.setAttribute('tabindex', '-1');
+                first.focus({ preventScroll: true });
+            }
+        });
+        sync();
+    }
+
+    /* ── lightbox ─────────────────────────────────────────────────────── */
+    /* The marquee renders each photo twice for a seamless loop, so build the
+       navigable set from the first (non-duplicated) pass only. */
+    var lb = document.getElementById('lb');
+    var lbImg = document.getElementById('lb-img');
+    var shots = [].slice.call(document.querySelectorAll('[data-lightbox]'));
+    var unique = shots.filter(function (s) { return s.getAttribute('aria-hidden') !== 'true'; });
+
+    if (lb && unique.length) {
+        var srcs = unique.map(function (s) { return { src: s.dataset.src, cap: s.dataset.cap || '' }; });
+        var idx = 0, lastFocus = null;
+
+        var render = function () {
+            lbImg.src = srcs[idx].src;
+            lbImg.alt = srcs[idx].cap;
+        };
+        var open = function (src) {
+            var found = srcs.findIndex(function (s) { return s.src === src; });
+            idx = found < 0 ? 0 : found;
+            lastFocus = document.activeElement;
+            render();
+            lb.hidden = false;
+            raf(function () { lb.classList.add('open'); });
+            document.body.style.overflow = 'hidden';
+            document.getElementById('lb-close').focus();
+        };
+        var close = function () {
+            lb.classList.remove('open');
+            document.body.style.overflow = '';
+            setTimeout(function () { lb.hidden = true; }, 300);
+            if (lastFocus) lastFocus.focus();
+        };
+        var step = function (n) { idx = (idx + n + srcs.length) % srcs.length; render(); };
+
+        shots.forEach(function (s) {
+            s.addEventListener('click', function () { open(s.dataset.src); });
+        });
+        document.getElementById('lb-close').addEventListener('click', close);
+        document.getElementById('lb-prev').addEventListener('click', function () { step(-1); });
+        document.getElementById('lb-next').addEventListener('click', function () { step(1); });
+        lb.addEventListener('click', function (e) { if (e.target === lb) close(); });
+        document.addEventListener('keydown', function (e) {
+            if (lb.hidden) return;
+            if (e.key === 'Escape') close();
+            if (e.key === 'ArrowLeft') step(-1);
+            if (e.key === 'ArrowRight') step(1);
+        });
+    }
+})();
+</script>
