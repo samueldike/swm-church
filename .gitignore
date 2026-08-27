@@ -42,3 +42,7 @@ churchaly/
 # Backup
 swm-backup/
 *.sql
+
+# Local-only deploy credentials and archived one-off deploy scripts
+.deploy-archive/
+.env.deploy
