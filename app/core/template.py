@@ -151,22 +151,42 @@ async def render_template(
         if route_name == "static":
             path = path_params.get("path", "")
             return f"/static/{path}" if path else "/static"
-        normalized = route_name.replace(".", "_").replace("-", "_")
-        router = request.app.router
-        for route in router.routes:
-            route_name_norm = str(getattr(route, "name", "")).replace(".", "_").replace("-", "_")
-            if route_name_norm == normalized:
-                path = getattr(route, "path", "")
-                import re
 
-                route_params = re.findall(r"\{(\w+)\}", path)
-                if args and route_params:
+        normalized = route_name.replace(".", "_").replace("-", "_")
+
+        # Positional args map to path params in declared order — resolved by
+        # walking app.routes just for the placeholder names, not to build the
+        # final URL (that part is delegated below).
+        if args:
+            import re
+
+            for route in request.app.routes:
+                route_name_norm = str(getattr(route, "name", "")).replace(".", "_").replace("-", "_")
+                if route_name_norm == normalized:
+                    route_params = re.findall(r"\{(\w+)\}", getattr(route, "path", ""))
                     for i, val in enumerate(args):
                         if i < len(route_params):
-                            path_params[route_params[i]] = val
-                for param, val in path_params.items():
-                    path = path.replace("{" + param + "}", str(val))
-                return path
+                            path_params.setdefault(route_params[i], val)
+                    break
+
+        # Delegate to Starlette's own reverse-routing. A hand-rolled walk of
+        # request.app.router.routes previously lived here; it broke outright
+        # when a Starlette upgrade started wrapping included routers behind
+        # an opaque proxy object instead of a flat list, silently degrading
+        # every internal link on the page to "/". url_path_for is the stable
+        # public API and stays correct regardless of that internal structure.
+        for name in (route_name, normalized) if route_name != normalized else (route_name,):
+            try:
+                return str(request.app.url_path_for(name, **path_params))
+            except Exception:
+                continue
+
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "url_for: no route named %r (params=%s) — link will point to \"/\"",
+            route_name, path_params,
+        )
         return "/"
 
     ctx["url_for"] = url_for
