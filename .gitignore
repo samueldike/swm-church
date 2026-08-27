@@ -23,8 +23,9 @@ seed_admin.py
 *.pyc
 !tests/test_*.py
 
-# One-off VPS scratch scripts with hardcoded credentials — never commit these
-deploy.py
+# One-off VPS scratch scripts that carried hardcoded credentials — archived
+# to .deploy-archive/. deploy.py is now the credential-free replacement (see
+# deploy.py's own docstring) and is deliberately tracked, not ignored.
 deploy[0-9]*.py
 ssh_exec.py
 vps_deploy.py
