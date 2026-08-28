@@ -4,21 +4,19 @@
 {% set pageLede = 'Every service and programme an admin has published — browse the year, not just this week.' %}
 {% include "partials/theme-page-open.html" %}
 
-<section class="band band-dark">
+<section class="band band-dark" id="cal-section" data-month="{{ currentMonth.strftime('%Y-%m') }}">
     <div class="shell">
         <div class="cal-head">
             <div>
-                <p class="mono eyebrow"><span class="rule"></span>{{ currentMonth.strftime('%Y') }}</p>
-                <h2 class="t-h2" style="margin-top:0.6rem;">{{ currentMonth.strftime('%B') }}</h2>
+                <p class="mono eyebrow"><span class="rule"></span><span id="cal-year">{{ currentMonth.strftime('%Y') }}</span></p>
+                <h2 class="t-h2" style="margin-top:0.6rem;" id="cal-month-name">{{ currentMonth.strftime('%B') }}</h2>
             </div>
             <nav class="cal-nav" aria-label="Change month">
-                <a href="{{ url_for('calendar') }}?month={{ prevMonth.strftime('%Y-%m') }}" class="cal-arrow" aria-label="Previous month">
+                <a href="{{ url_for('calendar') }}?month={{ prevMonth.strftime('%Y-%m') }}" class="cal-arrow" data-nav="{{ prevMonth.strftime('%Y-%m') }}" aria-label="Previous month">
                     <span class="material-symbols-outlined">chevron_left</span>
                 </a>
-                {% if not isCurrentMonth %}
-                <a href="{{ url_for('calendar') }}" class="lnk" style="margin-inline:0.3rem;">Today</a>
-                {% endif %}
-                <a href="{{ url_for('calendar') }}?month={{ nextMonth.strftime('%Y-%m') }}" class="cal-arrow" aria-label="Next month">
+                <a href="{{ url_for('calendar') }}" class="lnk" data-nav-today style="margin-inline:0.3rem;{{ '' if not isCurrentMonth else 'display:none;' }}">Today</a>
+                <a href="{{ url_for('calendar') }}?month={{ nextMonth.strftime('%Y-%m') }}" class="cal-arrow" data-nav="{{ nextMonth.strftime('%Y-%m') }}" aria-label="Next month">
                     <span class="material-symbols-outlined">chevron_right</span>
                 </a>
             </nav>
@@ -27,22 +25,22 @@
         {# A whole-year rail, since this is meant to be browsed as a year, not
            clicked through one month at a time. #}
         <div class="cal-year-rail-wrap">
-            <a href="{{ url_for('calendar') }}?month={{ prevYear.strftime('%Y-%m') }}" class="cal-arrow cal-arrow-sm" aria-label="Previous year">
+            <a href="{{ url_for('calendar') }}?month={{ prevYear.strftime('%Y-%m') }}" class="cal-arrow cal-arrow-sm" data-nav="{{ prevYear.strftime('%Y-%m') }}" aria-label="Previous year">
                 <span class="material-symbols-outlined" style="font-size:18px">keyboard_double_arrow_left</span>
             </a>
-            <div class="cal-year-rail no-scrollbar" role="tablist" aria-label="Jump to month">
+            <div class="cal-year-rail no-scrollbar" role="tablist" aria-label="Jump to month" id="cal-year-rail">
                 {% for m in yearMonths %}
-                <a href="{{ url_for('calendar') }}?month={{ m.ym }}"
+                <a href="{{ url_for('calendar') }}?month={{ m.ym }}" data-nav="{{ m.ym }}"
                    class="cal-month-chip {{ 'is-current' if m.current else '' }}"
                    role="tab" aria-selected="{{ 'true' if m.current else 'false' }}">{{ m.label }}</a>
                 {% endfor %}
             </div>
-            <a href="{{ url_for('calendar') }}?month={{ nextYear.strftime('%Y-%m') }}" class="cal-arrow cal-arrow-sm" aria-label="Next year">
+            <a href="{{ url_for('calendar') }}?month={{ nextYear.strftime('%Y-%m') }}" class="cal-arrow cal-arrow-sm" data-nav="{{ nextYear.strftime('%Y-%m') }}" aria-label="Next year">
                 <span class="material-symbols-outlined" style="font-size:18px">keyboard_double_arrow_right</span>
             </a>
         </div>
 
-        <div class="cal-grid">
+        <div class="cal-grid" id="cal-grid">
             {% for wd in ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] %}
             <div class="cal-wd mono">{{ wd }}</div>
             {% endfor %}
@@ -73,11 +71,12 @@
         <div class="head">
             <div>
                 <p class="mono eyebrow"><span class="rule"></span>This month</p>
-                <h2 class="t-h2" style="margin-top:1rem;">{{ currentMonth.strftime('%B %Y') }}</h2>
+                <h2 class="t-h2" style="margin-top:1rem;" id="cal-month-list-title">{{ currentMonth.strftime('%B %Y') }}</h2>
             </div>
             <a href="{{ url_for('events') }}" class="lnk">All upcoming programmes</a>
         </div>
 
+        <div id="cal-month-list">
         {% if monthOnlyEvents %}
         <ul class="rows" style="margin-top:2rem;">
             {% for ev in monthOnlyEvents %}
@@ -101,6 +100,7 @@
             <p class="t-body">Nothing has been published for {{ currentMonth.strftime('%B %Y') }} yet.</p>
         </div>
         {% endif %}
+        </div>
     </div>
 </section>
 
@@ -283,5 +283,123 @@
         .cal-arrow { width: 2.75rem; height: 2.75rem; }
     }
 </style>
+
+<script>
+(function () {
+    "use strict";
+    var section = document.getElementById("cal-section");
+    if (!section) return;
+
+    var DATA_URL = "{{ url_for('calendar_data') }}";
+    var CAL_URL = "{{ url_for('calendar') }}";
+    var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    function esc(s) {
+        return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+        });
+    }
+
+    function renderGrid(data) {
+        var html = WEEKDAYS.map(function (wd) { return '<div class="cal-wd mono">' + wd + '</div>'; }).join("");
+        data.calendarDays.forEach(function (day) {
+            var cls = "cal-day" + (day.isOut ? " is-out" : "") + (day.isToday ? " is-today" : "");
+            var dots = "";
+            if (day.events.length) {
+                var pills = day.events.slice(0, 2).map(function (ev) {
+                    var title = esc(ev.title) + (ev.time_label ? " — " + esc(ev.time_label) : "");
+                    return '<span class="cal-pill' + (ev.is_major ? " is-major" : "") + '" title="' + title + '">' + esc(ev.title) + "</span>";
+                }).join("");
+                var more = day.events.length > 2 ? '<span class="cal-more mono">+' + (day.events.length - 2) + " more</span>" : "";
+                dots = '<div class="cal-dots">' + pills + more + "</div>";
+            }
+            html += '<div class="' + cls + '"><span class="cal-daynum mono">' + day.day + "</span>" + dots + "</div>";
+        });
+        document.getElementById("cal-grid").innerHTML = html;
+    }
+
+    function renderMonthList(data) {
+        var title = document.getElementById("cal-month-list-title");
+        title.textContent = data.currentMonth.label + " " + data.currentMonth.year;
+        var wrap = document.getElementById("cal-month-list");
+        if (!data.monthOnlyEvents.length) {
+            wrap.innerHTML = '<div class="empty" style="margin-top:2rem;"><p class="t-body">Nothing has been published for '
+                + esc(data.currentMonth.label) + " " + esc(data.currentMonth.year) + " yet.</p></div>";
+            return;
+        }
+        var rows = data.monthOnlyEvents.map(function (ev) {
+            var toLabel = "";
+            if (ev.ends_at && ev.starts_at && ev.ends_at.slice(0, 10) !== ev.starts_at.slice(0, 10)) {
+                var d = new Date(ev.ends_at);
+                toLabel = "<br/>to " + d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
+            }
+            return '<li class="row"><span class="row-in">'
+                + '<span class="mono row-i ' + (ev.is_major ? "gold" : "faint") + '" style="min-width:5.5rem;">' + esc(ev.date_label) + "</span>"
+                + '<span class="row-main"><span class="t-h3">' + esc(ev.title) + "</span>"
+                + (ev.location ? '<span class="t-sm row-sub">' + esc(ev.location) + "</span>" : "") + "</span>"
+                + '<span class="row-meta mono ' + (ev.is_major ? "gold" : "faint") + '">' + esc(ev.time_label) + toLabel + "</span>"
+                + "</span></li>";
+        }).join("");
+        wrap.innerHTML = '<ul class="rows" style="margin-top:2rem;">' + rows + "</ul>";
+    }
+
+    function render(data) {
+        section.setAttribute("data-month", data.currentMonth.y + "-" + String(data.currentMonth.m).padStart(2, "0"));
+        document.getElementById("cal-year").textContent = data.currentMonth.year;
+        document.getElementById("cal-month-name").textContent = data.currentMonth.label;
+
+        var todayYm = data.today.slice(0, 7);
+        var arrows = section.querySelectorAll(".cal-nav .cal-arrow");
+        arrows[0].setAttribute("data-nav", data.prevMonth);
+        arrows[0].setAttribute("href", CAL_URL + "?month=" + data.prevMonth);
+        arrows[1].setAttribute("data-nav", data.nextMonth);
+        arrows[1].setAttribute("href", CAL_URL + "?month=" + data.nextMonth);
+
+        var todayLink = section.querySelector("[data-nav-today]");
+        todayLink.setAttribute("data-nav", todayYm);
+        todayLink.style.display = data.isCurrentMonth ? "none" : "";
+
+        var yearArrows = section.querySelectorAll(".cal-year-rail-wrap > .cal-arrow-sm");
+        yearArrows[0].setAttribute("data-nav", data.prevYear);
+        yearArrows[0].setAttribute("href", CAL_URL + "?month=" + data.prevYear);
+        yearArrows[1].setAttribute("data-nav", data.nextYear);
+        yearArrows[1].setAttribute("href", CAL_URL + "?month=" + data.nextYear);
+
+        var rail = document.getElementById("cal-year-rail");
+        rail.innerHTML = data.yearMonths.map(function (m) {
+            return '<a href="' + CAL_URL + "?month=" + m.ym + '" data-nav="' + m.ym + '" class="cal-month-chip' + (m.current ? " is-current" : "")
+                + '" role="tab" aria-selected="' + (m.current ? "true" : "false") + '">' + esc(m.label) + "</a>";
+        }).join("");
+
+        renderGrid(data);
+        renderMonthList(data);
+    }
+
+    function goTo(ym, push) {
+        fetch(DATA_URL + "?month=" + encodeURIComponent(ym), { headers: { Accept: "application/json" } })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                render(data);
+                if (push !== false) {
+                    var url = ym === data.today.slice(0, 7) ? CAL_URL : CAL_URL + "?month=" + ym;
+                    history.pushState({ ym: ym }, "", url);
+                }
+            })
+            .catch(function () { window.location.href = CAL_URL + "?month=" + ym; });
+    }
+
+    document.addEventListener("click", function (e) {
+        var el = e.target.closest("[data-nav]");
+        if (!el || !section.contains(el)) return;
+        e.preventDefault();
+        goTo(el.getAttribute("data-nav"));
+    });
+
+    window.addEventListener("popstate", function (e) {
+        var ym = (e.state && e.state.ym) || section.getAttribute("data-month");
+        goTo(ym, false);
+    });
+})();
+</script>
 
 {% include "partials/theme-page-close.html" %}

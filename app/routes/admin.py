@@ -1332,11 +1332,8 @@ async def admin_events(request: Request, db: AsyncSession = Depends(get_db), mon
     calendarDays = [d for week in raw_days for d in week]
     today_str = date.today().isoformat()
 
-    eventsByDate: dict[str, list] = {}
-    for ev in events:
-        if ev.starts_at:
-            key = ev.starts_at.strftime("%Y-%m-%d")
-            eventsByDate.setdefault(key, []).append(ev)
+    from app.core.calendar_utils import events_by_date
+    eventsByDate = events_by_date(events)
 
     upcomingPrograms = [
         ev for ev in events
