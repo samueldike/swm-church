@@ -22,3 +22,4 @@ python-slugify
 faster-whisper
 itsdangerous
 pymysql
+bcrypt==4.0.1
