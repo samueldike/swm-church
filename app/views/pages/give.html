@@ -18,6 +18,16 @@
             {% if session.get('success') %}
             <div class="alert" role="status" style="margin-top:1.6rem;">{{ session.get('success') }}</div>
             {% endif %}
+            {% if session.get('error') %}
+            <div class="alert alert-bad" role="alert" style="margin-top:1.6rem;">{{ session.get('error') }}</div>
+            {% endif %}
+            {% for msg in flash_messages %}
+            {% if msg.type == 'error' or msg.type == 'danger' %}
+            <div class="alert alert-bad" role="alert" style="margin-top:1.6rem;">{{ msg.message }}</div>
+            {% elif msg.type == 'success' %}
+            <div class="alert" role="status" style="margin-top:1.6rem;">{{ msg.message }}</div>
+            {% endif %}
+            {% endfor %}
 
             <div class="give-form-card">
             <form class="form-grid give-form" method="POST" action="{{ url_for('give_checkout') }}">
