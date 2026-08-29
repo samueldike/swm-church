@@ -300,6 +300,12 @@ Legal Pages
 <option value="live" {{ 'selected' if request.form.get('giving_mode', settings['giving_mode']) == 'live' else '' }}>Live</option>
 </select>
 </div>
+<div class="md:col-span-2 pt-4 border-t border-gray-100">
+<label class="form-label">Giving Purposes</label>
+<p class="text-[11px] text-gray-500 mb-2">One purpose per line. These appear as the dropdown options on the Give page. "Others" is always appended automatically.</p>
+<textarea class="form-input min-h-28" name="giving_purposes" placeholder="Tithe&#10;Offering&#10;Missions&#10;Building Fund&#10;Welfare">{{ request.form.get('giving_purposes', settings.get('giving_purposes', 'Tithe\nOffering\nMissions\nBuilding Fund\nWelfare')) }}</textarea>
+<p class="mt-1 text-[11px] text-gray-500">Currently shown on the /give page as the Purpose dropdown. Changes take effect immediately on save.</p>
+</div>
 </div>
 
 <div class="grid md:grid-cols-2 gap-5">
@@ -328,24 +334,74 @@ Legal Pages
 
 <section class="content-card settings-panel hidden" data-settings-panel="accounts">
 <h2 class="section-title">Church Accounts (Multiple)</h2>
-<p class="text-xs text-gray-500 mb-4">Add each giving account with separate bank, account number, and account name fields.</p>
+<p class="text-xs text-gray-500 mb-4">Add each giving account with separate bank, account number, and account name fields. Upload a bank logo per row, or pick one already uploaded.</p>
 {% set accountRows = request.form.get('church_accounts', settings['church_accounts']) %}
 {% if accountRows is not iterable or accountRows|length == 0 %}
-{% set accountRows = [{'bank_name': '', 'account_number': '', 'account_name': ''}] %}
+{% set accountRows = [{'bank_name': '', 'account_number': '', 'account_name': '', 'bank_logo': ''}] %}
 {% endif %}
-<div id="church-account-rows" class="space-y-3">
+
+{# Collect already-uploaded bank logos for reuse picker #}
+{% set uploadedLogos = bank_logos or [] %}
+
+<div id="church-account-rows" class="space-y-4">
 {% for account in accountRows %}
-<div class="church-account-row" data-account-row>
+<div class="church-account-row border border-gray-200 rounded-xl p-4 space-y-3" data-account-row>
+<div class="grid md:grid-cols-3 gap-3">
 <label><span class="form-label">Bank Name</span><input class="form-input" name="church_accounts[{{ loop.index0 }}][bank_name]" value="{{ account.get('bank_name', '') }}" /></label>
 <label><span class="form-label">Account Number</span><input class="form-input" name="church_accounts[{{ loop.index0 }}][account_number]" value="{{ account.get('account_number', '') }}" /></label>
 <label><span class="form-label">Account Name</span><input class="form-input" name="church_accounts[{{ loop.index0 }}][account_name]" value="{{ account.get('account_name', '') }}" /></label>
-<button type="button" class="h-10 w-10 self-end rounded-xl border border-gray-200 text-gray-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors" data-remove-account-row aria-label="Remove account"><i class="ri-delete-bin-line text-base"></i></button>
+</div>
+<div class="flex items-end gap-3 flex-wrap">
+  <div class="flex-1 min-w-48">
+    <span class="form-label block mb-1">Bank Logo</span>
+    <div class="flex items-center gap-2">
+      <div class="bank-logo-preview w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+        {% if account.get('bank_logo') %}
+        <img src="/static/{{ account['bank_logo'] }}" class="w-full h-full object-contain" alt="Bank logo"/>
+        {% else %}
+        <i class="ri-bank-line text-gray-400 text-lg"></i>
+        {% endif %}
+      </div>
+      <input type="hidden" name="church_accounts[{{ loop.index0 }}][bank_logo]" class="bank-logo-value" value="{{ account.get('bank_logo', '') }}"/>
+      <label class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-gray-600 cursor-pointer hover:border-primary/40 hover:text-primary transition-colors">
+        <i class="ri-upload-2-line text-sm"></i>Upload
+        <input type="file" accept="image/*" class="hidden bank-logo-file-input" data-row-index="{{ loop.index0 }}"/>
+      </label>
+      {% if uploadedLogos %}
+      <button type="button" class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-gray-600 hover:border-primary/40 hover:text-primary transition-colors bank-logo-reuse-btn">
+        <i class="ri-image-line text-sm"></i>Reuse
+      </button>
+      {% endif %}
+    </div>
+  </div>
+  <button type="button" class="h-9 w-9 self-end rounded-xl border border-gray-200 text-gray-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors flex-shrink-0" data-remove-account-row aria-label="Remove account"><i class="ri-delete-bin-line text-base"></i></button>
+</div>
 </div>
 {% endfor %}
 </div>
+
 <button type="button" id="add-church-account-row" class="mt-4 inline-flex h-10 items-center gap-2 rounded-xl border border-gray-200 px-4 text-xs font-bold text-gray-600 hover:border-primary/40 hover:text-primary transition-colors">
 <i class="ri-add-line text-base"></i><span>Add Account</span>
 </button>
+
+{# Hidden logo reuse picker modal #}
+{% if uploadedLogos %}
+<div id="bank-logo-reuse-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50" data-logo-modal>
+  <div class="bg-white rounded-2xl shadow-2xl p-6 w-80 max-w-full mx-4">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-sm font-bold text-gray-900">Pick an uploaded logo</h3>
+      <button type="button" id="bank-logo-modal-close" class="text-gray-400 hover:text-gray-700"><i class="ri-close-line text-lg"></i></button>
+    </div>
+    <div class="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
+      {% for logo in uploadedLogos %}
+      <button type="button" class="bank-logo-pick-item p-1 border border-gray-200 rounded-lg hover:border-primary transition-colors" data-logo-path="{{ logo }}">
+        <img src="/static/{{ logo }}" class="w-full h-12 object-contain" alt="Bank logo"/>
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
 </section>
 
 <section class="content-card settings-panel hidden" data-settings-panel="security">
@@ -653,9 +709,13 @@ function initializeSettingsPage() {
 
         accountRows.querySelectorAll('[data-account-row]').forEach((row, index) => {
             row.querySelectorAll('input').forEach((input) => {
-                const field = input.name.match(/\[(bank_name|account_number|account_name)\]$/)?.[1];
+                const field = input.name.match(/\[(bank_name|account_number|account_name|bank_logo)\]$/)?.[1];
                 if (field) {
                     input.name = `church_accounts[${index}][${field}]`;
+                }
+                // update file input data-row-index
+                if (input.classList.contains('bank-logo-file-input')) {
+                    input.dataset.rowIndex = String(index);
                 }
             });
             const removeButton = row.querySelector('[data-remove-account-row]');
@@ -672,17 +732,37 @@ function initializeSettingsPage() {
 
         const index = accountRows.querySelectorAll('[data-account-row]').length;
         const row = document.createElement('div');
-        row.className = 'church-account-row';
+        row.className = 'church-account-row border border-gray-200 rounded-xl p-4 space-y-3';
         row.dataset.accountRow = '';
+        const hasReuse = !!document.querySelector('[data-logo-modal]');
         row.innerHTML = `
-            <label><span class="form-label">Bank Name</span><input class="form-input" name="church_accounts[${index}][bank_name]" /></label>
-            <label><span class="form-label">Account Number</span><input class="form-input" name="church_accounts[${index}][account_number]" /></label>
-            <label><span class="form-label">Account Name</span><input class="form-input" name="church_accounts[${index}][account_name]" /></label>
-            <button type="button" class="h-10 w-10 self-end rounded-xl border border-gray-200 text-gray-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors" data-remove-account-row aria-label="Remove account"><i class="ri-delete-bin-line text-base"></i></button>
+            <div class="grid md:grid-cols-3 gap-3">
+              <label><span class="form-label">Bank Name</span><input class="form-input" name="church_accounts[${index}][bank_name]" /></label>
+              <label><span class="form-label">Account Number</span><input class="form-input" name="church_accounts[${index}][account_number]" /></label>
+              <label><span class="form-label">Account Name</span><input class="form-input" name="church_accounts[${index}][account_name]" /></label>
+            </div>
+            <div class="flex items-end gap-3 flex-wrap">
+              <div class="flex-1 min-w-48">
+                <span class="form-label block mb-1">Bank Logo</span>
+                <div class="flex items-center gap-2">
+                  <div class="bank-logo-preview w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    <i class="ri-bank-line text-gray-400 text-lg"></i>
+                  </div>
+                  <input type="hidden" name="church_accounts[${index}][bank_logo]" class="bank-logo-value" value=""/>
+                  <label class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-gray-600 cursor-pointer hover:border-primary/40 hover:text-primary transition-colors">
+                    <i class="ri-upload-2-line text-sm"></i>Upload
+                    <input type="file" accept="image/*" class="hidden bank-logo-file-input" data-row-index="${index}"/>
+                  </label>
+                  ${hasReuse ? `<button type="button" class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-gray-600 hover:border-primary/40 hover:text-primary transition-colors bank-logo-reuse-btn"><i class="ri-image-line text-sm"></i>Reuse</button>` : ''}
+                </div>
+              </div>
+              <button type="button" class="h-9 w-9 self-end rounded-xl border border-gray-200 text-gray-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors flex-shrink-0" data-remove-account-row aria-label="Remove account"><i class="ri-delete-bin-line text-base"></i></button>
+            </div>
         `;
         accountRows.appendChild(row);
+        attachLogoHandlers(row);
         renumberAccountRows();
-        row.querySelector('input')?.focus();
+        row.querySelector('input:not([type="hidden"]):not([type="file"])')?.focus();
     }
 
     addAccountRow.addEventListener('click', createAccountRow, listenerOptions);
@@ -702,6 +782,90 @@ function initializeSettingsPage() {
         renumberAccountRows();
     }, listenerOptions);
     renumberAccountRows();
+
+    // ── Bank logo upload + reuse ──────────────────────────────────────────
+    const logoModal = document.getElementById('bank-logo-reuse-modal');
+    const logoModalClose = document.getElementById('bank-logo-modal-close');
+    let activeLogoRow = null;
+
+    function setLogoOnRow(row, path) {
+        const preview = row.querySelector('.bank-logo-preview');
+        const hidden = row.querySelector('.bank-logo-value');
+        if (hidden) hidden.value = path;
+        if (preview) {
+            if (path) {
+                preview.innerHTML = `<img src="/static/${path}" class="w-full h-full object-contain" alt="Bank logo"/>`;
+            } else {
+                preview.innerHTML = `<i class="ri-bank-line text-gray-400 text-lg"></i>`;
+            }
+        }
+    }
+
+    function uploadLogoFile(file, row) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const csrfInput = document.querySelector('input[name="csrf_token"]');
+        if (csrfInput) fd.append('csrf_token', csrfInput.value);
+        fetch('/admin/settings/bank-logo', { method: 'POST', body: fd })
+            .then((r) => r.json())
+            .then((data) => {
+                if (data.path) {
+                    setLogoOnRow(row, data.path);
+                    // Add to the reuse grid if the modal exists
+                    const grid = logoModal?.querySelector('.grid');
+                    if (grid) {
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'bank-logo-pick-item p-1 border border-gray-200 rounded-lg hover:border-primary transition-colors';
+                        btn.dataset.logoPath = data.path;
+                        btn.innerHTML = `<img src="/static/${data.path}" class="w-full h-12 object-contain" alt="Bank logo"/>`;
+                        grid.appendChild(btn);
+                    }
+                } else {
+                    alert(data.error || 'Upload failed.');
+                }
+            })
+            .catch(() => alert('Upload failed. Please try again.'));
+    }
+
+    function attachLogoHandlers(scope) {
+        scope.querySelectorAll('.bank-logo-file-input').forEach((input) => {
+            input.addEventListener('change', () => {
+                const file = input.files && input.files[0];
+                if (!file) return;
+                const row = input.closest('[data-account-row]');
+                if (row) uploadLogoFile(file, row);
+                input.value = '';
+            }, listenerOptions);
+        });
+        scope.querySelectorAll('.bank-logo-reuse-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                activeLogoRow = btn.closest('[data-account-row]');
+                if (logoModal) logoModal.classList.remove('hidden');
+            }, listenerOptions);
+        });
+    }
+
+    // Attach to existing rows
+    if (accountRows) attachLogoHandlers(accountRows);
+
+    if (logoModalClose) {
+        logoModalClose.addEventListener('click', () => {
+            if (logoModal) logoModal.classList.add('hidden');
+            activeLogoRow = null;
+        }, listenerOptions);
+    }
+    if (logoModal) {
+        logoModal.addEventListener('click', (e) => {
+            if (e.target === logoModal) { logoModal.classList.add('hidden'); activeLogoRow = null; }
+            const item = e.target.closest('.bank-logo-pick-item');
+            if (item && activeLogoRow) {
+                setLogoOnRow(activeLogoRow, item.dataset.logoPath);
+                logoModal.classList.add('hidden');
+                activeLogoRow = null;
+            }
+        }, listenerOptions);
+    }
 
     const pageHeroKeyInput = document.getElementById('pageHeroKeyInput');
     const pageHeroFileInput = document.getElementById('pageHeroFileInput');

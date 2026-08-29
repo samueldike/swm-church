@@ -40,6 +40,52 @@ async def initialize_paystack(
     return data.get("data", {}).get("authorization_url")
 
 
+async def verify_paystack(reference: str, secret_key: str = "") -> dict:
+    """Verify a Paystack transaction. Returns a dict with 'success' bool and 'amount_kobo' int."""
+    url = f"https://api.paystack.co/transaction/verify/{reference}"
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.get(
+            url,
+            headers={"Authorization": f"Bearer {secret_key}"},
+        )
+    if response.status_code != 200:
+        return {"success": False}
+    data = response.json()
+    if not data.get("status"):
+        return {"success": False}
+    tx = data.get("data", {})
+    return {
+        "success": tx.get("status") == "success",
+        "amount_kobo": tx.get("amount", 0),
+        "currency": tx.get("currency", "NGN"),
+        "email": tx.get("customer", {}).get("email", ""),
+    }
+
+
+async def verify_flutterwave(transaction_id: str, tx_ref: str, secret_key: str = "") -> dict:
+    """Verify a Flutterwave transaction. Returns a dict with 'success' bool and 'amount' float."""
+    if not transaction_id:
+        return {"success": False}
+    url = f"https://api.flutterwave.com/v3/transactions/{transaction_id}/verify"
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.get(
+            url,
+            headers={"Authorization": f"Bearer {secret_key}"},
+        )
+    if response.status_code != 200:
+        return {"success": False}
+    data = response.json()
+    if data.get("status") != "success":
+        return {"success": False}
+    tx = data.get("data", {})
+    return {
+        "success": tx.get("status") == "successful" and tx.get("tx_ref") == tx_ref,
+        "amount": float(tx.get("amount", 0)),
+        "currency": tx.get("currency", "NGN"),
+        "email": tx.get("customer", {}).get("email", ""),
+    }
+
+
 async def initialize_flutterwave(
     email: str,
     amount_naira: float,

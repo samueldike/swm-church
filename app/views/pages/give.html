@@ -19,40 +19,42 @@
             <div class="alert" role="status" style="margin-top:1.6rem;">{{ session.get('success') }}</div>
             {% endif %}
 
-            <form class="form-grid" method="POST" action="{{ url_for('give_checkout') }}" style="margin-top:1.8rem;">
+            <div class="give-form-card">
+            <form class="form-grid give-form" method="POST" action="{{ url_for('give_checkout') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
                 {# The handler reads `full_name`; the previous form posted `name`,
                    so every donor name was silently dropped. #}
-                <label class="field"><span>Your name</span>
+                <label class="field give-field"><span>Your name</span>
                     <input type="text" name="full_name" value="{{ request.form.get('full_name', '') if request.form else '' }}" placeholder="Full name"/>
                 </label>
-                <label class="field"><span>Email</span>
+                <label class="field give-field"><span>Email</span>
                     <input type="email" name="email" required value="{{ request.form.get('email', '') if request.form else '' }}" placeholder="you@example.com"/>
                 </label>
-                <label class="field"><span>Phone <span style="text-transform:none;letter-spacing:0">(optional)</span></span>
+                <label class="field give-field"><span>Phone <span style="text-transform:none;letter-spacing:0">(optional)</span></span>
                     <input type="tel" name="phone" value="{{ request.form.get('phone', '') if request.form else '' }}" placeholder="+234…"/>
                 </label>
-                <label class="field"><span>Amount (₦)</span>
+                <label class="field give-field"><span>Amount (₦)</span>
                     <input type="number" name="amount" required min="100" step="50"
                            value="{{ request.form.get('amount', '') if request.form else '' }}" placeholder="5000"/>
                 </label>
 
-                <div class="field span-2"><span>Quick amounts</span>
+                <div class="field give-field span-2"><span>Quick amounts</span>
                     <div class="chips">
                         {% for amt in [2000, 5000, 10000, 20000, 50000] %}
-                        <button type="button" class="chip-amt" data-amount="{{ amt }}">₦{{ '{:,}'.format(amt) }}</button>
+                        <button type="button" class="chip-amt give-chip" data-amount="{{ amt }}">₦{{ '{:,}'.format(amt) }}</button>
                         {% endfor %}
                     </div>
                 </div>
 
-                <label class="field"><span>Purpose</span>
+                {% set giving_purposes = giving_purposes or ['Tithe', 'Offering', 'Missions', 'Building Fund', 'Welfare', 'Others'] %}
+                <label class="field give-field"><span>Purpose</span>
                     <select name="purpose" id="give-purpose">
-                        {% for p in ['Tithe', 'Offering', 'Missions', 'Building Fund', 'Welfare', 'Others'] %}
+                        {% for p in giving_purposes %}
                         <option value="{{ p }}" {{ 'selected' if (request.form.get('purpose') if request.form else '') == p else '' }}>{{ p }}</option>
                         {% endfor %}
                     </select>
                 </label>
-                <label class="field" id="purpose-other" hidden><span>Please specify</span>
+                <label class="field give-field" id="purpose-other" hidden><span>Please specify</span>
                     <input type="text" name="purpose_text" value="{{ request.form.get('purpose_text', '') if request.form else '' }}" placeholder="What is this gift for?"/>
                 </label>
 
@@ -61,19 +63,43 @@
                         <span class="material-symbols-outlined" style="font-size:18px">lock</span>
                         Continue to secure payment
                     </button>
-                    <p class="mono faint" style="margin-top:0.9rem;">Payment is processed securely. Your details are encrypted.</p>
+                    <p class="mono give-secure-note" style="margin-top:0.9rem;">Payment is processed securely. Your details are encrypted.</p>
                 </div>
             </form>
+            </div>
         </div>
 
         <aside>
+            {% if church_accounts %}
+            <div class="note">
+                <p class="t-h3">Ministry accounts</p>
+                <ul class="give-accounts">
+                    {% for acct in church_accounts %}
+                    <li class="give-account">
+                        <span class="give-account-bank">
+                            {% if acct.get('bank_logo') %}
+                            <img src="{{ url_for('static', path=acct['bank_logo']) }}" alt="{{ acct.get('bank_name','') }}" class="give-bank-logo"/>
+                            {% else %}
+                            <span class="give-bank-initials">{{ (acct.get('bank_name') or 'B')[0] | upper }}</span>
+                            {% endif %}
+                        </span>
+                        <span class="give-account-body">
+                            <span class="give-account-bname">{{ acct.get('bank_name', '') }}</span>
+                            <span class="give-account-num">{{ acct.get('account_number', '') }}</span>
+                            <span class="give-account-holder">{{ acct.get('account_name', '') }}</span>
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% else %}
             <div class="note">
                 <p class="t-h3">Where it goes</p>
                 <ul class="rows" style="margin-top:0.9rem;">
                     {% for label, blurb in [
                         ('Teaching and services', 'Sound, stage, streaming and the weekly running of the house.'),
                         ('Outreach', 'The annual prison and free medical outreaches.'),
-                        ('Welfare', 'The Joseph Ministry’s practical care for members and neighbours.')
+                        ('Welfare', 'The Joseph Ministry\'s practical care for members and neighbours.')
                     ] %}
                     <li class="row"><span class="row-in">
                         <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
@@ -85,6 +111,7 @@
                     {% endfor %}
                 </ul>
             </div>
+            {% endif %}
 
             <div class="note" style="margin-top:1.7rem;">
                 <p class="t-h3">Give in person</p>
@@ -100,7 +127,7 @@
 
 <section class="band band-dark">
     <div class="shell" style="text-align:center;">
-        <h2 class="t-h2" style="max-width:26ch;margin-inline:auto;">“At the scent of water it will bud.”</h2>
+        <h2 class="t-h2" style="max-width:26ch;margin-inline:auto;">"At the scent of water it will bud."</h2>
         <p class="t-body" style="margin:1.1rem auto 0;max-width:52ch;">
             Every gift waters something that looked finished.
         </p>
@@ -112,20 +139,132 @@
 </section>
 
 <style>
+    /* ── Give page layout ─── */
     .give-split { display: grid; gap: clamp(2.2rem, 5vw, 4.5rem); grid-template-columns: 1fr; align-items: start; }
     @media (min-width: 940px) { .give-split { grid-template-columns: 1.35fr 0.65fr; } }
+
+    /* ── Form card: white surface on the light-grey band ─── */
+    .give-form-card {
+        background: #ffffff;
+        border: 1px solid rgba(0,0,0,0.10);
+        border-radius: 0.75rem;
+        padding: clamp(1.4rem, 3vw, 2rem);
+        margin-top: 1.8rem;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    }
+    /* Override the band-light token set for fields inside the card */
+    .give-field > span {
+        color: #555560 !important;
+    }
+    .give-form .field input,
+    .give-form .field textarea,
+    .give-form .field select {
+        background: #fafafa;
+        border: 1px solid rgba(0,0,0,0.16);
+        border-radius: 0.5rem;
+        padding: 0.55rem 0.75rem;
+        color: #16161A;
+        transition: border-color 240ms var(--ease), box-shadow 240ms var(--ease);
+    }
+    .give-form .field input:focus,
+    .give-form .field textarea:focus,
+    .give-form .field select:focus {
+        outline: none;
+        border-color: var(--gold);
+        box-shadow: 0 0 0 3px rgba(184,137,31,0.15);
+    }
+    .give-form .field input::placeholder,
+    .give-form .field textarea::placeholder { color: #9898a0; }
+    .give-form .field select option { background: #fff; color: #16161A; }
+    .give-secure-note { color: #85858E; }
+
+    /* ── Quick amount chips inside the card ─── */
     .chips { display: flex; flex-wrap: wrap; gap: 0.55rem; }
-    .chip-amt {
-        padding: 0.5rem 0.95rem;
-        border: 1px solid var(--line-2);
-        background: transparent;
-        color: var(--fg);
+    .give-chip {
+        padding: 0.45rem 0.9rem;
+        border: 1px solid rgba(0,0,0,0.16);
+        background: #fff;
+        color: #16161A;
         font: inherit;
         font-size: 0.85rem;
+        border-radius: 0.4rem;
         cursor: pointer;
-        transition: border-color 260ms var(--ease), color 260ms var(--ease), background-color 260ms var(--ease);
+        transition: border-color 240ms var(--ease), color 240ms var(--ease), background 240ms var(--ease);
     }
-    .chip-amt:hover, .chip-amt.on { border-color: var(--gold); color: var(--gold); }
+    .give-chip:hover, .give-chip.on {
+        border-color: var(--gold);
+        color: var(--gold-deep);
+        background: rgba(184,137,31,0.06);
+    }
+
+    /* ── Ministry account list ─── */
+    .give-accounts {
+        list-style: none;
+        margin: 1.1rem 0 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.85rem;
+    }
+    .give-account {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        padding: 0.8rem 0.9rem;
+        background: rgba(0,0,0,0.025);
+        border: 1px solid rgba(0,0,0,0.07);
+        border-radius: 0.6rem;
+    }
+    .give-account-bank {
+        flex-shrink: 0;
+        width: 2.4rem;
+        height: 2.4rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .give-bank-logo {
+        width: 2.4rem;
+        height: 2.4rem;
+        object-fit: contain;
+        border-radius: 0.35rem;
+    }
+    .give-bank-initials {
+        width: 2.4rem;
+        height: 2.4rem;
+        border-radius: 0.35rem;
+        background: var(--gold);
+        color: #fff;
+        font-weight: 700;
+        font-size: 1.1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .give-account-body {
+        display: flex;
+        flex-direction: column;
+        gap: 0.12rem;
+        min-width: 0;
+    }
+    .give-account-bname {
+        font-size: 0.78rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--on-paper-dim);
+    }
+    .give-account-num {
+        font-family: 'Geist Mono', ui-monospace, monospace;
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--on-paper);
+        letter-spacing: 0.04em;
+    }
+    .give-account-holder {
+        font-size: 0.8rem;
+        color: var(--on-paper-dim);
+    }
 </style>
 
 <script>
@@ -136,11 +275,11 @@
     if (sel) { sel.addEventListener('change', sync); sync(); }
 
     var amount = document.querySelector('input[name="amount"]');
-    document.querySelectorAll('.chip-amt').forEach(function (b) {
+    document.querySelectorAll('.give-chip').forEach(function (b) {
         b.addEventListener('click', function () {
             if (!amount) return;
             amount.value = b.dataset.amount;
-            document.querySelectorAll('.chip-amt').forEach(function (x) { x.classList.remove('on'); });
+            document.querySelectorAll('.give-chip').forEach(function (x) { x.classList.remove('on'); });
             b.classList.add('on');
         });
     });

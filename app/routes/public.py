@@ -5,7 +5,12 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Form, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, JSONResponse
+from fastapi.responses import (
+    HTMLResponse,
+    RedirectResponse,
+    StreamingResponse,
+    JSONResponse,
+)
 from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -42,7 +47,7 @@ def _public_base_url(request: Request) -> str:
     base = str(request.base_url).rstrip("/")
     proto = request.headers.get("x-forwarded-proto")
     if proto == "https" and base.startswith("http://"):
-        base = "https://" + base[len("http://"):]
+        base = "https://" + base[len("http://") :]
     return base
 
 
@@ -141,7 +146,11 @@ async def _photos(db: AsyncSession, collection: str) -> list[dict]:
             .order_by(Photo.sort_order.asc(), Photo.id.asc())
         )
         return [
-            {"src": p.src, "alt": p.caption or "Scent of Water Ministry", "caption": p.caption}
+            {
+                "src": p.src,
+                "alt": p.caption or "Scent of Water Ministry",
+                "caption": p.caption,
+            }
             for p in result.scalars().all()
         ]
     except Exception:
@@ -217,9 +226,18 @@ OUTREACH_PAGES = {
             "off, carrying the same message of restoration we preach on Sunday."
         ),
         "points": [
-            ("Who it reaches", "Inmates and awaiting-trial detainees at the remand home beside our Mile 50 headquarters."),
-            ("What we bring", "The preached word, provisions, and follow-up for those approaching release."),
-            ("When it runs", "Annually, coordinated by The Joseph Ministry with volunteers from across our units."),
+            (
+                "Who it reaches",
+                "Inmates and awaiting-trial detainees at the remand home beside our Mile 50 headquarters.",
+            ),
+            (
+                "What we bring",
+                "The preached word, provisions, and follow-up for those approaching release.",
+            ),
+            (
+                "When it runs",
+                "Annually, coordinated by The Joseph Ministry with volunteers from across our units.",
+            ),
         ],
     },
     "medical": {
@@ -231,8 +249,14 @@ OUTREACH_PAGES = {
             "otherwise go without."
         ),
         "points": [
-            ("Who it reaches", "Families and children in Abakaliki and surrounding rural communities in Ebonyi State."),
-            ("What we bring", "Free consultations, medication, and relief materials, staffed by volunteer medical personnel."),
+            (
+                "Who it reaches",
+                "Families and children in Abakaliki and surrounding rural communities in Ebonyi State.",
+            ),
+            (
+                "What we bring",
+                "Free consultations, medication, and relief materials, staffed by volunteer medical personnel.",
+            ),
             ("When it runs", "Annually, as the Annual Community Medical Outreach."),
         ],
     },
@@ -240,7 +264,9 @@ OUTREACH_PAGES = {
 
 
 @router.get("/outreach/{kind}", name="outreach_detail")
-async def outreach_detail(kind: str, request: Request, db: AsyncSession = Depends(get_db)):
+async def outreach_detail(
+    kind: str, request: Request, db: AsyncSession = Depends(get_db)
+):
     from fastapi import HTTPException
 
     page = OUTREACH_PAGES.get(kind)
@@ -250,7 +276,12 @@ async def outreach_detail(kind: str, request: Request, db: AsyncSession = Depend
     return await render_template(
         request,
         "pages/outreach.html",
-        {"_db": db, "page": page, "kind": kind, "photos": await _photos(db, "outreach")},
+        {
+            "_db": db,
+            "page": page,
+            "kind": kind,
+            "photos": await _photos(db, "outreach"),
+        },
     )
 
 
@@ -285,18 +316,25 @@ async def about(request: Request, db: AsyncSession = Depends(get_db)):
 @router.get("/departments", name="departments")
 async def departments(request: Request, db: AsyncSession = Depends(get_db)):
     from app.models.department import Department
+
     departments_list = []
     try:
         result = await db.execute(
-            select(Department).where(Department.is_active == True).order_by(Department.name)
+            select(Department)
+            .where(Department.is_active == True)
+            .order_by(Department.name)
         )
         departments_list = list(result.scalars().all())
     except Exception:
         pass
-    return await render_template(request, "pages/departments.html", {
-        "_db": db,
-        "departments_list": departments_list,
-    })
+    return await render_template(
+        request,
+        "pages/departments.html",
+        {
+            "_db": db,
+            "departments_list": departments_list,
+        },
+    )
 
 
 @router.get("/messages", name="messages")
@@ -444,7 +482,9 @@ async def podcast_feed(request: Request, db: AsyncSession = Depends(get_db)):
     channel = ET.SubElement(rss, "channel")
     ET.SubElement(channel, "title").text = f"{site_name} — Audio Messages"
     ET.SubElement(channel, "link").text = f"{base_url}/messages"
-    ET.SubElement(channel, "description").text = f"Sermon audio messages from {site_name}."
+    ET.SubElement(
+        channel, "description"
+    ).text = f"Sermon audio messages from {site_name}."
     ET.SubElement(channel, "language").text = "en-us"
     ET.SubElement(channel, f"{{{ITUNES_NS}}}author").text = site_name
 
@@ -452,22 +492,34 @@ async def podcast_feed(request: Request, db: AsyncSession = Depends(get_db)):
         item = ET.SubElement(channel, "item")
         ET.SubElement(item, "title").text = sermon.title
         ET.SubElement(item, "link").text = f"{base_url}/messages/{sermon.slug}"
-        ET.SubElement(item, "guid", {"isPermaLink": "false"}).text = f"sermon-{sermon.id}"
+        ET.SubElement(
+            item, "guid", {"isPermaLink": "false"}
+        ).text = f"sermon-{sermon.id}"
         if sermon.caption or sermon.description:
-            ET.SubElement(item, "description").text = sermon.caption or sermon.description
+            ET.SubElement(item, "description").text = (
+                sermon.caption or sermon.description
+            )
         if sermon.preacher:
             ET.SubElement(item, f"{{{ITUNES_NS}}}author").text = sermon.preacher
         if sermon.published_at:
             ET.SubElement(item, "pubDate").text = format_datetime(sermon.published_at)
         if sermon.media_url:
-            enclosure_url = sermon.media_url if sermon.media_url.startswith("http") else f"{base_url}{sermon.media_url}"
+            enclosure_url = (
+                sermon.media_url
+                if sermon.media_url.startswith("http")
+                else f"{base_url}{sermon.media_url}"
+            )
         else:
             enclosure_url = f"{base_url}/messages/{sermon.id}/stream"
-        ET.SubElement(item, "enclosure", {
-            "url": enclosure_url,
-            "type": "audio/mpeg",
-            "length": str(sermon.original_file_size or 0),
-        })
+        ET.SubElement(
+            item,
+            "enclosure",
+            {
+                "url": enclosure_url,
+                "type": "audio/mpeg",
+                "length": str(sermon.original_file_size or 0),
+            },
+        )
 
     xml_bytes = ET.tostring(rss, encoding="utf-8", xml_declaration=True)
     return HTMLResponse(content=xml_bytes, media_type="application/rss+xml")
@@ -546,11 +598,14 @@ async def download_sermon(
         from fastapi.responses import FileResponse
 
         file_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), sermon.audio_file_path
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            sermon.audio_file_path,
         )
         if os.path.exists(file_path):
             ext = os.path.splitext(file_path)[1] or ".mp3"
-            return FileResponse(file_path, media_type="audio/mpeg", filename=f"{safe_title}{ext}")
+            return FileResponse(
+                file_path, media_type="audio/mpeg", filename=f"{safe_title}{ext}"
+            )
 
     if not sermon.telegram_file_id:
         return HTMLResponse("Audio not found", status_code=404)
@@ -642,7 +697,10 @@ async def _calendar_month_context(db: AsyncSession, month: str | None) -> dict:
     from datetime import date
     from app.models.event import Event
     from app.core.calendar_utils import (
-        month_bounds, month_grid_days, events_by_date, year_months,
+        month_bounds,
+        month_grid_days,
+        events_by_date,
+        year_months,
     )
 
     now = datetime.utcnow()
@@ -672,8 +730,10 @@ async def _calendar_month_context(db: AsyncSession, month: str | None) -> dict:
     grid_events = list(result.scalars().all())
     eventsByDate = events_by_date(grid_events)
     monthOnlyEvents = [
-        ev for ev in grid_events
-        if ev.starts_at.month == currentMonth.month and ev.starts_at.year == currentMonth.year
+        ev
+        for ev in grid_events
+        if ev.starts_at.month == currentMonth.month
+        and ev.starts_at.year == currentMonth.year
     ]
 
     return {
@@ -687,12 +747,15 @@ async def _calendar_month_context(db: AsyncSession, month: str | None) -> dict:
         "nextYear": currentMonth.replace(year=currentMonth.year + 1),
         "yearMonths": year_months(currentMonth.year, currentMonth.month),
         "today": date.today().isoformat(),
-        "isCurrentMonth": currentMonth.year == now.year and currentMonth.month == now.month,
+        "isCurrentMonth": currentMonth.year == now.year
+        and currentMonth.month == now.month,
     }
 
 
 @router.get("/calendar", name="calendar")
-async def calendar(request: Request, db: AsyncSession = Depends(get_db), month: str = Query(None)):
+async def calendar(
+    request: Request, db: AsyncSession = Depends(get_db), month: str = Query(None)
+):
     """The public yearly calendar — a real month grid over whatever events an
     admin has published, not a hand-typed schedule. Server-rendered here for
     the first paint / no-JS fallback; /calendar/data serves the same shape as
@@ -703,38 +766,52 @@ async def calendar(request: Request, db: AsyncSession = Depends(get_db), month: 
 
 
 @router.get("/calendar/data", name="calendar_data")
-async def calendar_data(request: Request, db: AsyncSession = Depends(get_db), month: str = Query(None)):
+async def calendar_data(
+    request: Request, db: AsyncSession = Depends(get_db), month: str = Query(None)
+):
     """JSON twin of /calendar for the client-side nav layer — same month math,
     serialized instead of rendered, so prev/next/year/chip clicks never
     reload the page."""
     from app.core.calendar_utils import serialize_event
 
     ctx = await _calendar_month_context(db, month)
-    return JSONResponse({
-        "currentMonth": {"y": ctx["currentMonth"].year, "m": ctx["currentMonth"].month,
-                          "label": ctx["currentMonth"].strftime("%B"), "year": ctx["currentMonth"].strftime("%Y")},
-        "prevMonth": ctx["prevMonth"].strftime("%Y-%m"),
-        "nextMonth": ctx["nextMonth"].strftime("%Y-%m"),
-        "prevYear": ctx["prevYear"].strftime("%Y-%m"),
-        "nextYear": ctx["nextYear"].strftime("%Y-%m"),
-        "yearMonths": ctx["yearMonths"],
-        "today": ctx["today"],
-        "isCurrentMonth": ctx["isCurrentMonth"],
-        "calendarDays": [
-            {
-                "date": d.isoformat(),
-                "day": d.day,
-                "isOut": d.month != ctx["currentMonth"].month,
-                "isToday": d.isoformat() == ctx["today"],
-                "events": [serialize_event(ev) for ev in ctx["eventsByDate"].get(d.isoformat(), [])],
-            }
-            for d in ctx["calendarDays"]
-        ],
-        "monthOnlyEvents": [
-            {**serialize_event(ev), "date_label": ev.starts_at.strftime("%d %b").upper()}
-            for ev in ctx["monthOnlyEvents"]
-        ],
-    })
+    return JSONResponse(
+        {
+            "currentMonth": {
+                "y": ctx["currentMonth"].year,
+                "m": ctx["currentMonth"].month,
+                "label": ctx["currentMonth"].strftime("%B"),
+                "year": ctx["currentMonth"].strftime("%Y"),
+            },
+            "prevMonth": ctx["prevMonth"].strftime("%Y-%m"),
+            "nextMonth": ctx["nextMonth"].strftime("%Y-%m"),
+            "prevYear": ctx["prevYear"].strftime("%Y-%m"),
+            "nextYear": ctx["nextYear"].strftime("%Y-%m"),
+            "yearMonths": ctx["yearMonths"],
+            "today": ctx["today"],
+            "isCurrentMonth": ctx["isCurrentMonth"],
+            "calendarDays": [
+                {
+                    "date": d.isoformat(),
+                    "day": d.day,
+                    "isOut": d.month != ctx["currentMonth"].month,
+                    "isToday": d.isoformat() == ctx["today"],
+                    "events": [
+                        serialize_event(ev)
+                        for ev in ctx["eventsByDate"].get(d.isoformat(), [])
+                    ],
+                }
+                for d in ctx["calendarDays"]
+            ],
+            "monthOnlyEvents": [
+                {
+                    **serialize_event(ev),
+                    "date_label": ev.starts_at.strftime("%d %b").upper(),
+                }
+                for ev in ctx["monthOnlyEvents"]
+            ],
+        }
+    )
 
 
 @router.get("/casom", name="casom")
@@ -788,7 +865,46 @@ async def get_involved(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.get("/give", name="give")
 async def give(request: Request, db: AsyncSession = Depends(get_db)):
-    return await render_template(request, "pages/give.html", {"_db": db})
+    from app.core.settings_cache import get_settings
+    import json
+
+    settings = await get_settings(db)
+    purposes_raw = settings.get("giving_purposes", "")
+    if purposes_raw:
+        try:
+            giving_purposes = (
+                json.loads(purposes_raw)
+                if purposes_raw.strip().startswith("[")
+                else [p.strip() for p in purposes_raw.split(",") if p.strip()]
+            )
+        except Exception:
+            giving_purposes = [p.strip() for p in purposes_raw.split(",") if p.strip()]
+    else:
+        giving_purposes = [
+            "Tithe",
+            "Offering",
+            "Missions",
+            "Building Fund",
+            "Welfare",
+            "Others",
+        ]
+    if "Others" not in giving_purposes:
+        giving_purposes.append("Others")
+    church_accounts = []
+    if settings.get("church_accounts"):
+        try:
+            church_accounts = json.loads(settings["church_accounts"])
+        except Exception:
+            church_accounts = []
+    return await render_template(
+        request,
+        "pages/give.html",
+        {
+            "_db": db,
+            "giving_purposes": giving_purposes,
+            "church_accounts": church_accounts,
+        },
+    )
 
 
 @router.post("/give/checkout", name="give_checkout")
@@ -814,7 +930,9 @@ async def give_checkout(
         return _redirect(request, "/give", "Please enter a valid amount.", "error")
 
     site_settings = await get_settings(db)
-    payment_gateway = (site_settings.get("active_giving_gateway") or payment_gateway or "paystack").strip()
+    payment_gateway = (
+        site_settings.get("active_giving_gateway") or payment_gateway or "paystack"
+    ).strip()
     giving_type = purpose.strip() or "Tithe"
     if giving_type == "Others" and purpose_text.strip():
         giving_type = purpose_text.strip()
@@ -856,7 +974,8 @@ async def give_checkout(
                 "title": "Scent of Water Ministry - Giving",
                 "description": f"Donation: {giving_type}",
             },
-            secret_key=site_settings.get("flutterwave_secret_key") or app_settings.FLUTTERWAVE_SECRET_KEY,
+            secret_key=site_settings.get("flutterwave_secret_key")
+            or app_settings.FLUTTERWAVE_SECRET_KEY,
         )
     else:
         authorization_url = await initialize_paystack(
@@ -871,7 +990,8 @@ async def give_checkout(
                 "anonymous": anonymous,
                 "dedication": dedication,
             },
-            secret_key=site_settings.get("paystack_secret_key") or app_settings.PAYSTACK_SECRET_KEY,
+            secret_key=site_settings.get("paystack_secret_key")
+            or app_settings.PAYSTACK_SECRET_KEY,
         )
 
     if not authorization_url:
@@ -888,35 +1008,65 @@ async def give_callback(
     reference: str = Query(""),
     trxref: str = Query(""),
     status: str = Query(""),
+    transaction_id: str = Query(""),
+    tx_ref: str = Query(""),
     db: AsyncSession = Depends(get_db),
 ):
+    from app.config import settings as app_settings
+    from app.core.payment import verify_paystack, verify_flutterwave
+    from app.core.settings_cache import get_settings
     from app.models.giving import Giving
 
-    actual_ref = trxref or reference
+    # Paystack uses trxref; Flutterwave uses tx_ref + transaction_id
+    actual_ref = trxref or reference or tx_ref
 
     result = await db.execute(select(Giving).where(Giving.reference == actual_ref))
     giving = result.scalar_one_or_none()
 
-    if giving:
-        normalized = status.lower() if status else "abandoned"
-        if normalized == "successful" or normalized == "success":
-            giving.status = "completed"
-            giving.paid_at = datetime.utcnow()
-        elif normalized in ("abandoned", "cancelled", "failed"):
-            giving.status = "failed"
-        else:
-            giving.status = normalized
+    if not giving:
+        return _redirect(request, "/give", "Payment reference not found.", "error")
 
+    # Already confirmed — avoid double-processing
+    if giving.status == "completed":
+        return _redirect(
+            request, "/give",
+            "Thank you for your generous giving! God bless you.",
+            "success",
+        )
+
+    site_settings = await get_settings(db)
+
+    if giving.payment_gateway == "flutterwave":
+        fw_secret = site_settings.get("flutterwave_secret_key") or app_settings.FLUTTERWAVE_SECRET_KEY
+        verification = await verify_flutterwave(
+            transaction_id=transaction_id,
+            tx_ref=actual_ref,
+            secret_key=fw_secret,
+        )
+    else:
+        ps_secret = site_settings.get("paystack_secret_key") or app_settings.PAYSTACK_SECRET_KEY
+        verification = await verify_paystack(
+            reference=actual_ref,
+            secret_key=ps_secret,
+        )
+
+    if verification.get("success"):
+        giving.status = "completed"
+        giving.paid_at = datetime.utcnow()
         await db.flush()
-
-    return _redirect(
-        request,
-        "/give",
-        "Thank you for your generous giving! God bless you."
-        if giving and giving.status == "completed"
-        else "Payment could not be confirmed. Please try again.",
-        "success" if giving and giving.status == "completed" else "error",
-    )
+        return _redirect(
+            request, "/give",
+            "Thank you for your generous giving! God bless you.",
+            "success",
+        )
+    else:
+        giving.status = "failed"
+        await db.flush()
+        return _redirect(
+            request, "/give",
+            "Payment could not be confirmed. Please contact us if you were charged.",
+            "error",
+        )
 
 
 @router.get("/privacy-policy", name="privacy_policy")

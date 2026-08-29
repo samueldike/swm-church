@@ -1818,19 +1818,76 @@ async def admin_sliders_store(
 
 # ─── Photos (gallery + outreach strips) ────────────────────────────
 
+def _compress_image(raw: bytes, ext: str, max_width: int = 2400, quality: int = 82) -> bytes:
+    """
+    Compress an uploaded image for web delivery.
+
+    - Converts to WebP (best quality/size trade-off) unless the source is GIF or SVG.
+    - Scales down if wider than max_width while preserving aspect ratio.
+    - quality=82 is visually lossless for photos; logos/transparent images use lossless WebP.
+    - Returns the original bytes unchanged for SVG (vector, no recompression needed).
+    - Falls back to original bytes if Pillow is unavailable or encounters an error.
+    """
+    if ext in {".svg"}:
+        return raw
+    try:
+        from io import BytesIO
+        from PIL import Image, UnidentifiedImageError
+        try:
+            img = Image.open(BytesIO(raw))
+        except (UnidentifiedImageError, Exception):
+            return raw
+
+        # Preserve EXIF orientation if present
+        try:
+            from PIL import ImageOps
+            img = ImageOps.exif_transpose(img)
+        except Exception:
+            pass
+
+        # Scale down large images
+        w, h = img.size
+        if w > max_width:
+            new_h = int(h * max_width / w)
+            img = img.resize((max_width, new_h), Image.LANCZOS)
+
+        # GIF: keep as GIF (animation support)
+        if ext == ".gif":
+            buf = BytesIO()
+            img.save(buf, format="GIF", save_all=True, optimize=True)
+            return buf.getvalue()
+
+        # Everything else → WebP
+        buf = BytesIO()
+        has_alpha = img.mode in ("RGBA", "LA", "PA") or (img.mode == "P" and "transparency" in img.info)
+        if has_alpha:
+            img = img.convert("RGBA")
+            # Use lossless for images with transparency (logos, icons)
+            img.save(buf, format="WEBP", lossless=True, quality=100, method=4)
+        else:
+            img = img.convert("RGB")
+            img.save(buf, format="WEBP", quality=quality, method=4)
+        return buf.getvalue()
+    except Exception:
+        return raw
+
+
 async def _save_photo_upload(upload: UploadFile, collection: str) -> str:
     """Persist an uploaded photo and return its web-relative path."""
     import uuid
 
+    raw = await upload.read()
     ext = os.path.splitext(upload.filename or "")[1].lower() or ".jpg"
-    filename = f"{collection}-{uuid.uuid4()}{ext}"
+    compressed = _compress_image(raw, ext)
+    # Non-animated, non-SVG images are re-encoded as WebP by _compress_image
+    filename = f"{collection}-{uuid.uuid4()}.webp" if ext not in {".gif", ".svg"} else f"{collection}-{uuid.uuid4()}{ext}"
     dest_dir = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "static", "images", collection,
     )
     os.makedirs(dest_dir, exist_ok=True)
     with open(os.path.join(dest_dir, filename), "wb") as f:
-        f.write(await upload.read())
+        f.write(compressed)
     return f"images/{collection}/{filename}"
 
 
@@ -2004,9 +2061,33 @@ async def admin_settings(request: Request, db: AsyncSession = Depends(get_db)):
 
     ctx = await _admin_context(request, db, "admin.settings")
     feed_url = _public_base_url(request) + "/feed.xml"
+
+    # Collect already-uploaded bank logos for the reuse picker
+    bank_logos_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "static", "images", "bank-logos",
+    )
+    bank_logos: list[str] = []
+    if os.path.isdir(bank_logos_dir):
+        for fname in sorted(os.listdir(bank_logos_dir)):
+            if os.path.splitext(fname)[1].lower() in {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}:
+                bank_logos.append(f"images/bank-logos/{fname}")
+
+    # Normalise giving_purposes for the textarea: stored as JSON array or comma-separated string
+    raw_gp = settings.get("giving_purposes", "")
+    if raw_gp:
+        try:
+            gp_list = json.loads(raw_gp) if raw_gp.strip().startswith("[") else [p.strip() for p in raw_gp.split(",") if p.strip()]
+        except Exception:
+            gp_list = [p.strip() for p in raw_gp.splitlines() if p.strip()]
+        settings["giving_purposes"] = "\n".join(gp_list)
+    else:
+        settings["giving_purposes"] = "Tithe\nOffering\nMissions\nBuilding Fund\nWelfare"
+
     return await render_template(request, "admin/settings.html", {
         "_db": db, "settings": settings, "timezones": timezones,
         "themePresets": themePresets, "feed_url": feed_url,
+        "bank_logos": bank_logos,
         "title": "Settings", "headerIcon": "ri-settings-4-line", **ctx,
     })
 
@@ -2022,7 +2103,7 @@ async def admin_settings_update(request: Request, db: AsyncSession = Depends(get
     # Map snake_case form keys to camelCase DB keys for compatibility
     from app.core.settings_cache import LEGACY_SETTING_KEY_ALIASES
     _key_map = LEGACY_SETTING_KEY_ALIASES
-    account_pattern = re.compile(r"^church_accounts\[(\d+)\]\[(bank_name|account_number|account_name)\]$")
+    account_pattern = re.compile(r"^church_accounts\[(\d+)\]\[(bank_name|account_number|account_name|bank_logo)\]$")
     church_accounts: dict[int, dict] = {}
     for key in form:
         if key == "csrf_token":
@@ -2038,9 +2119,22 @@ async def admin_settings_update(request: Request, db: AsyncSession = Depends(get
     accounts_list = [church_accounts[i] for i in sorted(church_accounts)]
     accounts_list = [
         a for a in accounts_list
-        if any((a.get(f) or "").strip() for f in ("bank_name", "account_number", "account_name"))
+        if any((a.get(f) or "").strip() for f in ("bank_name", "account_number", "account_name", "bank_logo"))
     ]
     settings_dict["church_accounts"] = json.dumps(accounts_list)
+
+    # Normalize giving_purposes: textarea sends newline-separated lines → save as JSON array
+    if "giving_purposes" in settings_dict:
+        raw_purposes = settings_dict["giving_purposes"]
+        purposes = [p.strip() for p in raw_purposes.replace(",", "\n").splitlines() if p.strip()]
+        # Remove duplicates while preserving order; ensure "Others" not duplicated (public route appends it)
+        seen = set()
+        deduped = []
+        for p in purposes:
+            if p not in seen:
+                seen.add(p)
+                deduped.append(p)
+        settings_dict["giving_purposes"] = json.dumps(deduped)
 
     await update_settings(db, settings_dict)
     return _redirect(request, "/admin/settings", "Settings updated successfully.")
@@ -2054,18 +2148,19 @@ async def admin_settings_pastor_photo(request: Request, db: AsyncSession = Depen
     if not photo or not photo.filename:
         return _redirect(request, "/admin/settings", "No file selected.", "error")
     ext = os.path.splitext(photo.filename or "")[1].lower()
-    if ext not in [".jpg", ".jpeg", ".png", ".webp", ".gif"]:
+    if ext not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
         return _redirect(request, "/admin/settings", "Invalid image format. Use JPG/PNG/WEBP/GIF.", "error")
-    content = await photo.read()
-    if len(content) > 5 * 1024 * 1024:
+    raw = await photo.read()
+    if len(raw) > 5 * 1024 * 1024:
         return _redirect(request, "/admin/settings", "Image too large (max 5MB).", "error")
     import uuid
+    # Pastor photo is intentionally saved uncompressed to preserve full quality.
     filename = f"pastor-{uuid.uuid4()}{ext}"
     dest_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "images", "pastor")
     os.makedirs(dest_dir, exist_ok=True)
     dest = os.path.join(dest_dir, filename)
     with open(dest, "wb") as f:
-        f.write(content)
+        f.write(raw)
     await update_settings(db, {"pastorPhoto": f"images/pastor/{filename}"})
     return _redirect(request, "/admin/settings", "Pastor photo updated successfully.")
 
@@ -2083,13 +2178,15 @@ async def admin_settings_page_hero(
     if not image or not image.filename:
         return _redirect(request, "/admin/settings", "No file selected.", "error")
     ext = os.path.splitext(image.filename or "")[1].lower()
-    if ext not in [".jpg", ".jpeg", ".png", ".webp", ".gif"]:
+    if ext not in {".jpg", ".jpeg", ".png", ".webp", ".gif"}:
         return _redirect(request, "/admin/settings", "Invalid image format.", "error")
-    content = await image.read()
-    if len(content) > 5 * 1024 * 1024:
+    raw = await image.read()
+    if len(raw) > 5 * 1024 * 1024:
         return _redirect(request, "/admin/settings", "Image too large (max 5MB).", "error")
     import uuid
-    filename = f"hero-{page_key}-{uuid.uuid4()}{ext}"
+    content = _compress_image(raw, ext)
+    out_ext = ".webp" if ext not in {".gif"} else ext
+    filename = f"hero-{page_key}-{uuid.uuid4()}{out_ext}"
     dest_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "images", "heroes")
     os.makedirs(dest_dir, exist_ok=True)
     dest = os.path.join(dest_dir, filename)
@@ -2098,6 +2195,45 @@ async def admin_settings_page_hero(
     setting_key = f"pageHero_{page_key}" if page_key != "default" else "defaultPageHero"
     await update_settings(db, {setting_key: f"images/heroes/{filename}"})
     return _redirect(request, "/admin/settings", f"Hero image for {page_key} updated successfully.")
+
+
+# ─── Bank Logo Upload ─────────────────────────────────────────────
+
+@router.post("/settings/bank-logo", name="admin_settings_bank_logo")
+async def admin_settings_bank_logo(
+    request: Request, db: AsyncSession = Depends(get_db),
+    file: UploadFile = File(...),
+):
+    """Upload a bank logo and return its static path as JSON — called by the accounts JS."""
+    from fastapi.responses import JSONResponse
+    admin = await _get_admin(request)
+    if not admin or admin.role != "super_admin":
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+    form = await request.form()
+    # CSRF check
+    if form.get("csrf_token") != request.session.get("csrf_token"):
+        return JSONResponse({"error": "Invalid CSRF token"}, status_code=403)
+    if not file or not file.filename:
+        return JSONResponse({"error": "No file provided"}, status_code=400)
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}:
+        return JSONResponse({"error": "Invalid image format."}, status_code=400)
+    raw = await file.read()
+    if len(raw) > 2 * 1024 * 1024:
+        return JSONResponse({"error": "Image too large (max 2 MB)."}, status_code=400)
+    import uuid
+    # Logos are often small PNGs with transparency — compress but keep SVG as-is
+    content = _compress_image(raw, ext, max_width=400, quality=90)
+    out_ext = ".webp" if ext not in {".gif", ".svg"} else ext
+    filename = f"bank-{uuid.uuid4()}{out_ext}"
+    dest_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "static", "images", "bank-logos",
+    )
+    os.makedirs(dest_dir, exist_ok=True)
+    with open(os.path.join(dest_dir, filename), "wb") as f:
+        f.write(content)
+    return JSONResponse({"path": f"images/bank-logos/{filename}"})
 
 
 # ─── Security Logs ─────────────────────────────────────────────────
@@ -2690,12 +2826,14 @@ async def admin_sliders_update(
 
     if image and image.filename:
         import uuid
-        ext = os.path.splitext(image.filename)[1] or ".jpg"
-        filename = f"slide-{uuid.uuid4()}{ext}"
+        ext = os.path.splitext(image.filename)[1].lower() or ".jpg"
+        raw = await image.read()
+        content = _compress_image(raw, ext)
+        out_ext = ".webp" if ext not in {".gif", ".svg"} else ext
+        filename = f"slide-{uuid.uuid4()}{out_ext}"
         dest_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "images", "sliders")
         os.makedirs(dest_dir, exist_ok=True)
         dest = os.path.join(dest_dir, filename)
-        content = await image.read()
         with open(dest, "wb") as f:
             f.write(content)
         slider.image_path = f"images/sliders/{filename}"
