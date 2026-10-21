@@ -10,6 +10,8 @@ import os
 
 from app.config import settings
 
+ARCHIVE_PREFIX = "archive/"
+
 
 def media_root() -> str:
     return settings.media_root
@@ -31,6 +33,13 @@ def to_abspath(stored_path: str | None) -> str | None:
         return None
 
     normalised = stored_path.replace("\\", "/")
+
+    # "archive/<path>": an original kept by the Telegram archive, outside the public media root.
+    if normalised.startswith(ARCHIVE_PREFIX):
+        root = os.path.realpath(settings.telegram_archive_dir)
+        candidate = os.path.realpath(os.path.join(root, *normalised[len(ARCHIVE_PREFIX):].split("/")))
+        inside = candidate.startswith(root + os.sep)
+        return candidate if inside and os.path.exists(candidate) else None
 
     # "/media/x.mp3" (the media_url form) looks absolute but is really
     # media-root-relative, so strip that prefix before the isabs check.

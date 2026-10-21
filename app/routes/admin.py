@@ -4195,6 +4195,173 @@ async def admin_messages_destroy(sermon_id: int, request: Request, db: AsyncSess
     return _redirect(request, "/admin/messages", "Audio message deleted successfully.")
 
 
+# ─── Telegram archive ──────────────────────────────────────────────
+
+async def _archive_super(request: Request):
+    admin = await _get_admin(request)
+    return admin if admin and admin.role == "super_admin" else None
+
+
+@router.get("/telegram-archive", name="admin_telegram_archive")
+async def admin_telegram_archive(request: Request, db: AsyncSession = Depends(get_db)):
+    admin = await _archive_super(request)
+    if not admin:
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    import shutil
+
+    from app.config import settings as _cfg
+    from app.core import telegram_archive as ta
+    from app.core import telegram_local
+    from app.models.telegram_archive import TelegramArchiveItem as Item
+
+    site = await get_settings(db)
+    rows = (await db.execute(select(Item.status, func.count(Item.id), func.coalesce(func.sum(Item.size), 0))
+                             .group_by(Item.status))).all()
+    counts = {s: {"n": n, "bytes": int(b)} for s, n, b in rows}
+    imported = (await db.execute(select(func.count(Item.id)).where(Item.sermon_id.isnot(None)))).scalar_one()
+    items = list((await db.execute(select(Item).order_by(Item.posted_at.desc()).limit(500))).scalars().all())
+    archive_dir = _cfg.telegram_archive_dir
+    try:
+        disk_free = shutil.disk_usage(archive_dir if os.path.isdir(archive_dir) else os.path.dirname(archive_dir) or ".").free
+    except OSError:
+        disk_free = None
+    ctx = await _admin_context(request, db, "admin.telegram-archive")
+    return await render_template(request, "admin/telegram-archive.html", {
+        "_db": db, "login": await ta.login_state(), "job": await ta.get_job(db), "job_running": ta.job_running(await ta.get_job(db)),
+        "keys_saved": telegram_local.credentials_saved(site), "channel_saved": bool((site.get("telegram_audio_chat_id") or "").strip()),
+        "counts": counts, "imported": imported, "items": items, "disk_free": disk_free, "disk_margin": ta.DISK_MARGIN,
+        "title": "Telegram archive", "headerIcon": "ri-archive-drawer-line", **ctx,
+    })
+
+
+@router.get("/telegram-archive/status", name="admin_telegram_archive_status")
+async def admin_telegram_archive_status(request: Request, db: AsyncSession = Depends(get_db)):
+    if not await _archive_super(request):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    from app.core import telegram_archive as ta
+
+    job = await ta.get_job(db)
+    return JSONResponse({"running": ta.job_running(job), "state": job.get("state"), "message": job.get("message"),
+                         "done": job.get("done", 0), "total": job.get("total", 0),
+                         "bytes_done": job.get("bytes_done", 0), "bytes_total": job.get("bytes_total", 0)})
+
+
+@router.post("/telegram-archive/login", name="admin_telegram_archive_login")
+async def admin_telegram_archive_login(request: Request, db: AsyncSession = Depends(get_db)):
+    admin = await _archive_super(request)
+    if not admin:
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from app.core import telegram_archive as ta
+
+    form = await request.form()
+    step = str(form.get("step") or "")
+    back = "/admin/telegram-archive#signin"
+    try:
+        if step == "phone":
+            await ta.start_login(str(form.get("phone") or ""))
+            return _redirect(request, back, "Telegram sent a login code to that account: look for a message from “Telegram” in the Telegram app.")
+        if step == "code":
+            stage = await ta.submit_code(str(form.get("code") or ""))
+            if stage == "password":
+                return _redirect(request, back, "This account has two-step verification: enter its password to finish.", "info")
+        elif step == "password":
+            await ta.submit_password(str(form.get("password") or ""))
+        elif step == "restart":
+            await ta.sign_out()
+            return _redirect(request, back, "Sign-in cancelled. You can start again.", "info")
+        else:
+            return _redirect(request, back, "Unknown step.", "error")
+    except ta.ArchiveError as exc:
+        return _redirect(request, back, str(exc), "error")
+    await log_admin_action(db, admin.id, "telegram_archive.signed_in", "settings", None, {}, request)
+    return _redirect(request, "/admin/telegram-archive", "Signed in to Telegram. Next: find the channel's audio.")
+
+
+@router.post("/telegram-archive/sign-out", name="admin_telegram_archive_sign_out")
+async def admin_telegram_archive_sign_out(request: Request, db: AsyncSession = Depends(get_db)):
+    admin = await _archive_super(request)
+    if not admin:
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from app.core import telegram_archive as ta
+
+    if ta.job_running(await ta.get_job(db)):
+        return _redirect(request, "/admin/telegram-archive", "Wait for the running step to finish before signing out.", "error")
+    await ta.sign_out()
+    await log_admin_action(db, admin.id, "telegram_archive.signed_out", "settings", None, {}, request)
+    return _redirect(request, "/admin/telegram-archive", "Signed out. The login was ended at Telegram and deleted from this website.")
+
+
+@router.post("/telegram-archive/run", name="admin_telegram_archive_run")
+async def admin_telegram_archive_run(request: Request, db: AsyncSession = Depends(get_db)):
+    admin = await _archive_super(request)
+    if not admin:
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from app.core import telegram_archive as ta
+    from app.core.jobs import enqueue
+    from app.tasks import telegram_archive_task
+
+    action = str((await request.form()).get("action") or "")
+    if action not in ("scan", "download", "import"):
+        return _redirect(request, "/admin/telegram-archive", "Unknown step.", "error")
+    if not await ta.claim_job(action):
+        return _redirect(request, "/admin/telegram-archive", "Another archive step is still running.", "error")
+    if not await enqueue(telegram_archive_task, action, admin.id):
+        from app.core.publications import _run_local
+
+        _run_local(ta.run(action, admin.id))      # no worker: run it in this process
+    await log_admin_action(db, admin.id, f"telegram_archive.{action}", "settings", None, {}, request)
+    started = {"scan": "Reading the channel…", "download": "Downloading the audio…", "import": "Creating draft messages…"}[action]
+    return _redirect(request, "/admin/telegram-archive", f"{started} This page shows progress; you can leave it and come back.")
+
+
+@router.get("/telegram-archive/files/{item_id}", name="admin_telegram_archive_file")
+async def admin_telegram_archive_file(item_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    if not await _archive_super(request):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from app.core.media import ARCHIVE_PREFIX, to_abspath
+    from app.models.telegram_archive import TelegramArchiveItem
+    from app.routes.public import _content_disposition, _serve_local_audio
+
+    item = await db.get(TelegramArchiveItem, item_id)
+    path = to_abspath(ARCHIVE_PREFIX + item.stored_path) if item and item.stored_path else None
+    if not path:
+        return HTMLResponse("This file is not in the archive.", status_code=404)
+    name = os.path.splitext(item.file_name or "audio")[0] or "audio"
+    return _serve_local_audio(request, path, _content_disposition("attachment", f"{item.posted_at:%Y-%m-%d} {name}", os.path.splitext(path)[1]))
+
+
+@router.get("/telegram-archive/index.csv", name="admin_telegram_archive_index")
+async def admin_telegram_archive_index(request: Request, db: AsyncSession = Depends(get_db)):
+    if not await _archive_super(request):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from app.core import telegram_archive as ta
+    from app.models.telegram_archive import TelegramArchiveItem
+
+    items = list((await db.execute(select(TelegramArchiveItem).order_by(TelegramArchiveItem.posted_at))).scalars().all())
+    body = ta.manifest_csv(items, (await ta.get_job(db)).get("channel_username"))
+    return StreamingResponse(iter([body.encode("utf-8")]), media_type="text/csv; charset=utf-8",
+                             headers={"Content-Disposition": 'attachment; filename="telegram-archive-index.csv"'})
+
+
+@router.get("/telegram-archive/archive.zip", name="admin_telegram_archive_zip")
+async def admin_telegram_archive_zip(request: Request, db: AsyncSession = Depends(get_db)):
+    if not await _archive_super(request):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from app.core import telegram_archive as ta
+    from app.core.media import ARCHIVE_PREFIX, to_abspath
+    from app.models.telegram_archive import TelegramArchiveItem
+
+    items = list((await db.execute(select(TelegramArchiveItem).where(TelegramArchiveItem.status == "saved")
+                                   .order_by(TelegramArchiveItem.posted_at))).scalars().all())
+    files = [(p, it.stored_path.split("/", 1)[-1], it.posted_at) for it in items if (p := to_abspath(ARCHIVE_PREFIX + it.stored_path))]
+    if not files:
+        return _redirect(request, "/admin/telegram-archive", "Nothing has been downloaded yet.", "error")
+    manifest = ta.manifest_csv(items, (await ta.get_job(db)).get("channel_username"))
+    stamp = datetime.utcnow().strftime("%Y-%m-%d")
+    return StreamingResponse(ta.zip_stream(files, manifest), media_type="application/zip",
+                             headers={"Content-Disposition": f'attachment; filename="telegram-audio-archive-{stamp}.zip"'})
+
+
 # ─── Transcriptions ────────────────────────────────────────────────
 
 @router.get("/transcriptions", name="admin_transcriptions")

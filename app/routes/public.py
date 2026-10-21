@@ -665,7 +665,7 @@ async def podcast_feed(request: Request, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Sermon)
         .where(Sermon.status == "published", await _hq_only(db))
-        .where(or_(Sermon.media_url.isnot(None), Sermon.telegram_file_id.isnot(None)))
+        .where(or_(Sermon.media_url.isnot(None), Sermon.audio_file_path.isnot(None), Sermon.telegram_file_id.isnot(None)))
         .order_by(Sermon.published_at.desc())
         .limit(200)
     )

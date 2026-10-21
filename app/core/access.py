@@ -106,7 +106,7 @@ OPEN_PREFIXES = ("/admin/login", "/admin/logout", "/admin/invitation/", "/admin/
 
 # (regex on the path AFTER /admin, permission, methods or None for all) - first match wins.
 _RULES: list[tuple[re.Pattern, str, tuple[str, ...] | None]] = [
-    (re.compile(r"^/(settings|security-logs|admins)(/|$)"), "system", None),
+    (re.compile(r"^/(settings|security-logs|admins|telegram-archive)(/|$)"), "system", None),
     (re.compile(r"^/branches/\d+/settings(/|$)"), "system", None),
     (re.compile(r"^/branches/\d+$"), "branch.view", ("GET",)),
     (re.compile(r"^/branches(/|$)"), "system", None),

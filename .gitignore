@@ -51,3 +51,7 @@ swm-backup/
 # Runtime uploads (bind-mounted on the VPS), never committed
 app/media/*
 !app/media/.gitkeep
+
+# Telegram archive (private backups of channel audio), never committed
+telegram-archive/
+app/telegram-archive/

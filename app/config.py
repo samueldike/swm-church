@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_API_CONF_DIR: str = ""
     # Website upload ceiling, and the hard limit of a --local Bot API server.
     TELEGRAM_MAX_UPLOAD_MB: int = 2000
+    # Telegram archive (Admin → Telegram archive): original channel audio is kept here,
+    # deliberately OUTSIDE the media root, which nginx and the app serve publicly.
+    # Empty = a "telegram-archive" folder next to the media root.
+    TELEGRAM_ARCHIVE_DIR: str = ""
 
     # Absolute path the app writes uploads to. Must match the media volume
     # mount in every container that needs to read them (worker, nginx,
@@ -54,6 +58,15 @@ class Settings(BaseSettings):
         if self.MEDIA_ROOT:
             return self.MEDIA_ROOT
         return os.path.join(os.path.dirname(os.path.abspath(__file__)), "media")
+
+    @property
+    def telegram_archive_dir(self) -> str:
+        """Private archive directory: never under the public media root."""
+        import os
+
+        if self.TELEGRAM_ARCHIVE_DIR:
+            return self.TELEGRAM_ARCHIVE_DIR
+        return os.path.join(os.path.dirname(os.path.normpath(self.media_root)), "telegram-archive")
 
     @property
     def telegram_api_base(self) -> str:

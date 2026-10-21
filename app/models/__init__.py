@@ -30,8 +30,10 @@ from app.models.minister import Minister
 from app.models.announcement import Announcement
 from app.models.engagement import AnalyticsCounter, EmailCampaign, EmailLog, EventReminder
 from app.models.publication import Publication, PublicationSource, PublicationSubtopic
+from app.models.telegram_archive import TelegramArchiveItem
 
 __all__ = [
+    "TelegramArchiveItem",
     "AnalyticsCounter",
     "EmailCampaign",
     "EmailLog",

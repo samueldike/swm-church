@@ -1,0 +1,217 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, empty_state, progress_bar with context %}
+{% set found = counts.get('found', {'n': 0, 'bytes': 0}) %}
+{% set failed = counts.get('failed', {'n': 0, 'bytes': 0}) %}
+{% set saved = counts.get('saved', {'n': 0, 'bytes': 0}) %}
+{% set on_site = counts.get('on_website', {'n': 0, 'bytes': 0}) %}
+{% set to_get_n = found.n + failed.n %}
+{% set to_get_bytes = found.bytes + failed.bytes %}
+{% set total_n = found.n + failed.n + saved.n + on_site.n %}
+{% set ready = login.stage == 'ready' %}
+{% set busy = job_running %}
+{% block title %}Telegram archive | {{ siteName }}{% endblock %}
+{% block topbar_title %}Telegram archive{% endblock %}
+{% block topbar_subtitle %}Back up the HQ channel's audio{% endblock %}
+{% block topbar_icon %}ri-archive-drawer-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header("Telegram archive", "A private backup of every audio file ever posted to the HQ Telegram channel, including posts from before the bot was added.",
+      audit=[('Audio found', total_n), ('Backed up', saved.n), ('Drafts created', imported)]) }}
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-4 max-w-5xl">
+
+  {% if not keys_saved or not channel_saved %}
+    <div class="rounded-md border border-line bg-sunken px-3.5 py-3 text-[12.5px] text-ink-2 flex gap-2" role="status">
+      <i class="ri-information-line text-base text-warn mt-0.5"></i>
+      <span>Before you start, save {% if not keys_saved %}the <b>App api_id</b> and <b>App api_hash</b>{% endif %}{% if not keys_saved and not channel_saved %} and {% endif %}{% if not channel_saved %}the <b>HQ channel ID</b>{% endif %}
+        in <a href="{{ url_for('admin_settings') }}#distribution" class="text-gold-text underline">Settings → Audio distribution</a>. The step-by-step guide is there.</span>
+    </div>
+  {% endif %}
+
+  {# Live progress of the running (or last) step #}
+  <section id="archive-live" class="panel flex flex-col gap-2.5 {{ '' if job.get('state') else 'hidden' }}"
+           data-status-url="{{ url_for('admin_telegram_archive_status') }}" data-running="{{ '1' if busy else '0' }}" aria-live="polite">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 class="text-[13px] font-semibold text-ink">
+        {{ {'scan': 'Finding audio', 'download': 'Downloading', 'import': 'Creating drafts'}.get(job.get('action'), 'Last step') }}
+      </h2>
+      <span data-live-state>{% if busy %}{{ badge('Running', 'warn') }}{% elif job.get('state') == 'failed' %}{{ badge('Stopped', 'bad') }}{% elif job.get('state') == 'done' %}{{ badge('Finished', 'ok') }}{% endif %}</span>
+    </div>
+    {% set pct = ((job.get('bytes_done', 0) / job.get('bytes_total')) * 100) if job.get('bytes_total') else (((job.get('done', 0) / job.get('total')) * 100) if job.get('total') else (100 if job.get('state') == 'done' else 0)) %}
+    <div data-live-bar>{{ progress_bar(pct|round(1), 'bad' if job.get('state') == 'failed' else ('ok' if job.get('state') == 'done' else 'gold')) }}</div>
+    <p class="text-[12.5px] {{ 'text-bad' if job.get('state') == 'failed' else 'text-ink-2' }}" data-live-message>{{ job.get('message') or '' }}</p>
+    {% if job.get('bytes_total') %}<p class="font-mono text-[11.5px] text-ink-3" data-live-bytes>{{ job.get('bytes_done', 0)|filesizeformat }} of {{ job.get('bytes_total')|filesizeformat }}</p>{% endif %}
+    {% if busy %}<p class="text-[11.5px] text-ink-3">You can close this page; the work continues on the server.</p>{% endif %}
+  </section>
+
+  <ol class="flex flex-col gap-4">
+
+    {# 1 · Sign in #}
+    <li id="signin" class="panel flex flex-col gap-3 scroll-mt-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-[14px] font-semibold text-ink"><span class="font-mono text-ink-3 mr-1.5">1</span>Sign in to Telegram</h2>
+        {% if ready %}{{ badge('Signed in', 'ok') }}{% else %}{{ badge('Not signed in', 'neut') }}{% endif %}
+      </div>
+      <p class="text-[12.5px] text-ink-2 leading-relaxed">Bots cannot read a channel's past posts, so the archive reads the channel <b>as a person</b>. Sign in with a Telegram account that is a member or admin of the HQ channel. The login is stored encrypted and used only for this archive. When you are done, <b>sign out</b>: the login is ended at Telegram (it disappears from that account's Settings → Devices) and deleted here.</p>
+
+      {% if ready %}
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-line px-3.5 py-2.5">
+          <span class="text-[12.5px] text-ink"><i class="ri-user-line text-ink-3"></i> {{ login.name }} <span class="font-mono text-ink-3">{{ login.phone }}</span></span>
+          <form method="POST" action="{{ url_for('admin_telegram_archive_sign_out') }}" data-turbo="false"
+                data-confirm="The login will be ended at Telegram and deleted from this website. The backed-up files stay." data-confirm-title="Sign out of Telegram" data-confirm-accept="Sign out">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn btn-secondary btn-sm" {{ 'disabled' if busy else '' }}><i class="ri-logout-box-r-line"></i>Sign out &amp; delete login</button>
+          </form>
+        </div>
+      {% elif login.stage == 'code' %}
+        <form method="POST" action="{{ url_for('admin_telegram_archive_login') }}" class="flex flex-wrap items-end gap-2" data-turbo="false">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="step" value="code">
+          <div class="min-w-[12rem]"><label for="code" class="field-label">Login code sent to {{ login.phone }}</label>
+            <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code" required maxlength="8" class="field-input field-mono" placeholder="12345" autofocus></div>
+          <button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>Confirm code</button>
+        </form>
+        <p class="field-hint">The code is a message from “Telegram” <b>inside the Telegram app</b> on that account (not an SMS). Never share it with anyone else.</p>
+      {% elif login.stage == 'password' %}
+        <form method="POST" action="{{ url_for('admin_telegram_archive_login') }}" class="flex flex-wrap items-end gap-2" data-turbo="false">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="step" value="password">
+          <div class="min-w-[16rem]"><label for="password" class="field-label">Two-step verification password</label>
+            <input id="password" name="password" type="password" autocomplete="off" required class="field-input" autofocus></div>
+          <button type="submit" class="btn btn-primary"><i class="ri-lock-unlock-line"></i>Finish sign-in</button>
+        </form>
+        <p class="field-hint">The extra password set in Telegram → Settings → Privacy and Security → Two-Step Verification. It is sent to Telegram once and never stored.</p>
+      {% else %}
+        <form method="POST" action="{{ url_for('admin_telegram_archive_login') }}" class="flex flex-wrap items-end gap-2" data-turbo="false">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="step" value="phone">
+          <div class="min-w-[16rem]"><label for="phone" class="field-label">Phone number of the Telegram account</label>
+            <input id="phone" name="phone" type="tel" autocomplete="tel" required class="field-input field-mono" placeholder="+234 803 123 4567"></div>
+          <button type="submit" class="btn btn-primary" {{ '' if keys_saved else 'disabled' }}><i class="ri-send-plane-line"></i>Send login code</button>
+        </form>
+      {% endif %}
+      {% if login.stage in ('code', 'password') %}
+        <form method="POST" action="{{ url_for('admin_telegram_archive_login') }}" data-turbo="false">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="step" value="restart">
+          <button type="submit" class="btn btn-ghost btn-sm"><i class="ri-arrow-go-back-line"></i>Start again</button>
+        </form>
+      {% endif %}
+    </li>
+
+    {# 2 · Find #}
+    <li class="panel flex flex-col gap-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-[14px] font-semibold text-ink"><span class="font-mono text-ink-3 mr-1.5">2</span>Find every audio in the channel</h2>
+        <form method="POST" action="{{ url_for('admin_telegram_archive_run') }}" data-turbo="false">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="scan">
+          <button type="submit" class="btn {{ 'btn-secondary' if total_n else 'btn-primary' }} btn-sm" {{ '' if ready and channel_saved and not busy else 'disabled' }}><i class="ri-search-line"></i>{{ 'Look again for new posts' if total_n else 'Find audio' }}</button>
+        </form>
+      </div>
+      <p class="text-[12.5px] text-ink-2">Reads the channel from its very first post and lists every audio file. Nothing is downloaded yet. Audio the bot already posted is already on your website and is skipped.</p>
+      {% if total_n %}
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div class="rounded-md border border-line px-3 py-2"><p class="mono-label">Audio found</p><p class="kpi-value text-[20px] mt-1">{{ total_n }}</p></div>
+          <div class="rounded-md border border-line px-3 py-2"><p class="mono-label">To back up</p><p class="kpi-value text-[20px] mt-1">{{ to_get_n }}</p><p class="text-[11px] text-ink-3 mt-1">{{ to_get_bytes|filesizeformat }}</p></div>
+          <div class="rounded-md border border-line px-3 py-2"><p class="mono-label">Backed up</p><p class="kpi-value text-[20px] mt-1">{{ saved.n }}</p><p class="text-[11px] text-ink-3 mt-1">{{ saved.bytes|filesizeformat }}</p></div>
+          <div class="rounded-md border border-line px-3 py-2"><p class="mono-label">Already on website</p><p class="kpi-value text-[20px] mt-1">{{ on_site.n }}</p></div>
+        </div>
+      {% endif %}
+    </li>
+
+    {# 3 · Download #}
+    <li class="panel flex flex-col gap-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-[14px] font-semibold text-ink"><span class="font-mono text-ink-3 mr-1.5">3</span>Back up the original files</h2>
+        {% set fits = disk_free is none or to_get_bytes <= disk_free - disk_margin %}
+        <form method="POST" action="{{ url_for('admin_telegram_archive_run') }}" data-turbo="false">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="download">
+          <button type="submit" class="btn btn-primary btn-sm" {{ '' if ready and to_get_n and fits and not busy else 'disabled' }}><i class="ri-download-cloud-2-line"></i>{{ 'Retry ' ~ failed.n ~ ' failed' if failed.n and not found.n else 'Download ' ~ to_get_n ~ ' file' ~ ('' if to_get_n == 1 else 's') }}</button>
+        </form>
+      </div>
+      <p class="text-[12.5px] text-ink-2">Saves each file exactly as posted, in a private folder on the server that is <b>not</b> public. Each file gets a checksum so you can prove a copy is intact. If it stops (a restart, a network drop), press the button again: it continues where it left off.</p>
+      {% if disk_free is not none %}
+        <p class="text-[12px] {{ 'text-ok' if fits else 'text-bad' }}"><i class="{{ 'ri-hard-drive-2-line' if fits else 'ri-error-warning-line' }}"></i>
+          Needs {{ to_get_bytes|filesizeformat }} · {{ disk_free|filesizeformat }} free on the server{% if not fits %} — not enough room (2 GB is always kept free for the website). Free up space first.{% endif %}</p>
+      {% endif %}
+    </li>
+
+    {# 4 · Drafts #}
+    <li class="panel flex flex-col gap-3">
+      {% set importable = saved.n - imported if saved.n > imported else 0 %}
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-[14px] font-semibold text-ink"><span class="font-mono text-ink-3 mr-1.5">4</span>Add them to the website as drafts</h2>
+        <form method="POST" action="{{ url_for('admin_telegram_archive_run') }}" data-turbo="false">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="import">
+          <button type="submit" class="btn btn-primary btn-sm" {{ '' if importable and not busy else 'disabled' }}><i class="ri-file-add-line"></i>Create {{ importable }} draft{{ '' if importable == 1 else 's' }}</button>
+        </form>
+      </div>
+      <p class="text-[12.5px] text-ink-2">Each backed-up file becomes a <b>draft</b> audio message with the post's original date and caption. Drafts are not public: review the titles, then publish the ones you want. They are not sent to Telegram again.</p>
+      {% if imported %}<p class="text-[12px]"><a href="{{ url_for('admin_messages') }}?status=draft" class="text-gold-text underline">Review {{ imported }} imported draft{{ '' if imported == 1 else 's' }} in Audio Messages</a></p>{% endif %}
+    </li>
+
+    {# 5 · Copy #}
+    <li class="panel flex flex-col gap-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-[14px] font-semibold text-ink"><span class="font-mono text-ink-3 mr-1.5">5</span>Keep a second copy</h2>
+        <div class="flex flex-wrap gap-2">
+          <a href="{{ url_for('admin_telegram_archive_index') }}" class="btn btn-secondary btn-sm {{ '' if total_n else 'pointer-events-none opacity-50' }}" data-turbo="false"><i class="ri-file-list-3-line"></i>Index (CSV)</a>
+          <a href="{{ url_for('admin_telegram_archive_zip') }}" class="btn btn-primary btn-sm {{ '' if saved.n else 'pointer-events-none opacity-50' }}" data-turbo="false"><i class="ri-folder-zip-line"></i>Download all ({{ saved.bytes|filesizeformat }})</a>
+        </div>
+      </div>
+      <p class="text-[12.5px] text-ink-2">A backup that lives only on one server is not safe. Download everything as one ZIP and keep it on a computer or external drive. The ZIP includes <span class="font-mono">index.csv</span> (date, title, caption, Telegram link, checksum for every file), so it makes sense without this website. Large archives take a while; keep the tab open until it finishes.</p>
+    </li>
+  </ol>
+
+  {# Everything found #}
+  <section class="panel">
+    <h2 class="text-[14px] font-semibold text-ink mb-3">Audio in the channel {% if items|length >= 500 %}<span class="font-normal text-ink-3">· latest 500 (all are in the index)</span>{% endif %}</h2>
+    {% if items %}
+      <div class="overflow-x-auto"><table class="dtable dtable-responsive">
+        <thead><tr><th>Posted</th><th>Audio</th><th>Size</th><th>Status</th><th class="text-right">Actions</th></tr></thead>
+        <tbody>
+          {% for it in items %}
+            <tr>
+              <td data-label="Posted" class="font-mono text-xs whitespace-nowrap">{{ it.posted_at.strftime('%d %b %Y') }}</td>
+              <td data-label="Audio">
+                <p class="font-medium text-ink">{{ it.audio_title or ((it.caption or '').strip().splitlines()[0] if (it.caption or '').strip() else (it.file_name or 'Audio')) }}</p>
+                {% if it.performer %}<p class="text-[11px] text-ink-3">{{ it.performer }}</p>{% endif %}
+                {% if it.error %}<p class="text-[11px] text-bad">{{ it.error }}</p>{% endif %}
+              </td>
+              <td data-label="Size" class="font-mono text-xs whitespace-nowrap">{{ it.size|filesizeformat }}{% if it.duration %} · {{ (it.duration // 60) }}m{% endif %}</td>
+              <td data-label="Status">{{ badge({'found': 'To back up', 'saved': 'Backed up', 'failed': 'Failed', 'on_website': 'On website'}.get(it.status, it.status),
+                                        {'saved': 'ok', 'failed': 'bad', 'on_website': 'gold'}.get(it.status, 'neut')) }}</td>
+              <td data-label="Actions" class="text-right whitespace-nowrap">
+                {% if it.status == 'saved' %}<a href="{{ url_for('admin_telegram_archive_file', item_id=it.id) }}" class="icon-btn" data-turbo="false" aria-label="Download {{ it.file_name or 'file' }}"><i class="ri-download-2-line"></i></a>{% endif %}
+                {% if it.sermon_id %}<a href="{{ url_for('admin_messages_edit_page', sermon_id=it.sermon_id) }}" class="icon-btn" aria-label="Open the draft message"><i class="ri-edit-line"></i></a>{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+    {% else %}
+      {{ empty_state("ri-archive-drawer-line", "Nothing found yet", "Sign in (step 1), then press Find audio (step 2).") }}
+    {% endif %}
+  </section>
+</div>
+
+<script>
+(() => {
+  window.__swmArchiveTimer && clearInterval(window.__swmArchiveTimer);
+  const live = document.getElementById('archive-live');
+  if (!live || live.dataset.running !== '1') return;
+  const fmt = (b) => b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : (b / 1e6).toFixed(1) + ' MB';
+  window.__swmArchiveTimer = setInterval(async () => {
+    if (document.hidden) return;
+    try {
+      const res = await fetch(live.dataset.statusUrl, { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const j = await res.json();
+      if (!j.running) { clearInterval(window.__swmArchiveTimer); location.reload(); return; }
+      live.querySelector('[data-live-message]').textContent = j.message || '';
+      const pct = j.bytes_total ? j.bytes_done / j.bytes_total * 100 : (j.total ? j.done / j.total * 100 : 0);
+      const bar = live.querySelector('[data-live-bar] div > div'); if (bar) bar.style.width = pct.toFixed(1) + '%';
+      const bytes = live.querySelector('[data-live-bytes]'); if (bytes && j.bytes_total) bytes.textContent = fmt(j.bytes_done) + ' of ' + fmt(j.bytes_total);
+    } catch (_) { /* transient network error: try again next tick */ }
+  }, 3000);
+})();
+</script>
+{% endblock %}

@@ -6,6 +6,7 @@ ENCRYPTED_SETTING_KEYS = {
     "telegram_bot_token",
     "telegram_api_id",
     "telegram_api_hash",
+    "telegram_user_session",   # Telegram archive sign-in (a user login, not the bot)
     "resend_api_key",
     "paystack_secret_key",
     "flutterwave_secret_key",

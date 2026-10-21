@@ -37,6 +37,8 @@ FastAPI + async SQLAlchemy + Postgres (asyncpg) + Jinja2 + Celery/Redis. Python 
 - All media paths resolve via `app/core/media.py:to_abspath()`. Never rebuild them from `__file__` — `MEDIA_ROOT` may differ from the package dir.
 - Distribution is async: the create route queues `distribute_audio_task`, which sends to Telegram, writes `telegram_file_id`, records `Sermon.distribution_status["telegram"]`, then chains `transcribe_audio_task`. The HTTP request returns immediately.
 - Transcription prefers the **local file** and only falls back to Telegram, so it is no longer bound by the 20MB `getFile` ceiling.
+- **Telegram archive** (`/admin/telegram-archive`, HQ Administrator only, `app/core/telegram_archive.py`): bots cannot read channel history, so it signs in as a Telegram *user* (Telethon/MTProto, same App api_id/api_hash). The StringSession is encrypted in `telegram_user_session`; "Sign out" calls `log_out()` and deletes it. Jobs `scan → download → import` run in `telegram_archive_task` (progress in the `telegram_archive_job` setting, heartbeat-based `job_running`), rows in `telegram_archive_items` (unique per channel+message, so re-runs never duplicate).
+- Archive files live in `TELEGRAM_ARCHIVE_DIR` (`/app/telegram-archive`, mounted in app **and** worker), deliberately **outside `MEDIA_ROOT`**, which nginx and the app serve publicly. Sermons made from them store `audio_file_path = "archive/<path>"`; `to_abspath` resolves that prefix inside the archive dir only. They play through `messages_stream` once published; they are drafts until an admin publishes them.
 - `Sermon.original_file_size` is a Postgres `INTEGER` — max ~2.1GB. Raising `TELEGRAM_MAX_UPLOAD_MB` past 2048 requires a `BIGINT` migration first.
 
 ## Admin frontend (redesign)

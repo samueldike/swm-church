@@ -12,6 +12,7 @@ services:
       - static_files:/app/static
       - media_files:/app/media
       - telegram_bot_api_conf:/run/swm-telegram
+      - telegram_archive:/app/telegram-archive   # private: never under /app/media (served publicly)
     depends_on:
       postgres:
         condition: service_healthy
@@ -33,6 +34,7 @@ services:
     volumes:
       - static_files:/app/static
       - media_files:/app/media
+      - telegram_archive:/app/telegram-archive
     depends_on:
       - app
       - telegram-bot-api
@@ -136,6 +138,7 @@ volumes:
   postgres_data:
   telegram_bot_api_data:
   telegram_bot_api_conf:
+  telegram_archive:
   static_files:
   media_files:
   certbot_www:

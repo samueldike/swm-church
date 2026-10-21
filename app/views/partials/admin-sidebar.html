@@ -67,6 +67,7 @@
         {% if can('announcements.view') %}{{ nav_item(url_for('admin_announcements'), 'ri-megaphone-line', 'Announcements', 'admin.announcements') }}{% endif %}
         {% if can('audio') %}{{ nav_item(url_for('admin_messages'), 'ri-message-3-line', 'Audio Messages', 'admin.messages', badges.messages) }}
         {{ nav_item(url_for('admin_transcriptions'), 'ri-file-text-line', 'Transcriptions', 'admin.transcriptions') }}{% endif %}
+        {% if can('system') %}{{ nav_item(url_for('admin_telegram_archive'), 'ri-archive-drawer-line', 'Telegram archive', 'admin.telegram-archive') }}{% endif %}
         {% if can('inquiries') %}{{ nav_item(url_for('admin_inquiries'), 'ri-question-answer-line', 'Inquiries', 'admin.inquiries', badges.inquiries) }}{% endif %}
         {% if can('prayer') %}{{ nav_item(url_for('admin_prayer_requests'), 'ri-hand-heart-line', 'Prayer Requests', 'admin.prayer-requests', badges.prayers) }}{% endif %}
       </div>

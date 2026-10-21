@@ -7,7 +7,8 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     MEDIA_ROOT=/app/media \
-    TELEGRAM_BOT_API_CONF_DIR=/run/swm-telegram
+    TELEGRAM_BOT_API_CONF_DIR=/run/swm-telegram \
+    TELEGRAM_ARCHIVE_DIR=/app/telegram-archive
 
 WORKDIR /app
 

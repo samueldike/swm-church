@@ -133,6 +133,19 @@ async def _distribute(sermon_id: int, transcribe: bool, final: bool = True) -> N
         transcribe_audio_task.delay(sermon_id)
 
 
+# ─── Telegram archive ──────────────────────────────────────────────
+
+@celery_app.task(bind=True, max_retries=0)
+def telegram_archive_task(self, action: str, admin_id: int | None = None):
+    """Scan / download / import for the Telegram archive. Hours-long downloads are fine here;
+    progress and errors are written to the ``telegram_archive_job`` setting."""
+    import asyncio
+
+    from app.core.telegram_archive import run
+
+    asyncio.run(run(action, admin_id))
+
+
 # ─── Transcription ─────────────────────────────────────────────────
 
 @celery_app.task(bind=True, max_retries=2, default_retry_delay=60)
