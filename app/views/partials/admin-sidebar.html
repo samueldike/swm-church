@@ -21,11 +21,12 @@
     </button>
   </a>
 
-  {% macro nav_item(url, icon, label, page, count=0) -%}
+  {#- count: a live number; hint says what it counts ("{n}" = the number), shown on hover and read by screen readers -#}
+  {% macro nav_item(url, icon, label, page, count=0, hint='') -%}
     <a href="{{ url }}" class="nav-link {{ 'nav-link-active' if active_page == page else '' }}">
       <i class="{{ icon }} text-base w-5 text-center flex-shrink-0"></i>
       <span class="flex-1 whitespace-nowrap">{{ label }}</span>
-      {% if count and count > 0 %}<span class="font-mono text-[10px] font-bold text-[#121110] bg-gold rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{{ count }}</span>{% endif %}
+      {% if count and count > 0 %}{% set what = hint|replace('{n}', count|string) if hint else count|string %}<span class="font-mono text-[10px] font-bold text-[#121110] bg-gold rounded-full px-1.5 py-0.5 min-w-[18px] text-center" title="{{ what }}" aria-label="{{ what }}">{{ count }}</span>{% endif %}
     </a>
   {%- endmacro %}
   {% macro nav_heading(text) -%}
@@ -41,7 +42,7 @@
       {% if can('members') or can('hods') or can('harvest') or can('system') or can('ministers.view') %}
       <div class="mb-1.5 px-1">
         {{ nav_heading('People') }}
-        {% if can('members') %}{{ nav_item(url_for('admin_members'), 'ri-team-line', 'Members', 'admin.members', badges.members) }}{% endif %}
+        {% if can('members') %}{{ nav_item(url_for('admin_members'), 'ri-team-line', 'Members', 'admin.members', badges.members, '{n} joined in the last 7 days') }}{% endif %}
         {% if can('ministers.view') %}{{ nav_item(url_for('admin_ministers'), 'ri-user-voice-line', 'Ministers', 'admin.ministers') }}{% endif %}
         {% if can('hods') %}{{ nav_item(url_for('admin_hods'), 'ri-user-star-line', 'Department HODs', 'admin.hods') }}{% endif %}
         {% if can('harvest') %}{{ nav_item(url_for('admin_harvesttrack'), 'ri-seedling-line', 'HarvestTrack', 'admin.harvesttrack') }}{% endif %}
@@ -51,13 +52,13 @@
 
       <div class="mb-1.5 px-1">
         {{ nav_heading('Church Activities') }}
-        {% if can('events') %}{{ nav_item(url_for('admin_events'), 'ri-calendar-event-line', 'Calendar', 'admin.events', badges.events) }}{% endif %}
+        {% if can('events') %}{{ nav_item(url_for('admin_events'), 'ri-calendar-event-line', 'Calendar', 'admin.events', badges.events, '{n} events in the next 7 days') }}{% endif %}
         {% if can('departments.view') %}{{ nav_item(url_for('admin_departments'), 'ri-building-2-line', 'Departments', 'admin.departments') }}{% endif %}
         {% if can('system') %}{{ nav_item(url_for('admin_branches'), 'ri-map-pin-2-line', 'Branches', 'admin.branches') }}
         {% elif can('branch.view') and admin_branch_id %}{{ nav_item(url_for('admin_branch', branch_id=admin_branch_id), 'ri-map-pin-2-line', 'My branch', 'admin.branches') }}{% endif %}
         {% if can('branch_settings') and not can('system') %}{{ nav_item(url_for('admin_branch_settings'), 'ri-settings-3-line', 'Branch settings', 'admin.branch-settings') }}{% endif %}
-        {% if can('branch_reports') %}{{ nav_item(url_for('admin_branch_reports'), 'ri-file-list-3-line', ('Branch Reports' if admin.role in ['super_admin', 'hq_pastoral'] else 'Reports to HQ'), 'admin.branch-reports', badges.branch_reports) }}{% endif %}
-        {% if can('reports') %}{{ nav_item(url_for('admin_unit_reports'), 'ri-file-chart-line', 'Unit Reports', 'admin.unit-reports', badges.unit_reports) }}{% endif %}
+        {% if can('branch_reports') %}{{ nav_item(url_for('admin_branch_reports'), 'ri-file-list-3-line', ('Branch Reports' if admin.role in ['super_admin', 'hq_pastoral'] else 'Reports to HQ'), 'admin.branch-reports', badges.branch_reports, ('{n} reports waiting for HQ to acknowledge' if admin.role in ['super_admin', 'hq_pastoral'] else '{n}')) }}{% endif %}
+        {% if can('reports') %}{{ nav_item(url_for('admin_unit_reports'), 'ri-file-chart-line', 'Unit Reports', 'admin.unit-reports', badges.unit_reports, '{n} department reports waiting for your comment') }}{% endif %}
         {% if can('activity') and not can('system') %}{{ nav_item(url_for('admin_activity'), 'ri-history-line', 'Activity', 'admin.activity') }}{% endif %}
       </div>
 
@@ -65,11 +66,11 @@
       <div class="mb-1.5 px-1">
         {{ nav_heading('Communication') }}
         {% if can('announcements.view') %}{{ nav_item(url_for('admin_announcements'), 'ri-megaphone-line', 'Announcements', 'admin.announcements') }}{% endif %}
-        {% if can('audio') %}{{ nav_item(url_for('admin_messages'), 'ri-message-3-line', 'Audio Messages', 'admin.messages', badges.messages) }}
+        {% if can('audio') %}{{ nav_item(url_for('admin_messages'), 'ri-message-3-line', 'Audio Messages', 'admin.messages', badges.messages, '{n} draft messages not yet published') }}
         {{ nav_item(url_for('admin_transcriptions'), 'ri-file-text-line', 'Transcriptions', 'admin.transcriptions') }}{% endif %}
         {% if can('system') %}{{ nav_item(url_for('admin_telegram_archive'), 'ri-archive-drawer-line', 'Telegram archive', 'admin.telegram-archive') }}{% endif %}
-        {% if can('inquiries') %}{{ nav_item(url_for('admin_inquiries'), 'ri-question-answer-line', 'Inquiries', 'admin.inquiries', badges.inquiries) }}{% endif %}
-        {% if can('prayer') %}{{ nav_item(url_for('admin_prayer_requests'), 'ri-hand-heart-line', 'Prayer Requests', 'admin.prayer-requests', badges.prayers) }}{% endif %}
+        {% if can('inquiries') %}{{ nav_item(url_for('admin_inquiries'), 'ri-question-answer-line', 'Inquiries', 'admin.inquiries', badges.inquiries, '{n} new inquiries not yet handled') }}{% endif %}
+        {% if can('prayer') %}{{ nav_item(url_for('admin_prayer_requests'), 'ri-hand-heart-line', 'Prayer Requests', 'admin.prayer-requests', badges.prayers, '{n} prayer requests waiting for a response') }}{% endif %}
       </div>
       {% endif %}
 

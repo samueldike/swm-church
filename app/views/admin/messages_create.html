@@ -36,7 +36,12 @@
       <h2 class="text-[14px] font-semibold text-ink">Message details</h2>
       {{ field('Message title', 'title', value=sermon.title if editing else '', required=True) }}
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {{ field('Speaker', 'speaker', value=sermon.preacher or '' if editing else '') }}
+        <div>
+          <label for="speaker" class="field-label">Speaker</label>
+          <input id="speaker" name="speaker" list="speaker-list" value="{{ request.form.get('speaker', sermon.preacher or '' if editing else '') }}" class="field-input" autocomplete="off" spellcheck="false">
+          <datalist id="speaker-list">{% for s in speaker_list %}<option value="{{ s }}">{% endfor %}</datalist>
+          <p class="field-hint">Start typing to pick a speaker you have used before, so the name is always spelled the same.</p>
+        </div>
         {{ field('Published on', 'published_on', value=(sermon.published_at.strftime('%Y-%m-%d') if editing and sermon.published_at else current_date_iso), type='date', mono=True) }}
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -46,7 +51,11 @@
           <datalist id="series-list">{% for s in series_list %}<option value="{{ s }}">{% endfor %}</datalist>
           <p class="field-hint">Visitors can filter the public archive by series.</p>
         </div>
-        {{ field('Main scripture', 'scripture', value=sermon.scripture or '' if editing else '', placeholder='Job 14:7-9') }}
+        <div>
+          <label for="scripture" class="field-label">Main scripture <span class="font-normal text-ink-3">(optional)</span></label>
+          <input id="scripture" name="scripture" value="{{ request.form.get('scripture', sermon.scripture or '' if editing else '') }}" class="field-input" placeholder="e.g. Job 14:7-9" autocomplete="off">
+          <p class="field-hint">Leave empty if the message has no single main passage.</p>
+        </div>
       </div>
       {{ textarea('Caption', 'caption', value=sermon.caption or '' if editing else '', rows=3, required=not editing, hint='Shown alongside the audio player and in Telegram.') }}
       {{ textarea('Summary', 'summary' if editing else 'description', value=sermon.description or '' if editing else '', rows=3, hint='Optional longer description.') }}
@@ -73,7 +82,8 @@
           <label for="branch_id" class="field-label">Owner branch</label>
           <select id="branch_id" name="branch_id" class="field-select">
             {% if not editing %}<option value="">Select branch</option>{% endif %}
-            {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if editing and sermon.branch_id == b.id else '' }}>{{ b.name }}{{ ' (HQ)' if b.is_hq else '' }}</option>{% endfor %}
+            {% set picked = request.form.get('branch_id') %}
+            {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if (editing and sermon.branch_id == b.id) or (not editing and (picked == b.id|string or (not picked and b.is_hq))) else '' }}>{{ b.name }}{{ ' (HQ)' if b.is_hq else '' }}</option>{% endfor %}
           </select>
           <p class="field-hint">Only messages owned by HQ appear on the public website and podcast feed. A branch's message is distributed only through that branch's own Telegram channel.</p>
         </div>

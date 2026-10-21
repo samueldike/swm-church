@@ -57,9 +57,28 @@ async def _message_form_ctx(db, admin) -> dict:
     from app.models.sermon import Sermon as _S
 
     series_list = [r[0] for r in (await db.execute(select(_S.series).where(_S.series.isnot(None), _S.series != "").distinct().order_by(_S.series))).all()]
+
+    # Speaker suggestions: names already used (most used first), then the church's active ministers,
+    # so the same preacher is always spelled the same way.
+    from app.models.minister import Minister
+
+    used = select(_S.preacher, func.count()).where(_S.preacher.isnot(None), _S.preacher != "")
+    ministers_q = select(Minister.title, Minister.full_name).where(Minister.status == "active")
+    if owner_is_branch:
+        used, ministers_q = used.where(_S.branch_id == admin.branch_id), ministers_q.where(Minister.branch_id == admin.branch_id)
+    speakers, seen = [], set()
+    names = [n for n, _ in (await db.execute(used.group_by(_S.preacher).order_by(func.count().desc(), _S.preacher))).all()]
+    names += [f"{t} {n}".strip() if t else n for t, n in (await db.execute(ministers_q.order_by(Minister.full_name))).all()]
+    for name in names:
+        name = " ".join(name.split())
+        if name and name.lower() not in seen:
+            seen.add(name.lower())
+            speakers.append(name)
+
     tg = TelegramDistributor(admin.branch_id if owner_is_branch else None)
     return {
         "series_list": series_list,
+        "speaker_list": speakers[:300],
         "is_branch_owner": owner_is_branch,
         "own_branch_name": branch.name if branch else "",
         "telegram_ready": await tg.configured(),
@@ -195,10 +214,15 @@ async def _admin_context(request: Request, db: AsyncSession, active_page: str = 
         logging.exception("Unhandled error")
 
     try:
-        q = select(func.count()).select_from(Event)
+        # Calendar: published events happening in the next 7 days (event times are naive church time,
+        # UTC+1). Rises when one is added for this week, falls as each one ends.
+        church_now = datetime.utcnow() + timedelta(hours=1)
+        q = select(func.count()).select_from(Event).where(
+            Event.is_published == True,  # noqa: E712
+            Event.starts_at <= church_now + timedelta(days=7),
+            func.coalesce(Event.ends_at, Event.starts_at) >= church_now)
         if not is_super and branch_id:
-            q = q.where(Event.branch_id == branch_id)
-        q = q.where(Event.is_published == True, Event.starts_at >= datetime.utcnow())
+            q = q.where(_visible_event_scope(admin, await get_hq_branch_id(db)))   # own + HQ's, as on their calendar
         badges["events"] = (await db.execute(q)).scalar_one() or 0
     except Exception:
         logging.exception("Unhandled error")
@@ -2311,7 +2335,8 @@ async def admin_messages_store(
         caption=caption.strip() if caption else None,
         series=series.strip()[:150] or None, scripture=scripture.strip()[:150] or None, transcript_public=transcript_public == "1",
         status=status.strip().lower() or "draft",
-        branch_id=branch_id if admin.role == "super_admin" and branch_id else admin.branch_id,
+        # HQ Administrator: the chosen church, HQ when none is chosen; everyone else: their own church
+        branch_id=(branch_id or await get_hq_branch_id(db)) if admin.role == "super_admin" else admin.branch_id,
         created_by=admin.id,
         platform_targets=[p for p in platform_targets if p] or None,
     )

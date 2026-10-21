@@ -202,6 +202,15 @@
   .admin-scrollbar::-webkit-scrollbar-thumb { background: rgba(184, 137, 31, 0.4); border-radius: 999px; }
 }
 
+/* ── Cursors: Tailwind v4's reset gives buttons the arrow; everything clickable shows the hand. ── */
+@layer base {
+  button:not(:disabled), [role="button"], summary, select:not(:disabled),
+  input[type="checkbox"]:not(:disabled), input[type="radio"]:not(:disabled), input[type="file"], input[type="color"],
+  input[type="submit"], input[type="button"], label:has(> input[type="checkbox"], > input[type="radio"]),
+  ::-webkit-calendar-picker-indicator { cursor: pointer; }
+  :disabled, [aria-disabled="true"] { cursor: not-allowed; }
+}
+
 /* ── Dark mode: the html.dark class (set by the top-bar toggle) re-points the
    design tokens, so every utility and component follows without extra rules. ── */
 @layer base {

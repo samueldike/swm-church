@@ -300,6 +300,12 @@
     .btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
     .btn[disabled] { opacity: 0.4; cursor: not-allowed; }
     .btn[disabled]:active { transform: none; }
+    /* Tailwind's reset gives buttons the arrow cursor: everything clickable shows the hand. */
+    button:not(:disabled), [role="button"], summary, select:not(:disabled),
+    input[type="checkbox"]:not(:disabled), input[type="radio"]:not(:disabled), input[type="file"], input[type="color"],
+    input[type="submit"], input[type="button"], label:has(> input[type="checkbox"], > input[type="radio"]),
+    ::-webkit-calendar-picker-indicator { cursor: pointer; }
+    :disabled, [aria-disabled="true"] { cursor: not-allowed; }
     /* Compact chrome button — a class, not an inline height, so the mobile
        layer can grow it to a proper touch target. */
     .btn-sm { height: 2.4rem; padding-inline: 1rem; }
