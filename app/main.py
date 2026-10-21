@@ -188,6 +188,11 @@ async def _seed_defaults():
 
             if await encrypt_plaintext_secrets(db):
                 await db.commit()
+            # The telegram-bot-api container reads the api_id/api_hash saved in Settings from a shared volume.
+            from app.core import telegram_local
+            from app.core.settings_cache import get_settings
+
+            telegram_local.sync_credentials(await get_settings(db))
             count_result = await db.execute(
                 select(func.count()).select_from(SiteSetting)
             )

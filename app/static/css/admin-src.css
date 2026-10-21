@@ -130,6 +130,27 @@
   }
   .dtable tr:last-child td { @apply border-b-0; }
 
+  /* ── Setup guides (Settings) ─────────────────────────────────── */
+  .guide { @apply rounded-md border border-line bg-sunken text-[12.5px] text-ink-2; }
+  .guide > summary {
+    @apply flex cursor-pointer list-none items-center gap-2 px-3.5 py-2.5 font-semibold text-ink;
+    min-height: 44px;
+  }
+  .guide > summary::-webkit-details-marker { display: none; }
+  .guide > summary::after { content: "\203A"; @apply ml-auto text-base text-ink-3 transition-transform; }
+  .guide[open] > summary::after { transform: rotate(90deg); }
+  .guide > summary > i { @apply text-base text-gold-text; }
+  .guide > ol { @apply list-decimal space-y-2.5 px-3.5 pb-3.5 pl-8 leading-relaxed; }
+  .guide ul { @apply mt-1.5 mb-1.5 list-disc space-y-1 pl-5; }
+  .guide a:not(.btn) { @apply text-gold-text underline underline-offset-2; }
+  .guide code { @apply rounded bg-surface px-1 py-px font-mono text-[11.5px] text-ink; }
+  .guide-links { @apply flex flex-wrap gap-2 px-3.5 pb-3; }
+  .guide-note { @apply mx-3.5 mb-3.5 rounded-md border border-line bg-surface px-3 py-2.5 text-[12px] leading-relaxed; }
+  .tg-steps { @apply flex flex-wrap gap-x-5 gap-y-1.5 text-[12px] text-ink-3; }
+  .tg-steps li { @apply inline-flex items-center gap-1.5; }
+  .tg-steps li.done { @apply text-ok; }
+  .tg-steps i { @apply text-base; }
+
   /* ── Mono / label utilities ──────────────────────────────────── */
   .mono-label {
     @apply font-mono text-[10px] font-semibold tracking-wider text-ink-3 uppercase;

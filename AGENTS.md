@@ -18,7 +18,7 @@ FastAPI + async SQLAlchemy + Postgres (asyncpg) + Jinja2 + Celery/Redis. Python 
 - CSRF: all POST forms include `csrf_token`; the `csrf_protect` router dependency (`app/core/csrf.py`, wired in `app/main.py`) validates it against `session["csrf_token"]` (JSON fetches send `X-CSRF-Token`).
 - Flash: `_redirect` sets both `flash_messages` and `session[flash_type]`; `app/core/template.py` pops after render — message shows once.
 - Auth: `app/core/auth.py` reads `admin_session_timeout_minutes` from settings_cache, not hardcoded 1800.
-- Uploads: whitelist `.jpg/.jpeg/.png/.webp/.gif` for images, audio `mp3/wav/m4a/...` max 50MB images 5MB; use `slugify` + suffix for branch/department/story slugs.
+- Uploads: whitelist `.jpg/.jpeg/.png/.webp/.gif` for images, audio `mp3/wav/m4a/...` max `TELEGRAM_MAX_UPLOAD_MB` (2000MB) images 5MB; use `slugify` + suffix for branch/department/story slugs.
 
 ## Gotchas
 - Postgres columns are `TIMESTAMP WITHOUT TIME ZONE` (naive). Always compare with naive `datetime.utcnow()`, not `timezone.utc` aware, else asyncpg `can't subtract offset-naive` error (see metrics).
@@ -28,10 +28,12 @@ FastAPI + async SQLAlchemy + Postgres (asyncpg) + Jinja2 + Celery/Redis. Python 
 - `migrate_mysql.py` regex for `INSERT ... VALUES (...);` breaks on `;` inside `'...&amp;...'` — use scan for `;` outside quotes.
 
 ## Telegram audio distribution
-- Uploads go through a **self-hosted `telegram-bot-api` server** (`--local` mode, compose service `telegram-bot-api`). Cloud Bot API caps `sendAudio` at 50MB and `getFile` at 20MB; local mode raises them to 2000MB / unlimited.
-- Needs `TELEGRAM_API_ID` + `TELEGRAM_API_HASH` from my.telegram.org (account-level, **not** the bot token). Without them the container will not start.
-- `TELEGRAM_LOCAL_API=false` falls back to the cloud API and `TelegramDistributor.max_upload_bytes` clamps to 50MB automatically.
-- In local mode files are handed over as `file://` paths, never streamed — so `media_files` must mount at the **same absolute path** in `app`, `worker` and `telegram-bot-api`. That path is `MEDIA_ROOT` (`/app/media` in compose).
+- **Audio is never re-encoded.** Telegram gets the file exactly as uploaded. Cloud Bot API caps `sendAudio` at 50MB; **large files** (the self-hosted `telegram-bot-api`, `--local`) raise it to 2000MB. A file over the limit in use fails with an actionable reason; there is no compression fallback.
+- Large files are switched on by the HQ Administrator in **Settings → Audio distribution** (`telegram_large_files` = `on`), after saving the church account's **App api_id / App api_hash** (my.telegram.org; account-level, not the bot token). Both are in `ENCRYPTED_SETTING_KEYS`; never put them in `.env` or compose. "Turn on" proves the local server logs the bot in (`telegram_local.server_check`) before flipping the switch; a failure leaves it off.
+- The container cannot read the DB, so `telegram_local.sync_credentials()` writes them to `TELEGRAM_BOT_API_CONF_DIR` (`/run/swm-telegram`, volume `telegram_bot_api_conf`, rw in `app`, ro in the container) on save and at app startup; `deploy/telegram-bot-api/entrypoint.sh` waits for them and restarts the server when `stamp` changes. The container idles until keys are saved.
+- The app never reads bot updates, so Telegram's `logOut` step is skipped: the same bot works on both servers and switching is instant/reversible. `TelegramDistributor.is_local` is set from Settings by `_get_credentials()`; use `await upload_limit()`. `resolve_file` always uses the cloud API (a `--local` server answers with paths on its own disk).
+- In local mode files are handed over as `file://` paths, never streamed — so `media_files` must mount at the **same absolute path** in `app`, `worker` and `telegram-bot-api`. That path is `MEDIA_ROOT` (`/app/media`, baked into the Dockerfile).
+- Distribution failures: network/429/5xx retry automatically (`_DISTRIBUTE_BACKOFF`, ~2.5h, honouring `retry_after`); permanent rejections record Telegram's own `description`; the Messages page shows it with a "Send to Telegram again" action (`admin_messages_redistribute`).
 - All media paths resolve via `app/core/media.py:to_abspath()`. Never rebuild them from `__file__` — `MEDIA_ROOT` may differ from the package dir.
 - Distribution is async: the create route queues `distribute_audio_task`, which sends to Telegram, writes `telegram_file_id`, records `Sermon.distribution_status["telegram"]`, then chains `transcribe_audio_task`. The HTTP request returns immediately.
 - Transcription prefers the **local file** and only falls back to Telegram, so it is no longer bound by the 20MB `getFile` ceiling.

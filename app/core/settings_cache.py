@@ -4,6 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # Settings keys whose values are secrets (API keys/tokens) and are encrypted at rest.
 ENCRYPTED_SETTING_KEYS = {
     "telegram_bot_token",
+    "telegram_api_id",
+    "telegram_api_hash",
     "resend_api_key",
     "paystack_secret_key",
     "flutterwave_secret_key",

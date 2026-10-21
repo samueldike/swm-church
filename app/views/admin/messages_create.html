@@ -101,7 +101,17 @@
         <p class="text-[11.5px] text-warn mt-3 leading-relaxed"><i class="ri-alert-line"></i> {{ 'Your branch has no Telegram bot and channel saved yet' if is_branch_owner else 'No HQ Telegram channel is saved' }} — audio will be stored and transcribed but not sent to Telegram.
           {% if is_branch_owner and can('branch_settings') %}<a href="{{ url_for('admin_branch_settings') }}" class="text-gold-text underline">Add it in Branch settings</a>.{% endif %}</p>
       {% endif %}
-      {% if not editing %}<p class="text-[11px] text-ink-3 mt-3 leading-relaxed">Large uploads are sent to Telegram in the background after saving; transcription starts automatically afterwards.</p>{% endif %}
+      {% if not editing %}
+        {% if telegram_ready %}
+          <p class="text-[11px] text-ink-3 mt-3 leading-relaxed">
+            Telegram gets the file exactly as uploaded, up to <b>{{ '2 GB' if telegram_large_files else '50 MB' }}</b>{% if not telegram_large_files %}
+            {%- if is_super %} · <a href="{{ url_for('admin_settings') }}#distribution" class="text-gold-text underline">raise to 2 GB</a>{% else %} (HQ can raise this to 2 GB){% endif %}{% endif %}.
+            It is sent in the background after saving; transcription starts automatically afterwards.</p>
+          <p id="tg-size-warning" class="hidden text-[11.5px] text-warn mt-2 leading-relaxed" data-limit="{{ telegram_limit_bytes }}" role="status"></p>
+        {% else %}
+          <p class="text-[11px] text-ink-3 mt-3 leading-relaxed">Transcription starts automatically after saving.</p>
+        {% endif %}
+      {% endif %}
     </div>
 
     <div class="flex flex-col gap-2">
@@ -129,10 +139,22 @@
     const sizeEl = document.getElementById('upload-overlay-size');
     if (!form || !input) return;
     const fmt = (b) => b >= 1073741824 ? (b / 1073741824).toFixed(2) + ' GB' : (b / 1048576).toFixed(1) + ' MB';
+    const warn = document.getElementById('tg-size-warning');
+    const tgBox = form.querySelector('input[name="platform_targets"][value="telegram"]');
+    const checkSize = () => {
+      if (!warn) return;
+      const f = input.files && input.files[0];
+      const limit = Number(warn.dataset.limit);
+      const over = f && limit && f.size > limit && tgBox && tgBox.checked;
+      warn.textContent = over ? 'This file is ' + fmt(f.size) + '; Telegram accepts up to ' + fmt(limit) + ' right now. It will be saved on the website, but not sent to Telegram.' : '';
+      warn.classList.toggle('hidden', !over);
+    };
     input.addEventListener('change', () => {
       const f = input.files && input.files[0];
       nameEl.textContent = f ? f.name + ' (' + fmt(f.size) + ')' : 'Choose an audio file';
+      checkSize();
     });
+    if (tgBox) tgBox.addEventListener('change', checkSize);
     form.addEventListener('submit', () => {
       const f = input.files && input.files[0];
       if (!f) return;

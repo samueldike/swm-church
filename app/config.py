@@ -9,17 +9,16 @@ class Settings(BaseSettings):
     APP_NAME: str = "Scent of Water Ministry"
     APP_URL: str = "http://localhost"
 
-    TELEGRAM_BOT_TOKEN: str = ""
-    TELEGRAM_AUDIO_CHAT_ID: str = ""
-    # Base URL of the Bot API. The public cloud API caps uploads at 50MB and
-    # getFile downloads at 20MB. Point this at a self-hosted telegram-bot-api
-    # server running in --local mode to lift both limits (see docker-compose).
+    # Telegram keys (bot token, channel, api_id/api_hash) and the large-file switch are
+    # managed in Admin → Settings → Audio distribution, never here.
+    # Public cloud Bot API: uploads capped at 50MB, getFile downloads at 20MB.
     TELEGRAM_API_BASE: str = "https://api.telegram.org"
-    # True when TELEGRAM_API_BASE is a --local server: uploads may be handed
-    # over as filesystem paths, and getFile returns a path instead of a URL.
-    TELEGRAM_LOCAL_API: bool = False
-    # Upload ceiling enforced before we touch the network. 2000MB is the hard
-    # limit of a --local Bot API server; the cloud API only allows 50.
+    # The self-hosted telegram-bot-api (--local, 2000MB) used once "large files" is on.
+    TELEGRAM_LOCAL_API_BASE: str = "http://telegram-bot-api:8081"
+    # Shared with the telegram-bot-api container, which reads the api_id/api_hash
+    # saved in Settings from here. Empty outside Docker: nothing is written.
+    TELEGRAM_BOT_API_CONF_DIR: str = ""
+    # Website upload ceiling, and the hard limit of a --local Bot API server.
     TELEGRAM_MAX_UPLOAD_MB: int = 2000
 
     # Absolute path the app writes uploads to. Must match the media volume
@@ -42,12 +41,6 @@ class Settings(BaseSettings):
     FLUTTERWAVE_SECRET_KEY: str = ""
     FLUTTERWAVE_ENCRYPTION_KEY: str = ""
 
-    SMTP_HOST: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
-    SMTP_USER: str = ""
-    SMTP_PASSWORD: str = ""
-    SMTP_FROM_EMAIL: str = ""
-    SMTP_FROM_NAME: str = "Scent of Water Ministry"
 
     @property
     def is_development(self) -> bool:
@@ -74,6 +67,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
+        extra = "ignore"  # retired keys left in an old .env must not stop the app starting
 
 
 settings = Settings()

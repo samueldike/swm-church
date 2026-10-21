@@ -22,16 +22,16 @@ def audio_file():
     os.unlink(path)
 
 
-def _send(monkeypatch, path, handler, caption="Caption"):
+def _send(monkeypatch, path, handler, caption="Caption", large_files=False):
     real_client = httpx.AsyncClient
     monkeypatch.setattr(telegram.httpx, "AsyncClient",
                         lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw))
 
     async def creds(self):
+        self.is_local = large_files
         return "TOKEN", "@channel"
 
     monkeypatch.setattr(TelegramDistributor, "_get_credentials", creds)
-    monkeypatch.setattr(telegram.app_settings, "TELEGRAM_LOCAL_API", False)
     return asyncio.run(TelegramDistributor(None).send_audio(path, "m.mp3", "Title", caption))
 
 
@@ -110,3 +110,76 @@ def test_permanent_failure_is_not_retried(monkeypatch):
     monkeypatch.setattr(tasks, "_distribute", rejected)
     tasks.distribute_audio_task.apply(args=(1,))
     assert len(calls) == 1
+
+
+# ─── Large files (self-hosted Bot API) ─────────────────────────────
+
+def test_large_files_send_by_path_to_the_local_server(monkeypatch, audio_file):
+    seen = {}
+
+    def handler(request):
+        seen["url"] = str(request.url)
+        seen["body"] = request.read().decode()
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": 7, "audio": {"file_id": "F"}}})
+
+    assert _send(monkeypatch, audio_file, handler, large_files=True)["message_id"] == 7
+    assert seen["url"].startswith(telegram.app_settings.TELEGRAM_LOCAL_API_BASE.rstrip("/") + "/botTOKEN/sendAudio")
+    assert "file%3A%2F%2F" in seen["body"] or "file://" in seen["body"]   # handed over by path, never streamed
+
+
+def test_over_the_limit_is_refused_never_compressed(monkeypatch, audio_file):
+    monkeypatch.setattr(telegram.telegram_local, "CLOUD_LIMIT_BYTES", 1000)   # the test file is 2003 bytes
+    with pytest.raises(telegram.TelegramUploadTooLarge):
+        _send(monkeypatch, audio_file, lambda r: pytest.fail("must not upload"))
+    assert not hasattr(telegram, "shrink_audio")
+
+
+def test_api_id_and_hash_validation():
+    from app.core.telegram_local import valid_api_hash, valid_api_id
+
+    assert valid_api_id("1234567") and not valid_api_id("12a4567") and not valid_api_id("")
+    assert valid_api_hash("0123456789abcdef0123456789abcdef")
+    assert valid_api_hash("0123456789ABCDEF0123456789ABCDEF")          # pasted in capitals
+    assert not valid_api_hash("0123456789abcdef0123456789abcde")       # 31 characters
+    assert not valid_api_hash("0123456789abcdef0123456789abcdeg")      # not hex
+
+
+def test_api_keys_are_encrypted_settings():
+    from app.core.settings_cache import ENCRYPTED_SETTING_KEYS
+
+    assert {"telegram_api_id", "telegram_api_hash"} <= ENCRYPTED_SETTING_KEYS
+
+
+def test_large_files_need_both_the_switch_and_the_keys():
+    from app.core.telegram_local import enabled
+
+    keys = {"telegram_api_id": "1234567", "telegram_api_hash": "0123456789abcdef0123456789abcdef"}
+    assert enabled({**keys, "telegram_large_files": "on"})
+    assert not enabled({**keys, "telegram_large_files": ""})
+    assert not enabled({"telegram_large_files": "on"})
+
+
+def test_credentials_are_handed_to_the_container_only_when_changed(monkeypatch, tmp_path):
+    from app.core import telegram_local
+
+    monkeypatch.setattr(telegram_local.app_settings, "TELEGRAM_BOT_API_CONF_DIR", str(tmp_path))
+    keys = {"telegram_api_id": "1234567", "telegram_api_hash": "0123456789ABCDEF0123456789ABCDEF"}
+
+    assert telegram_local.sync_credentials(keys)
+    assert (tmp_path / "api_id").read_text() == "1234567"
+    assert (tmp_path / "api_hash").read_text() == "0123456789abcdef0123456789abcdef"
+    stamp = (tmp_path / "stamp").read_text()
+
+    telegram_local.sync_credentials(keys)                       # unchanged: no restart
+    assert (tmp_path / "stamp").read_text() == stamp
+
+    telegram_local.sync_credentials({})                         # removed in Settings: withdrawn
+    assert not (tmp_path / "api_id").exists() and not (tmp_path / "api_hash").exists()
+    assert (tmp_path / "stamp").read_text() != stamp
+
+
+def test_nothing_is_written_outside_docker(monkeypatch):
+    from app.core import telegram_local
+
+    monkeypatch.setattr(telegram_local.app_settings, "TELEGRAM_BOT_API_CONF_DIR", "")
+    assert telegram_local.sync_credentials({"telegram_api_id": "1234567", "telegram_api_hash": "0" * 32}) is False

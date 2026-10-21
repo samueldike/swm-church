@@ -57,11 +57,14 @@ async def _message_form_ctx(db, admin) -> dict:
     from app.models.sermon import Sermon as _S
 
     series_list = [r[0] for r in (await db.execute(select(_S.series).where(_S.series.isnot(None), _S.series != "").distinct().order_by(_S.series))).all()]
+    tg = TelegramDistributor(admin.branch_id if owner_is_branch else None)
     return {
         "series_list": series_list,
         "is_branch_owner": owner_is_branch,
         "own_branch_name": branch.name if branch else "",
-        "telegram_ready": await TelegramDistributor(admin.branch_id if owner_is_branch else None).configured(),
+        "telegram_ready": await tg.configured(),
+        "telegram_limit_bytes": await tg.upload_limit(),
+        "telegram_large_files": tg.is_local,
     }
 
 
@@ -3164,12 +3167,16 @@ async def admin_settings(request: Request, db: AsyncSession = Depends(get_db)):
 
     email_log = list((await db.execute(select(EmailLog).order_by(EmailLog.created_at.desc()).limit(12))).scalars().all())
     _raw_site = await get_settings(db)
+    from app.core import telegram_local as _tgl
+    tg_large = {"on": _tgl.enabled(_raw_site), "keys_saved": _tgl.credentials_saved(_raw_site),
+                "bot_saved": bool(_raw_site.get("telegram_bot_token")),
+                "installed": bool(_cfg.TELEGRAM_BOT_API_CONF_DIR and os.path.isdir(_cfg.TELEGRAM_BOT_API_CONF_DIR))}
     svc_rows = _sc.services_to_form(_sc.get_services(_raw_site))
     return await render_template(request, "admin/settings.html", {
         "svc_rows": svc_rows, "expect_rows": _sc.get_expect(_raw_site) or [("", "")], "teach_rows": _sc.get_teaching(_raw_site) or [("", "")],
         "readiness": await site_readiness(db, _raw_site, _cfg.APP_URL), "email_log": email_log,
         "_db": db, "settings": settings, "timezones": timezones,
-        "secret_status": secret_status, "env_fallback": env_fallback,
+        "secret_status": secret_status, "env_fallback": env_fallback, "tg_large": tg_large,
         "ai_providers": ai_mod.PROVIDERS,
         "ai_model_opts": {k: ai_mod.model_options(k, settings) for k in ai_mod.PROVIDERS},
         "ai_default": (settings.get(ai_mod.DEFAULT_PROVIDER_SETTING) or ai_mod.DEFAULT_PROVIDER),
@@ -3233,6 +3240,17 @@ async def admin_settings_update(request: Request, db: AsyncSession = Depends(get
         if form.get(f"clear_{secret_key}") == "1" and secret_key not in settings_dict:
             settings_dict[secret_key] = ""
 
+    # Telegram api_id / api_hash: catch a paste of the wrong value before it is encrypted.
+    from app.core import telegram_local as _tgl
+    tg_errors = []
+    for tg_key, check, what in (("telegram_api_id", _tgl.valid_api_id, "App api_id must be the number shown on my.telegram.org (digits only)"),
+                                ("telegram_api_hash", _tgl.valid_api_hash, "App api_hash must be the 32-character code shown on my.telegram.org")):
+        if settings_dict.get(tg_key):
+            settings_dict[tg_key] = re.sub(r"\s", "", settings_dict[tg_key]).lower()
+            if not check(settings_dict[tg_key]):
+                settings_dict.pop(tg_key)
+                tg_errors.append(what)
+
     # Normalize giving_purposes: textarea sends newline-separated lines → save as JSON array
     if "giving_purposes" in settings_dict:
         raw_purposes = settings_dict["giving_purposes"]
@@ -3259,6 +3277,11 @@ async def admin_settings_update(request: Request, db: AsyncSession = Depends(get
     if settings_dict.get("giving_model") not in (None, "central", "branch"):
         settings_dict.pop("giving_model")
     await update_settings(db, settings_dict)
+    if {"telegram_api_id", "telegram_api_hash"} & set(settings_dict):
+        saved = await get_settings(db)
+        if saved.get(_tgl.LARGE_FILES_SETTING) == "on" and not _tgl.credentials_saved(saved):
+            await update_settings(db, {_tgl.LARGE_FILES_SETTING: ""})   # nothing left to run it with
+        _tgl.sync_credentials(saved)
     if bad_models:
         return _redirect(request, "/admin/settings#ai",
                          "Saved, except model name(s) with invalid characters: " + ", ".join(bad_models)
@@ -3266,7 +3289,71 @@ async def admin_settings_update(request: Request, db: AsyncSession = Depends(get
     changed = sorted(k for k in settings_dict if k in ENCRYPTED_SETTING_KEYS)
     if changed:
         await log_admin_action(db, admin.id, "settings.secrets_changed", "settings", None, {"keys": changed}, request)
+    if tg_errors:
+        return _redirect(request, "/admin/settings#distribution", "Saved, except: " + "; ".join(tg_errors) + ".", "error")
     return _redirect(request, "/admin/settings", "Settings updated successfully.")
+
+
+@router.post("/settings/test-telegram", name="admin_settings_test_telegram")
+async def admin_settings_test_telegram(request: Request, db: AsyncSession = Depends(get_db)):
+    """Check HQ's saved bot token and channel with Telegram itself."""
+    admin = await _get_admin(request)
+    if not admin or admin.role != "super_admin":
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from app.core.telegram import TelegramDistributor
+
+    ok, message = await TelegramDistributor(None).check()
+    return _redirect(request, "/admin/settings#distribution", message, "success" if ok else "error")
+
+
+@router.post("/settings/telegram-large-files", name="admin_settings_telegram_large_files")
+async def admin_settings_telegram_large_files(request: Request, db: AsyncSession = Depends(get_db)):
+    """Turn large Telegram uploads (self-hosted Bot API, up to 2 GB) on, off, or just check them.
+
+    Turning on proves the server logs the bot in with the saved api_id/api_hash first, so a
+    wrong key can never leave uploads failing. Off is instant: the bot still works on the cloud.
+    """
+    admin = await _get_admin(request)
+    if not admin or admin.role != "super_admin":
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    import asyncio
+
+    from app.core import telegram_local as tgl
+
+    back = "/admin/settings#distribution"
+    action = str((await request.form()).get("action") or "check")
+    site = await get_settings(db)
+    if action == "off":
+        await update_settings(db, {tgl.LARGE_FILES_SETTING: ""})
+        await log_admin_action(db, admin.id, "settings.telegram_large_files", "settings", None, {"on": False}, request)
+        return _redirect(request, back, "Large files are off. Telegram uploads are limited to 50 MB again.")
+    if not tgl.credentials_saved(site):
+        return _redirect(request, back, "Save the App api_id and App api_hash first (step 4 of the guide).", "error")
+    if not site.get("telegram_bot_token"):
+        return _redirect(request, back, "Save the Telegram bot token first.", "error")
+    if not tgl.sync_credentials(site):
+        return _redirect(request, back, "The large-file service is not installed on this server yet "
+                                        "(the telegram-bot-api container). Ask whoever deploys the site to add it.", "error")
+
+    # The server restarts when its credentials change, then logs the bot in: allow it 30s in all.
+    import time
+
+    deadline = time.monotonic() + 30
+    while True:
+        state, message = await tgl.server_check(site["telegram_bot_token"], timeout=min(4.0, max(0.5, deadline - time.monotonic())))
+        if state != "down" or time.monotonic() + 2 > deadline:
+            break
+        await asyncio.sleep(2)
+    if state != "ok":
+        if state == "rejected":
+            message += ". Check that the App api_id and App api_hash were copied exactly."
+        on = site.get(tgl.LARGE_FILES_SETTING) == "on"
+        return _redirect(request, back, message + (" Large files stay off." if not on else ""), "error")
+    if action == "on":
+        await update_settings(db, {tgl.LARGE_FILES_SETTING: "on"})
+        await log_admin_action(db, admin.id, "settings.telegram_large_files", "settings", None, {"on": True}, request)
+        return _redirect(request, back, message + " Large files are on: Telegram now gets every message as uploaded.")
+    return _redirect(request, back, message)
 
 
 @router.post("/settings/test-email", name="admin_settings_test_email")

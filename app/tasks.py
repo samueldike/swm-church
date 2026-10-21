@@ -10,7 +10,7 @@ import httpx
 from app.celery_app import celery_app
 from app.database import async_session
 from app.core.media import to_abspath
-from app.core.telegram import TelegramDistributor, TelegramError, TelegramUploadTooLarge, shrink_audio
+from app.core.telegram import TelegramDistributor, TelegramError
 
 logger = logging.getLogger(__name__)
 
@@ -87,25 +87,22 @@ async def _distribute(sermon_id: int, transcribe: bool, final: bool = True) -> N
         await _set_distribution(sermon_id, "telegram", state="skipped", error="this branch has no Telegram bot/channel saved")
         return
 
-    await _set_distribution(sermon_id, "telegram", state="uploading", error=None)
+    # Telegram always gets the file exactly as uploaded: it is never re-encoded.
+    size, limit = os.path.getsize(audio_path), await tg.upload_limit()
+    if size > limit:
+        logger.error("Sermon %d is %d bytes, over the %d-byte Telegram limit", sermon_id, size, limit)
+        hint = ("the largest file Telegram accepts" if tg.is_local else
+                "Telegram's standard limit. Turn on large files (up to 2 GB) in Settings → Audio distribution, then use Send again")
+        await _set_distribution(sermon_id, "telegram", state="failed",
+                                error=f"This file is {size / 1048576:.0f} MB; {limit // 1048576} MB is {hint}.")
+        return
 
-    send_path, shrunk = audio_path, None
-    if os.path.getsize(audio_path) > tg.max_upload_bytes:
-        # The website keeps the original; Telegram gets a smaller mono copy that fits its cap.
-        shrunk = await shrink_audio(audio_path, tg.max_upload_bytes)
-        if not shrunk:
-            exc = TelegramUploadTooLarge(os.path.getsize(audio_path), tg.max_upload_bytes)
-            logger.error("Sermon %d too large for Telegram and could not be compressed: %s", sermon_id, exc)
-            await _set_distribution(sermon_id, "telegram", state="failed", error=f"{exc}, and it could not be compressed to fit")
-            return
-        send_path = shrunk
-        logger.info("Sermon %d compressed for Telegram: %d -> %d bytes", sermon_id,
-                    os.path.getsize(audio_path), os.path.getsize(shrunk))
+    await _set_distribution(sermon_id, "telegram", state="uploading", error=None)
 
     try:
         result = await tg.send_audio(
-            file_path=send_path,
-            filename=os.path.splitext(filename)[0] + ".mp3" if shrunk else filename,
+            file_path=audio_path,
+            filename=filename,
             title=title,
             caption=caption,
         )
@@ -115,9 +112,6 @@ async def _distribute(sermon_id: int, transcribe: bool, final: bool = True) -> N
                        "will retry" if retrying else "giving up", exc)
         await _set_distribution(sermon_id, "telegram", state="retrying" if retrying else "failed", error=str(exc))
         raise
-    finally:
-        if shrunk:
-            os.unlink(shrunk)
 
     if not result:
         await _set_distribution(sermon_id, "telegram", state="skipped", error="this branch has no Telegram bot/channel saved")
