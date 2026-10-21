@@ -2334,7 +2334,11 @@ async def admin_messages_store(
         media_dir = media_subdir("sermons")
         stored_filename = f"{secrets.token_hex(16)}.{ext or 'mp3'}"
         stored_abspath = os.path.join(media_dir, stored_filename)
-        limit = TelegramDistributor().max_upload_bytes
+        # The website keeps the full file; when it is over Telegram's cap the worker sends a
+        # compressed copy, so Telegram's 50MB cloud limit must not cap the upload itself.
+        from app.config import settings as _cfg
+
+        limit = _cfg.telegram_max_upload_bytes
         written = 0
 
         try:
@@ -4047,6 +4051,42 @@ async def admin_messages_update(
 
     await db.flush()
     return _redirect(request, "/admin/messages", "Audio message updated successfully.")
+
+
+@router.post("/messages/{sermon_id}/redistribute", name="admin_messages_redistribute")
+async def admin_messages_redistribute(sermon_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    admin = await _get_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+
+    from app.core.jobs import enqueue
+    from app.core.telegram import TelegramDistributor
+    from app.models.sermon import Sermon
+    from app.tasks import distribute_audio_task
+
+    sermon = (await db.execute(select(Sermon).where(Sermon.id == sermon_id))).scalar_one_or_none()
+    if not sermon:
+        return _redirect(request, "/admin/messages", "Message not found.", "error")
+    if _foreign(admin, sermon.branch_id):
+        return _redirect(request, "/admin/messages", "You can only manage records of your own branch.", "error")
+    if not await TelegramDistributor(sermon.branch_id).configured():
+        return _redirect(request, "/admin/messages", "This church has no Telegram bot and channel saved yet (see Settings).", "error")
+
+    status = dict(sermon.distribution_status or {})
+    status["telegram"] = {"state": "queued", "updated_at": datetime.now(timezone.utc).isoformat()}
+    sermon.distribution_status = status
+    targets = list(sermon.platform_targets or [])
+    if "telegram" not in targets:
+        sermon.platform_targets = targets + ["telegram"]
+    await db.commit()
+    # Only chain a transcription if none has run or is running already.
+    transcribe = sermon.transcription_status in (None, "", "none", "failed")
+    if not await enqueue(distribute_audio_task, sermon_id, transcribe):
+        status["telegram"] = {"state": "failed", "error": "the background worker is unavailable; try again shortly",
+                              "updated_at": datetime.now(timezone.utc).isoformat()}
+        sermon.distribution_status = dict(status)
+        return _redirect(request, "/admin/messages", "The background worker is unavailable. Try again shortly.", "error")
+    return _redirect(request, "/admin/messages", f"“{sermon.title}” is being sent to Telegram again.")
 
 
 @router.post("/messages/{sermon_id}/destroy", name="admin_messages_destroy")

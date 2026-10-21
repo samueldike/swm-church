@@ -10,13 +10,28 @@ Against a local server we hand files over by absolute path rather than
 streaming the bytes through this process, so a 2GB sermon never lands in RAM.
 """
 
+import asyncio
+import json
 import os
+import shutil
+import tempfile
 from typing import Any
 
 import httpx
 
 from app.config import settings as app_settings
 from app.database import async_session
+
+CAPTION_LIMIT = 1024  # Bot API rejects longer audio captions outright
+
+
+class TelegramError(Exception):
+    """Telegram refused or could not be reached. ``transient`` errors are worth retrying."""
+
+    def __init__(self, message: str, *, transient: bool, retry_after: int | None = None):
+        self.transient = transient
+        self.retry_after = retry_after
+        super().__init__(message)
 
 
 class TelegramUploadTooLarge(Exception):
@@ -29,6 +44,54 @@ class TelegramUploadTooLarge(Exception):
             f"{size_bytes / 1048576:.1f}MB exceeds the "
             f"{limit_bytes // 1048576}MB Telegram upload limit"
         )
+
+
+# Speech stays clear down to 32kbps mono; below 48kbps MP3 needs the 22.05kHz (MPEG-2) rates.
+_SHRINK_KBPS = (96, 64, 48, 40, 32, 24)
+
+
+def _duration_seconds(path: str) -> float | None:
+    import subprocess
+
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", path],
+        capture_output=True, text=True, timeout=120,
+    )
+    try:
+        return float(json.loads(out.stdout)["format"]["duration"])
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+async def shrink_audio(src: str, max_bytes: int) -> str | None:
+    """Re-encode ``src`` as a mono MP3 that fits under ``max_bytes``.
+
+    Returns the path of a temporary file under the media root (the caller deletes it), or
+    ``None`` when ffmpeg is missing, the file is unreadable, or no speech-quality bitrate fits.
+    """
+    if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
+        return None
+    duration = await asyncio.to_thread(_duration_seconds, src)
+    if not duration:
+        return None
+    from app.core.media import media_subdir
+
+    budget = max_bytes * 0.95  # headroom for ID3 tags and frame padding
+    for kbps in _SHRINK_KBPS:
+        if kbps * 1000 / 8 * duration > budget:
+            continue
+        fd, out = tempfile.mkstemp(suffix=".mp3", dir=media_subdir("tmp"))
+        os.close(fd)
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-v", "error", "-i", src, "-vn", "-ac", "1",
+            "-ar", "44100" if kbps >= 48 else "22050", "-b:a", f"{kbps}k", out,
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.wait()
+        if proc.returncode == 0 and 0 < os.path.getsize(out) <= max_bytes:
+            return out
+        os.unlink(out)
+    return None
 
 
 class TelegramDistributor:
@@ -108,8 +171,9 @@ class TelegramDistributor:
         caption: str = "",
         timeout: float = 1800.0,
     ) -> dict[str, Any] | None:
-        """Send an on-disk audio file. Returns ``None`` when unconfigured or rejected.
+        """Send an on-disk audio file. Returns ``None`` only when no bot/channel is saved.
 
+        Raises ``TelegramError`` (with Telegram's own reason) when the upload fails.
         ``file_path`` must be absolute and, in local mode, readable by the
         telegram-bot-api container at the exact same path.
         """
@@ -122,29 +186,38 @@ class TelegramDistributor:
             raise TelegramUploadTooLarge(size, self.max_upload_bytes)
 
         url = self._method_url(token, "sendAudio")
+        if len(caption) > CAPTION_LIMIT:
+            caption = caption[: CAPTION_LIMIT - 1].rstrip() + "…"
         data = {"chat_id": chat_id, "title": title, "caption": caption}
 
         # A --local server reads the file off disk itself, so we pass a URI and
         # never stream the payload. Otherwise httpx streams it from the handle.
-        if self.is_local:
-            data["audio"] = "file://" + file_path.replace("\\", "/")
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(url, data=data)
-        else:
-            with open(file_path, "rb") as fh:
+        try:
+            if self.is_local:
+                data["audio"] = "file://" + file_path.replace("\\", "/")
                 async with httpx.AsyncClient(timeout=timeout) as client:
-                    response = await client.post(
-                        url,
-                        data=data,
-                        files={"audio": (filename, fh, "audio/mpeg")},
-                    )
+                    response = await client.post(url, data=data)
+            else:
+                with open(file_path, "rb") as fh:
+                    async with httpx.AsyncClient(timeout=timeout) as client:
+                        response = await client.post(
+                            url,
+                            data=data,
+                            files={"audio": (filename, fh, "audio/mpeg")},
+                        )
+        except httpx.HTTPError as exc:
+            raise TelegramError(f"could not reach Telegram ({type(exc).__name__})", transient=True) from exc
 
-        if response.status_code != 200:
-            return None
-
-        payload = response.json()
-        if not payload.get("ok"):
-            return None
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {}
+        if response.status_code != 200 or not payload.get("ok"):
+            reason = payload.get("description") or f"HTTP {response.status_code}"
+            retry_after = (payload.get("parameters") or {}).get("retry_after")
+            # 429 = flood control, 5xx = Telegram's side: both clear up by themselves.
+            transient = response.status_code == 429 or response.status_code >= 500
+            raise TelegramError(f"Telegram: {reason}", transient=transient, retry_after=retry_after)
 
         message = payload["result"]
         audio = message.get("audio", {}) or message.get("document", {})

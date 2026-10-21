@@ -10,7 +10,7 @@ import httpx
 from app.celery_app import celery_app
 from app.database import async_session
 from app.core.media import to_abspath
-from app.core.telegram import TelegramDistributor, TelegramUploadTooLarge
+from app.core.telegram import TelegramDistributor, TelegramError, TelegramUploadTooLarge, shrink_audio
 
 logger = logging.getLogger(__name__)
 
@@ -39,33 +39,47 @@ async def _set_distribution(sermon_id: int, platform: str, **fields) -> None:
 
 # ─── Distribution ──────────────────────────────────────────────────
 
-@celery_app.task(bind=True, max_retries=2, default_retry_delay=120)
+# Transient failures (network, Telegram 429/5xx) retry on this schedule (seconds), ~2.5h in all.
+_DISTRIBUTE_BACKOFF = (30, 120, 600, 1800, 3600, 3600)
+
+
+@celery_app.task(bind=True, max_retries=len(_DISTRIBUTE_BACKOFF))
 def distribute_audio_task(self, sermon_id: int, transcribe: bool = True):
     """Upload a sermon's audio to Telegram, then queue transcription.
 
     Runs out-of-band because a multi-hundred-megabyte upload would otherwise
-    hold the admin HTTP request open past nginx's proxy timeout.
+    hold the admin HTTP request open past nginx's proxy timeout. Failures that
+    clear up by themselves are retried; the rest record Telegram's own reason.
     """
     import asyncio
 
-    asyncio.run(_distribute(sermon_id, transcribe))
+    final = self.request.retries >= self.max_retries
+    try:
+        asyncio.run(_distribute(sermon_id, transcribe, final=final))
+    except TelegramError as exc:
+        if final or not exc.transient:
+            return
+        delay = max(exc.retry_after or 0, _DISTRIBUTE_BACKOFF[self.request.retries])
+        raise self.retry(exc=exc, countdown=delay)
 
 
-async def _distribute(sermon_id: int, transcribe: bool) -> None:
+async def _distribute(sermon_id: int, transcribe: bool, final: bool = True) -> None:
     async with async_session() as db:
         sermon = await _load_sermon(db, sermon_id)
         if not sermon:
             logger.error("Sermon %d not found for distribution", sermon_id)
             return
-        audio_path = to_abspath(sermon.audio_file_path)
+        stored_path = sermon.audio_file_path
+        audio_path = to_abspath(stored_path)
         filename = sermon.original_file_name or "sermon.mp3"
         title = sermon.title
         caption = sermon.caption or sermon.title
         branch_id = sermon.branch_id
 
     if not audio_path:
-        logger.error("Sermon %d has no readable audio file on disk", sermon_id)
-        await _set_distribution(sermon_id, "telegram", state="failed", error="audio file missing")
+        logger.error("Sermon %d has no readable audio file on disk (%s)", sermon_id, stored_path)
+        await _set_distribution(sermon_id, "telegram", state="failed",
+                                error="the audio file is not on the server's disk; upload it again")
         return
 
     tg = TelegramDistributor(branch_id)      # the message's own branch bot; HQ's only for HQ messages
@@ -73,26 +87,40 @@ async def _distribute(sermon_id: int, transcribe: bool) -> None:
         await _set_distribution(sermon_id, "telegram", state="skipped", error="this branch has no Telegram bot/channel saved")
         return
 
-    await _set_distribution(sermon_id, "telegram", state="uploading")
+    await _set_distribution(sermon_id, "telegram", state="uploading", error=None)
+
+    send_path, shrunk = audio_path, None
+    if os.path.getsize(audio_path) > tg.max_upload_bytes:
+        # The website keeps the original; Telegram gets a smaller mono copy that fits its cap.
+        shrunk = await shrink_audio(audio_path, tg.max_upload_bytes)
+        if not shrunk:
+            exc = TelegramUploadTooLarge(os.path.getsize(audio_path), tg.max_upload_bytes)
+            logger.error("Sermon %d too large for Telegram and could not be compressed: %s", sermon_id, exc)
+            await _set_distribution(sermon_id, "telegram", state="failed", error=f"{exc}, and it could not be compressed to fit")
+            return
+        send_path = shrunk
+        logger.info("Sermon %d compressed for Telegram: %d -> %d bytes", sermon_id,
+                    os.path.getsize(audio_path), os.path.getsize(shrunk))
 
     try:
         result = await tg.send_audio(
-            file_path=audio_path,
-            filename=filename,
+            file_path=send_path,
+            filename=os.path.splitext(filename)[0] + ".mp3" if shrunk else filename,
             title=title,
             caption=caption,
         )
-    except TelegramUploadTooLarge as exc:
-        logger.error("Sermon %d too large for Telegram: %s", sermon_id, exc)
-        await _set_distribution(sermon_id, "telegram", state="failed", error=str(exc))
-        return
-    except Exception as exc:
-        logger.exception("Telegram upload failed for sermon %d", sermon_id)
-        await _set_distribution(sermon_id, "telegram", state="failed", error=str(exc))
+    except TelegramError as exc:
+        retrying = exc.transient and not final
+        logger.warning("Telegram upload for sermon %d failed (%s): %s", sermon_id,
+                       "will retry" if retrying else "giving up", exc)
+        await _set_distribution(sermon_id, "telegram", state="retrying" if retrying else "failed", error=str(exc))
         raise
+    finally:
+        if shrunk:
+            os.unlink(shrunk)
 
     if not result:
-        await _set_distribution(sermon_id, "telegram", state="failed", error="rejected by Telegram")
+        await _set_distribution(sermon_id, "telegram", state="skipped", error="this branch has no Telegram bot/channel saved")
         return
 
     async with async_session() as db:
@@ -103,7 +131,7 @@ async def _distribute(sermon_id: int, transcribe: bool) -> None:
             await db.commit()
 
     await _set_distribution(
-        sermon_id, "telegram", state="sent", message_id=result.get("message_id")
+        sermon_id, "telegram", state="sent", message_id=result.get("message_id"), error=None
     )
     logger.info("Sermon %d distributed to Telegram", sermon_id)
 

@@ -51,8 +51,12 @@
                 <td data-label="Distribution">
                   <div class="flex flex-wrap gap-1.5 justify-end md:justify-start">
                     {% if 'telegram' in targets %}
-                      {% set st = (dist.get('telegram') or {}).get('state') %}
+                      {% set tg = dist.get('telegram') or {} %}
+                      {% set st = tg.get('state') %}
                       {{ badge('Telegram: ' ~ ((st or 'queued')|capitalize), 'ok' if st == 'sent' else ('bad' if st == 'failed' else 'warn')) }}
+                      {% if st in ('failed', 'retrying', 'skipped') and tg.get('error') %}
+                        <p class="basis-full text-[11px] {{ 'text-bad' if st == 'failed' else 'text-ink-3' }}">{{ tg.get('error') }}{% if st == 'retrying' %} · retrying automatically{% endif %}</p>
+                      {% endif %}
                     {% else %}
                       <span class="text-[11px] text-ink-3">Website only</span>
                     {% endif %}
@@ -62,6 +66,12 @@
                 <td data-label="Status">{{ badge((sm.status or 'draft')|capitalize, 'ok' if sm.status == 'published' else ('neut' if sm.status == 'archived' else 'warn')) }}</td>
                 <td data-label="Actions" class="text-right whitespace-nowrap">
                   {% if sm.media_url and sm.status == 'published' %}<a href="{{ sm.media_url }}" target="_blank" rel="noopener" class="icon-btn" aria-label="Play {{ sm.title }}" data-turbo="false"><i class="ri-play-line"></i></a>{% endif %}
+                  {% if 'telegram' in targets and (dist.get('telegram') or {}).get('state') in ('failed', 'skipped') %}
+                  <form method="POST" action="{{ url_for('admin_messages_redistribute', sermon_id=sm.id) }}" class="inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="icon-btn" aria-label="Send “{{ sm.title }}” to Telegram again" title="Send to Telegram again"><i class="ri-send-plane-line"></i></button>
+                  </form>
+                  {% endif %}
                   <a href="{{ url_for('admin_messages_edit_page', sermon_id=sm.id) }}" class="icon-btn" aria-label="Edit {{ sm.title }}"><i class="ri-edit-line"></i></a>
                   <form method="POST" action="{{ url_for('admin_messages_destroy', sermon_id=sm.id) }}" class="inline"
                         data-confirm="Delete “{{ sm.title }}”? The audio record will be removed." data-confirm-title="Delete Message" data-confirm-accept="Delete">
