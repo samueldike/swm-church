@@ -183,3 +183,31 @@ def test_nothing_is_written_outside_docker(monkeypatch):
 
     monkeypatch.setattr(telegram_local.app_settings, "TELEGRAM_BOT_API_CONF_DIR", "")
     assert telegram_local.sync_credentials({"telegram_api_id": "1234567", "telegram_api_hash": "0" * 32}) is False
+
+
+# ─── Transcription queueing ────────────────────────────────────────
+
+def test_transcriptions_run_on_their_own_queue():
+    from app.celery_app import celery_app
+
+    assert celery_app.conf.task_routes["app.tasks.transcribe_audio_task"]["queue"] == "transcription"
+
+
+def test_long_jobs_are_not_handed_out_twice():
+    from app.celery_app import celery_app
+
+    # acks_late + Redis: a task still running past the visibility timeout is redelivered
+    assert celery_app.conf.broker_transport_options["visibility_timeout"] >= 6 * 3600
+
+
+def test_telegram_send_does_not_chain_a_transcription_by_default(monkeypatch):
+    from app import tasks
+
+    seen = {}
+
+    async def record(sermon_id, transcribe, final=True):
+        seen["transcribe"] = transcribe
+
+    monkeypatch.setattr(tasks, "_distribute", record)
+    tasks.distribute_audio_task.apply(args=(1,))
+    assert seen["transcribe"] is False      # uploads queue their own transcription, independent of Telegram

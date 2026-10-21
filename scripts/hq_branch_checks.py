@@ -172,15 +172,19 @@ with TestClient(app, raise_server_exceptions=False, base_url="https://testserver
     # distribution routing when a message is uploaded
     sent = []
     import app.core.jobs as jobs
+    transcribing = []
     async def _fake_enqueue(task, sermon_id, *a):
         if task.name.endswith("distribute_audio_task"):
             sent.append(sermon_id)
+        if task.name.endswith("transcribe_audio_task"):
+            transcribing.append(sermon_id)
         return True
     jobs.enqueue = _fake_enqueue
     audio = ("m.mp3", b"ID3" + b"\0" * 2000, "audio/mpeg")
     r = A.post("/admin/messages", data={"csrf_token": T(A), "title": "Branch A sermon", "platform_targets": "telegram"}, files={"audio_file": audio}, follow_redirects=False)
     row = Q("select id, branch_id, status from sermons where title='Branch A sermon'")
     rec("branch A upload: owned by A, queued for A's own bot", row and row[0][1] == A_id and row[0][0] in sent, str(row))
+    rec("upload queues its transcription straight away", row and row[0][0] in transcribing, str(transcribing))
     n_before = len(sent)
     r = B.post("/admin/messages", data={"csrf_token": T(B), "title": "Branch B sermon", "platform_targets": "telegram"}, files={"audio_file": audio}, follow_redirects=False)
     rowb = Q("select id, branch_id, platform_targets from sermons where title='Branch B sermon'")

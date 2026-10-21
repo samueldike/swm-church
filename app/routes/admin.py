@@ -2406,26 +2406,33 @@ async def admin_messages_store(
     db.add(sermon)
     await db.flush()
 
-    # Telegram upload happens in the worker: at these file sizes it would
-    # otherwise outlive the request and hit nginx's proxy timeout.
+    # Transcription and the Telegram upload both run in the background (at these file sizes they
+    # would outlive the request). Transcription reads the local file, so it never waits on Telegram.
+    from app.core.jobs import enqueue
+    from app.tasks import distribute_audio_task, transcribe_audio_task
+
+    has_audio = bool(sermon.audio_file_path)
+    if has_audio:
+        sermon.transcription_status = "queued"
+    sermon_id = sermon.id
+    await db.commit()
+    notes, worker_down = [], False
+    if has_audio:
+        if await enqueue(transcribe_audio_task, sermon_id):
+            notes.append("Transcription has started")
+        else:
+            worker_down = True
+            await _set_transcription_failed(db, sermon_id, "The background worker was unavailable when this was uploaded.")
     if queue_distribution:
-        sermon_id = sermon.id
-        await db.commit()
-        from app.core.jobs import enqueue
-        from app.tasks import distribute_audio_task
-
-        if not await enqueue(distribute_audio_task, sermon_id):
-            return _redirect(
-                request, "/admin/messages",
-                "Audio message created, but the background worker is unavailable, so Telegram distribution has not started.",
-                "error",
-            )
-        return _redirect(
-            request, "/admin/messages",
-            "Audio message created. Telegram distribution is running in the background.",
-        )
-
-    return _redirect(request, "/admin/messages", "Audio message created successfully." + dist_notice)
+        if await enqueue(distribute_audio_task, sermon_id):
+            notes.append("Telegram distribution is running")
+        else:
+            worker_down = True
+    if worker_down:
+        return _redirect(request, "/admin/messages", "Audio message created, but the background worker is unavailable: "
+                         "use Retry on the message once it is running.", "error")
+    tail = (" " + " and ".join(notes) + " in the background.") if notes else ""
+    return _redirect(request, "/admin/messages", "Audio message created." + tail + dist_notice)
 
 
 # ─── Inquiries ─────────────────────────────────────────────────────
@@ -4191,9 +4198,7 @@ async def admin_messages_redistribute(sermon_id: int, request: Request, db: Asyn
     if "telegram" not in targets:
         sermon.platform_targets = targets + ["telegram"]
     await db.commit()
-    # Only chain a transcription if none has run or is running already.
-    transcribe = sermon.transcription_status in (None, "", "none", "failed")
-    if not await enqueue(distribute_audio_task, sermon_id, transcribe):
+    if not await enqueue(distribute_audio_task, sermon_id):
         status["telegram"] = {"state": "failed", "error": "the background worker is unavailable; try again shortly",
                               "updated_at": datetime.now(timezone.utc).isoformat()}
         sermon.distribution_status = dict(status)
@@ -4424,6 +4429,53 @@ async def admin_telegram_archive_zip(request: Request, db: AsyncSession = Depend
 
 # ─── Transcriptions ────────────────────────────────────────────────
 
+async def _set_transcription_failed(db: AsyncSession, sermon_id: int, reason: str) -> None:
+    from app.models.sermon import Sermon
+
+    sermon = await db.get(Sermon, sermon_id)
+    if sermon:
+        sermon.transcription_status, sermon.transcription_error = "failed", reason[:1000]
+
+
+def _transcribable(sermon) -> bool:
+    return bool(sermon.audio_file_path or sermon.telegram_file_id)
+
+
+@router.post("/transcriptions/start-waiting", name="admin_transcriptions_start_waiting")
+async def admin_transcriptions_start_waiting(request: Request, db: AsyncSession = Depends(get_db)):
+    """Queue every message with audio that was never transcribed (or failed). The transcriber
+    works through them one at a time, newest first, so the website stays responsive."""
+    admin = await _get_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+    from app.core.jobs import enqueue
+    from app.models.sermon import Sermon
+    from app.tasks import transcribe_audio_task
+
+    q = select(Sermon).where(or_(Sermon.transcription_status.in_(("none", "failed", "")), Sermon.transcription_status.is_(None)),
+                             or_(and_(Sermon.audio_file_path.isnot(None), Sermon.audio_file_path != ""),
+                                 and_(Sermon.telegram_file_id.isnot(None), Sermon.telegram_file_id != "")))
+    if admin.role != "super_admin" and admin.branch_id:
+        q = q.where(Sermon.branch_id == admin.branch_id)
+    waiting = list((await db.execute(q.order_by(Sermon.created_at.desc()))).scalars().all())
+    if not waiting:
+        return _redirect(request, "/admin/transcriptions", "Nothing is waiting: every message with audio has been transcribed or is in the queue.", "info")
+    for s in waiting:
+        s.transcription_status, s.transcription_error = "queued", None
+    await db.commit()
+    queued = 0
+    for s in waiting:
+        if await enqueue(transcribe_audio_task, s.id):
+            queued += 1
+        else:
+            await _set_transcription_failed(db, s.id, "The background worker was unavailable.")
+    if not queued:
+        return _redirect(request, "/admin/transcriptions", "The background worker is unavailable. Try again shortly.", "error")
+    return _redirect(request, "/admin/transcriptions",
+                     f"{queued} message{'s' if queued != 1 else ''} queued. They are transcribed one at a time, newest first; "
+                     "a one-hour sermon can take about an hour.")
+
+
 @router.get("/transcriptions", name="admin_transcriptions")
 async def admin_transcriptions(request: Request, db: AsyncSession = Depends(get_db)):
     admin = await _get_admin(request)
@@ -4514,6 +4566,7 @@ async def admin_transcriptions_retranscribe(sermon_id: int, request: Request, db
         return _redirect(request, "/admin/transcriptions", "No audio file found for this sermon.", "error")
 
     sermon.transcription_status = "queued"
+    sermon.transcription_error = None
     sermon.transcript = None
     await db.flush()
 

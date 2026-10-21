@@ -5,11 +5,15 @@
 {% block topbar_subtitle %}Speech-to-text for sermon audio{% endblock %}
 {% block topbar_icon %}ri-file-text-line{% endblock %}
 
+{% set ns = namespace(waiting=0) %}
+{% for sm in sermons %}{% if (sm.transcription_status or 'none') in ['none', 'failed'] and (sm.audio_file_path or sm.telegram_file_id) %}{% set ns.waiting = ns.waiting + 1 %}{% endif %}{% endfor %}
 {% block page_header %}
-  {{ page_header("Transcriptions", "Automatic transcripts for every audio message",
+  {{ page_header("Transcriptions", "Every uploaded message is transcribed automatically, one at a time, in the background.",
+      actions=(('<form method="POST" action="' ~ url_for('admin_transcriptions_start_waiting') ~ '" data-turbo="false"><input type="hidden" name="csrf_token" value="' ~ csrf_token ~ '"><button type="submit" class="btn btn-primary"><i class="ri-play-circle-line"></i>Transcribe ' ~ ns.waiting ~ ' waiting</button></form>') if ns.waiting else ''),
       audit=[('Completed', sermons|selectattr('transcription_status', 'equalto', 'completed')|list|length),
              ('In progress', (sermons|selectattr('transcription_status', 'in', ['queued', 'processing'])|list|length)),
-             ('Failed', sermons|selectattr('transcription_status', 'equalto', 'failed')|list|length)]) }}
+             ('Failed', sermons|selectattr('transcription_status', 'equalto', 'failed')|list|length),
+             ('Waiting', ns.waiting)]) }}
 {% endblock %}
 
 {% block content %}
@@ -27,8 +31,13 @@
                 <p class="text-[11px] text-ink-3">{{ sm.preacher or '' }}</p>
               </td>
               <td data-label="Status">
-                {{ badge({'completed': 'Completed', 'processing': 'Processing', 'queued': 'Queued', 'failed': 'Failed', 'none': 'Not started'}.get(ts, ts|capitalize),
-                         'ok' if ts == 'completed' else ('bad' if ts == 'failed' else ('warn' if ts in ['processing', 'queued'] else 'neut'))) }}
+                {% if ts in ['none', 'failed'] and not (sm.audio_file_path or sm.telegram_file_id) %}
+                  {{ badge('No audio', 'neut') }}
+                {% else %}
+                  {{ badge({'completed': 'Completed', 'processing': 'Transcribing…', 'queued': 'Queued', 'failed': 'Failed', 'none': 'Not started'}.get(ts, ts|capitalize),
+                           'ok' if ts == 'completed' else ('bad' if ts == 'failed' else ('warn' if ts in ['processing', 'queued'] else 'neut'))) }}
+                  {% if ts == 'failed' and sm.transcription_error %}<p class="text-[11px] text-bad mt-1 max-w-xs">{{ sm.transcription_error }}</p>{% endif %}
+                {% endif %}
               </td>
               <td data-label="Length" class="font-mono text-xs text-ink-2">{{ (sm.transcript.split()|length) ~ ' words' if sm.transcript else '—' }}</td>
               <td data-label="Actions" class="text-right">

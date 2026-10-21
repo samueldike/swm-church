@@ -44,7 +44,8 @@ class Sermon(Base):
     series: Mapped[str | None] = mapped_column(String(150), index=True)
     scripture: Mapped[str | None] = mapped_column(String(150))
     transcript_public: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
-    transcription_status: Mapped[str] = mapped_column(String(20), default="none")
+    transcription_status: Mapped[str] = mapped_column(String(20), default="none")   # none | queued | processing | completed | failed
+    transcription_error: Mapped[str | None] = mapped_column(Text)                    # why the last attempt failed
     transcription_started_at: Mapped[datetime | None] = mapped_column()
     transcription_completed_at: Mapped[datetime | None] = mapped_column()
 

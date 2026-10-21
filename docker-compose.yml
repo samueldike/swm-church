@@ -41,6 +41,24 @@ services:
     networks:
       - swm-net
 
+  # Speech-to-text (Whisper on the CPU, ~3GB per loaded model): its own queue, ONE job at a
+  # time, memory-capped, so transcriptions never starve Telegram sends or the website.
+  transcriber:
+    build: .
+    container_name: swm-transcriber
+    restart: unless-stopped
+    env_file: .env
+    command: celery -A app.celery_app worker -Q transcription -c 1 -n transcriber@%h -l info
+    mem_limit: 5g
+    volumes:
+      - media_files:/app/media
+      - telegram_archive:/app/telegram-archive
+      - whisper_models:/root/.cache/huggingface    # the model is downloaded once, not on every rebuild
+    depends_on:
+      - app
+    networks:
+      - swm-net
+
   beat:
     build: .
     container_name: swm-beat
@@ -139,6 +157,7 @@ volumes:
   telegram_bot_api_data:
   telegram_bot_api_conf:
   telegram_archive:
+  whisper_models:
   static_files:
   media_files:
   certbot_www:

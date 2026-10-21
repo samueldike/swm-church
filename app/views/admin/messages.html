@@ -63,7 +63,17 @@
                     {% if sm.status == 'published' %}{{ badge('Podcast feed', 'gold') }}{% endif %}
                   </div>
                 </td>
-                <td data-label="Status">{{ badge((sm.status or 'draft')|capitalize, 'ok' if sm.status == 'published' else ('neut' if sm.status == 'archived' else 'warn')) }}</td>
+                <td data-label="Status">
+                  {{ badge((sm.status or 'draft')|capitalize, 'ok' if sm.status == 'published' else ('neut' if sm.status == 'archived' else 'warn')) }}
+                  {% set ts = sm.transcription_status or 'none' %}
+                  {% if sm.audio_file_path or sm.telegram_file_id %}
+                    <a href="{{ url_for('admin_transcriptions_show', sermon_id=sm.id) }}" class="mt-1 flex items-center gap-1 text-[11px] no-underline {{ 'text-ok' if ts == 'completed' else ('text-bad' if ts == 'failed' else ('text-warn' if ts in ['queued', 'processing'] else 'text-ink-3')) }}"
+                       title="{{ sm.transcription_error if ts == 'failed' and sm.transcription_error else 'Open the transcript' }}">
+                      <i class="{{ {'completed': 'ri-file-text-line', 'processing': 'ri-loader-4-line animate-spin', 'queued': 'ri-time-line', 'failed': 'ri-error-warning-line'}.get(ts, 'ri-file-unknow-line') }}"></i>
+                      Transcript: {{ {'completed': 'ready', 'processing': 'transcribing…', 'queued': 'queued', 'failed': 'failed', 'none': 'not started'}.get(ts, ts) }}
+                    </a>
+                  {% endif %}
+                </td>
                 <td data-label="Actions" class="text-right whitespace-nowrap">
                   {% if sm.media_url and sm.status == 'published' %}<a href="{{ sm.media_url }}" target="_blank" rel="noopener" class="icon-btn" aria-label="Play {{ sm.title }}" data-turbo="false"><i class="ri-play-line"></i></a>{% endif %}
                   {% if 'telegram' in targets and (dist.get('telegram') or {}).get('state') in ('failed', 'skipped') %}

@@ -77,6 +77,7 @@ _ADDED_COLUMNS = [
     ("sermons", "series", "VARCHAR(150)"),
     ("sermons", "scripture", "VARCHAR(150)"),
     ("sermons", "transcript_public", "BOOLEAN DEFAULT FALSE"),
+    ("sermons", "transcription_error", "TEXT"),
     ("newsletter_subscribers", "token", "VARCHAR(64)"),
     ("newsletter_subscribers", "source", "VARCHAR(30)"),
     ("prayer_requests", "notified_at", "TIMESTAMP"),

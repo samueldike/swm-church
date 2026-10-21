@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -13,6 +13,26 @@ from app.core.media import to_abspath
 from app.core.telegram import TelegramDistributor, TelegramError
 
 logger = logging.getLogger(__name__)
+
+
+def _run(coro):
+    """Run a task's coroutine on a fresh event loop with a fresh DB pool.
+
+    Each Celery task gets a new loop from asyncio.run, but the engine's pooled asyncpg
+    connections belong to the loop that opened them: reusing one in a later task fails with
+    "... attached to a different loop". Disposing the pool when the task ends prevents that.
+    """
+    import asyncio
+
+    from app.database import engine
+
+    async def wrapped():
+        try:
+            return await coro
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(wrapped())
 
 
 async def _load_sermon(db, sermon_id: int):
@@ -44,8 +64,10 @@ _DISTRIBUTE_BACKOFF = (30, 120, 600, 1800, 3600, 3600)
 
 
 @celery_app.task(bind=True, max_retries=len(_DISTRIBUTE_BACKOFF))
-def distribute_audio_task(self, sermon_id: int, transcribe: bool = True):
-    """Upload a sermon's audio to Telegram, then queue transcription.
+def distribute_audio_task(self, sermon_id: int, transcribe: bool = False):
+    """Upload a sermon's audio to Telegram (and, only if ``transcribe``, queue a transcription after).
+
+    Uploads queue their transcription themselves, straight away and independent of Telegram.
 
     Runs out-of-band because a multi-hundred-megabyte upload would otherwise
     hold the admin HTTP request open past nginx's proxy timeout. Failures that
@@ -55,7 +77,7 @@ def distribute_audio_task(self, sermon_id: int, transcribe: bool = True):
 
     final = self.request.retries >= self.max_retries
     try:
-        asyncio.run(_distribute(sermon_id, transcribe, final=final))
+        _run(_distribute(sermon_id, transcribe, final=final))
     except TelegramError as exc:
         if final or not exc.transient:
             return
@@ -144,7 +166,7 @@ def telegram_archive_task(self, action: str, admin_id: int | None = None, limit:
 
     from app.core.telegram_archive import run
 
-    asyncio.run(run(action, admin_id, limit))
+    _run(run(action, admin_id, limit))
 
 
 # ─── Transcription ─────────────────────────────────────────────────
@@ -153,7 +175,7 @@ def telegram_archive_task(self, action: str, admin_id: int | None = None, limit:
 def transcribe_audio_task(self, sermon_id: int, telegram_file_id: str | None = None):
     import asyncio
 
-    asyncio.run(_transcribe(sermon_id, telegram_file_id))
+    _run(_transcribe(sermon_id, telegram_file_id))
 
 
 async def _resolve_audio(sermon_id: int, stored_path: str | None, telegram_file_id: str | None, branch_id: int | None = None):
@@ -189,12 +211,13 @@ async def _resolve_audio(sermon_id: int, stored_path: str | None, telegram_file_
     return tmp_path, True
 
 
-async def _mark_failed(sermon_id: int) -> None:
+async def _mark_failed(sermon_id: int, reason: str) -> None:
     try:
         async with async_session() as db:
             sermon = await _load_sermon(db, sermon_id)
             if sermon:
                 sermon.transcription_status = "failed"
+                sermon.transcription_error = reason[:1000]
                 await db.commit()
     except Exception:
         logger.exception("Could not mark sermon %d transcription failed", sermon_id)
@@ -209,12 +232,18 @@ async def _transcribe(sermon_id: int, telegram_file_id: str | None):
             logger.error("Sermon %d not found for transcription", sermon_id)
             return
 
+        if sermon.transcription_status == "processing" and sermon.transcription_started_at and                 datetime.utcnow() - sermon.transcription_started_at < timedelta(hours=6):
+            logger.info("Sermon %d is already being transcribed; skipping the duplicate", sermon_id)
+            return
         stored_path = sermon.audio_file_path
         telegram_file_id = telegram_file_id or sermon.telegram_file_id
         branch_id = sermon.branch_id
 
         sermon.transcription_status = "processing"
-        sermon.transcription_started_at = datetime.now(timezone.utc)
+        sermon.transcription_error = None
+        # Naive UTC: these are TIMESTAMP WITHOUT TIME ZONE columns. An aware value made asyncpg
+        # reject this write, so every transcription died here and stayed "Not started".
+        sermon.transcription_started_at = datetime.utcnow()
         await db.commit()
 
     audio_path = None
@@ -225,7 +254,7 @@ async def _transcribe(sermon_id: int, telegram_file_id: str | None):
         logger.exception("Could not fetch audio for sermon %d", sermon_id)
 
     if not audio_path:
-        await _mark_failed(sermon_id)
+        await _mark_failed(sermon_id, "The audio file is not on the server and could not be fetched from Telegram.")
         logger.error("No audio source available for sermon %d", sermon_id)
         return
 
@@ -241,7 +270,7 @@ async def _transcribe(sermon_id: int, telegram_file_id: str | None):
             if sermon:
                 sermon.transcript = transcript
                 sermon.transcription_status = "completed"
-                sermon.transcription_completed_at = datetime.now(timezone.utc)
+                sermon.transcription_completed_at = datetime.utcnow()
                 await db.commit()
                 logger.info(
                     "Transcription completed for sermon %d (%d chars)",
@@ -251,7 +280,7 @@ async def _transcribe(sermon_id: int, telegram_file_id: str | None):
 
     except Exception as exc:
         logger.exception("Transcription failed for sermon %d", sermon_id)
-        await _mark_failed(sermon_id)
+        await _mark_failed(sermon_id, f"{type(exc).__name__}: {exc}")
         raise exc
 
     finally:
@@ -270,7 +299,7 @@ def generate_topics_task(self, publication_id: int):
 
     from app.core.publications import run_topics
 
-    asyncio.run(run_topics(publication_id))
+    _run(run_topics(publication_id))
 
 
 @celery_app.task(bind=True, max_retries=0)
@@ -279,4 +308,4 @@ def generate_contents_task(self, publication_id: int):
 
     from app.core.publications import run_contents
 
-    asyncio.run(run_contents(publication_id))
+    _run(run_contents(publication_id))
