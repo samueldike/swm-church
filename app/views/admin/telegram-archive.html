@@ -37,7 +37,17 @@
       <h2 class="text-[13px] font-semibold text-ink">
         {{ {'scan': 'Finding audio', 'download': 'Downloading', 'import': 'Creating drafts'}.get(job.get('action'), 'Last step') }}
       </h2>
-      <span data-live-state>{% if busy %}{{ badge('Running', 'warn') }}{% elif job.get('state') == 'failed' %}{{ badge('Stopped', 'bad') }}{% elif job.get('state') == 'done' %}{{ badge('Finished', 'ok') }}{% endif %}</span>
+      <span class="flex items-center gap-2" data-live-state>
+        {% if busy %}{{ badge('Pausing…' if job.get('pause_requested') else ('Running · ' ~ ('batch' if job.get('mode') == 'batch' else 'continuous') if job.get('action') == 'download' else 'Running'), 'warn') }}
+        {% elif job.get('state') == 'paused' %}{{ badge('Paused', 'neut') }}
+        {% elif job.get('state') == 'failed' %}{{ badge('Stopped', 'bad') }}{% elif job.get('state') == 'done' %}{{ badge('Finished', 'ok') }}{% endif %}
+        {% if busy and job.get('action') == 'download' and not job.get('pause_requested') %}
+          <form method="POST" action="{{ url_for('admin_telegram_archive_pause') }}" data-turbo="false">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn btn-secondary btn-sm"><i class="ri-pause-line"></i>Pause</button>
+          </form>
+        {% endif %}
+      </span>
     </div>
     {% set pct = ((job.get('bytes_done', 0) / job.get('bytes_total')) * 100) if job.get('bytes_total') else (((job.get('done', 0) / job.get('total')) * 100) if job.get('total') else (100 if job.get('state') == 'done' else 0)) %}
     <div data-live-bar>{{ progress_bar(pct|round(1), 'bad' if job.get('state') == 'failed' else ('ok' if job.get('state') == 'done' else 'gold')) }}</div>
@@ -106,7 +116,7 @@
           <button type="submit" class="btn {{ 'btn-secondary' if total_n else 'btn-primary' }} btn-sm" {{ '' if ready and channel_saved and not busy else 'disabled' }}><i class="ri-search-line"></i>{{ 'Look again for new posts' if total_n else 'Find audio' }}</button>
         </form>
       </div>
-      <p class="text-[12.5px] text-ink-2">Reads the channel from its very first post and lists every audio file. Nothing is downloaded yet. Audio the bot already posted is already on your website and is skipped.</p>
+      <p class="text-[12.5px] text-ink-2">Lists every post with an <b>audio file attached</b> (audio files and voice notes), from the channel's very first post. Telegram does the filtering, so text, photos, videos and other documents are never fetched. Nothing is downloaded yet. Audio the bot already posted is on your website already and is skipped.</p>
       {% if total_n %}
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           <div class="rounded-md border border-line px-3 py-2"><p class="mono-label">Audio found</p><p class="kpi-value text-[20px] mt-1">{{ total_n }}</p></div>
@@ -117,21 +127,44 @@
       {% endif %}
     </li>
 
-    {# 3 · Download #}
-    <li class="panel flex flex-col gap-3">
+    {# 3 · Back up #}
+    {% set usable = (disk_free - disk_margin) if disk_free is not none and disk_free > disk_margin else (0 if disk_free is not none else none) %}
+    {% set downloading = busy and job.get('action') == 'download' %}
+    <li id="backup" class="panel flex flex-col gap-3 scroll-mt-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-[14px] font-semibold text-ink"><span class="font-mono text-ink-3 mr-1.5">3</span>Back up the original files</h2>
-        {% set fits = disk_free is none or to_get_bytes <= disk_free - disk_margin %}
-        <form method="POST" action="{{ url_for('admin_telegram_archive_run') }}" data-turbo="false">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="download">
-          <button type="submit" class="btn btn-primary btn-sm" {{ '' if ready and to_get_n and fits and not busy else 'disabled' }}><i class="ri-download-cloud-2-line"></i>{{ 'Retry ' ~ failed.n ~ ' failed' if failed.n and not found.n else 'Download ' ~ to_get_n ~ ' file' ~ ('' if to_get_n == 1 else 's') }}</button>
-        </form>
+        <span class="text-[12px] text-ink-3">{{ to_get_n }} to go · {{ to_get_bytes|filesizeformat }}{% if usable is not none %} · <span class="{{ 'text-ok' if to_get_bytes <= usable else 'text-warn' }}">{{ usable|filesizeformat }} usable on the server</span>{% endif %}</span>
       </div>
-      <p class="text-[12.5px] text-ink-2">Saves each file exactly as posted, in a private folder on the server that is <b>not</b> public. Each file gets a checksum so you can prove a copy is intact. If it stops (a restart, a network drop), press the button again: it continues where it left off.</p>
-      {% if disk_free is not none %}
-        <p class="text-[12px] {{ 'text-ok' if fits else 'text-bad' }}"><i class="{{ 'ri-hard-drive-2-line' if fits else 'ri-error-warning-line' }}"></i>
-          Needs {{ to_get_bytes|filesizeformat }} · {{ disk_free|filesizeformat }} free on the server{% if not fits %} — not enough room (2 GB is always kept free for the website). Free up space first.{% endif %}</p>
-      {% endif %}
+      <p class="text-[12.5px] text-ink-2">Saves each audio file exactly as posted, oldest first, in a private folder on the server that is <b>not</b> public, with a checksum to prove each copy is intact. Back up in batches to control space, or run it continuously and pause whenever you like. 2 GB is always kept free for the website.</p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <form method="POST" action="{{ url_for('admin_telegram_archive_run') }}" class="rounded-md border border-line p-3.5 flex flex-col gap-2.5" data-turbo="false">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="download"><input type="hidden" name="mode" value="batch">
+          <h3 class="text-[13px] font-semibold text-ink"><i class="ri-stack-line text-ink-3"></i> A batch</h3>
+          <div class="flex flex-wrap items-end gap-2">
+            <div><label for="batch-n" class="field-label">Back up the next</label>
+              <div class="flex items-center gap-2"><input id="batch-n" name="limit" type="number" min="1" max="{{ [to_get_n, 10000]|min if to_get_n else 1 }}" value="{{ [10, to_get_n]|min if to_get_n else 1 }}" required class="field-input field-mono w-24"><span class="text-[12.5px] text-ink-2">files</span></div></div>
+            <button type="submit" class="btn btn-secondary" data-batch-submit {{ '' if ready and to_get_n and not busy else 'disabled' }}><i class="ri-download-2-line"></i>Back up</button>
+          </div>
+          <p class="text-[11.5px] text-ink-3" id="batch-estimate" data-sizes="{{ queue_sizes|tojson }}" data-usable="{{ usable if usable is not none else '' }}" aria-live="polite"></p>
+        </form>
+
+        <div class="rounded-md border border-line p-3.5 flex flex-col gap-2.5">
+          <h3 class="text-[13px] font-semibold text-ink"><i class="ri-repeat-line text-ink-3"></i> Continuous</h3>
+          <p class="text-[11.5px] text-ink-3">Backs up everything left, one file after another. <b>Pause</b> stops after the file in progress; <b>Start</b> picks up where it stopped. It pauses by itself if the server is about to run out of space.</p>
+          {% if downloading %}
+            <form method="POST" action="{{ url_for('admin_telegram_archive_pause') }}" data-turbo="false">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button type="submit" class="btn btn-secondary" {{ 'disabled' if job.get('pause_requested') else '' }}><i class="ri-pause-circle-line"></i>{{ 'Pausing…' if job.get('pause_requested') else 'Pause' }}</button>
+            </form>
+          {% else %}
+            <form method="POST" action="{{ url_for('admin_telegram_archive_run') }}" data-turbo="false">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="download"><input type="hidden" name="mode" value="continuous">
+              <button type="submit" class="btn btn-primary" {{ '' if ready and to_get_n and not busy else 'disabled' }}><i class="ri-play-circle-line"></i>{{ 'Start again' if job.get('state') == 'paused' else 'Start' }}</button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
     </li>
 
     {# 4 · Drafts #}
@@ -194,6 +227,28 @@
 </div>
 
 <script>
+(() => {
+  // "Back up the next N": show what those N files need against the space the server can use.
+  const est = document.getElementById('batch-estimate');
+  const input = document.getElementById('batch-n');
+  const submit = document.querySelector('[data-batch-submit]');
+  if (!est || !input) return;
+  const sizes = JSON.parse(est.dataset.sizes || '[]');
+  const usable = est.dataset.usable === '' ? null : Number(est.dataset.usable);
+  const fmt = (b) => b >= 1e9 ? (b / 1e9).toFixed(2) + ' GB' : (b / 1e6).toFixed(1) + ' MB';
+  const canRun = submit && !submit.disabled;
+  const update = () => {
+    const n = Math.max(0, Math.min(sizes.length, parseInt(input.value, 10) || 0));
+    const need = sizes.slice(0, n).reduce((a, b) => a + b, 0);
+    const fits = usable === null || need <= usable;
+    est.textContent = n ? `These ${n} file${n === 1 ? '' : 's'} need ${fmt(need)}` + (usable === null ? '.' : fits ? ` · ${fmt(usable - need)} will be left.` : ` · only ${fmt(usable)} can be used. Choose fewer.`) : '';
+    est.classList.toggle('text-bad', !fits);
+    if (canRun) submit.disabled = !n || !fits;
+  };
+  input.addEventListener('input', update);
+  update();
+})();
+
 (() => {
   window.__swmArchiveTimer && clearInterval(window.__swmArchiveTimer);
   const live = document.getElementById('archive-live');

@@ -48,7 +48,8 @@ def _item(**kw):
 def test_index_csv_neutralises_formulas_and_links_posts():
     rows = list(csv.reader(io.StringIO(ta.manifest_csv([_item()], None).lstrip("﻿"))))
     assert rows[0][0] == "posted_at_utc" and rows[1][2] == "https://t.me/c/1234/7"
-    assert rows[1][5].startswith("'=")                      # caption cannot run as a spreadsheet formula
+    assert rows[0][6] == "caption" and rows[1][6].startswith("'=")   # caption cannot run as a spreadsheet formula
+    assert rows[1][3] == ""                                     # private channel: no embed link
 
 
 def test_zip_stream_is_a_valid_archive_with_index_and_identical_files(tmp_path):
@@ -95,3 +96,25 @@ def test_login_and_job_state_are_encrypted_or_plain_as_intended():
 
     assert ta.SESSION_SETTING in ENCRYPTED_SETTING_KEYS       # a Telegram login: never stored readable
     assert ta.JOB_SETTING not in ENCRYPTED_SETTING_KEYS       # progress only
+
+
+def test_sizes_read_naturally():
+    assert ta.human_size(1003) == "1003 bytes"
+    assert ta.human_size(3 * 1024 ** 2) == "3.0 MB" and ta.human_size(int(2.5 * 1024 ** 3)) == "2.5 GB"
+
+
+def test_embed_links_only_for_public_channels():
+    assert ta.embed_link("swmchannel", 9) == "https://t.me/swmchannel/9?embed=1"
+    assert ta.embed_link(None, 9) is None
+
+
+def test_each_file_carries_its_posts_caption_and_details():
+    f = SimpleNamespace(title="Excellence as Worship", performer="Pastor Samuel", duration=1800.4, name="a.mp3",
+                        mime_type="audio/mpeg", size=1003)
+    msg = SimpleNamespace(id=12, file=f, message="Full caption\nwith lines", date=datetime(2019, 1, 1, 9),
+                          edit_date=None, views=50, forwards=2, post_author="Media team", voice=None)
+    meta = ta.post_metadata(msg, "HQ", "swmchannel", "1234", "ab" * 32)
+    assert meta["caption"] == "Full caption\nwith lines" and meta["telegram_link"] == "https://t.me/swmchannel/12"
+    assert meta["telegram_embed"] == "https://t.me/swmchannel/12?embed=1" and meta["duration_seconds"] == 1800
+    assert meta["posted_at_utc"] == "2019-01-01 09:00:00" and meta["edited_at_utc"] is None
+    assert {"title", "performer", "sha256", "views", "forwards", "post_author", "voice_note"} <= meta.keys()

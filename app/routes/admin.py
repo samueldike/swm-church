@@ -4220,6 +4220,9 @@ async def admin_telegram_archive(request: Request, db: AsyncSession = Depends(ge
     counts = {s: {"n": n, "bytes": int(b)} for s, n, b in rows}
     imported = (await db.execute(select(func.count(Item.id)).where(Item.sermon_id.isnot(None)))).scalar_one()
     items = list((await db.execute(select(Item).order_by(Item.posted_at.desc()).limit(500))).scalars().all())
+    # Sizes of the files still to back up, in backup order, so the page can show what "next N" needs.
+    queue_sizes = [int(s or 0) for (s,) in (await db.execute(select(Item.size).where(Item.status.in_(("found", "failed")))
+                                                              .order_by(Item.posted_at).limit(10000))).all()]
     archive_dir = _cfg.telegram_archive_dir
     try:
         disk_free = shutil.disk_usage(archive_dir if os.path.isdir(archive_dir) else os.path.dirname(archive_dir) or ".").free
@@ -4230,6 +4233,7 @@ async def admin_telegram_archive(request: Request, db: AsyncSession = Depends(ge
         "_db": db, "login": await ta.login_state(), "job": await ta.get_job(db), "job_running": ta.job_running(await ta.get_job(db)),
         "keys_saved": telegram_local.credentials_saved(site), "channel_saved": bool((site.get("telegram_audio_chat_id") or "").strip()),
         "counts": counts, "imported": imported, "items": items, "disk_free": disk_free, "disk_margin": ta.DISK_MARGIN,
+        "queue_sizes": queue_sizes,
         "title": "Telegram archive", "headerIcon": "ri-archive-drawer-line", **ctx,
     })
 
@@ -4300,18 +4304,43 @@ async def admin_telegram_archive_run(request: Request, db: AsyncSession = Depend
     from app.core.jobs import enqueue
     from app.tasks import telegram_archive_task
 
-    action = str((await request.form()).get("action") or "")
+    form = await request.form()
+    action = str(form.get("action") or "")
     if action not in ("scan", "download", "import"):
         return _redirect(request, "/admin/telegram-archive", "Unknown step.", "error")
+    limit = None                                  # download: a batch of N files, or continuous
+    if action == "download" and form.get("mode") == "batch":
+        try:
+            limit = int(str(form.get("limit") or ""))
+        except ValueError:
+            limit = 0
+        if not 1 <= limit <= 10000:
+            return _redirect(request, "/admin/telegram-archive#backup", "Enter how many files to back up (1 to 10,000).", "error")
     if not await ta.claim_job(action):
         return _redirect(request, "/admin/telegram-archive", "Another archive step is still running.", "error")
-    if not await enqueue(telegram_archive_task, action, admin.id):
+    if not await enqueue(telegram_archive_task, action, admin.id, limit):
         from app.core.publications import _run_local
 
-        _run_local(ta.run(action, admin.id))      # no worker: run it in this process
-    await log_admin_action(db, admin.id, f"telegram_archive.{action}", "settings", None, {}, request)
-    started = {"scan": "Reading the channel…", "download": "Downloading the audio…", "import": "Creating draft messages…"}[action]
+        _run_local(ta.run(action, admin.id, limit))      # no worker: run it in this process
+    await log_admin_action(db, admin.id, f"telegram_archive.{action}", "settings", None, {"limit": limit}, request)
+    started = {"scan": "Looking for audio in the channel…",
+               "download": f"Backing up the next {limit:,} files…" if limit else "Continuous backup started. Press Pause any time.",
+               "import": "Creating draft messages…"}[action]
     return _redirect(request, "/admin/telegram-archive", f"{started} This page shows progress; you can leave it and come back.")
+
+
+@router.post("/telegram-archive/pause", name="admin_telegram_archive_pause")
+async def admin_telegram_archive_pause(request: Request, db: AsyncSession = Depends(get_db)):
+    admin = await _archive_super(request)
+    if not admin:
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from app.core import telegram_archive as ta
+
+    job = await ta.get_job(db)
+    if not (ta.job_running(job) and job.get("action") == "download"):
+        return _redirect(request, "/admin/telegram-archive", "No backup is running.", "info")
+    await ta.request_pause()
+    return _redirect(request, "/admin/telegram-archive", "Pausing: the file in progress finishes first, then the backup stops. Press Start to continue later.", "info")
 
 
 @router.get("/telegram-archive/files/{item_id}", name="admin_telegram_archive_file")
@@ -4353,7 +4382,13 @@ async def admin_telegram_archive_zip(request: Request, db: AsyncSession = Depend
 
     items = list((await db.execute(select(TelegramArchiveItem).where(TelegramArchiveItem.status == "saved")
                                    .order_by(TelegramArchiveItem.posted_at))).scalars().all())
-    files = [(p, it.stored_path.split("/", 1)[-1], it.posted_at) for it in items if (p := to_abspath(ARCHIVE_PREFIX + it.stored_path))]
+    files = []
+    for it in items:
+        if p := to_abspath(ARCHIVE_PREFIX + it.stored_path):
+            name = it.stored_path.split("/", 1)[-1]
+            files.append((p, name, it.posted_at))
+            if os.path.exists(p + ".json"):                  # the post's caption and details, beside its audio
+                files.append((p + ".json", name + ".json", it.posted_at))
     if not files:
         return _redirect(request, "/admin/telegram-archive", "Nothing has been downloaded yet.", "error")
     manifest = ta.manifest_csv(items, (await ta.get_job(db)).get("channel_username"))

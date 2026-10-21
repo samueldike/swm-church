@@ -63,6 +63,30 @@ def draft_title(audio_title: str | None, caption: str | None, file_name: str | N
     return f"Audio message {posted_at:%d %b %Y}"
 
 
+def human_size(n: int) -> str:
+    for unit, step in (("GB", 1024 ** 3), ("MB", 1024 ** 2), ("KB", 1024)):
+        if n >= step:
+            return f"{n / step:.1f} {unit}"
+    return f"{n} bytes"
+
+
+def post_metadata(msg, channel_title: str | None, username: str | None, channel_id: str, sha256: str) -> dict:
+    """Everything the post says about its audio, saved as ``<file>.json`` beside it."""
+    f = msg.file
+    edited = getattr(msg, "edit_date", None)
+    return {
+        "channel": channel_title, "message_id": msg.id, "telegram_link": post_link(channel_id, username, msg.id),
+        "telegram_embed": embed_link(username, msg.id),
+        "posted_at_utc": msg.date.strftime("%Y-%m-%d %H:%M:%S"),
+        "edited_at_utc": edited.strftime("%Y-%m-%d %H:%M:%S") if edited else None,
+        "caption": msg.message or "", "title": f.title, "performer": f.performer,
+        "duration_seconds": int(f.duration) if f.duration else None, "file_name": f.name, "mime_type": f.mime_type,
+        "size_bytes": f.size, "sha256": sha256, "views": getattr(msg, "views", None),
+        "forwards": getattr(msg, "forwards", None), "post_author": getattr(msg, "post_author", None),
+        "voice_note": bool(getattr(msg, "voice", None)),
+    }
+
+
 def safe_name(name: str) -> str:
     stem, ext = os.path.splitext(name or "audio")
     stem = re.sub(r"[^\w\-]+", "_", stem, flags=re.ASCII).strip("_")[:80] or "audio"
@@ -74,6 +98,12 @@ def post_link(channel_id: str, username: str | None, message_id: int) -> str:
     return f"https://t.me/{username}/{message_id}" if username else f"https://t.me/c/{channel_id}/{message_id}"
 
 
+def embed_link(username: str | None, message_id: int) -> str | None:
+    """Telegram's embeddable post (with its audio player) — public channels only; it never expires.
+    Telegram offers no permanent direct link to the file itself (bot file URLs expire and carry the token)."""
+    return f"https://t.me/{username}/{message_id}?embed=1" if username else None
+
+
 def _cell(value) -> str:
     text = "" if value is None else str(value)
     return "'" + text if text[:1] in ("=", "+", "-", "@") else text   # neutralise spreadsheet formulas
@@ -82,11 +112,12 @@ def _cell(value) -> str:
 def manifest_csv(items, username: str | None) -> str:
     out = io.StringIO()
     w = csv.writer(out)
-    w.writerow(["posted_at_utc", "message_id", "telegram_link", "title", "performer", "caption",
+    w.writerow(["posted_at_utc", "message_id", "telegram_link", "telegram_embed", "title", "performer", "caption",
                 "file", "size_bytes", "duration_seconds", "sha256", "status", "website_message_id"])
     for it in items:
         w.writerow([_cell(v) for v in (
             f"{it.posted_at:%Y-%m-%d %H:%M}", it.message_id, post_link(it.channel_id, username, it.message_id),
+            embed_link(username, it.message_id) or "",
             draft_title(it.audio_title, it.caption, it.file_name, it.posted_at), it.performer, it.caption,
             it.stored_path or "", it.size, it.duration or "", it.sha256 or "", it.status, it.sermon_id or "")])
     return "﻿" + out.getvalue()
@@ -119,7 +150,7 @@ async def claim_job(action: str) -> bool:
         if job_running(await get_job(db)):
             return False
     await set_job(state="running", action=action, started_at=time.time(), error=None, message="Starting…",
-                  done=0, total=0, bytes_done=0, bytes_total=0)
+                  done=0, total=0, bytes_done=0, bytes_total=0, pause_requested=False)
     return True
 
 
@@ -289,6 +320,15 @@ async def _channel(client):
 
 # ─── Jobs ──────────────────────────────────────────────────────────
 
+async def _audio_posts(client, entity):
+    """Only posts with an audio attachment, filtered by Telegram itself (text, photos, video and
+    other documents are never fetched): audio files first, then voice notes, each oldest first."""
+    from telethon.tl.types import InputMessagesFilterMusic, InputMessagesFilterVoice
+
+    for flt in (InputMessagesFilterMusic, InputMessagesFilterVoice):
+        async for m in client.iter_messages(entity, filter=flt, reverse=True):
+            yield m
+
 async def run_scan() -> None:
     from app.models.sermon import Sermon
     from app.models.telegram_archive import TelegramArchiveItem
@@ -306,7 +346,7 @@ async def run_scan() -> None:
                                                           .where(Sermon.telegram_message_id.isnot(None)))).all()}
         seen = found = 0
         batch = []
-        async for m in client.iter_messages(entity, reverse=True):
+        async for m in _audio_posts(client, entity):
             seen += 1
             if is_audio(m) and m.id not in known:
                 f = m.file
@@ -323,12 +363,12 @@ async def run_scan() -> None:
                         db.add_all(batch)
                         await db.commit()
                     batch = []
-                await set_job(message=f"Read {seen:,} posts, found {found:,} new audio files…")
+                await set_job(message=f"Checked {seen:,} audio posts, {found:,} new…")
         if batch:
             async with async_session() as db:
                 db.add_all(batch)
                 await db.commit()
-        await set_job(state="done", message=f"Read all {seen:,} posts: {found:,} new audio files found.")
+        await set_job(state="done", message=f"Checked all {seen:,} audio posts in the channel: {found:,} new to back up.")
     finally:
         await client.disconnect()
 
@@ -341,7 +381,26 @@ def _sha256(path: str) -> str:
     return h.hexdigest()
 
 
-async def run_download() -> None:
+def usable_space(root: str) -> int:
+    """Bytes the archive may still use: free space minus the margin kept for the website."""
+    return max(0, shutil.disk_usage(root).free - DISK_MARGIN)
+
+
+async def pause_requested() -> bool:
+    async with async_session() as db:
+        return bool((await get_job(db)).get("pause_requested"))
+
+
+async def request_pause() -> None:
+    await set_job(pause_requested=True, message="Pausing after the file in progress…")
+
+
+async def run_download(limit: int | None = None) -> None:
+    """Back up the oldest files not yet saved: ``limit`` of them, or all (continuous) until paused.
+
+    A batch is refused up front if it would not fit; a continuous run stops by itself, as paused,
+    when the next file would not fit. Either way "Start" picks up where it stopped.
+    """
     from telethon import errors
 
     from app.models.telegram_archive import TelegramArchiveItem
@@ -349,20 +408,35 @@ async def run_download() -> None:
     root = app_settings.telegram_archive_dir
     os.makedirs(root, exist_ok=True)
     async with async_session() as db:
-        todo = list((await db.execute(select(TelegramArchiveItem).where(TelegramArchiveItem.status.in_(("found", "failed")))
-                                      .order_by(TelegramArchiveItem.posted_at))).scalars().all())
+        q = (select(TelegramArchiveItem).where(TelegramArchiveItem.status.in_(("found", "failed")))
+             .order_by(TelegramArchiveItem.posted_at))
+        todo = list((await db.execute(q.limit(limit) if limit else q)).scalars().all())
+    if not todo:
+        await set_job(state="done", message="Everything found so far is already backed up.")
+        return
     need = sum(i.size or 0 for i in todo)
-    free = shutil.disk_usage(root).free
-    if need > free - DISK_MARGIN:
-        raise ArchiveError(f"Not enough disk space: the files need {need / 1024 ** 3:.1f} GB but only "
-                           f"{max(0, free - DISK_MARGIN) / 1024 ** 3:.1f} GB can be used safely.")
-    await set_job(total=len(todo), bytes_total=need, message=f"Downloading {len(todo):,} files…")
+    if limit and need > usable_space(root):
+        raise ArchiveError(f"Not enough disk space: these {len(todo)} files need {human_size(need)} but only "
+                           f"{human_size(usable_space(root))} can be used safely. Choose fewer files or free up space.")
+    mode = f"the next {len(todo):,}" if limit else f"all {len(todo):,} remaining"
+    await set_job(total=len(todo), bytes_total=need, mode="batch" if limit else "continuous",
+                  message=f"Backing up {mode} files…")
 
     client = await _ready_client()
+    stopped = None
     try:
         entity = await _channel(client)
+        username, channel_title = getattr(entity, "username", None), getattr(entity, "title", None)
         bytes_before = 0
         for n, item in enumerate(todo, 1):
+            if await pause_requested():
+                stopped = f"Paused after {n - 1:,} file{'s' if n - 1 != 1 else ''}. Press Start to continue."
+                break
+            if (item.size or 0) > usable_space(root):
+                stopped = (f"Paused after {n - 1:,} file{'s' if n - 1 != 1 else ''}: the server is nearly out of space "
+                           f"(the next file is {human_size(item.size or 0)}). Free up space or move older "
+                           f"backups to your own drive, then press Start.")
+                break
             rel = f"{item.channel_id}/{item.posted_at:%Y}/{item.posted_at:%Y-%m-%d}_{item.message_id}_{safe_name(item.file_name or '')}"
             dest = os.path.join(root, *rel.split("/"))
             os.makedirs(os.path.dirname(dest), exist_ok=True)
@@ -374,7 +448,7 @@ async def run_download() -> None:
                     last[0] = time.time()
                     await set_job(done=n - 1, bytes_done=base + current, message=f"{n:,}/{len(todo):,}: {label}")
 
-            status, error, digest = "failed", "Telegram kept asking us to wait; run Download again later.", None
+            status, error, digest, meta = "failed", "Telegram kept asking us to wait; run Download again later.", None, None
             for attempt in range(3):
                 try:
                     msg = await client.get_messages(entity, ids=item.message_id)
@@ -384,6 +458,10 @@ async def run_download() -> None:
                     await client.download_media(msg, file=dest + ".part", progress_callback=progress)
                     os.replace(dest + ".part", dest)
                     digest = await asyncio.to_thread(_sha256, dest)
+                    # The post's caption and details travel with the file (fresh: captions may have been edited).
+                    meta = post_metadata(msg, channel_title, username, item.channel_id, digest)
+                    with open(dest + ".json", "w", encoding="utf-8") as fh:
+                        json.dump(meta, fh, ensure_ascii=False, indent=2)
                     status, error = "saved", None
                     break
                 except errors.FloodWaitError as exc:
@@ -399,14 +477,23 @@ async def run_download() -> None:
                 row.status, row.error = status, error
                 if status == "saved":
                     row.stored_path, row.sha256 = rel, digest
+                    row.caption = meta["caption"] or None
+                    row.audio_title, row.performer = meta["title"] or row.audio_title, meta["performer"] or row.performer
                 await db.commit()
             bytes_before += item.size or 0
             await set_job(done=n, bytes_done=bytes_before, message=f"{n:,}/{len(todo):,}: {label}")
         await write_manifest()
+        if stopped:
+            await set_job(state="paused", pause_requested=False, message=stopped)
+            return
         async with async_session() as db:
-            failed = (await db.execute(select(TelegramArchiveItem.id).where(TelegramArchiveItem.status == "failed"))).all()
-        tail = f" {len(failed)} could not be downloaded; run Download again to retry them." if failed else ""
-        await set_job(state="done", message=f"Downloaded {len(todo) - len(failed):,} of {len(todo):,} files.{tail}")
+            failed = len((await db.execute(select(TelegramArchiveItem.id).where(
+                TelegramArchiveItem.id.in_([i.id for i in todo]), TelegramArchiveItem.status == "failed"))).all())
+            left = len((await db.execute(select(TelegramArchiveItem.id).where(
+                TelegramArchiveItem.status.in_(("found", "failed"))))).all())
+        tail = f" {failed} could not be downloaded and will be retried next time." if failed else ""
+        more = f" {left:,} still to back up." if left else " Everything found is backed up."
+        await set_job(state="done", pause_requested=False, message=f"Backed up {len(todo) - failed:,} of {len(todo):,} files.{tail}{more}")
     finally:
         await client.disconnect()
 
@@ -463,13 +550,13 @@ async def run_import(admin_id: int | None) -> None:
                   message=f"Created {len(items):,} draft messages. Review them under Audio Messages (filter: Draft) and publish the ones you want.")
 
 
-async def run(action: str, admin_id: int | None = None) -> None:
+async def run(action: str, admin_id: int | None = None, limit: int | None = None) -> None:
     """Entry point for the background job; records any failure on the job for the page to show."""
     try:
         if action == "scan":
             await run_scan()
         elif action == "download":
-            await run_download()
+            await run_download(limit)
         elif action == "import":
             await run_import(admin_id)
         else:
