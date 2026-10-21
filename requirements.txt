@@ -19,7 +19,10 @@ pydantic-settings
 aiosmtplib
 openpyxl
 python-slugify
-faster-whisper
+faster-whisper==1.2.1
+# faster-whisper 1.2.1 calls av.open(..., metadata_errors=...): PyAV 19 rejects that
+# argument (every transcription failed); 16.1.0 was tested on the server with a real sermon.
+av==16.1.0
 itsdangerous
 pymysql
 bcrypt==4.0.1
