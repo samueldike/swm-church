@@ -1,0 +1,88 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, textarea, file_field with context %}
+{% set editing = m is not none %}
+{% block title %}{{ 'Edit' if editing else 'Add' }} minister | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ 'Edit minister' if editing else 'Add minister' }}{% endblock %}
+{% block topbar_subtitle %}Ministers{% endblock %}
+{% block topbar_icon %}ri-user-voice-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header(('Edit ' ~ m.full_name) if editing else 'Add a minister', "Bio-data kept on record for the church.",
+      actions='<a href="' ~ (url_for('admin_ministers_show', minister_id=m.id) if editing else url_for('admin_ministers')) ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>Cancel</a>') }}
+{% endblock %}
+
+{% block content %}
+{% set f = request.form %}
+<form method="POST" enctype="multipart/form-data" data-turbo="false" action="{{ url_for('admin_ministers_update', minister_id=m.id) if editing else url_for('admin_ministers_store') }}" class="flex flex-col gap-4 max-w-4xl">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+  <section class="panel flex flex-col gap-4">
+    <h2 class="text-[14px] font-semibold text-ink">Identity</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-4">
+      <div>
+        <label for="title" class="field-label">Title</label>
+        <input id="title" name="title" list="titles" value="{{ f.get('title', m.title if editing else 'Pastor') or '' }}" class="field-input" autocomplete="off">
+        <datalist id="titles">{% for t in titles %}<option value="{{ t }}">{% endfor %}</datalist>
+      </div>
+      {{ field('Full name', 'full_name', value=m.full_name if editing else '', required=True) }}
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div>
+        <label for="gender" class="field-label">Gender</label>
+        <select id="gender" name="gender" class="field-select">
+          {% for v, l in [('', '—'), ('male', 'Male'), ('female', 'Female')] %}<option value="{{ v }}" {{ 'selected' if f.get('gender', (m.gender if editing else '') or '') == v else '' }}>{{ l }}</option>{% endfor %}
+        </select>
+      </div>
+      {{ field('Date of birth', 'date_of_birth', value=(m.date_of_birth.isoformat() if editing and m.date_of_birth else ''), type='date', mono=True) }}
+      <div>
+        <label for="marital_status" class="field-label">Marital status</label>
+        <select id="marital_status" name="marital_status" class="field-select">
+          {% for v in ['', 'Single', 'Married', 'Widowed', 'Divorced'] %}<option value="{{ v }}" {{ 'selected' if f.get('marital_status', (m.marital_status if editing else '') or '') == v else '' }}>{{ v or '—' }}</option>{% endfor %}
+        </select>
+      </div>
+      {{ field('Spouse', 'spouse_name', value=(m.spouse_name or '') if editing else '') }}
+      {{ field('State of origin', 'state_of_origin', value=(m.state_of_origin or '') if editing else '') }}
+      {{ field('Education / training', 'education', value=(m.education or '') if editing else '') }}
+    </div>
+  </section>
+
+  <section class="panel flex flex-col gap-4">
+    <h2 class="text-[14px] font-semibold text-ink">Contact</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {{ field('Phone', 'phone', value=(m.phone or '') if editing else '', mono=True) }}
+      {{ field('Email', 'email', value=(m.email or '') if editing else '', type='email', mono=True, hint='Needed to give them a console login (department head or Resident Pastor).') }}
+    </div>
+    {{ field('Address', 'address', value=(m.address or '') if editing else '') }}
+  </section>
+
+  <section class="panel flex flex-col gap-4">
+    <h2 class="text-[14px] font-semibold text-ink">Ministry</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label for="branch_id" class="field-label">Church served</label>
+        <select id="branch_id" name="branch_id" class="field-select" {{ 'disabled' if (not can('system')) or (editing and m.account) else '' }}>
+          {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if (editing and m.branch_id == b.id) else '' }}>{{ b.name }}{{ ' (HQ)' if b.is_hq else '' }}</option>{% endfor %}
+        </select>
+        {% if editing and m.account %}<p class="field-hint">Fixed while they hold a console role.</p>{% endif %}
+      </div>
+      {{ field('Ministry rank', 'ministry_rank', value=(m.ministry_rank or '') if editing else '', hint='e.g. Associate Pastor, Minister-in-training') }}
+      {{ field('Date joined', 'date_joined', value=(m.date_joined.isoformat() if editing and m.date_joined else ''), type='date', mono=True) }}
+      {{ field('Ordination date', 'ordination_date', value=(m.ordination_date.isoformat() if editing and m.ordination_date else ''), type='date', mono=True) }}
+      <div>
+        <label for="status" class="field-label">Status</label>
+        <select id="status" name="status" class="field-select">
+          {% for v, l in statuses %}<option value="{{ v }}" {{ 'selected' if (editing and m.status == v) or (not editing and v == 'active') else '' }}>{{ l }}</option>{% endfor %}
+        </select>
+      </div>
+      {{ file_field('Photo', 'photo', hint='JPG, PNG, WEBP or GIF — up to 5 MB', accept='image/*', id='photo') }}
+    </div>
+    {{ textarea('Biography', 'bio', value=(m.bio or '') if editing else '', rows=5) }}
+    {{ textarea('Internal notes', 'notes', value=(m.notes or '') if editing else '', rows=3, hint='Visible to admins who manage ministers only.') }}
+  </section>
+
+  <div class="flex items-center gap-2.5">
+    <button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>{{ 'Save changes' if editing else 'Save minister' }}</button>
+    <a href="{{ url_for('admin_ministers_show', minister_id=m.id) if editing else url_for('admin_ministers') }}" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}

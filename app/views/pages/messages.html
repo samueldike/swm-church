@@ -1,6 +1,7 @@
 {% set pageKey = 'messages' %}
 {% set pageEyebrow = 'Audio messages' %}
 {% set pageTitle = 'The Word, kept and shared.' %}
+{% set metaTitle = 'Audio messages' %}
 {% set pageLede = 'Every message preached in this house, archived so you can return to it — or hear what you missed.' %}
 {% include "partials/theme-page-open.html" %}
 
@@ -40,16 +41,36 @@
             <div>
                 <p class="mono eyebrow"><span class="rule"></span>The archive</p>
                 <h2 class="t-h2" style="margin-top:1rem;">
-                    {% if search %}Results for “{{ search }}”{% else %}All messages{% endif %}
+                    {% if search %}Results for “{{ search }}”{% elif filtered %}Filtered messages{% else %}All messages{% endif %}
                 </h2>
             </div>
             <form method="GET" action="{{ url_for('messages') }}" class="search-row" role="search">
                 <label class="sr-only" for="msg-search">Search messages</label>
                 <input id="msg-search" type="search" name="search" value="{{ search or '' }}"
-                       placeholder="Search by title or preacher"/>
+                       placeholder="Title, preacher, series or scripture"/>
                 <button class="btn btn-gold" type="submit">Search</button>
             </form>
         </div>
+
+        {% if series_opts or preacher_opts|length > 1 or year_opts|length > 1 %}
+        <form method="GET" action="{{ url_for('messages') }}" class="msg-filters" aria-label="Filter messages">
+            {% if search %}<input type="hidden" name="search" value="{{ search }}"/>{% endif %}
+            {% if series_opts %}
+            <label class="sr-only" for="f-series">Series</label>
+            <select id="f-series" name="series" onchange="this.form.submit()"><option value="">All series</option>{% for s in series_opts %}<option value="{{ s }}" {{ 'selected' if f_series == s else '' }}>{{ s }}</option>{% endfor %}</select>
+            {% endif %}
+            {% if preacher_opts|length > 1 %}
+            <label class="sr-only" for="f-preacher">Preacher</label>
+            <select id="f-preacher" name="preacher" onchange="this.form.submit()"><option value="">All preachers</option>{% for s in preacher_opts %}<option value="{{ s }}" {{ 'selected' if f_preacher == s else '' }}>{{ s }}</option>{% endfor %}</select>
+            {% endif %}
+            {% if year_opts|length > 1 %}
+            <label class="sr-only" for="f-year">Year</label>
+            <select id="f-year" name="year" onchange="this.form.submit()"><option value="">Any year</option>{% for y in year_opts %}<option value="{{ y }}" {{ 'selected' if f_year == y|string else '' }}>{{ y }}</option>{% endfor %}</select>
+            {% endif %}
+            <noscript><button class="btn btn-ghost btn-sm" type="submit">Apply</button></noscript>
+            {% if filtered %}<a class="lnk-inline" href="{{ url_for('messages') }}">Clear all</a>{% endif %}
+        </form>
+        {% endif %}
 
         {% if sermons %}
         <ul class="rows rows-play" style="margin-top:2rem;">
@@ -61,6 +82,7 @@
                     <span class="row-main">
                         <span class="t-h3">{{ sermon.title }}</span>
                         {% if sermon.caption %}<span class="t-sm row-sub">{{ sermon.caption }}</span>{% endif %}
+                        {% if sermon.series or sermon.scripture %}<span class="t-sm row-sub">{{ [sermon.series, sermon.scripture]|select|join(' · ') }}</span>{% endif %}
                     </span>
                     <span class="row-meta mono faint">
                         {{ sermon.preacher or '' }}
@@ -84,10 +106,10 @@
         </nav>
         {% endif %}
 
-        {% elif search %}
+        {% elif filtered %}
         <div class="empty" style="margin-top:2rem;">
-            <p class="t-body">Nothing matched “{{ search }}”.</p>
-            <a href="{{ url_for('messages') }}" class="btn btn-ghost" style="margin-top:1.2rem;">Clear search</a>
+            <p class="t-body">Nothing matched{% if search %} “{{ search }}”{% endif %}. Try fewer words or clear the filters.</p>
+            <a href="{{ url_for('messages') }}" class="btn btn-ghost" style="margin-top:1.2rem;">Clear search and filters</a>
         </div>
         {% else %}
         <div class="empty" style="margin-top:2rem;">
@@ -102,7 +124,7 @@
     <div class="shell" style="text-align:center;">
         <h2 class="t-h2" style="max-width:24ch;margin-inline:auto;">Hear it live, in the room.</h2>
         <div class="flex flex-wrap items-center justify-center gap-3" style="margin-top:1.8rem;">
-            <a href="{{ url_for('contact') }}" class="btn btn-gold">Plan your visit</a>
+            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan your visit</a>
             <a href="{{ url_for('watch') }}" class="btn btn-ghost">Watch online</a>
         </div>
     </div>
@@ -132,6 +154,13 @@
         min-width: min(15rem, 52vw);
     }
     .search-row input:focus { outline: none; border-bottom-color: var(--gold); }
+    .msg-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem 1.4rem; margin-top: 1.6rem; }
+    .msg-filters select {
+        background: transparent; border: 0; border-bottom: 1px solid var(--line-2); color: var(--fg);
+        font: inherit; font-size: 0.88rem; padding: 0.5rem 1.4rem 0.5rem 0; max-width: 100%;
+    }
+    .msg-filters select option { background: #fff; color: #111; }
+    .msg-filters select:focus { outline: none; border-bottom-color: var(--gold); }
     .pager { display: flex; align-items: center; gap: 1.2rem; margin-top: 2.2rem; flex-wrap: wrap; }
 </style>
 

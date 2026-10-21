@@ -4,6 +4,8 @@ services:
     container_name: swm-app
     restart: unless-stopped
     env_file: .env
+    environment:
+      MEDIA_ROOT: /app/media
     expose:
       - "8000"
     volumes:
@@ -14,6 +16,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      telegram-bot-api:
+        condition: service_started
     networks:
       - swm-net
 
@@ -22,12 +26,15 @@ services:
     container_name: swm-worker
     restart: unless-stopped
     env_file: .env
+    environment:
+      MEDIA_ROOT: /app/media
     command: celery -A app.celery_app worker -l info -c 4
     volumes:
       - static_files:/app/static
       - media_files:/app/media
     depends_on:
       - app
+      - telegram-bot-api
     networks:
       - swm-net
 
@@ -39,6 +46,28 @@ services:
     command: celery -A app.celery_app beat -l info
     depends_on:
       - app
+    networks:
+      - swm-net
+
+  # Self-hosted Bot API server in --local mode. Raises the upload ceiling from
+  # 50MB to 2000MB and removes the 20MB getFile download limit. Needs an
+  # api_id/api_hash from https://my.telegram.org (TELEGRAM_API_ID/HASH in .env).
+  # The media volume is mounted at the SAME path as in the app container so
+  # file:// handoffs resolve identically on both sides.
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    container_name: swm-telegram-bot-api
+    restart: unless-stopped
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+      TELEGRAM_LOCAL: "1"
+      TELEGRAM_MAX_WEBHOOK_CONNECTIONS: "100"
+    expose:
+      - "8081"
+    volumes:
+      - telegram_bot_api_data:/var/lib/telegram-bot-api
+      - media_files:/app/media:ro
     networks:
       - swm-net
 
@@ -103,6 +132,7 @@ services:
 
 volumes:
   postgres_data:
+  telegram_bot_api_data:
   static_files:
   media_files:
   certbot_www:

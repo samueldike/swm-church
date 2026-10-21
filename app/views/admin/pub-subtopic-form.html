@@ -1,0 +1,84 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, textarea, badge with context %}
+{% set editing = sub is not none %}
+{% block title %}{{ 'Edit' if editing else 'New' }} {{ kmeta.sub|lower }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ 'Edit' if editing else 'New' }} {{ kmeta.sub|lower }}{% endblock %}
+{% block topbar_subtitle %}{{ pub.title }}{% endblock %}
+{% block topbar_icon %}{{ kmeta.icon }}{% endblock %}
+
+{% block page_header %}
+  {{ page_header((sub.title if editing else 'New ' ~ kmeta.sub|lower), (src.main_title or src.sermon.title) ~ ' · ' ~ kmeta.main,
+      actions='<a href="' ~ url_for('admin_pubs_show', kind=kind, pub_id=pub.id) ~ '#source-' ~ src.id ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>Back to project</a>') }}
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 items-start max-w-6xl">
+  <form method="POST" action="{{ url_for('admin_pubs_subtopics_update', kind=kind, pub_id=pub.id, sub_id=sub.id) if editing else url_for('admin_pubs_subtopics_store', kind=kind, pub_id=pub.id) }}" class="panel flex flex-col gap-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% if not editing %}<input type="hidden" name="source_id" value="{{ src.id }}">{% endif %}
+
+    {{ field('Title', 'title', value=sub.title if editing else '', required=True) }}
+    {{ textarea('Points the preacher covered', 'points', value=(sub.points or [])|join('\n') if editing else '', rows=4,
+                hint='One point per line. These guide the AI when it writes the content.') }}
+    {{ textarea('Scripture', 'scripture', value=(sub.scripture or '') if editing else '', rows=2, hint='With the version in brackets, e.g. Habakkuk 2:4 (NKJV).') }}
+    <div>
+      {{ textarea('Content', 'body', value=(sub.body or '') if editing else '', rows=14, hint='Separate paragraphs with a blank line.', id='sub-body') }}
+      <p class="font-mono text-[11px] text-ink-3 mt-1.5"><span id="sub-words">0</span> words{% if kind == 'devotionals' %} · aim for about 200{% endif %}</p>
+    </div>
+    {% if kind == 'devotionals' %}
+      {{ textarea('Action plan', 'action_plan', value=(sub.action_plan or '') if editing else '', rows=2, hint='One sentence for the reader.') }}
+      {{ textarea('Prayer point', 'prayer_point', value=(sub.prayer_point or '') if editing else '', rows=2, hint='One or two sentences.') }}
+    {% endif %}
+
+    <div class="flex items-center gap-2.5 pt-4 border-t border-line">
+      <button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>{{ 'Save changes' if editing else 'Add topic' }}</button>
+      <a href="{{ url_for('admin_pubs_show', kind=kind, pub_id=pub.id) }}#source-{{ src.id }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+
+  <div class="flex flex-col gap-4">
+    <div class="panel">
+      <h2 class="text-[14px] font-semibold text-ink mb-3">Status</h2>
+      {% if editing %}
+        <dl class="flex flex-col gap-2 text-[12px]">
+          <div class="flex justify-between gap-3"><dt class="text-ink-3">Content</dt><dd>{{ badge('Written' if sub.has_content else 'Missing', 'ok' if sub.has_content else 'warn') }}</dd></div>
+          <div class="flex justify-between gap-3"><dt class="text-ink-3">Words</dt><dd class="font-mono text-ink">{{ sub.word_count or 0 }}</dd></div>
+          <div class="flex justify-between gap-3"><dt class="text-ink-3">Edited by hand</dt><dd class="font-mono text-ink">{{ 'Yes' if sub.edited else 'No' }}</dd></div>
+        </dl>
+        {% if sub.content_status == 'failed' and sub.content_error %}
+          <p class="mt-3 text-[12px] text-bad">{{ sub.content_error }}</p>
+        {% endif %}
+        <form method="POST" action="{{ url_for('admin_pubs_generate_contents', kind=kind, pub_id=pub.id) }}" class="mt-4 pt-3 border-t border-line"
+              {% if sub.has_content %}data-confirm="Replace this content with a new AI draft? Your current text will be overwritten." data-confirm-title="Regenerate content" data-confirm-accept="Regenerate"{% endif %}>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="subtopic_id" value="{{ sub.id }}">
+          <button type="submit" class="btn btn-secondary w-full"><i class="ri-magic-line"></i>{{ 'Regenerate with AI' if sub.has_content else 'Write with AI' }}</button>
+        </form>
+        <form method="POST" action="{{ url_for('admin_pubs_subtopics_delete', kind=kind, pub_id=pub.id, sub_id=sub.id) }}" class="mt-2"
+              data-confirm="Delete this topic and its content?" data-confirm-title="Delete topic" data-confirm-accept="Delete">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="btn btn-secondary w-full text-bad"><i class="ri-delete-bin-line"></i>Delete topic</button>
+        </form>
+      {% else %}
+        <p class="text-[12px] text-ink-3 leading-relaxed">Add the title and points now. You can write the content yourself here, or leave it empty and use “Generate Contents” on the project.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+(() => {
+  window.__swmSubFormAbort?.abort();
+  const ctl = new AbortController();
+  window.__swmSubFormAbort = ctl;
+  const body = document.getElementById('sub-body');
+  const out = document.getElementById('sub-words');
+  if (!body || !out) return;
+  const count = () => { out.textContent = (body.value.match(/\b[\w’'-]+\b/g) || []).length; };
+  body.addEventListener('input', count, { signal: ctl.signal });
+  count();
+})();
+</script>
+{% endblock %}

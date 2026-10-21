@@ -1,6 +1,7 @@
 {% set pageKey = 'events' %}
 {% set pageEyebrow = 'Events' %}
 {% set pageTitle = 'What is coming up.' %}
+{% set metaTitle = 'Events' %}
 {% set pageLede = 'Services, programmes and gatherings at Mile 50 and across our branches.' %}
 {% include "partials/theme-page-open.html" %}
 
@@ -21,8 +22,9 @@
             <p class="t-sm" style="margin-top:0.9rem;">{{ featured_event.location }}</p>
             {% endif %}
             <div class="flex flex-wrap items-center gap-3" style="margin-top:1.8rem;">
-                <a href="{{ url_for('calendar') }}" class="btn btn-gold">See the calendar</a>
-                <a href="{{ url_for('contact') }}" class="btn btn-ghost">Plan your visit</a>
+                <a href="{{ url_for('event_detail', event_id=featured_event.id) }}" class="btn btn-gold">Details &amp; reminder</a>
+                <a href="{{ url_for('calendar') }}" class="btn btn-ghost">See the calendar</a>
+                <a href="{{ url_for('visit') }}" class="btn btn-ghost">Plan your visit</a>
             </div>
         </div>
         <div class="split-media">
@@ -44,21 +46,25 @@
                 <p class="mono eyebrow"><span class="rule"></span>Upcoming</p>
                 <h2 class="t-h2" style="margin-top:1rem;">On the calendar</h2>
             </div>
-            <a href="{{ url_for('calendar') }}" class="lnk">Full calendar</a>
+            <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
+                <a href="{{ url_for('calendar_ics') }}" class="lnk">Subscribe in your calendar app</a>
+                <a href="{{ url_for('calendar') }}" class="lnk">Full calendar</a>
+            </div>
         </div>
 
         {% if upcoming_events %}
         <ul class="rows" style="margin-top:2rem;">
             {% for ev in upcoming_events %}
-            <li class="row">
-                <span class="row-in">
+            <li class="row row-link">
+                <a href="{{ url_for('event_detail', event_id=ev.id) }}">
                     <span class="mono faint row-i">{{ ev.starts_at.strftime('%d %b')|upper }}</span>
                     <span class="row-main">
                         <span class="t-h3">{{ ev.title }}</span>
-                        {% if ev.location %}<span class="t-sm row-sub">{{ ev.location }}</span>{% endif %}
+                        {% if ev.location or (ev.branch and not ev.branch.is_hq) %}<span class="t-sm row-sub">{{ [ev.location, (ev.branch.name if ev.branch and not ev.branch.is_hq else '')]|select|join(' · ') }}</span>{% endif %}
                     </span>
-                    <span class="row-meta mono faint">{{ ev.starts_at.strftime('%I:%M %p')|replace(' 0', ' ') }}</span>
-                </span>
+                    <span class="row-meta mono faint">{{ ev.starts_at|clock }}</span>
+                    <span class="row-go material-symbols-outlined" aria-hidden="true">arrow_outward</span>
+                </a>
             </li>
             {% endfor %}
         </ul>

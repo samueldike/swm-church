@@ -1,88 +1,44 @@
-<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Slider Management - {{ siteName }}</title>
-<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
-<link rel="apple-touch-icon" href="/images/swm-logo.png"/>
-{% include "partials/admin-head-assets.html" %}
-</head>
-<body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
-<div class="flex h-screen overflow-hidden">
-{% include "partials/admin-sidebar.html" %}
-<main class="flex-1 flex flex-col overflow-hidden">
-{% with title="Slider Management", subtitle="Manage homepage hero slides", headerIcon="ri-slideshow-3-line" %}{% include "partials/admin-topbar.html" %}{% endwith %}
-<div class="flex-1 overflow-y-auto p-5 lg:p-8 space-y-4">
-{% if session.get('status') %}<div class="bg-primary/10 border border-primary/20 text-primary text-sm font-semibold px-4 py-3 rounded-xl">{{ session.get('status') }}</div>{% endif %}
-{% if errors %}<div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ (error_messages.values()|map('first')|list|first if error_messages else '') }}</div>{% endif %}
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, empty_state with context %}
+{% block title %}Sliders | {{ siteName }}{% endblock %}
+{% block topbar_title %}Sliders{% endblock %}
+{% block topbar_subtitle %}Homepage hero images{% endblock %}
+{% block topbar_icon %}ri-slideshow-3-line{% endblock %}
 
-<section class="content-card p-4 lg:p-5">
-<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-<div><h2 class="text-base font-bold text-gray-900">Homepage Slides</h2><p class="text-xs text-gray-500 mt-0.5">{{ "{:,}".format(sliders|length) }} records</p></div>
-<button type="button" data-open-create-slider class="h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors"><i class="ri-image-add-line text-base"></i><span>Add Slide</span></button>
-</div>
-<div class="mt-4 grid gap-3">
-{% for slider in sliders %}
+{% block page_header %}
+  {{ page_header("Homepage sliders", "Rotating hero images on the public homepage",
+      actions='<a href="' ~ url_for('admin_sliders_create_page') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add slider</a>',
+      audit=[('Sliders', sliders|length), ('Active', sliders|selectattr('is_active')|list|length)]) }}
+{% endblock %}
 
-<article class="rounded-xl border border-gray-100 p-3 flex flex-col sm:flex-row sm:items-center gap-3">
-<img class="w-full sm:w-36 h-24 object-cover rounded-lg bg-gray-100 flex-shrink-0" src="{{ url_for('static', path=slider.image_path) }}" alt="Slider image"/>
-<div class="min-w-0 flex-1">
-<div class="flex items-center gap-2 flex-wrap"><p class="font-semibold text-gray-900 truncate">{{ slider.title or 'Untitled slide' }}</p><span class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide {{ 'bg-emerald-50 text-emerald-600' if slider.is_active else 'bg-gray-100 text-gray-500' }}">{{ 'Active' if slider.is_active else 'Inactive' }}</span></div>
-<p class="text-xs text-gray-500 truncate mt-0.5">{{ slider.title or 'No title' }}</p>
-<p class="text-xs text-gray-400 mt-1">Order {{ slider.sort_order }}{% if slider.cta_label %} <span class="text-gray-300">&middot;</span> {{ slider.cta_label }}{% endif %}</p>
-</div>
-<div class="flex items-center justify-end gap-2">
-<button type="button" class="slider-edit-btn w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50 transition-colors" title="Edit slide"
-data-action="{{ url_for('admin_sliders_update', slider_id=slider.id) }}" data-title="{{ slider.title|e }}" data-description="{{ slider.description|e }}" data-cta-label="{{ slider.cta_label|e }}" data-cta-url="{{ slider.cta_url|e }}" data-sort-order="{{ slider.sort_order }}" data-is-active="{{ 1 if slider.is_active else 0 }}"><i class="ri-edit-line text-base"></i></button>
-<form method="POST" action="{{ url_for('admin_sliders_destroy', slider_id=slider.id) }}" data-confirm="Delete this slide?" data-confirm-title="Delete Slide" data-confirm-accept="Delete"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"> <input type="hidden" name="_method" value="DELETE"><button class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete slide"><i class="ri-delete-bin-line text-base"></i></button></form>
-</div>
-</article>
+{% block content %}
+{% if sliders %}
+  <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3.5">
+    {% for sl in sliders %}
+      <div class="panel-flush flex flex-col">
+        <div class="relative aspect-video bg-sunken">
+          <img src="{{ url_for('static', path=sl.image_path) }}" alt="{{ sl.title or 'Slider image' }}" class="w-full h-full object-cover" loading="lazy">
+          <div class="absolute top-2 right-2">{{ badge('Active' if sl.is_active else 'Hidden', 'ok' if sl.is_active else 'neut') }}</div>
+        </div>
+        <div class="p-3.5 flex flex-col gap-1 flex-grow">
+          <p class="text-[13px] font-semibold text-ink truncate">{{ sl.title or 'Untitled slider' }}</p>
+          <p class="font-mono text-[10.5px] text-ink-3">Position {{ sl.sort_order }}{% if sl.cta_label %} · CTA: {{ sl.cta_label }}{% endif %}</p>
+        </div>
+        <div class="flex items-center gap-2 px-3.5 pb-3.5">
+          <a href="{{ url_for('admin_sliders_edit_page', slider_id=sl.id) }}" class="btn btn-secondary btn-sm"><i class="ri-edit-line"></i>Edit</a>
+          <form method="POST" action="{{ url_for('admin_sliders_destroy', slider_id=sl.id) }}" class="inline"
+                data-confirm="Delete this slider?" data-confirm-title="Delete Slider" data-confirm-accept="Delete">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn btn-danger btn-sm"><i class="ri-delete-bin-line"></i>Delete</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
 {% else %}
-
-<p class="py-10 text-center text-sm text-gray-500">No slides yet.</p>
-{% endfor %}
-</div>
-</section>
-</div>
-</main>
-</div>
-
-<div id="create-slider-modal" class="fixed inset-0 z-50 hidden" aria-hidden="true"><div class="absolute inset-0 bg-black/50" data-close-slider-modal></div><div class="absolute inset-x-4 top-6 mx-auto max-w-4xl rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
-<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4"><h3 class="text-sm font-bold text-gray-900">Add Slide</h3><button type="button" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-50" data-close-slider-modal><i class="ri-close-line text-lg"></i></button></div>
-<form method="POST" action="{{ url_for('admin_sliders_store') }}" enctype="multipart/form-data" class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3 modal-scroll overflow-y-auto max-h-[calc(100vh-9rem)]"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-<label><span class="form-label">Image</span><input class="form-input" type="file" name="image" required></label>
-<label><span class="form-label">Sort Order</span><input class="form-input" type="number" name="sort_order" value="0" min="0"></label>
-<label><span class="form-label">Title</span><input class="form-input" type="text" name="title"></label>
-<div class="sm:col-span-2"><span class="form-label">Description</span><textarea class="form-input" name="description" rows="3"></textarea></div>
-<label><span class="form-label">CTA Label</span><input class="form-input" type="text" name="cta_label"></label>
-<label><span class="form-label">CTA URL</span><input class="form-input" type="text" name="cta_url" placeholder="/calendar"></label>
-<label class="flex items-center gap-2 text-sm font-semibold text-gray-600"><input type="hidden" name="is_active" value="0"><input type="checkbox" name="is_active" value="1" class="rounded border-gray-300 text-primary focus:ring-primary"> Active</label>
-<div class="sm:col-span-2 flex justify-end gap-2 pt-2"><button type="button" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900" data-close-slider-modal>Cancel</button><button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814] hover:bg-primary-dark">Create</button></div>
-</form></div></div>
-
-<div id="edit-slider-modal" class="fixed inset-0 z-50 hidden" aria-hidden="true"><div class="absolute inset-0 bg-black/50" data-close-slider-modal></div><div class="absolute inset-x-4 top-6 mx-auto max-w-4xl rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
-<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4"><h3 class="text-sm font-bold text-gray-900">Edit Slide</h3><button type="button" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-50" data-close-slider-modal><i class="ri-close-line text-lg"></i></button></div>
-<form id="edit-slider-form" method="POST" action="" enctype="multipart/form-data" class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3 modal-scroll overflow-y-auto max-h-[calc(100vh-9rem)]"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"> <input type="hidden" name="_method" value="PUT">
-<label><span class="form-label">Replace Image</span><input class="form-input" type="file" name="image"></label>
-<label><span class="form-label">Sort Order</span><input id="edit-slider-sort-order" class="form-input" type="number" name="sort_order" min="0"></label>
-<label><span class="form-label">Title</span><input id="edit-slider-title" class="form-input" type="text" name="title"></label>
-<div class="sm:col-span-2"><span class="form-label">Description</span><textarea id="edit-slider-description" class="form-input" name="description" rows="3"></textarea></div>
-<label><span class="form-label">CTA Label</span><input id="edit-slider-cta-label" class="form-input" type="text" name="cta_label"></label>
-<label><span class="form-label">CTA URL</span><input id="edit-slider-cta-url" class="form-input" type="text" name="cta_url"></label>
-<label class="flex items-center gap-2 text-sm font-semibold text-gray-600"><input type="hidden" name="is_active" value="0"><input id="edit-slider-is-active" type="checkbox" name="is_active" value="1" class="rounded border-gray-300 text-primary focus:ring-primary"> Active</label>
-<div class="sm:col-span-2 flex justify-end gap-2 pt-2"><button type="button" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900" data-close-slider-modal>Cancel</button><button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814] hover:bg-primary-dark">Save Changes</button></div>
-</form></div></div>
-
-<script>
-(() => {
-const body=document.body, createModal=document.getElementById('create-slider-modal'), editModal=document.getElementById('edit-slider-modal'), editForm=document.getElementById('edit-slider-form');
-const open=m=>{m.classList.remove('hidden');m.setAttribute('aria-hidden','false');body.classList.add('overflow-hidden')};
-const close=()=>{[createModal,editModal].forEach(m=>{m.classList.add('hidden');m.setAttribute('aria-hidden','true')});body.classList.remove('overflow-hidden')};
-document.querySelector('[data-open-create-slider]')?.addEventListener('click',()=>open(createModal));
-document.querySelectorAll('[data-close-slider-modal]').forEach(el=>el.addEventListener('click',close));
-document.querySelectorAll('.slider-edit-btn').forEach(btn=>btn.addEventListener('click',()=>{editForm.action=btn.dataset.action||'';['title','description','ctaLabel','ctaUrl','sortOrder'].forEach(k=>{const id='edit-slider-'+k.replace(/[A-Z]/g,m=>'-'+m.toLowerCase());const el=document.getElementById(id);if(el)el.value=btn.dataset[k]||''});document.getElementById('edit-slider-is-active').checked=btn.dataset.isActive==='1';open(editModal)}));
-document.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
-{% if errors %}open(createModal);{% endif %}
-})();
-</script>
-</body></html>
+  <div class="panel-flush">
+    {{ empty_state("ri-slideshow-3-line", "No sliders yet", "Add a hero image to feature on the homepage.",
+                   '<a href="' ~ url_for('admin_sliders_create_page') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add slider</a>') }}
+  </div>
+{% endif %}
+{% endblock %}

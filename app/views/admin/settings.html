@@ -1,912 +1,717 @@
-<!DOCTYPE html>
-<html lang="en"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>System Settings - {{ siteName }}</title>
-<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
-<link rel="apple-touch-icon" href="/images/swm-logo.png"/>
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, textarea, checkbox, badge, secret_field with context %}
+{% set S = settings %}
+{% set sections = [('general', 'General site', 'ri-global-line'), ('website', 'Website content', 'ri-layout-4-line'), ('appearance', 'Admin appearance', 'ri-palette-line'), ('giving', 'Giving gateway', 'ri-hand-coin-line'),
+                   ('accounts', 'Church accounts', 'ri-bank-line'), ('security', 'Admin security', 'ri-shield-keyhole-line'), ('email', 'Email delivery', 'ri-mail-line'), ('ai', 'AI drafting', 'ri-magic-line'),
+                   ('distribution', 'Audio distribution', 'ri-broadcast-line'), ('legal', 'Legal pages', 'ri-file-list-3-line'), ('media', 'Photos & page headers', 'ri-image-line')] %}
+{% set accounts = S.get('church_accounts') if S.get('church_accounts') is iterable and S.get('church_accounts') is not string else [] %}
+{% set hero_pages = [('default', 'Default (all pages)'), ('visit', 'Plan your visit'), ('branches', 'Find a branch'), ('about', 'About'), ('departments', 'Departments'), ('messages', 'Audio messages'), ('events', 'Events'),
+                     ('calendar', 'Calendar'), ('contact', 'Contact'), ('casom', 'CASOM'), ('give', 'Give'), ('stories', 'Stories'), ('get-involved', 'Get involved'),
+                     ('prayer', 'Prayer'), ('watch', 'Watch'), ('our-pastor', 'Our pastor'), ('outreach', 'Outreach')] %}
+{% set cur_preset = S.get('admin_theme_preset') or 'default' %}
+{% block title %}Settings | {{ siteName }}{% endblock %}
+{% block topbar_title %}Settings{% endblock %}
+{% block topbar_subtitle %}Site, integrations and security{% endblock %}
+{% block topbar_icon %}ri-settings-4-line{% endblock %}
 
-{% include "partials/admin-head-assets.html" %}
-</head>
-<body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
-<div class="flex h-screen overflow-hidden">
-{% include "partials/admin-sidebar.html" %}
-<main class="flex-1 flex flex-col overflow-hidden">
-{% with title="System Settings", subtitle="Configure payment gateways, church accounts, and admin security controls", headerIcon="ri-settings-4-line" %}{% include "partials/admin-topbar.html" %}{% endwith %}
+{% block page_header %}
+  {{ page_header("Settings", "Site configuration, giving, security and integrations",
+      audit=[('Gateway', (S.get('active_giving_gateway') or 'paystack')|capitalize), ('Mode', (S.get('giving_mode') or 'test')|capitalize), ('Session timeout', (S.get('admin_session_timeout_minutes') or '30') ~ ' min')]) }}
+{% endblock %}
 
-<div class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
-{% if request.session.get('status') %}
-<div class="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold px-4 py-3 rounded-xl">
-{{ request.session.get('status') }}
-</div>
-{% endif %}
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-[210px_1fr] gap-4 lg:gap-6 items-start max-w-6xl">
 
-{% if error_messages %}
-<div class="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl">
-<p class="font-semibold mb-2">Please fix the following:</p>
-<ul class="list-disc list-inside space-y-1">
-{% for field_errors in error_messages.values() %}
-{% for error in field_errors %}
-<li>{{ error }}</li>
-{% endfor %}
-{% endfor %}
-</ul>
-</div>
-{% endif %}
-
-<form action="{{ url_for('admin_settings_update') }}" method="POST">
-<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-
-<div class="settings-layout">
-<aside class="content-card settings-menu-panel">
-<h2 class="section-title mb-4">Settings Menu</h2>
-<div class="space-y-2">
-<button type="button" class="settings-tab active" data-settings-tab="general">
-<i class="ri-settings-3-line h-4 w-4"></i>
-General Site
-</button>
-<button type="button" class="settings-tab" data-settings-tab="appearance">
-<i class="ri-palette-line text-base"></i>
-Appearance
-</button>
-<button type="button" class="settings-tab" data-settings-tab="gateway">
-<i class="ri-money-dollar-circle-line h-4 w-4"></i>
-Giving Gateway
-</button>
-<button type="button" class="settings-tab" data-settings-tab="accounts">
-<i class="ri-bank-line h-4 w-4"></i>
-Church Accounts
-</button>
-<button type="button" class="settings-tab" data-settings-tab="security">
-<i class="ri-shield-check-line h-4 w-4"></i>
-Admin Security
-</button>
-<button type="button" class="settings-tab" data-settings-tab="email">
-<i class="ri-mail-send-line text-base"></i>
-Email Delivery
-</button>
-<button type="button" class="settings-tab" data-settings-tab="audio">
-<i class="ri-broadcast-line text-base"></i>
-Audio Distribution
-</button>
-<button type="button" class="settings-tab" data-settings-tab="pages">
-<i class="ri-image-line h-4 w-4"></i>
-Page Headers
-</button>
-<button type="button" class="settings-tab" data-settings-tab="legal">
-<i class="ri-file-text-line h-4 w-4"></i>
-Legal Pages
-</button>
-</div>
-</aside>
-
-<div class="settings-content-panel">
-<section class="content-card settings-panel" data-settings-panel="general">
-<h2 class="section-title">General Site</h2>
-<div class="grid md:grid-cols-2 gap-5">
-<div>
-<label class="form-label">Site Name</label>
-<input class="form-input" name="site_name" value="{{ request.form.get('site_name', settings['site_name']) }}" />
-</div>
-<div>
-<label class="form-label">Site Tagline</label>
-<input class="form-input" name="site_tagline" value="{{ request.form.get('site_tagline', settings['site_tagline']) }}" />
-</div>
-<div>
-<label class="form-label">Public Contact Email</label>
-<input class="form-input" name="public_contact_email" type="email" value="{{ request.form.get('public_contact_email', settings['public_contact_email']) }}" />
-</div>
-<div>
-<label class="form-label">Support Phone</label>
-<input class="form-input" name="support_phone" value="{{ request.form.get('support_phone', settings['support_phone']) }}" />
-</div>
-<div class="md:col-span-2">
-<label class="form-label">Headquarters Address</label>
-<input class="form-input" name="headquarters_address" value="{{ request.form.get('headquarters_address', settings['headquarters_address']) }}" />
-</div>
-<div class="md:col-span-2 mt-2 pt-4 border-t border-gray-100">
-<h3 class="text-sm font-bold text-gray-900 mb-1">Counselling</h3>
-<p class="text-[11px] text-gray-500 mb-3">Shown in the "Take a next step" section on the Home page. Leave the number blank to hide the whole block.</p>
-</div>
-<div>
-<label class="form-label">Counselling Phone</label>
-<input class="form-input" name="counsellingPhone" value="{{ request.form.get('counsellingPhone', settings.get('counsellingPhone', '')) }}" placeholder="+234 703 773 6698" />
-</div>
-<div>
-<label class="form-label">Counselling Availability</label>
-<input class="form-input" name="counsellingHours" value="{{ request.form.get('counsellingHours', settings.get('counsellingHours', '')) }}" placeholder="Monday to Friday, 9:00 am — 5:00 pm" />
-</div>
-
-<div class="md:col-span-2 mt-2 pt-4 border-t border-gray-100">
-<h3 class="text-sm font-bold text-gray-900 mb-1">Social Links</h3>
-<p class="text-[11px] text-gray-500 mb-3">Shown in the site footer. Leave a field blank to hide that link everywhere.</p>
-</div>
-<div>
-<label class="form-label">Facebook URL</label>
-<input class="form-input" name="socialFacebook" type="url" value="{{ request.form.get('socialFacebook', settings.get('socialFacebook', '')) }}" placeholder="https://www.facebook.com/swmnigeria" />
-</div>
-<div>
-<label class="form-label">Instagram URL</label>
-<input class="form-input" name="socialInstagram" type="url" value="{{ request.form.get('socialInstagram', settings.get('socialInstagram', '')) }}" placeholder="https://www.instagram.com/swm_nigeria/" />
-</div>
-<div>
-<label class="form-label">X (Twitter) URL</label>
-<input class="form-input" name="socialX" type="url" value="{{ request.form.get('socialX', settings.get('socialX', '')) }}" placeholder="https://x.com/swm_nigeria" />
-</div>
-<div>
-<label class="form-label">YouTube URL</label>
-<input class="form-input" name="socialYouTube" type="url" value="{{ request.form.get('socialYouTube', settings.get('socialYouTube', '')) }}" placeholder="https://www.youtube.com/@..." />
-</div>
-<div class="md:col-span-2">
-<label class="form-label">Telegram URL</label>
-<input class="form-input" name="socialTelegram" type="url" value="{{ request.form.get('socialTelegram', settings.get('socialTelegram', '')) }}" placeholder="https://t.me/..." />
-</div>
-
-<div class="md:col-span-2">
-<label class="form-label">Map Embed URL (optional)</label>
-<input class="form-input" name="mapEmbedUrl" type="url" value="{{ request.form.get('mapEmbedUrl', settings['mapEmbedUrl']) }}" placeholder="https://www.google.com/maps/embed?pb=..." />
-<p class="mt-1 text-[11px] text-gray-500">Powers the map on the Home page "Visit Us" section and the Contact page. Get this from Google Maps: Share &rarr; Embed a map &rarr; copy the <code>src</code> URL. Leave blank to auto-generate a map from the Headquarters Address above.</p>
-</div>
-<div>
-<label class="form-label">Timezone</label>
-<select class="form-input" name="timezone" required>
-{% for tz in timezones %}
-<option value="{{ tz }}" {{ 'selected' if request.form.get('timezone', settings['timezone']) == tz else '' }}>{{ tz }}</option>
-{% endfor %}
-</select>
-</div>
-<div class="md:col-span-2 pt-4 border-t border-gray-100">
-<h3 class="text-sm font-bold text-gray-900 mb-3">Social Links (shown in the footer and Contact page — left blank icons are hidden)</h3>
-</div>
-<div>
-<label class="form-label">Facebook URL</label>
-<input class="form-input" name="facebook_url" type="url" value="{{ request.form.get('facebook_url', settings['facebook_url']) }}" placeholder="https://facebook.com/..." />
-</div>
-<div>
-<label class="form-label">Instagram URL</label>
-<input class="form-input" name="instagram_url" type="url" value="{{ request.form.get('instagram_url', settings['instagram_url']) }}" placeholder="https://instagram.com/..." />
-</div>
-<div>
-<label class="form-label">YouTube URL</label>
-<input class="form-input" name="youtube_url" type="url" value="{{ request.form.get('youtube_url', settings['youtube_url']) }}" placeholder="https://youtube.com/@..." />
-</div>
-<div>
-<label class="form-label">X (Twitter) URL</label>
-<input class="form-input" name="x_url" type="url" value="{{ request.form.get('x_url', settings['x_url']) }}" placeholder="https://x.com/..." />
-</div>
-<div class="md:col-span-2 pt-4 border-t border-gray-100">
-<h3 class="text-sm font-bold text-gray-900 mb-3">Pastor Profile (shown on Home &amp; About)</h3>
-</div>
-<div>
-<label class="form-label">Pastor Name</label>
-<input class="form-input" name="pastorName" value="{{ request.form.get('pastorName', settings['pastorName'] or 'Pastor Samuel Daniel Inyeneabasi') }}" />
-</div>
-<div>
-<label class="form-label">Pastor Title</label>
-<input class="form-input" name="pastorTitle" value="{{ request.form.get('pastorTitle', settings['pastorTitle'] or 'Senior Pastor') }}" />
-</div>
-<div class="md:col-span-2">
-<label class="form-label">Pastor Bio</label>
-<textarea class="form-input min-h-24" name="pastorBio">{{ request.form.get('pastorBio', settings['pastorBio'] or '') }}</textarea>
-</div>
-<div class="md:col-span-2 pt-4 border-t border-gray-100">
-<h3 class="text-sm font-bold text-gray-900 mb-3">Pastor Photo</h3>
-<div class="flex items-center gap-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
-<img src="{{ url_for('static', path=settings.get('pastorPhoto', 'images/pastor-samuel-inyeneabasi.png')) }}" alt="Pastor Photo" class="w-20 h-20 rounded-xl object-cover border border-gray-200" onerror="this.style.display='none'"/>
-<div>
-<p class="text-xs font-semibold text-gray-900">Current: {{ settings.get('pastorPhoto', 'images/pastor-samuel-inyeneabasi.png') }}</p>
-<p class="text-[11px] text-gray-500">Shown on Home &amp; About. Use the Upload Photo form below to change.</p>
-</div>
-</div>
-</div>
-</div>
-</section>
-<section class="content-card settings-panel hidden" data-settings-panel="appearance">
-<h2 class="section-title">Admin Appearance</h2>
-{% set themeMode = request.form.get('admin_theme_mode', settings['admin_theme_mode']) %}
-{% set selectedPreset = request.form.get('admin_theme_preset', settings['admin_theme_preset']) %}
-{% set customTheme = {
-  'primary': request.form.get('admin_theme_custom_primary', settings['admin_theme_custom_primary']),
-  'primary_dark': request.form.get('admin_theme_custom_primary_dark', settings['admin_theme_custom_primary_dark']),
-  'primary_light': request.form.get('admin_theme_custom_primary_light', settings['admin_theme_custom_primary_light']),
-  'secondary': request.form.get('admin_theme_custom_secondary', settings['admin_theme_custom_secondary']),
-  'background': request.form.get('admin_theme_custom_background', settings['admin_theme_custom_background']),
-  'sidebar': request.form.get('admin_theme_custom_sidebar', settings['admin_theme_custom_sidebar']),
-} %}
-<input type="hidden" name="admin_theme_mode" value="{{ themeMode }}" data-theme-mode-input>
-<input type="hidden" name="admin_theme_preset" value="{{ selectedPreset }}" data-theme-preset-input>
-
-<div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-{% for key, theme in themePresets.items() %}
-<button type="button"
-  class="theme-preset-option rounded-2xl border p-4 text-left transition-all {{ 'border-primary bg-primary/5 ring-2 ring-primary/20' if themeMode == 'preset' and selectedPreset == key else 'border-gray-200 bg-white hover:border-primary/40' }}"
-  data-theme-preset="{{ key }}"
-  data-theme-primary="{{ theme['primary'] }}"
-  data-theme-primary-dark="{{ theme['primary_dark'] }}"
-  data-theme-primary-light="{{ theme['primary_light'] }}"
-  data-theme-secondary="{{ theme['secondary'] }}"
-  data-theme-background="{{ theme['background'] }}"
-  data-theme-sidebar="{{ theme['sidebar'] }}">
-  <div class="flex items-center justify-between gap-3">
-    <div>
-      <p class="text-sm font-bold text-gray-900">{{ theme['name'] }}</p>
-      <p class="mt-1 text-xs text-gray-500">{{ theme['description'] }}</p>
-    </div>
-    <span class="hidden items-center justify-center rounded-full bg-primary text-white theme-preset-check" style="height: 25px; width: 46px;"><i class="ri-check-line text-sm"></i></span>
+  <div role="tablist" aria-label="Settings sections" aria-orientation="vertical" id="settings-tabs"
+       class="lg:sticky lg:top-0 flex lg:flex-col gap-1 overflow-x-auto pb-1 lg:pb-0 admin-scrollbar">
+    {% for key, label, icon in sections %}
+      <button type="button" role="tab" id="tab-{{ key }}" data-tab="{{ key }}" aria-controls="{{ key }}" aria-selected="{{ 'true' if loop.first else 'false' }}" tabindex="{{ '0' if loop.first else '-1' }}"
+              class="settings-tab inline-flex items-center gap-2 px-3 py-2 rounded-md text-[12.5px] font-medium text-ink-2 hover:bg-sunken hover:text-ink whitespace-nowrap text-left border border-transparent">
+        <i class="{{ icon }} text-base text-ink-3"></i>{{ label }}
+      </button>
+    {% endfor %}
   </div>
-  <div class="mt-4 flex h-9 overflow-hidden rounded-xl border border-gray-100">
-    <span class="flex-1" style="background-color: {{ theme['primary'] }}"></span>
-    <span class="flex-1" style="background-color: {{ theme['secondary'] }}"></span>
-    <span class="flex-1" style="background-color: {{ theme['background'] }}"></span>
-    <span class="flex-1" style="background-color: {{ theme['sidebar'] }}"></span>
-  </div>
-</button>
-{% endfor %}
-</div>
 
-<div class="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4">
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-    <div>
-      <h3 class="text-sm font-bold text-gray-900">Custom Theme</h3>
-      <p class="text-xs text-gray-500 mt-0.5">Create your own admin palette when the presets do not fit.</p>
-    </div>
-    <button type="button" class="inline-flex h-10 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-xs font-bold text-gray-700 hover:border-primary/40 hover:text-primary" data-use-custom-theme>
-      <i class="ri-brush-line text-base"></i>
-      Use Custom
-    </button>
-  </div>
-  <div class="mt-4 grid gap-4 md:grid-cols-3">
-    <label><span class="form-label">Primary</span><input type="color" name="admin_theme_custom_primary" value="{{ customTheme['primary'] }}" class="h-11 w-full rounded-xl border border-gray-200 bg-white p-1" data-custom-color="primary"></label>
-    <label><span class="form-label">Primary Dark</span><input type="color" name="admin_theme_custom_primary_dark" value="{{ customTheme['primary_dark'] }}" class="h-11 w-full rounded-xl border border-gray-200 bg-white p-1" data-custom-color="primaryDark"></label>
-    <label><span class="form-label">Primary Light</span><input type="color" name="admin_theme_custom_primary_light" value="{{ customTheme['primary_light'] }}" class="h-11 w-full rounded-xl border border-gray-200 bg-white p-1" data-custom-color="primaryLight"></label>
-    <label><span class="form-label">Secondary</span><input type="color" name="admin_theme_custom_secondary" value="{{ customTheme['secondary'] }}" class="h-11 w-full rounded-xl border border-gray-200 bg-white p-1" data-custom-color="secondary"></label>
-    <label><span class="form-label">Background</span><input type="color" name="admin_theme_custom_background" value="{{ customTheme['background'] }}" class="h-11 w-full rounded-xl border border-gray-200 bg-white p-1" data-custom-color="background"></label>
-    <label><span class="form-label">Sidebar</span><input type="color" name="admin_theme_custom_sidebar" value="{{ customTheme['sidebar'] }}" class="h-11 w-full rounded-xl border border-gray-200 bg-white p-1" data-custom-color="sidebar"></label>
-  </div>
-  <div class="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white" data-theme-preview>
-    <div class="flex">
-      <div class="w-28 p-3" data-preview-sidebar>
-        <div class="mb-3 h-3 w-16 rounded-full bg-white/80"></div>
-        <div class="h-6 rounded-lg" data-preview-primary-soft></div>
-        <div class="mt-2 h-6 rounded-lg bg-white/10"></div>
+  <div class="flex flex-col gap-4 min-w-0">
+
+    {% if secret_key_is_default %}
+      <div class="rounded-md border border-[#e6c9c5] bg-bad-bg text-bad px-3.5 py-2.5 text-[12.5px] flex gap-2" role="alert">
+        <i class="ri-alert-line text-base mt-0.5"></i>
+        <span>The server <code class="font-mono">SECRET_KEY</code> is still the default. Saved API keys are encrypted with a key derived from it, so set a long random value in <code class="font-mono">.env</code> <b>before</b> saving keys. Changing it later makes saved keys unreadable and they will need re-entering.</span>
       </div>
-      <div class="flex-1 p-4" data-preview-background>
-        <div class="mb-3 h-4 w-24 rounded-full" data-preview-secondary></div>
-        <div class="grid grid-cols-3 gap-2">
-          <div class="h-12 rounded-xl bg-white"></div>
-          <div class="h-12 rounded-xl" data-preview-primary></div>
-          <div class="h-12 rounded-xl bg-white"></div>
+    {% endif %}
+
+    <form id="settings-form" action="{{ url_for('admin_settings_update') }}" method="POST" class="flex flex-col gap-4" data-turbo="false">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      {# ───── General ───── #}
+      <section id="general" class="panel scroll-mt-4 flex flex-col gap-4">
+        <h2 class="text-[15px] font-semibold text-ink">General site</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {{ field('Site name', 'site_name', value=S.get('site_name') or S.get('siteName') or '') }}
+          {{ field('Tagline', 'site_tagline', value=S.get('site_tagline') or S.get('siteTagline') or '') }}
+          {{ field('Public contact email', 'public_contact_email', value=S.get('public_contact_email') or '', type='email', mono=True) }}
+          {{ field('Support phone', 'support_phone', value=S.get('support_phone') or '', mono=True) }}
+        </div>
+        {{ field('Headquarters address', 'headquarters_address', value=S.get('headquarters_address') or '') }}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label for="timezone" class="field-label">Timezone</label>
+            <select id="timezone" name="timezone" class="field-select">
+              {% for tz in timezones %}<option value="{{ tz }}" {{ 'selected' if (S.get('timezone') or 'Africa/Lagos') == tz else '' }}>{{ tz }}</option>{% endfor %}
+            </select>
+          </div>
+          {{ field('Map embed URL', 'mapEmbedUrl', value=S.get('mapEmbedUrl') or '', mono=True, hint='Optional. Defaults to a Google Maps search for the headquarters address.') }}
+        </div>
+
+        <div class="pt-4 border-t border-line">
+          <h3 class="text-[13px] font-semibold text-ink mb-3">Counselling</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {{ field('Counselling phone', 'counsellingPhone', value=S.get('counsellingPhone') or '', mono=True) }}
+            {{ field('Counselling hours', 'counsellingHours', value=S.get('counsellingHours') or '') }}
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-line">
+          <h3 class="text-[13px] font-semibold text-ink mb-1">Social links</h3>
+          <p class="text-[11.5px] text-ink-3 mb-3">Shown in the site footer and contact page. Leave blank to hide an icon.</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {{ field('Facebook', 'socialFacebook', value=S.get('socialFacebook') or '', mono=True) }}
+            {{ field('Instagram', 'socialInstagram', value=S.get('socialInstagram') or '', mono=True) }}
+            {{ field('X (Twitter)', 'socialX', value=S.get('socialX') or '', mono=True) }}
+            {{ field('YouTube', 'socialYouTube', value=S.get('socialYouTube') or '', mono=True) }}
+            {{ field('Telegram', 'socialTelegram', value=S.get('socialTelegram') or '', mono=True) }}
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-line">
+          <h3 class="text-[13px] font-semibold text-ink mb-3">Pastor profile <span class="font-normal text-ink-3">— shown on Home &amp; About</span></h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            {{ field('Name', 'pastorName', value=S.get('pastorName') or '') }}
+            {{ field('Title', 'pastorTitle', value=S.get('pastorTitle') or '') }}
+          </div>
+          {{ textarea('Biography', 'pastorBio', value=S.get('pastorBio') or '', rows=4) }}
+        </div>
+      </section>
+
+
+      {# ───── Website content ───── #}
+      <section id="website" class="panel scroll-mt-4 flex flex-col gap-6">
+        <div>
+          <h2 class="text-[15px] font-semibold text-ink">Website content</h2>
+          <p class="text-[12px] text-ink-3 mt-1">What visitors read on the public site. Anything left empty is simply not shown — nothing is invented.</p>
+        </div>
+
+        {% if readiness %}
+        <div class="rounded-md border border-line">
+          <div class="px-3.5 py-2.5 border-b border-line flex items-center justify-between">
+            <p class="text-[12.5px] font-semibold text-ink">Website checklist</p>
+            <p class="font-mono text-[11px] text-ink-3">{{ readiness|selectattr('ok')|list|length }} of {{ readiness|length }} done</p>
+          </div>
+          <ul class="divide-y divide-line">
+            {% for it in readiness %}
+              <li class="px-3.5 py-2.5 flex gap-2.5 items-start">
+                <i class="{{ 'ri-checkbox-circle-fill text-ok' if it.ok else 'ri-error-warning-line text-warn' }} text-base mt-0.5" aria-hidden="true"></i>
+                <div class="min-w-0"><p class="text-[12.5px] font-medium text-ink">{{ it.label }}</p><p class="text-[11.5px] text-ink-3">{{ it.detail }}</p></div>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        {# Service times #}
+        <div class="pt-2 border-t border-line">
+          <h3 class="text-[13px] font-semibold text-ink">Service times</h3>
+          <p class="text-[11.5px] text-ink-3 mt-1 mb-3">Used on the home, about, visit, contact and prayer pages, in search results and in the “add to calendar” file. Write times like <span class="font-mono">7:00 — 9:30 am</span> so calendars and Google can read them. Tick <b>Main</b> for the highlighted services.</p>
+          <div id="svc-rows" class="flex flex-col gap-2">
+            {% for r in svc_rows %}
+              <div class="grid grid-cols-[1fr_1.4fr_1.2fr_auto_auto] gap-2 items-center max-sm:grid-cols-2" data-row>
+                <input name="svc_day" value="{{ r.day }}" placeholder="Sunday" aria-label="Day" class="field-input">
+                <input name="svc_name" value="{{ r.name }}" placeholder="First Service" aria-label="Service name" class="field-input">
+                <input name="svc_time" value="{{ r.time }}" placeholder="7:00 — 9:30 am" aria-label="Time" class="field-input field-mono">
+                <label class="flex items-center gap-1.5 text-[11.5px] text-ink-2"><input type="checkbox" class="field-checkbox" data-lead {{ 'checked' if r.lead else '' }}>Main<input type="hidden" name="svc_lead" value="{{ '1' if r.lead else '0' }}"></label>
+                <button type="button" class="icon-btn text-bad" data-remove-row aria-label="Remove this service"><i class="ri-close-line"></i></button>
+              </div>
+            {% endfor %}
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm mt-2" data-add-row="svc-rows" data-template="tpl-svc"><i class="ri-add-line"></i>Add a service</button>
+          <template id="tpl-svc">
+            <div class="grid grid-cols-[1fr_1.4fr_1.2fr_auto_auto] gap-2 items-center max-sm:grid-cols-2" data-row>
+              <input name="svc_day" placeholder="Sunday" aria-label="Day" class="field-input">
+              <input name="svc_name" placeholder="Service name" aria-label="Service name" class="field-input">
+              <input name="svc_time" placeholder="7:00 — 9:30 am" aria-label="Time" class="field-input field-mono">
+              <label class="flex items-center gap-1.5 text-[11.5px] text-ink-2"><input type="checkbox" class="field-checkbox" data-lead>Main<input type="hidden" name="svc_lead" value="0"></label>
+              <button type="button" class="icon-btn text-bad" data-remove-row aria-label="Remove this service"><i class="ri-close-line"></i></button>
+            </div>
+          </template>
+        </div>
+
+        {# Visit page #}
+        <div class="pt-4 border-t border-line">
+          <h3 class="text-[13px] font-semibold text-ink">Plan your visit page</h3>
+          <p class="text-[11.5px] text-ink-3 mt-1 mb-3">“What to expect” is a short list of headings with a sentence each. The details below appear only when you fill them in.</p>
+          <div id="exp-rows" class="flex flex-col gap-3">
+            {% for title, text in expect_rows %}
+              <div class="grid grid-cols-[1fr_2fr_auto] gap-2 items-start max-sm:grid-cols-1" data-row>
+                <input name="exp_title" value="{{ title }}" placeholder="A warm welcome" aria-label="Heading" class="field-input">
+                <textarea name="exp_text" rows="2" aria-label="Description" data-richtext="off" class="field-textarea">{{ text }}</textarea>
+                <button type="button" class="icon-btn text-bad" data-remove-row aria-label="Remove this item"><i class="ri-close-line"></i></button>
+              </div>
+            {% endfor %}
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm mt-2" data-add-row="exp-rows" data-template="tpl-exp"><i class="ri-add-line"></i>Add an item</button>
+          <template id="tpl-exp">
+            <div class="grid grid-cols-[1fr_2fr_auto] gap-2 items-start max-sm:grid-cols-1" data-row>
+              <input name="exp_title" placeholder="Heading" aria-label="Heading" class="field-input">
+              <textarea name="exp_text" rows="2" aria-label="Description" data-richtext="off" class="field-textarea"></textarea>
+              <button type="button" class="icon-btn text-bad" data-remove-row aria-label="Remove this item"><i class="ri-close-line"></i></button>
+            </div>
+          </template>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+            {{ field('Parking', 'visitParking', value=S.get('visitParking') or '', hint='e.g. Free parking inside the compound.') }}
+            {{ field('What to wear', 'visitDress', value=S.get('visitDress') or '', hint='e.g. Come as you are; smart-casual is common.') }}
+            {{ field('Children', 'visitChildren', value=S.get('visitChildren') or '', hint='Only if you run a children’s ministry.') }}
+            {{ field('Accessibility', 'visitAccessibility', value=S.get('visitAccessibility') or '', hint='Step-free access, seating, sign language…') }}
+          </div>
+          <div class="mt-4">{{ textarea('A closing note for visitors', 'visitNote', value=S.get('visitNote') or '', rows=2) }}</div>
+        </div>
+
+        {# Teaching + stories #}
+        <div class="pt-4 border-t border-line">
+          <h3 class="text-[13px] font-semibold text-ink">What we teach <span class="font-normal text-ink-3">— shown on About</span></h3>
+          <p class="text-[11.5px] text-ink-3 mt-1 mb-3">Until you save your own, the About page shows short statements taken from the ministry’s existing wording. Replace them with your statement of faith when it is ready.</p>
+          <div id="bel-rows" class="flex flex-col gap-3">
+            {% for title, text in teach_rows %}
+              <div class="grid grid-cols-[1fr_2fr_auto] gap-2 items-start max-sm:grid-cols-1" data-row>
+                <input name="bel_title" value="{{ title }}" placeholder="The Word of God" aria-label="Heading" class="field-input">
+                <textarea name="bel_text" rows="2" aria-label="Statement" data-richtext="off" class="field-textarea">{{ text }}</textarea>
+                <button type="button" class="icon-btn text-bad" data-remove-row aria-label="Remove this statement"><i class="ri-close-line"></i></button>
+              </div>
+            {% endfor %}
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm mt-2" data-add-row="bel-rows" data-template="tpl-bel"><i class="ri-add-line"></i>Add a statement</button>
+          <template id="tpl-bel">
+            <div class="grid grid-cols-[1fr_2fr_auto] gap-2 items-start max-sm:grid-cols-1" data-row>
+              <input name="bel_title" placeholder="Heading" aria-label="Heading" class="field-input">
+              <textarea name="bel_text" rows="2" aria-label="Statement" data-richtext="off" class="field-textarea"></textarea>
+              <button type="button" class="icon-btn text-bad" data-remove-row aria-label="Remove this statement"><i class="ri-close-line"></i></button>
+            </div>
+          </template>
+          <div class="mt-4">{{ field('Link to a full statement of faith (optional)', 'faithStatementUrl', value=S.get('faithStatementUrl') or '', mono=True, hint='A web address, e.g. a PDF you host.') }}</div>
+          <div class="mt-4 grid grid-cols-1 gap-4">
+            {{ textarea('Our story', 'ourStory', value=S.get('ourStory') or '', rows=6, hint='How the ministry began. Separate paragraphs with a blank line. Shown on About only when filled.') }}
+            {{ textarea('The pastor’s story', 'pastorStory', value=S.get('pastorStory') or '', rows=6, hint='Shown on the Our Pastor page only when filled.') }}
+          </div>
+        </div>
+
+        {# Channels #}
+        <div class="pt-4 border-t border-line">
+          <h3 class="text-[13px] font-semibold text-ink">WhatsApp &amp; Telegram</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+            {{ field('WhatsApp chat number', 'whatsappNumber', value=S.get('whatsappNumber') or '', mono=True, hint='A number people can message, e.g. 0803 000 0000. Adds “Message us on WhatsApp” buttons.') }}
+            {{ field('WhatsApp channel link', 'whatsappChannelUrl', value=S.get('whatsappChannelUrl') or '', type='url', mono=True, hint='The channel invite link (whatsapp.com/channel/…).') }}
+            {{ field('Telegram join link', 'telegramJoinUrl', value=S.get('telegramJoinUrl') or '', type='url', mono=True, hint='Your channel or group invite link (t.me/…). Falls back to the Telegram social link.') }}
+          </div>
+        </div>
+
+        {# Prayer + emails #}
+        <div class="pt-4 border-t border-line">
+          <h3 class="text-[13px] font-semibold text-ink">Prayer &amp; email</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+            {{ field('Prayer response time', 'prayerResponseTime', value=S.get('prayerResponseTime') or '', placeholder='three working days', hint='Completes “you can expect to hear from us within …”. Only promise what your team can keep.') }}
+            {{ field('Public web address', 'siteUrl', value=S.get('siteUrl') or '', type='url', mono=True, placeholder='https://scentofwater.org', hint='Used for links inside emails sent in the background (reminders, campaigns).') }}
+          </div>
+        </div>
+
+        {# Analytics #}
+        <div class="pt-4 border-t border-line">
+          <h3 class="text-[13px] font-semibold text-ink">Visitor statistics</h3>
+          <p class="text-[11.5px] text-ink-3 mt-1 mb-3">Built-in counts are always on (no cookies, no IP addresses — see <a href="{{ url_for('admin_analytics') }}" class="text-gold-text hover:underline">Site traffic</a>). If you also use Plausible, add its domain here to load its script.</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {{ field('Plausible domain (optional)', 'plausibleDomain', value=S.get('plausibleDomain') or '', mono=True, placeholder='scentofwater.org') }}
+            {{ field('Plausible script URL (optional)', 'plausibleSrc', value=S.get('plausibleSrc') or '', type='url', mono=True, placeholder='https://plausible.io/js/script.js', hint='Only for a self-hosted Plausible.') }}
+          </div>
+        </div>
+      </section>
+
+      {# ───── Appearance ───── #}
+      <section id="appearance" class="panel scroll-mt-4 flex flex-col gap-4">
+        <div>
+          <h2 class="text-[15px] font-semibold text-ink">Admin appearance</h2>
+          <p class="text-[12px] text-ink-3 mt-1">Accent colours for this console. Each administrator can still switch between light and dark mode from the top bar.</p>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          {% for key, preset in themePresets.items() %}
+            <label class="flex flex-col gap-2 rounded-md border p-3 cursor-pointer {{ 'border-gold bg-gold-tint' if cur_preset == key else 'border-line' }}">
+              <span class="flex items-center gap-2">
+                <input type="radio" name="admin_theme_preset" value="{{ key }}" {{ 'checked' if cur_preset == key else '' }} class="accent-gold">
+                <span class="text-[12.5px] font-semibold text-ink">{{ preset.name }}</span>
+              </span>
+              <span class="flex gap-1">
+                <span class="w-5 h-5 rounded-sm border border-line" style="background:{{ preset.primary }}"></span>
+                <span class="w-5 h-5 rounded-sm border border-line" style="background:{{ preset.primary_dark }}"></span>
+                <span class="w-5 h-5 rounded-sm border border-line" style="background:{{ preset.primary_light }}"></span>
+                <span class="w-5 h-5 rounded-sm border border-line" style="background:{{ preset.sidebar }}"></span>
+              </span>
+              <span class="text-[11px] text-ink-3">{{ preset.description }}</span>
+            </label>
+          {% endfor %}
+          <label class="flex flex-col gap-2 rounded-md border p-3 cursor-pointer {{ 'border-gold bg-gold-tint' if cur_preset == 'custom' else 'border-line' }}">
+            <span class="flex items-center gap-2">
+              <input type="radio" name="admin_theme_preset" value="custom" {{ 'checked' if cur_preset == 'custom' else '' }} class="accent-gold">
+              <span class="text-[12.5px] font-semibold text-ink">Custom</span>
+            </span>
+            <span class="text-[11px] text-ink-3">Choose your own colours below.</span>
+          </label>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {% for name, label, default in [('admin_theme_custom_primary', 'Primary', '#b8891f'), ('admin_theme_custom_primary_dark', 'Primary dark', '#8a6414'), ('admin_theme_custom_primary_light', 'Primary light', '#e8c870'), ('admin_theme_custom_sidebar', 'Sidebar', '#121110')] %}
+            <div>
+              <label for="{{ name }}" class="field-label">{{ label }}</label>
+              <input id="{{ name }}" type="color" name="{{ name }}" value="{{ S.get(name) or default }}" class="h-10 w-full rounded-md border border-line-2 bg-surface p-1 cursor-pointer">
+            </div>
+          {% endfor %}
+        </div>
+        <p class="text-[11px] text-ink-3">Custom colours apply only when “Custom” is selected. Changes take effect after saving.</p>
+      </section>
+
+      {# ───── Giving ───── #}
+      <section id="giving" class="panel scroll-mt-4 flex flex-col gap-4">
+        <h2 class="text-[15px] font-semibold text-ink">Giving gateway</h2>
+        <div class="rounded-md border border-line p-4 flex flex-col gap-3">
+          <p class="field-label">How giving works</p>
+          {% set gm = S.get('giving_model') or 'central' %}
+          <label class="flex items-start gap-2.5 cursor-pointer"><input type="radio" name="giving_model" value="central" {{ 'checked' if gm == 'central' else '' }} class="accent-gold mt-1">
+            <span><span class="text-[12.5px] font-semibold text-ink">Central — everything through HQ</span>
+              <span class="block text-[11.5px] text-ink-3">All online gifts use HQ's gateway and bank accounts. The Give page shows only HQ's details.</span></span></label>
+          <label class="flex items-start gap-2.5 cursor-pointer"><input type="radio" name="giving_model" value="branch" {{ 'checked' if gm == 'branch' else '' }} class="accent-gold mt-1">
+            <span><span class="text-[12.5px] font-semibold text-ink">Each branch collects — and remits to HQ</span>
+              <span class="block text-[11.5px] text-ink-3">Donors choose HQ or a branch. Each branch shows its own bank accounts and can use its own payment account (Branch settings). Gifts taken through HQ's gateway are tracked as held for that branch. See Remittances for who owes whom.</span></span></label>
+          <p class="field-hint">You can switch at any time. Existing gifts keep the branch and account they were recorded with.</p>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label for="active_giving_gateway" class="field-label">Active gateway <span class="normal-case text-ink-3 font-sans">(one at a time)</span></label>
+            <select id="active_giving_gateway" name="active_giving_gateway" class="field-select">
+              {% for v, l in [('paystack', 'Paystack'), ('flutterwave', 'Flutterwave')] %}<option value="{{ v }}" {{ 'selected' if (S.get('active_giving_gateway') or 'paystack') == v else '' }}>{{ l }}</option>{% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="giving_mode" class="field-label">Gateway mode</label>
+            <select id="giving_mode" name="giving_mode" class="field-select">
+              {% for v, l in [('test', 'Test'), ('live', 'Live')] %}<option value="{{ v }}" {{ 'selected' if (S.get('giving_mode') or 'test') == v else '' }}>{{ l }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        {{ textarea('Giving purposes', 'giving_purposes', value=S.get('giving_purposes') or '', rows=5, hint='One purpose per line. These become the dropdown on the Give page; “Others” is always added automatically.') }}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-line">
+          {{ field('Paystack public key', 'paystack_public_key', value=S.get('paystack_public_key') or '', mono=True) }}
+          {{ secret_field('Paystack secret key', 'paystack_secret_key', secret_status.paystack_secret_key, env_fallback.paystack_secret_key) }}
+          {{ field('Flutterwave public key', 'flutterwave_public_key', value=S.get('flutterwave_public_key') or '', mono=True) }}
+          {{ secret_field('Flutterwave secret key', 'flutterwave_secret_key', secret_status.flutterwave_secret_key, env_fallback.flutterwave_secret_key) }}
+          {{ secret_field('Flutterwave encryption key', 'flutterwave_encryption_key', secret_status.flutterwave_encryption_key) }}
+        </div>
+      </section>
+
+      {# ───── Church accounts ───── #}
+      <section id="accounts" class="panel scroll-mt-4 flex flex-col gap-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 class="text-[15px] font-semibold text-ink">Church accounts</h2>
+            <p class="text-[12px] text-ink-3 mt-1">Bank accounts displayed on the public Give page.</p>
+          </div>
+          <button type="button" id="add-account" class="btn btn-secondary btn-sm"><i class="ri-add-line"></i>Add account</button>
+        </div>
+        <div id="accounts-list" class="flex flex-col gap-3">
+          {% for acct in accounts %}
+            <div class="account-row rounded-md border border-line bg-sunken p-3.5" data-index="{{ loop.index0 }}">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div><label class="field-label">Bank name</label><input name="church_accounts[{{ loop.index0 }}][bank_name]" value="{{ acct.get('bank_name', '') }}" class="field-input"></div>
+                <div><label class="field-label">Account number</label><input name="church_accounts[{{ loop.index0 }}][account_number]" value="{{ acct.get('account_number', '') }}" class="field-input field-mono"></div>
+                <div><label class="field-label">Account name</label><input name="church_accounts[{{ loop.index0 }}][account_name]" value="{{ acct.get('account_name', '') }}" class="field-input"></div>
+              </div>
+              <div class="flex flex-wrap items-center gap-3 mt-3">
+                <input type="hidden" name="church_accounts[{{ loop.index0 }}][bank_logo]" value="{{ acct.get('bank_logo', '') }}" class="bank-logo-value">
+                <img src="{{ ('/static/' ~ acct.get('bank_logo')) if acct.get('bank_logo') else '' }}" alt="" class="bank-logo-preview h-8 w-auto max-w-[96px] object-contain rounded border border-line bg-surface {{ '' if acct.get('bank_logo') else 'hidden' }}">
+                <label class="btn btn-secondary btn-sm cursor-pointer"><i class="ri-upload-2-line"></i>Upload logo<input type="file" accept="image/*" class="sr-only bank-logo-file"></label>
+                {% if bank_logos %}<button type="button" class="btn btn-ghost btn-sm bank-logo-reuse">Choose existing</button>{% endif %}
+                <span class="bank-logo-status text-[11px] text-ink-3"></span>
+                <span class="flex-grow"></span>
+                <button type="button" class="btn btn-danger btn-sm remove-account"><i class="ri-delete-bin-line"></i>Remove</button>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <p id="accounts-empty" class="text-[12.5px] text-ink-3 {{ 'hidden' if accounts else '' }}">No accounts added yet.</p>
+
+        <div id="logo-picker" class="hidden rounded-md border border-line p-3">
+          <p class="text-[12px] font-semibold text-ink mb-2">Choose an uploaded logo</p>
+          <div class="grid grid-cols-4 sm:grid-cols-6 gap-2">
+            {% for logo in bank_logos %}
+              <button type="button" class="logo-choice rounded border border-line bg-surface p-2 hover:border-gold" data-path="{{ logo }}"><img src="/static/{{ logo }}" alt="" class="h-8 w-full object-contain"></button>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      {# ───── Security ───── #}
+      <section id="security" class="panel scroll-mt-4 flex flex-col gap-4">
+        <h2 class="text-[15px] font-semibold text-ink">Admin security</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {{ field('Session timeout (minutes)', 'admin_session_timeout_minutes', value=S.get('admin_session_timeout_minutes') or '30', type='number', mono=True, hint='Administrators are signed out after this period of inactivity (5–1440).') }}
+        </div>
+        <div class="rounded-md border border-line bg-sunken p-3.5">
+          <p class="mono-label mb-2">Not yet enforced</p>
+          <p class="text-[11.5px] text-ink-3 mb-3">These controls are stored for future use but the console does not enforce them yet, so they are read-only.</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 opacity-70">
+            <div><label class="field-label">Audit log retention (days)</label><input value="{{ S.get('audit_log_retention_days') or '365' }}" disabled class="field-input field-mono"></div>
+            <div class="flex flex-col gap-2 justify-end text-[12.5px] text-ink-2">
+              <label class="flex items-center gap-2"><input type="checkbox" disabled {{ 'checked' if S.get('enforce_strong_passwords') == '1' else '' }} class="field-checkbox">Enforce strong passwords</label>
+              <label class="flex items-center gap-2"><input type="checkbox" disabled {{ 'checked' if S.get('enable_admin_2fa') == '1' else '' }} class="field-checkbox">Two-factor authentication</label>
+              <label class="flex items-center gap-2"><input type="checkbox" disabled {{ 'checked' if S.get('allow_admin_remember_me') == '1' else '' }} class="field-checkbox">Allow “remember me”</label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {# ───── Email ───── #}
+      <section id="email" class="panel scroll-mt-4 flex flex-col gap-4">
+        <h2 class="text-[15px] font-semibold text-ink">Email delivery</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {{ secret_field('Resend API key', 'resend_api_key', secret_status.resend_api_key) }}
+          {{ field('From email', 'resend_from_email', value=S.get('resend_from_email') or '', type='email', mono=True) }}
+          {{ field('From name', 'resend_from_name', value=S.get('resend_from_name') or '') }}
+        </div>
+
+        <div class="pt-4 border-t border-line">
+          <h3 class="text-[13px] font-semibold text-ink mb-1">Send a test email</h3>
+          <p class="text-[11.5px] text-ink-3 mb-3">Uses the saved key, so save first. If it fails, the provider’s reason is shown (most often the sender domain is not verified in Resend).</p>
+          <div class="flex flex-wrap items-end gap-2">
+            <div class="min-w-[16rem] flex-1"><label for="test_to" class="field-label">Send to</label><input id="test_to" name="test_to" form="email-test-form" type="email" value="{{ admin.email }}" class="field-input field-mono"></div>
+            <button type="submit" form="email-test-form" class="btn btn-secondary btn-sm"><i class="ri-send-plane-line"></i>Send test</button>
+          </div>
+        </div>
+        {% if email_log %}
+        <div class="pt-4 border-t border-line">
+          <h3 class="text-[13px] font-semibold text-ink mb-2">Recent emails</h3>
+          <div class="overflow-x-auto"><table class="dtable dtable-responsive">
+            <thead><tr><th>When</th><th>To</th><th>What</th><th>Result</th></tr></thead>
+            <tbody>
+              {% for m in email_log %}
+                <tr>
+                  <td data-label="When" class="font-mono text-xs whitespace-nowrap">{{ m.created_at.strftime('%d %b %H:%M') }}</td>
+                  <td data-label="To" class="font-mono text-xs">{{ m.to_email }}</td>
+                  <td data-label="What" class="text-[12.5px]">{{ m.kind }} · {{ m.subject }}</td>
+                  <td data-label="Result">{{ badge(m.status, 'ok' if m.status == 'sent' else ('bad' if m.status == 'failed' else 'neut')) }}{% if m.error %}<span class="block text-[11px] text-ink-3 mt-0.5">{{ m.error }}</span>{% endif %}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table></div>
+        </div>
+        {% endif %}
+      </section>
+
+      {# ───── AI drafting ───── #}
+      <section id="ai" class="panel scroll-mt-4 flex flex-col gap-5">
+        <div>
+          <h2 class="text-[15px] font-semibold text-ink">AI drafting <span class="font-normal text-ink-3">· Books Pub</span></h2>
+          <p class="text-[12px] text-ink-3 mt-1">Drafts devotional and book topics and content from sermon transcripts. Save keys for any providers you want, then choose which one is the default. Changes apply immediately to the app and the background worker.</p>
+        </div>
+
+        <div>
+          <p class="field-label">Default provider</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+            {% for pkey, pm in ai_providers.items() %}
+              {% set st = secret_status[pm.key_setting] %}
+              <label class="flex flex-col gap-1.5 rounded-md border p-3 cursor-pointer {{ 'border-gold bg-gold-tint' if ai_default == pkey else 'border-line' }}">
+                <span class="flex items-center gap-2">
+                  <input type="radio" name="ai_default_provider" value="{{ pkey }}" {{ 'checked' if ai_default == pkey else '' }} class="accent-gold">
+                  <span class="text-[12.5px] font-semibold text-ink">{{ pm.label }}</span>
+                </span>
+                <span class="text-[11px] {{ 'text-ok' if st.state == 'set' or env_fallback.get(pm.key_setting) else 'text-ink-3' }}">
+                  {{ 'Key saved' if st.state == 'set' else ('Key from server .env' if env_fallback.get(pm.key_setting) else ('Key unreadable' if st.state == 'unreadable' else 'No key yet')) }}
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+          <p class="field-hint">If the default provider has no key, drafting is unavailable until you add one or pick another default.</p>
+        </div>
+
+        {% for pkey, pm in ai_providers.items() %}
+          <div class="pt-4 border-t border-line">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <h3 class="text-[13px] font-semibold text-ink">{{ pm.label }} {% if ai_default == pkey %}<span class="badge badge-ok ml-1">Default</span>{% endif %}</h3>
+              <span class="text-[11px] text-ink-3">Get a key at <span class="font-mono">{{ pm.docs }}</span></span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {{ secret_field(pm.label ~ ' API key', pm.key_setting, secret_status[pm.key_setting], env_fallback.get(pm.key_setting, False), placeholder=pm.key_hint) }}
+              {% set mo = ai_model_opts[pkey] %}
+              {% set cur = request.form.get(pm.model_setting, S.get(pm.model_setting) or '') %}
+              <div>
+                <label for="{{ pm.model_setting }}" class="field-label">Model</label>
+                <input id="{{ pm.model_setting }}" name="{{ pm.model_setting }}" type="text" list="models-{{ pkey }}" value="{{ cur }}"
+                       placeholder="{{ ai_default_models[pkey] }}" autocomplete="off" spellcheck="false" maxlength="120" class="field-input field-mono">
+                <datalist id="models-{{ pkey }}">
+                  {% for mid, mlabel in mo.models %}<option value="{{ mid }}">{{ mlabel }}</option>{% endfor %}
+                </datalist>
+                <p class="field-hint">
+                  Pick from the list or type any model name. Blank uses <span class="font-mono">{{ ai_default_models[pkey] }}</span>.
+                  {% if mo.live %}Live list · {{ mo.models|length }} models · fetched {{ mo.fetched_at }}.{% else %}Suggested list — use Refresh to load the provider's current models.{% endif %}
+                </p>
+                {% if cur and cur not in (mo.models|map('first')|list) %}
+                  <p class="field-hint text-warn">“{{ cur }}” is a custom name{% if mo.live %} that is not in the provider's current list{% endif %}. Use “Test saved key” after saving to confirm it works.</p>
+                {% endif %}
+              </div>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button type="submit" form="ai-test-form" name="provider" value="{{ pkey }}" class="btn btn-secondary btn-sm"><i class="ri-plug-line"></i>Test saved {{ pm.label.split(' ')[0] }} key</button>
+              <button type="submit" form="ai-refresh-form" name="provider" value="{{ pkey }}" class="btn btn-secondary btn-sm" {{ 'disabled' if secret_status[pm.key_setting].state != 'set' and not env_fallback.get(pm.key_setting) else '' }}><i class="ri-refresh-line"></i>Refresh model list</button>
+            </div>
+          </div>
+        {% endfor %}
+        <p class="text-[11.5px] text-ink-3">Test and Refresh use the key that is already saved, so save your changes first. Free tiers (notably Groq) have small per-minute token limits; long sermons may need a paid plan or a different provider.</p>
+      </section>
+
+      {# ───── Distribution ───── #}
+      <section id="distribution" class="panel scroll-mt-4 flex flex-col gap-4">
+        <h2 class="text-[15px] font-semibold text-ink">Audio message distribution</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {{ secret_field('Telegram bot token', 'telegram_bot_token', secret_status.telegram_bot_token, placeholder='123456:ABC…') }}
+          {{ field('Telegram audio chat / channel ID', 'telegram_audio_chat_id', value=S.get('telegram_audio_chat_id') or '', mono=True, placeholder='@channelname or -100…') }}
+        </div>
+        <div class="pt-4 border-t border-line">
+          <h3 class="text-[13px] font-semibold text-ink mb-1">Public listen links <span class="font-normal text-ink-3">(optional)</span></h3>
+          <p class="text-[11.5px] text-ink-3 mb-3">Podcast feed: <span class="font-mono">{{ feed_url }}</span></p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {{ field('Spotify show URL', 'spotify_rss_url', value=S.get('spotify_rss_url') or '', type='url', mono=True) }}
+            {{ field('Apple Podcasts URL', 'apple_podcasts_url', value=S.get('apple_podcasts_url') or '', type='url', mono=True) }}
+          </div>
+        </div>
+      </section>
+
+      {# ───── Legal ───── #}
+      <section id="legal" class="panel scroll-mt-4 flex flex-col gap-4">
+        <h2 class="text-[15px] font-semibold text-ink">Legal pages</h2>
+        <p class="text-[12px] text-ink-3">The site already publishes a standard <a href="{{ url_for('privacy_policy') }}" target="_blank" rel="noopener" class="text-gold-text hover:underline">Privacy Policy</a> and <a href="{{ url_for('terms_of_service') }}" target="_blank" rel="noopener" class="text-gold-text hover:underline">Terms of Service</a> written for a Nigerian church under the NDPA. Have your adviser review them. To publish your own wording instead, write it below; <b>leave a box empty to keep the standard text</b>.</p>
+        {{ textarea('Privacy policy', 'privacy_policy_content', value=S.get('privacy_policy_content') or '', rows=8, rich=True) }}
+        {{ textarea('Terms of service', 'terms_of_service_content', value=S.get('terms_of_service_content') or '', rows=8, rich=True) }}
+      </section>
+
+      <div id="settings-save-bar" class="sticky bottom-0 -mx-1 px-1 py-3 bg-paper/95 backdrop-blur border-t border-line flex items-center justify-end gap-3">
+        <span class="text-[11.5px] text-ink-3 hidden sm:inline">Saves the changes on every tab.</span>
+        <button type="submit" class="btn btn-primary btn-lg"><i class="ri-save-line"></i>Save all settings</button>
+      </div>
+    </form>
+
+
+    <form id="email-test-form" method="POST" action="{{ url_for('admin_settings_test_email') }}" data-turbo="false">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    </form>
+
+    <form id="ai-test-form" method="POST" action="{{ url_for('admin_settings_test_ai') }}" data-turbo="false">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    </form>
+    <form id="ai-refresh-form" method="POST" action="{{ url_for('admin_settings_refresh_models') }}" data-turbo="false">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    </form>
+
+    {# ───── Media (own forms: file uploads) ───── #}
+    <section id="media" class="panel scroll-mt-4 flex flex-col gap-5">
+      <h2 class="text-[15px] font-semibold text-ink">Photos &amp; page headers</h2>
+
+      <form action="{{ url_for('admin_settings_pastor_photo') }}" method="POST" enctype="multipart/form-data" class="flex flex-wrap items-center gap-4" data-turbo="false">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <img src="{{ ('/' ~ S.get('pastorPhoto').lstrip('/')) if S.get('pastorPhoto') else '/images/pastor-samuel-inyeneabasi.png' }}" alt="Pastor photo" class="w-16 h-16 rounded-full object-cover border border-line bg-sunken">
+        <div class="flex-grow min-w-[200px]">
+          <p class="text-[13px] font-semibold text-ink">Pastor photo</p>
+          <p class="text-[11.5px] text-ink-3">Shown on Home &amp; About. JPG, PNG, WebP or GIF up to 5 MB.</p>
+        </div>
+        <label class="btn btn-secondary cursor-pointer"><i class="ri-upload-2-line"></i>Choose photo
+          <input type="file" name="photo" accept="image/*" class="sr-only" onchange="this.form.requestSubmit()" required>
+        </label>
+      </form>
+
+      <div class="pt-4 border-t border-line">
+        <h3 class="text-[13px] font-semibold text-ink mb-1">Page headers</h3>
+        <p class="text-[11.5px] text-ink-3 mb-4">Hero background for each public page. Choose an image to replace it; the default applies wherever a page has no image of its own.</p>
+        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+          {% for key, label in hero_pages %}
+            {% set setting_key = 'defaultPageHero' if key == 'default' else 'pageHero_' ~ key %}
+            {% set img = S.get(setting_key) or S.get('defaultPageHero') or 'images/general-page-header.jpg' %}
+            <form action="{{ url_for('admin_settings_page_hero') }}" method="POST" enctype="multipart/form-data" class="rounded-md border border-line bg-sunken p-2.5 flex flex-col gap-2" data-turbo="false">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <input type="hidden" name="page_key" value="{{ key }}">
+              <img src="/{{ img.lstrip('/') }}" alt="{{ label }} header" class="w-full h-20 rounded object-cover border border-line bg-surface" loading="lazy" onerror="this.style.visibility='hidden'">
+              <p class="text-[12px] font-semibold text-ink truncate">{{ label }}</p>
+              <p class="text-[10px] text-ink-3">{{ 'Applies to every page by default' if key == 'default' else ('Custom image set' if S.get(setting_key) else 'Uses default') }}</p>
+              <label class="btn btn-secondary btn-sm cursor-pointer w-full"><i class="ri-upload-2-line"></i>Replace
+                <input type="file" name="image" accept="image/*" class="sr-only" onchange="this.form.requestSubmit()" required>
+              </label>
+            </form>
+          {% endfor %}
         </div>
       </div>
-    </div>
+    </section>
   </div>
 </div>
-</section>
 
-<section class="content-card settings-panel hidden" data-settings-panel="gateway">
-<h2 class="section-title">Giving Gateway</h2>
-<div class="grid md:grid-cols-2 gap-5 mb-6">
-<div>
-<label class="form-label">Active Gateway (one at a time)</label>
-<select class="form-input" name="active_giving_gateway">
-<option value="paystack" {{ 'selected' if request.form.get('active_giving_gateway', settings['active_giving_gateway']) == 'paystack' else '' }}>Paystack</option>
-<option value="flutterwave" {{ 'selected' if request.form.get('active_giving_gateway', settings['active_giving_gateway']) == 'flutterwave' else '' }}>Flutterwave</option>
-</select>
-</div>
-<div>
-<label class="form-label">Gateway Mode</label>
-<select class="form-input" name="giving_mode">
-<option value="test" {{ 'selected' if request.form.get('giving_mode', settings['giving_mode']) == 'test' else '' }}>Test</option>
-<option value="live" {{ 'selected' if request.form.get('giving_mode', settings['giving_mode']) == 'live' else '' }}>Live</option>
-</select>
-</div>
-<div class="md:col-span-2 pt-4 border-t border-gray-100">
-<label class="form-label">Giving Purposes</label>
-<p class="text-[11px] text-gray-500 mb-2">One purpose per line. These appear as the dropdown options on the Give page. "Others" is always appended automatically.</p>
-<textarea class="form-input min-h-28" name="giving_purposes" placeholder="Tithe&#10;Offering&#10;Missions&#10;Building Fund&#10;Welfare">{{ request.form.get('giving_purposes', settings.get('giving_purposes', 'Tithe\nOffering\nMissions\nBuilding Fund\nWelfare')) }}</textarea>
-<p class="mt-1 text-[11px] text-gray-500">Currently shown on the /give page as the Purpose dropdown. Changes take effect immediately on save.</p>
-</div>
-</div>
-
-<div class="grid md:grid-cols-2 gap-5">
-<div data-gateway-fields="paystack">
-<label class="form-label">Paystack Public Key</label>
-<input class="form-input" name="paystack_public_key" value="{{ request.form.get('paystack_public_key', settings['paystack_public_key']) }}" />
-</div>
-<div data-gateway-fields="paystack">
-<label class="form-label">Paystack Secret Key</label>
-<input class="form-input" name="paystack_secret_key" value="{{ request.form.get('paystack_secret_key', settings['paystack_secret_key']) }}" />
-</div>
-<div data-gateway-fields="flutterwave">
-<label class="form-label">Flutterwave Public Key</label>
-<input class="form-input" name="flutterwave_public_key" value="{{ request.form.get('flutterwave_public_key', settings['flutterwave_public_key']) }}" />
-</div>
-<div data-gateway-fields="flutterwave">
-<label class="form-label">Flutterwave Secret Key</label>
-<input class="form-input" name="flutterwave_secret_key" value="{{ request.form.get('flutterwave_secret_key', settings['flutterwave_secret_key']) }}" />
-</div>
-<div class="md:col-span-2" data-gateway-fields="flutterwave">
-<label class="form-label">Flutterwave Encryption Key</label>
-<input class="form-input" name="flutterwave_encryption_key" value="{{ request.form.get('flutterwave_encryption_key', settings['flutterwave_encryption_key']) }}" />
-</div>
-</div>
-</section>
-
-<section class="content-card settings-panel hidden" data-settings-panel="accounts">
-<h2 class="section-title">Church Accounts (Multiple)</h2>
-<p class="text-xs text-gray-500 mb-4">Add each giving account with separate bank, account number, and account name fields. Upload a bank logo per row, or pick one already uploaded.</p>
-{% set accountRows = request.form.get('church_accounts', settings['church_accounts']) %}
-{% if accountRows is not iterable or accountRows|length == 0 %}
-{% set accountRows = [{'bank_name': '', 'account_number': '', 'account_name': '', 'bank_logo': ''}] %}
-{% endif %}
-
-{# Collect already-uploaded bank logos for reuse picker #}
-{% set uploadedLogos = bank_logos or [] %}
-
-<div id="church-account-rows" class="space-y-4">
-{% for account in accountRows %}
-<div class="church-account-row border border-gray-200 rounded-xl p-4 space-y-3" data-account-row>
-<div class="grid md:grid-cols-3 gap-3">
-<label><span class="form-label">Bank Name</span><input class="form-input" name="church_accounts[{{ loop.index0 }}][bank_name]" value="{{ account.get('bank_name', '') }}" /></label>
-<label><span class="form-label">Account Number</span><input class="form-input" name="church_accounts[{{ loop.index0 }}][account_number]" value="{{ account.get('account_number', '') }}" /></label>
-<label><span class="form-label">Account Name</span><input class="form-input" name="church_accounts[{{ loop.index0 }}][account_name]" value="{{ account.get('account_name', '') }}" /></label>
-</div>
-<div class="flex items-end gap-3 flex-wrap">
-  <div class="flex-1 min-w-48">
-    <span class="form-label block mb-1">Bank Logo</span>
-    <div class="flex items-center gap-2">
-      <div class="bank-logo-preview w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
-        {% if account.get('bank_logo') %}
-        <img src="/static/{{ account['bank_logo'] }}" class="w-full h-full object-contain" alt="Bank logo"/>
-        {% else %}
-        <i class="ri-bank-line text-gray-400 text-lg"></i>
-        {% endif %}
-      </div>
-      <input type="hidden" name="church_accounts[{{ loop.index0 }}][bank_logo]" class="bank-logo-value" value="{{ account.get('bank_logo', '') }}"/>
-      <label class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-gray-600 cursor-pointer hover:border-primary/40 hover:text-primary transition-colors">
-        <i class="ri-upload-2-line text-sm"></i>Upload
-        <input type="file" accept="image/*" class="hidden bank-logo-file-input" data-row-index="{{ loop.index0 }}"/>
-      </label>
-      {% if uploadedLogos %}
-      <button type="button" class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-gray-600 hover:border-primary/40 hover:text-primary transition-colors bank-logo-reuse-btn">
-        <i class="ri-image-line text-sm"></i>Reuse
-      </button>
-      {% endif %}
+<template id="account-row-template">
+  <div class="account-row rounded-md border border-line bg-sunken p-3.5" data-index="__INDEX__">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div><label class="field-label">Bank name</label><input name="church_accounts[__INDEX__][bank_name]" class="field-input"></div>
+      <div><label class="field-label">Account number</label><input name="church_accounts[__INDEX__][account_number]" class="field-input field-mono"></div>
+      <div><label class="field-label">Account name</label><input name="church_accounts[__INDEX__][account_name]" class="field-input"></div>
+    </div>
+    <div class="flex flex-wrap items-center gap-3 mt-3">
+      <input type="hidden" name="church_accounts[__INDEX__][bank_logo]" value="" class="bank-logo-value">
+      <img src="" alt="" class="bank-logo-preview hidden h-8 w-auto max-w-[96px] object-contain rounded border border-line bg-surface">
+      <label class="btn btn-secondary btn-sm cursor-pointer"><i class="ri-upload-2-line"></i>Upload logo<input type="file" accept="image/*" class="sr-only bank-logo-file"></label>
+      {% if bank_logos %}<button type="button" class="btn btn-ghost btn-sm bank-logo-reuse">Choose existing</button>{% endif %}
+      <span class="bank-logo-status text-[11px] text-ink-3"></span>
+      <span class="flex-grow"></span>
+      <button type="button" class="btn btn-danger btn-sm remove-account"><i class="ri-delete-bin-line"></i>Remove</button>
     </div>
   </div>
-  <button type="button" class="h-9 w-9 self-end rounded-xl border border-gray-200 text-gray-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors flex-shrink-0" data-remove-account-row aria-label="Remove account"><i class="ri-delete-bin-line text-base"></i></button>
-</div>
-</div>
-{% endfor %}
-</div>
+</template>
 
-<button type="button" id="add-church-account-row" class="mt-4 inline-flex h-10 items-center gap-2 rounded-xl border border-gray-200 px-4 text-xs font-bold text-gray-600 hover:border-primary/40 hover:text-primary transition-colors">
-<i class="ri-add-line text-base"></i><span>Add Account</span>
-</button>
-
-{# Hidden logo reuse picker modal #}
-{% if uploadedLogos %}
-<div id="bank-logo-reuse-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50" data-logo-modal>
-  <div class="bg-white rounded-2xl shadow-2xl p-6 w-80 max-w-full mx-4">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="text-sm font-bold text-gray-900">Pick an uploaded logo</h3>
-      <button type="button" id="bank-logo-modal-close" class="text-gray-400 hover:text-gray-700"><i class="ri-close-line text-lg"></i></button>
-    </div>
-    <div class="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
-      {% for logo in uploadedLogos %}
-      <button type="button" class="bank-logo-pick-item p-1 border border-gray-200 rounded-lg hover:border-primary transition-colors" data-logo-path="{{ logo }}">
-        <img src="/static/{{ logo }}" class="w-full h-12 object-contain" alt="Bank logo"/>
-      </button>
-      {% endfor %}
-    </div>
-  </div>
-</div>
-{% endif %}
-</section>
-
-<section class="content-card settings-panel hidden" data-settings-panel="security">
-<h2 class="section-title">Admin Security</h2>
-<div class="grid md:grid-cols-2 gap-5">
-<div>
-<label class="form-label">Admin Session Timeout (minutes)</label>
-<input class="form-input" name="admin_session_timeout_minutes" type="number" min="5" max="1440" value="{{ request.form.get('admin_session_timeout_minutes', settings['admin_session_timeout_minutes']) }}" />
-</div>
-<div>
-<label class="form-label">Audit Log Retention (days)</label>
-<input class="form-input" name="audit_log_retention_days" type="number" min="7" max="3650" value="{{ request.form.get('audit_log_retention_days', settings['audit_log_retention_days']) }}" />
-</div>
-<div class="space-y-3 pt-6">
-<label class="flex items-center gap-3 text-sm font-semibold">
-<input type="hidden" name="enforce_strong_passwords" value="0"/>
-<input type="checkbox" name="enforce_strong_passwords" value="1" {{ 'checked' if request.form.get('enforce_strong_passwords', settings['enforce_strong_passwords']) == '1' else '' }} class="rounded border-gray-300 text-primary focus:ring-primary"/>
-Enforce strong passwords
-</label>
-<label class="flex items-center gap-3 text-sm font-semibold">
-<input type="hidden" name="enable_admin_2fa" value="0"/>
-<input type="checkbox" name="enable_admin_2fa" value="1" {{ 'checked' if request.form.get('enable_admin_2fa', settings['enable_admin_2fa']) == '1' else '' }} class="rounded border-gray-300 text-primary focus:ring-primary"/>
-Require 2FA for admins
-</label>
-<label class="flex items-center gap-3 text-sm font-semibold">
-<input type="hidden" name="allow_admin_remember_me" value="0"/>
-<input type="checkbox" name="allow_admin_remember_me" value="1" {{ 'checked' if request.form.get('allow_admin_remember_me', settings['allow_admin_remember_me']) == '1' else '' }} class="rounded border-gray-300 text-primary focus:ring-primary"/>
-Allow remember me on admin login
-</label>
-</div>
-</div>
-</section>
-
-<section class="content-card settings-panel hidden" data-settings-panel="email">
-<h2 class="section-title">Email Delivery</h2>
-<p class="text-xs text-gray-500 mb-5">HarvestTrack app login credentials are sent with Resend. Store the API key here so branch admins can create workers without seeing or managing mail credentials.</p>
-<div class="grid md:grid-cols-2 gap-5">
-<div class="md:col-span-2">
-<label class="form-label">Resend API Key</label>
-<input class="form-input" name="resend_api_key" value="{{ request.form.get('resend_api_key', settings['resend_api_key']) }}" placeholder="re_xxxxxxxxx" autocomplete="off" />
-<p class="mt-1 text-[11px] text-gray-500">Stored encrypted. Required before HarvestTrack worker credentials can be mailed.</p>
-</div>
-<div>
-<label class="form-label">Sender Email</label>
-<input class="form-input" name="resend_from_email" type="email" value="{{ request.form.get('resend_from_email', settings['resend_from_email']) }}" placeholder="{{ settings['public_contact_email'] }}" />
-</div>
-<div>
-<label class="form-label">Sender Name</label>
-<input class="form-input" name="resend_from_name" value="{{ request.form.get('resend_from_name', settings['resend_from_name']) }}" placeholder="{{ settings['site_name'] }}" />
-</div>
-</div>
-</section>
-
-<section class="content-card settings-panel hidden" data-settings-panel="audio">
-<h2 class="section-title">Audio Message Distribution</h2>
-<p class="text-xs text-gray-500 mb-5">Uploaded audio is stored on this server and served from the website. Telegram is an optional extra delivery channel per message.</p>
-<div class="mb-5 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5">
-<i class="ri-rss-line text-primary text-base"></i>
-<div class="min-w-0 flex-1">
-<p class="text-xs font-bold text-gray-800">Podcast Feed URL — this is the single point of distribution</p>
-<p class="text-[11px] text-gray-500">Submit this URL once to Spotify for Podcasters and Apple Podcasts Connect. Every audio message you publish is added automatically — no per-platform upload needed.</p>
-</div>
-<input readonly value="{{ feed_url }}" class="hidden sm:block w-64 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600" onclick="this.select()">
-</div>
-<div class="grid md:grid-cols-2 gap-5">
-<div>
-<label class="form-label">Telegram Bot Token</label>
-<input class="form-input" name="telegram_bot_token" value="{{ request.form.get('telegram_bot_token', settings['telegram_bot_token']) }}" autocomplete="off" placeholder="123456:ABC..." />
-<p class="mt-1 text-[11px] text-gray-500">Stored encrypted. Only needed if you check "Telegram" as a delivery target when uploading a message.</p>
-</div>
-<div>
-<label class="form-label">Telegram Audio Chat / Channel ID</label>
-<input class="form-input" name="telegram_audio_chat_id" value="{{ request.form.get('telegram_audio_chat_id', settings['telegram_audio_chat_id']) }}" placeholder="@channelname or -100..." />
-</div>
-<div class="md:col-span-2 pt-2 border-t border-gray-100">
-<h3 class="text-sm font-bold text-gray-900 mb-1">Public listen links (optional)</h3>
-<p class="text-[11px] text-gray-500 mb-3">These are just informational links shown to visitors after you've manually submitted the Podcast Feed URL above to each platform. They do not upload or sync anything automatically.</p>
-</div>
-<div>
-<label class="form-label">Spotify Show URL</label>
-<input class="form-input" name="spotify_rss_url" type="url" value="{{ request.form.get('spotify_rss_url', settings['spotify_rss_url']) }}" placeholder="https://open.spotify.com/show/..." />
-</div>
-<div>
-<label class="form-label">Apple Podcasts URL</label>
-<input class="form-input" name="apple_podcasts_url" type="url" value="{{ request.form.get('apple_podcasts_url', settings['apple_podcasts_url']) }}" />
-</div>
-</div>
-</section>
-
-<section class="content-card settings-panel hidden" data-settings-panel="pages">
-<h2 class="section-title">Page Headers</h2>
-<p class="text-xs text-gray-500 mb-5">Configure the hero background image for each public page. Click any thumbnail to replace it. The default applies to every page unless a page-specific image is set.</p>
-<input type="hidden" name="page_key" id="pageHeroKeyInput">
-<input type="file" name="image" id="pageHeroFileInput" accept="image/*" class="hidden">
-<button type="submit" formaction="{{ url_for('admin_settings_page_hero') }}" formenctype="multipart/form-data" formnovalidate id="pageHeroSubmitBtn" class="hidden"></button>
-<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-{% set pageKeys = [
-  {'key': 'default', 'label': 'Default Hero (all pages)'},
-  {'key': 'about', 'label': 'About Page'},
-  {'key': 'departments', 'label': 'Departments Page'},
-  {'key': 'messages', 'label': 'Audio Messages Page'},
-  {'key': 'events', 'label': 'Events Page'},
-  {'key': 'calendar', 'label': 'Calendar Page'},
-  {'key': 'contact', 'label': 'Contact Page'},
-  {'key': 'casom', 'label': 'CASOM Page'},
-  {'key': 'give', 'label': 'Give Page'},
-  {'key': 'stories', 'label': 'Stories Page'},
-  {'key': 'get-involved', 'label': 'Get Involved Page'},
-  {'key': 'prayer', 'label': 'Prayer Page'},
-  {'key': 'watch', 'label': 'Watch Page'},
-  {'key': 'our-pastor', 'label': 'Our Pastor Page'},
-  {'key': 'outreach', 'label': 'Outreach Pages'},
-] %}
-{% for pk in pageKeys %}
-{% set pkSettingKey = 'defaultPageHero' if pk.key == 'default' else 'pageHero_' + pk.key %}
-{% set pkImage = settings.get(pkSettingKey) or settings.get('defaultPageHero', '/images/general-page-header.jpg') %}
-<div class="p-3 bg-gray-50 rounded-xl border border-gray-200">
-<button type="button" class="page-hero-thumb-btn block w-full relative group" data-page-hero-key="{{ pk.key }}" title="Click to change {{ pk.label }} hero image">
-<img src="{{ pkImage }}" alt="{{ pk.label }}" class="w-full h-24 rounded-lg object-cover border border-gray-200" onerror="this.style.display='none'"/>
-<span class="absolute inset-0 rounded-lg bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100"><i class="ri-upload-2-line text-white text-lg"></i></span>
-</button>
-<p class="text-sm font-semibold text-gray-800 mt-2">{{ pk.label }}</p>
-<p class="text-[10px] text-gray-400">{{ 'Applies to every page by default' if pk.key == 'default' else ('Custom image set' if settings.get(pkSettingKey) else 'Uses default') }}</p>
-<input type="file" accept="image/*" class="hidden page-hero-picker" id="pageHeroPicker-{{ pk.key }}" data-page-key="{{ pk.key }}">
-</div>
-{% endfor %}
-</div>
-</section>
-
-<section class="content-card settings-panel hidden" data-settings-panel="legal">
-<h2 class="section-title">Legal Pages</h2>
-<div class="space-y-5">
-<div>
-<label class="form-label">Privacy Policy Content</label>
-<textarea class="form-input min-h-40" name="privacy_policy_content">{{ request.form.get('privacy_policy_content', settings['privacy_policy_content']) }}</textarea>
-</div>
-<div>
-<label class="form-label">Terms of Service Content</label>
-<textarea class="form-input min-h-40" name="terms_of_service_content">{{ request.form.get('terms_of_service_content', settings['terms_of_service_content']) }}</textarea>
-</div>
-</div>
-</section>
-
-<div class="flex justify-end">
-<button type="submit" class="w-full h-12 rounded-xl bg-primary px-6 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">
-Save All Settings
-</button>
-</div>
-</div>
-</div>
-</form>
-<form action="{{ url_for('admin_settings_pastor_photo') }}" method="POST" enctype="multipart/form-data" class="content-card p-5 flex items-center gap-4 mt-4">
-<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-<div>
-<h3 class="text-sm font-bold text-gray-900">Pastor Photo</h3>
-<p class="text-xs text-gray-500">Current: {{ settings.get('pastorPhoto', 'images/pastor-samuel-inyeneabasi.png') }}</p>
-</div>
-<input type="file" name="photo" accept="image/*" required class="form-input text-sm">
-<button type="submit" class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814]">Upload Photo</button>
-</form>
-</div>
-</main>
-</div>
 <script>
+/* Settings tabs: one panel visible at a time; the URL hash (#ai) keeps the tab across reloads, links and redirects. */
 (() => {
-function initializeSettingsPage() {
-    window.__swmSettingsPageAbort?.abort();
-    const controller = new AbortController();
-    window.__swmSettingsPageAbort = controller;
-    const listenerOptions = { signal: controller.signal };
+  window.__swmSettingsTabsAbort?.abort();
+  const ctl = new AbortController();
+  window.__swmSettingsTabsAbort = ctl;
+  const opt = { signal: ctl.signal };
+  const tabs = [...document.querySelectorAll('#settings-tabs [data-tab]')];
+  if (!tabs.length) return;
+  const ids = tabs.map((t) => t.dataset.tab);
+  const bar = document.getElementById('settings-save-bar');
+  const scroller = document.querySelector('main');
 
-    const tabs = Array.from(document.querySelectorAll('[data-settings-tab]'));
-    const panels = Array.from(document.querySelectorAll('[data-settings-panel]'));
-    if (!tabs.length || !panels.length) {
-        return;
-    }
-
-    const gatewaySelect = document.querySelector('select[name="active_giving_gateway"]');
-    const gatewayFieldBlocks = Array.from(document.querySelectorAll('[data-gateway-fields]'));
-    const accountRows = document.getElementById('church-account-rows');
-    const addAccountRow = document.getElementById('add-church-account-row');
-    const themeModeInput = document.querySelector('[data-theme-mode-input]');
-    const themePresetInput = document.querySelector('[data-theme-preset-input]');
-    const themePresetButtons = Array.from(document.querySelectorAll('[data-theme-preset]'));
-    const customThemeButton = document.querySelector('[data-use-custom-theme]');
-    const customColorInputs = Array.from(document.querySelectorAll('[data-custom-color]'));
-    const preview = {
-        sidebar: document.querySelector('[data-preview-sidebar]'),
-        background: document.querySelector('[data-preview-background]'),
-        primary: document.querySelector('[data-preview-primary]'),
-        primarySoft: document.querySelector('[data-preview-primary-soft]'),
-        secondary: document.querySelector('[data-preview-secondary]'),
-    };
-
-    function activateTab(key) {
-        tabs.forEach((tab) => {
-            const active = tab.dataset.settingsTab === key;
-            tab.classList.toggle('active', active);
-        });
-
-        panels.forEach((panel) => {
-            const active = panel.dataset.settingsPanel === key;
-            panel.classList.toggle('hidden', !active);
-        });
-    }
-
-    tabs.forEach((tab) => {
-        tab.addEventListener('click', () => activateTab(tab.dataset.settingsTab), listenerOptions);
+  function show(id, { focus = false, push = false, scroll = true } = {}) {
+    if (!ids.includes(id)) id = ids[0];
+    tabs.forEach((t) => {
+      const on = t.dataset.tab === id;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      t.classList.toggle('bg-gold-tint', on);
+      t.classList.toggle('border-line-2', on);
+      t.classList.toggle('text-ink', on);
+      if (on && focus) t.focus();
+      if (on) t.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     });
+    ids.forEach((i) => { const p = document.getElementById(i); if (p) { p.hidden = i !== id; p.setAttribute('role', 'tabpanel'); p.setAttribute('aria-labelledby', 'tab-' + i); } });
+    if (bar) bar.hidden = id === 'media';           /* the media panel has its own upload forms */
+    const url = location.pathname + location.search + '#' + id;
+    if (location.hash !== '#' + id) (push ? history.pushState : history.replaceState).call(history, history.state, '', url);
+    if (scroll && scroller) scroller.scrollTo({ top: 0 });
+  }
 
-    function toggleGatewayFields() {
-        if (!gatewaySelect) {
-            return;
-        }
+  const initial = location.hash.slice(1);
+  show(ids.includes(initial) ? initial : ids[0], { scroll: false });
 
-        const activeGateway = gatewaySelect.value;
-        gatewayFieldBlocks.forEach((block) => {
-            block.classList.toggle('hidden', block.dataset.gatewayFields !== activeGateway);
-        });
-    }
-
-    if (gatewaySelect) {
-        gatewaySelect.addEventListener('change', toggleGatewayFields, listenerOptions);
-        toggleGatewayFields();
-    }
-
-    function previewTheme(theme) {
-        if (preview.sidebar) preview.sidebar.style.backgroundColor = theme.sidebar;
-        if (preview.background) preview.background.style.backgroundColor = theme.background;
-        if (preview.primary) preview.primary.style.backgroundColor = theme.primary;
-        if (preview.primarySoft) preview.primarySoft.style.backgroundColor = `${theme.primary}33`;
-        if (preview.secondary) preview.secondary.style.backgroundColor = theme.secondary;
-    }
-
-    function customThemeValues() {
-        const valueFor = (key) => customColorInputs.find((input) => input.dataset.customColor === key)?.value;
-        return {
-            primary: valueFor('primary') || '#c9a227',
-            primaryDark: valueFor('primaryDark') || '#a5831f',
-            primaryLight: valueFor('primaryLight') || '#e8d5a3',
-            secondary: valueFor('secondary') || '#1a1a1a',
-            background: valueFor('background') || '#f8f8f7',
-            sidebar: valueFor('sidebar') || '#1a1814',
-        };
-    }
-
-    function syncThemeControls() {
-        const mode = themeModeInput.value || 'preset';
-        const preset = themePresetInput.value || 'default';
-        themePresetButtons.forEach((button) => {
-            const active = mode === 'preset' && button.dataset.themePreset === preset;
-            button.classList.toggle('border-primary', active);
-            button.classList.toggle('bg-primary/5', active);
-            button.classList.toggle('ring-2', active);
-            button.classList.toggle('ring-primary/20', active);
-            button.classList.toggle('border-gray-200', !active);
-            button.querySelector('.theme-preset-check')?.classList.toggle('hidden', !active);
-            button.querySelector('.theme-preset-check')?.classList.toggle('flex', active);
-        });
-
-        customThemeButton.classList.toggle('border-primary', mode === 'custom');
-        customThemeButton.classList.toggle('text-primary', mode === 'custom');
-
-        if (mode === 'custom') {
-            previewTheme(customThemeValues());
-            return;
-        }
-
-        const selected = themePresetButtons.find((button) => button.dataset.themePreset === preset) || themePresetButtons[0];
-        if (selected) {
-            previewTheme({
-                primary: selected.dataset.themePrimary,
-                secondary: selected.dataset.themeSecondary,
-                background: selected.dataset.themeBackground,
-                sidebar: selected.dataset.themeSidebar,
-            });
-        }
-    }
-
-    themePresetButtons.forEach((button) => {
-        button.addEventListener('click', () => {
-            if (themeModeInput) themeModeInput.value = 'preset';
-            if (themePresetInput) themePresetInput.value = button.dataset.themePreset;
-            syncThemeControls();
-        }, listenerOptions);
-    });
-
-    customThemeButton.addEventListener('click', () => {
-        if (themeModeInput) themeModeInput.value = 'custom';
-        syncThemeControls();
-    }, listenerOptions);
-
-    customColorInputs.forEach((input) => {
-        input.addEventListener('input', () => {
-            if (themeModeInput) themeModeInput.value = 'custom';
-            syncThemeControls();
-        }, listenerOptions);
-    });
-    syncThemeControls();
-
-    function renumberAccountRows() {
-        if (!accountRows) {
-            return;
-        }
-
-        accountRows.querySelectorAll('[data-account-row]').forEach((row, index) => {
-            row.querySelectorAll('input').forEach((input) => {
-                const field = input.name.match(/\[(bank_name|account_number|account_name|bank_logo)\]$/)?.[1];
-                if (field) {
-                    input.name = `church_accounts[${index}][${field}]`;
-                }
-                // update file input data-row-index
-                if (input.classList.contains('bank-logo-file-input')) {
-                    input.dataset.rowIndex = String(index);
-                }
-            });
-            const removeButton = row.querySelector('[data-remove-account-row]');
-            if (removeButton) {
-                removeButton.classList.toggle('opacity-40', accountRows.querySelectorAll('[data-account-row]').length === 1);
-            }
-        });
-    }
-
-    function createAccountRow() {
-        if (!accountRows) {
-            return;
-        }
-
-        const index = accountRows.querySelectorAll('[data-account-row]').length;
-        const row = document.createElement('div');
-        row.className = 'church-account-row border border-gray-200 rounded-xl p-4 space-y-3';
-        row.dataset.accountRow = '';
-        const hasReuse = !!document.querySelector('[data-logo-modal]');
-        row.innerHTML = `
-            <div class="grid md:grid-cols-3 gap-3">
-              <label><span class="form-label">Bank Name</span><input class="form-input" name="church_accounts[${index}][bank_name]" /></label>
-              <label><span class="form-label">Account Number</span><input class="form-input" name="church_accounts[${index}][account_number]" /></label>
-              <label><span class="form-label">Account Name</span><input class="form-input" name="church_accounts[${index}][account_name]" /></label>
-            </div>
-            <div class="flex items-end gap-3 flex-wrap">
-              <div class="flex-1 min-w-48">
-                <span class="form-label block mb-1">Bank Logo</span>
-                <div class="flex items-center gap-2">
-                  <div class="bank-logo-preview w-10 h-10 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
-                    <i class="ri-bank-line text-gray-400 text-lg"></i>
-                  </div>
-                  <input type="hidden" name="church_accounts[${index}][bank_logo]" class="bank-logo-value" value=""/>
-                  <label class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-gray-600 cursor-pointer hover:border-primary/40 hover:text-primary transition-colors">
-                    <i class="ri-upload-2-line text-sm"></i>Upload
-                    <input type="file" accept="image/*" class="hidden bank-logo-file-input" data-row-index="${index}"/>
-                  </label>
-                  ${hasReuse ? `<button type="button" class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 px-3 text-xs font-semibold text-gray-600 hover:border-primary/40 hover:text-primary transition-colors bank-logo-reuse-btn"><i class="ri-image-line text-sm"></i>Reuse</button>` : ''}
-                </div>
-              </div>
-              <button type="button" class="h-9 w-9 self-end rounded-xl border border-gray-200 text-gray-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-colors flex-shrink-0" data-remove-account-row aria-label="Remove account"><i class="ri-delete-bin-line text-base"></i></button>
-            </div>
-        `;
-        accountRows.appendChild(row);
-        attachLogoHandlers(row);
-        renumberAccountRows();
-        row.querySelector('input:not([type="hidden"]):not([type="file"])')?.focus();
-    }
-
-    addAccountRow.addEventListener('click', createAccountRow, listenerOptions);
-    accountRows.addEventListener('click', (event) => {
-        const button = event.target.closest('[data-remove-account-row]');
-        if (!button || !accountRows) {
-            return;
-        }
-
-        const rows = accountRows.querySelectorAll('[data-account-row]');
-        if (rows.length === 1) {
-            rows[0].querySelectorAll('input').forEach((input) => input.value = '');
-            return;
-        }
-
-        button.closest('[data-account-row]')?.remove();
-        renumberAccountRows();
-    }, listenerOptions);
-    renumberAccountRows();
-
-    // ── Bank logo upload + reuse ──────────────────────────────────────────
-    const logoModal = document.getElementById('bank-logo-reuse-modal');
-    const logoModalClose = document.getElementById('bank-logo-modal-close');
-    let activeLogoRow = null;
-
-    function setLogoOnRow(row, path) {
-        const preview = row.querySelector('.bank-logo-preview');
-        const hidden = row.querySelector('.bank-logo-value');
-        if (hidden) hidden.value = path;
-        if (preview) {
-            if (path) {
-                preview.innerHTML = `<img src="/static/${path}" class="w-full h-full object-contain" alt="Bank logo"/>`;
-            } else {
-                preview.innerHTML = `<i class="ri-bank-line text-gray-400 text-lg"></i>`;
-            }
-        }
-    }
-
-    function uploadLogoFile(file, row) {
-        const fd = new FormData();
-        fd.append('file', file);
-        const csrfInput = document.querySelector('input[name="csrf_token"]');
-        if (csrfInput) fd.append('csrf_token', csrfInput.value);
-        fetch('/admin/settings/bank-logo', { method: 'POST', body: fd })
-            .then((r) => r.json())
-            .then((data) => {
-                if (data.path) {
-                    setLogoOnRow(row, data.path);
-                    // Add to the reuse grid if the modal exists
-                    const grid = logoModal?.querySelector('.grid');
-                    if (grid) {
-                        const btn = document.createElement('button');
-                        btn.type = 'button';
-                        btn.className = 'bank-logo-pick-item p-1 border border-gray-200 rounded-lg hover:border-primary transition-colors';
-                        btn.dataset.logoPath = data.path;
-                        btn.innerHTML = `<img src="/static/${data.path}" class="w-full h-12 object-contain" alt="Bank logo"/>`;
-                        grid.appendChild(btn);
-                    }
-                } else {
-                    alert(data.error || 'Upload failed.');
-                }
-            })
-            .catch(() => alert('Upload failed. Please try again.'));
-    }
-
-    function attachLogoHandlers(scope) {
-        scope.querySelectorAll('.bank-logo-file-input').forEach((input) => {
-            input.addEventListener('change', () => {
-                const file = input.files && input.files[0];
-                if (!file) return;
-                const row = input.closest('[data-account-row]');
-                if (row) uploadLogoFile(file, row);
-                input.value = '';
-            }, listenerOptions);
-        });
-        scope.querySelectorAll('.bank-logo-reuse-btn').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                activeLogoRow = btn.closest('[data-account-row]');
-                if (logoModal) logoModal.classList.remove('hidden');
-            }, listenerOptions);
-        });
-    }
-
-    // Attach to existing rows
-    if (accountRows) attachLogoHandlers(accountRows);
-
-    if (logoModalClose) {
-        logoModalClose.addEventListener('click', () => {
-            if (logoModal) logoModal.classList.add('hidden');
-            activeLogoRow = null;
-        }, listenerOptions);
-    }
-    if (logoModal) {
-        logoModal.addEventListener('click', (e) => {
-            if (e.target === logoModal) { logoModal.classList.add('hidden'); activeLogoRow = null; }
-            const item = e.target.closest('.bank-logo-pick-item');
-            if (item && activeLogoRow) {
-                setLogoOnRow(activeLogoRow, item.dataset.logoPath);
-                logoModal.classList.add('hidden');
-                activeLogoRow = null;
-            }
-        }, listenerOptions);
-    }
-
-    const pageHeroKeyInput = document.getElementById('pageHeroKeyInput');
-    const pageHeroFileInput = document.getElementById('pageHeroFileInput');
-    const pageHeroSubmitBtn = document.getElementById('pageHeroSubmitBtn');
-
-    document.querySelectorAll('.page-hero-thumb-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            document.getElementById('pageHeroPicker-' + btn.dataset.pageHeroKey)?.click();
-        }, listenerOptions);
-    });
-
-    document.querySelectorAll('.page-hero-picker').forEach((picker) => {
-        picker.addEventListener('change', () => {
-            const file = picker.files && picker.files[0];
-            if (!file || !pageHeroKeyInput || !pageHeroFileInput || !pageHeroSubmitBtn) {
-                return;
-            }
-            const dt = new DataTransfer();
-            dt.items.add(file);
-            pageHeroFileInput.files = dt.files;
-            pageHeroKeyInput.value = picker.dataset.pageKey;
-            pageHeroSubmitBtn.click();
-        }, listenerOptions);
-    });
-
-    activateTab('general');
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeSettingsPage, { once: true });
-} else {
-    initializeSettingsPage();
-}
-
-if (!window.__swmSettingsTurboListenerAttached) {
-    window.__swmSettingsTurboListenerAttached = true;
-    document.addEventListener('turbo:load', initializeSettingsPage);
-}
+  document.getElementById('settings-tabs').addEventListener('click', (e) => {
+    const t = e.target.closest('[data-tab]');
+    if (t) show(t.dataset.tab, { push: true });
+  }, opt);
+  document.getElementById('settings-tabs').addEventListener('keydown', (e) => {
+    const i = tabs.indexOf(document.activeElement);
+    if (i < 0) return;
+    const next = { ArrowDown: i + 1, ArrowRight: i + 1, ArrowUp: i - 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+    if (next === undefined) return;
+    e.preventDefault();
+    show(tabs[(next + tabs.length) % tabs.length].dataset.tab, { focus: true });
+  }, opt);
+  window.addEventListener('hashchange', () => show(location.hash.slice(1), { scroll: false }), opt);
+  /* A required field on a hidden tab would block Save silently: jump to its tab first. */
+  document.addEventListener('invalid', (e) => {
+    const panel = e.target.closest?.('[role=tabpanel]');
+    if (panel && panel.hidden) show(panel.id, { scroll: false });
+  }, { capture: true, signal: ctl.signal });
 })();
 </script>
-</body></html>
 
+<script>
+(() => {
+  const list = document.getElementById('accounts-list');
+  const empty = document.getElementById('accounts-empty');
+  const tpl = document.getElementById('account-row-template');
+  const picker = document.getElementById('logo-picker');
+  const addBtn = document.getElementById('add-account');
+  const csrf = {{ csrf_token|tojson }};
+  const uploadUrl = {{ url_for('admin_settings_bank_logo')|tojson }};
+  if (!list || !tpl || !addBtn) return;
+  window.__swmSettingsAbort?.abort();
+  const controller = new AbortController();
+  window.__swmSettingsAbort = controller;
+  const opts = { signal: controller.signal };
+  let nextIndex = list.querySelectorAll('.account-row').length;
+  let pickerRow = null;
 
+  const syncEmpty = () => empty && empty.classList.toggle('hidden', list.querySelectorAll('.account-row').length > 0);
+  const setLogo = (row, path) => {
+    row.querySelector('.bank-logo-value').value = path || '';
+    const img = row.querySelector('.bank-logo-preview');
+    if (path) { img.src = '/static/' + path; img.classList.remove('hidden'); } else { img.classList.add('hidden'); }
+  };
 
+  addBtn.addEventListener('click', () => {
+    const html = tpl.innerHTML.split('__INDEX__').join(String(nextIndex++));
+    list.insertAdjacentHTML('beforeend', html);
+    syncEmpty();
+    list.lastElementChild.querySelector('input').focus();
+  }, opts);
+
+  list.addEventListener('click', (e) => {
+    const row = e.target.closest('.account-row');
+    if (!row) return;
+    if (e.target.closest('.remove-account')) { row.remove(); syncEmpty(); if (pickerRow === row) picker.classList.add('hidden'); }
+    if (e.target.closest('.bank-logo-reuse') && picker) { pickerRow = row; picker.classList.toggle('hidden'); row.after(picker); }
+  }, opts);
+
+  picker?.addEventListener('click', (e) => {
+    const choice = e.target.closest('.logo-choice');
+    if (!choice || !pickerRow) return;
+    setLogo(pickerRow, choice.dataset.path);
+    picker.classList.add('hidden');
+  }, opts);
+
+  list.addEventListener('change', async (e) => {
+    if (!e.target.classList.contains('bank-logo-file')) return;
+    const row = e.target.closest('.account-row');
+    const file = e.target.files && e.target.files[0];
+    const status = row.querySelector('.bank-logo-status');
+    if (!file) return;
+    status.textContent = 'Uploading…';
+    const body = new FormData();
+    body.append('file', file);
+    body.append('csrf_token', csrf);
+    try {
+      const res = await fetch(uploadUrl, { method: 'POST', body, credentials: 'same-origin' });
+      const data = await res.json();
+      if (!res.ok || !data.path) throw new Error(data.error || 'Upload failed');
+      setLogo(row, data.path);
+      status.textContent = 'Uploaded';
+    } catch (err) {
+      status.textContent = err.message || 'Upload failed';
+    }
+  }, opts);
+})();
+</script>
+
+<script>
+(function () {
+  var form = document.getElementById('settings-form'); if (!form) return;
+  form.addEventListener('click', function (e) {
+    var add = e.target.closest('[data-add-row]');
+    if (add) { var tpl = document.getElementById(add.dataset.template); document.getElementById(add.dataset.addRow).appendChild(tpl.content.cloneNode(true)); return; }
+    var rm = e.target.closest('[data-remove-row]');
+    if (rm) { var row = rm.closest('[data-row]'); if (row) row.remove(); }
+  });
+  form.addEventListener('change', function (e) {
+    var cb = e.target.closest('[data-lead]'); if (!cb) return;
+    var hid = cb.parentElement.querySelector('input[name="svc_lead"]'); if (hid) hid.value = cb.checked ? '1' : '0';
+  });
+})();
+</script>
+
+{% endblock %}

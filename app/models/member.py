@@ -28,7 +28,7 @@ class Member(Base):
         onupdate=lambda: datetime.utcnow(),
     )
 
-    branch = relationship("Branch", back_populates="members")
+    branch = relationship("Branch", back_populates="members", lazy="selectin")
 
     @property
     def full_name(self) -> str:

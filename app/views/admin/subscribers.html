@@ -1,0 +1,64 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, empty_state, filter_pager with context %}
+{% block title %}Subscribers | {{ siteName }}{% endblock %}
+{% block topbar_title %}Subscribers{% endblock %}
+{% block topbar_subtitle %}Newsletter sign-ups{% endblock %}
+{% block topbar_icon %}ri-mail-send-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header("Newsletter subscribers", "Emails collected by the sign-up form in the site footer.",
+      actions='<a href="' ~ url_for('admin_subscribers_export') ~ '?status=active" class="btn btn-secondary" data-turbo="false"><i class="ri-download-2-line"></i>Export active (CSV)</a>',
+      audit=[('Active', total_active), ('Shown', pagination.total)]) }}
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-3.5">
+  <form method="get" action="{{ url_for('admin_subscribers') }}" class="flex flex-wrap items-center gap-2.5" data-no-loading>
+    <div class="flex items-center gap-2 w-full sm:w-72 px-3 py-2 rounded-md border border-line-2 bg-surface">
+      <i class="ri-search-line text-ink-3 text-sm"></i>
+      <label for="sub-q" class="sr-only">Search subscribers</label>
+      <input id="sub-q" type="search" name="q" value="{{ search }}" placeholder="Search email…" class="flex-grow border-none bg-transparent text-[12.5px] text-ink outline-none min-w-0">
+    </div>
+    <select name="status" onchange="this.form.submit()" aria-label="Filter by status" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
+      <option value="">All</option>
+      <option value="active" {{ 'selected' if filter_status == 'active' else '' }}>Active</option>
+      <option value="unsubscribed" {{ 'selected' if filter_status == 'unsubscribed' else '' }}>Unsubscribed</option>
+    </select>
+    <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+    {% if search or filter_status %}<a href="{{ url_for('admin_subscribers') }}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
+  </form>
+
+  <div class="panel-flush">
+    {% if items %}
+      <div class="overflow-x-auto">
+        <table class="dtable dtable-responsive">
+          <thead><tr><th>Email</th><th>Status</th><th>Subscribed</th><th class="text-right">Actions</th></tr></thead>
+          <tbody>
+            {% for s in items %}
+              <tr>
+                <td data-label="Email" class="font-mono text-xs">{{ s.email }}</td>
+                <td data-label="Status">{{ badge('Active' if s.is_active else 'Unsubscribed', 'ok' if s.is_active else 'neut') }}</td>
+                <td data-label="Subscribed" class="font-mono text-xs text-ink-3">{{ s.created_at.strftime('%d %b %Y') }}</td>
+                <td data-label="Actions" class="text-right whitespace-nowrap">
+                  <form method="POST" action="{{ url_for('admin_subscribers_toggle', sub_id=s.id) }}" class="inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-secondary btn-sm">{{ 'Unsubscribe' if s.is_active else 'Reactivate' }}</button>
+                  </form>
+                  <form method="POST" action="{{ url_for('admin_subscribers_destroy', sub_id=s.id) }}" class="inline"
+                        data-confirm="Remove {{ s.email }} from the list permanently?" data-confirm-title="Remove subscriber" data-confirm-accept="Remove">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="icon-btn text-bad" aria-label="Remove subscriber"><i class="ri-delete-bin-line"></i></button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {{ empty_state("ri-mail-send-line", "No subscribers yet", "Emails entered in the newsletter form on the public site will appear here.") }}
+    {% endif %}
+  </div>
+  {{ filter_pager(pagination) }}
+</div>
+{% endblock %}

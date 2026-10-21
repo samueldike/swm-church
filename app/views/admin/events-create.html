@@ -1,86 +1,61 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Add Program - {{ siteName }}</title>
-{% include "partials/admin-head-assets.html" %}
-</head>
-<body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
-<div class="flex h-screen overflow-hidden">
-{% include "partials/admin-sidebar.html" %}
-<main class="flex-1 flex flex-col overflow-hidden">
-{% with title="Add Program", subtitle="Schedule a church program" %}{% include "partials/admin-topbar.html" %}{% endwith %}
-<div class="flex-1 overflow-y-auto p-5 lg:p-8 space-y-4">
-{% if errors and errors.get('createEvent') %}<div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ (error_messages.get('createEvent', [''])[0] if error_messages.get('createEvent') else '') }}</div>
-{% elif errors %}<div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ (error_messages.values()|map('first')|list|first if error_messages else '') }}</div>{% endif %}
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, textarea with context %}
+{% block title %}{{ 'Edit Program' if event else 'New Program' }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ 'Edit Program' if event else 'New Program' }}{% endblock %}
+{% block topbar_subtitle %}Calendar{% endblock %}
+{% block topbar_icon %}ri-calendar-event-line{% endblock %}
 
-{% set eventTypes = {'major': 'Major Program', 'minor': 'Minor Program'} %}
+{% block page_header %}
+  {{ page_header('Edit program' if event else 'New program',
+      event.title if event else 'Schedule a programme on the church calendar',
+      actions='<a href="' ~ url_for('admin_events') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>Calendar</a>') }}
+{% endblock %}
 
-<section class="content-card p-4 lg:p-5">
-<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-<div><h2 class="text-base font-bold text-gray-900">Program Details</h2><p class="text-xs text-gray-500 mt-0.5">Set the date, daily time, location, and program type.</p></div>
-<a href="{{ url_for('admin_events') }}" class="h-10 inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 text-sm font-bold text-gray-700 hover:text-gray-900 hover:border-primary/40 transition-colors"><i class="ri-arrow-left-line text-base"></i><span>Back to Calendar</span></a>
-</div>
-
-<form method="POST" action="{{ url_for('admin_events_store') }}" class="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-<label class="lg:col-span-2"><span class="form-label">Program Title</span><input name="title" value="{{ request.form.get('title', '') }}" class="form-input" required></label>
-<label><span class="form-label">Start Date</span><input type="date" name="start_date" value="{{ request.form.get('start_date', '') }}" class="form-input" required></label>
-<label><span class="form-label">End Date</span><input type="date" name="end_date" value="{{ request.form.get('end_date', '') }}" class="form-input"></label>
-<label class="lg:col-span-2"><span class="form-label">Location</span><input name="location" value="{{ request.form.get('location', '') }}" class="form-input"></label>
-<label><span class="form-label">Type</span><select name="event_type" class="form-input" required>{% for label, value in eventTypes.items() %}<option value="{{ value }}" {{ 'selected' if request.form.get('event_type', 'minor') == value }}>{{ label }}</option>{% endfor %}</select></label>
-<div class="lg:col-span-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
-  <div class="flex items-center justify-between gap-3">
-    <div><p class="text-xs font-bold uppercase tracking-wider text-gray-500">Daily Time</p><p class="mt-0.5 text-xs text-gray-500">For multi-day programs, set the start and end time for each date.</p></div>
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 items-start max-w-4xl">
+  <div class="panel">
+    <form method="POST" action="{{ url_for('admin_events_update', event_id=event.id) if event else url_for('admin_events_store') }}" class="flex flex-col gap-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="grid grid-cols-1 sm:grid-cols-[1fr_200px] gap-4">
+        {{ field('Program title', 'title', value=event.title if event else '', required=True) }}
+        <div>
+          <label for="is_major" class="field-label">Type</label>
+          <select id="is_major" name="is_major" class="field-select">
+            <option value="false" {{ 'selected' if not event or not event.is_major else '' }}>Minor program</option>
+            <option value="true" {{ 'selected' if event and event.is_major else '' }}>Major program</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {{ field('Start date', 'start_date', value=event.starts_at.strftime('%Y-%m-%d') if event and event.starts_at else '', type='date', mono=True, required=True) }}
+        {{ field('Start time', 'start_time', value=event.starts_at.strftime('%H:%M') if event and event.starts_at else '', type='time', mono=True) }}
+        {{ field('End date', 'end_date', value=event.ends_at.strftime('%Y-%m-%d') if event and event.ends_at else '', type='date', mono=True, hint='Leave blank for single-day') }}
+        {{ field('End time', 'end_time', value=event.ends_at.strftime('%H:%M') if event and event.ends_at else '', type='time', mono=True) }}
+      </div>
+      {{ field('Location', 'location', value=event.location or '' if event else '') }}
+      {{ textarea('Description', 'description', value=event.description or '' if event else '', rows=4, placeholder='Shown on the public calendar') }}
+      <div class="flex items-center gap-2.5 pt-4 border-t border-line">
+        <button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>{{ 'Save program' if event else 'Create program' }}</button>
+        <a href="{{ url_for('admin_events') }}" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
   </div>
-  <div id="daily-schedule" class="mt-3 space-y-2" data-old='{{ request.form.get("daily_schedule", "[]") }}'></div>
+
+  {% if event %}
+    <div class="panel">
+      <h2 class="text-[14px] font-semibold text-ink mb-2">Danger zone</h2>
+      <p class="text-[12px] text-ink-3 mb-3">Deleting removes this program from the calendar.</p>
+      <form method="POST" action="{{ url_for('admin_events_destroy', event_id=event.id) }}"
+            data-confirm="Delete “{{ event.title }}”?" data-confirm-title="Delete Program" data-confirm-accept="Delete">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-danger w-full"><i class="ri-delete-bin-line"></i>Delete program</button>
+      </form>
+    </div>
+  {% else %}
+    <div class="panel flex gap-2.5 bg-gold-tint border-[#ebdfc0]">
+      <i class="ri-information-line text-gold-text flex-shrink-0 mt-0.5"></i>
+      <p class="text-[12px] text-gold-text leading-relaxed">New programs are published to the public calendar immediately for your branch.</p>
+    </div>
+  {% endif %}
 </div>
-<div class="lg:col-span-4"><span class="form-label">Description</span><textarea name="description" rows="4" class="form-input">{{ request.form.get('description', '') }}</textarea></div>
-<div class="lg:col-span-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
-<a href="{{ url_for('admin_events') }}" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900 text-center transition-colors">Cancel</a>
-<button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">Create Program</button>
-</div>
-</form>
-</section>
-</div>
-</main>
-</div>
-<script>
-(() => {
-  const startDate = document.querySelector('[name="start_date"]');
-  const endDate = document.querySelector('[name="end_date"]');
-  const schedule = document.getElementById('daily-schedule');
-  const oldRows = JSON.parse(schedule.dataset.old || '[]');
-  const oldByDate = Object.fromEntries(oldRows.filter(row => row.date).map(row => [row.date, row]));
-  const dateRange = (start, end) => {
-    const dates = [];
-    const cursor = new Date(`${start}T00:00:00`);
-    const last = new Date(`${(end || start)}T00:00:00`);
-    if (Number.isNaN(cursor.getTime()) || Number.isNaN(last.getTime()) || cursor > last) return dates;
-    while (cursor <= last) {
-      dates.push(cursor.toISOString().slice(0, 10));
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return dates;
-  };
-  const render = () => {
-    const dates = dateRange(startDate.value, endDate.value || startDate.value);
-    schedule.innerHTML = dates.map((date, index) => {
-      const existing = oldByDate[date] || {};
-      const label = new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-      return `<div class="grid grid-cols-1 gap-2 rounded-xl border border-gray-100 bg-white p-3 sm:grid-cols-[minmax(0,1fr)_160px_160px]">
-        <input type="hidden" name="daily_schedule[${index}][date]" value="${date}">
-        <div class="text-sm font-bold text-gray-800">${label}</div>
-        <label><span class="form-label mb-1">Start Time</span><input type="time" name="daily_schedule[${index}][start_time]" value="${existing.start_time || ''}" class="form-input"></label>
-        <label><span class="form-label mb-1">End Time</span><input type="time" name="daily_schedule[${index}][end_time]" value="${existing.end_time || ''}" class="form-input"></label>
-      </div>`;
-    }).join('');
-  };
-  startDate.addEventListener('change', render);
-  endDate.addEventListener('change', render);
-  render();
-})();
-</script>
-</body>
-</html>
+{% endblock %}

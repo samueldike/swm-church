@@ -1,98 +1,72 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Department HODs - {{ siteName }}</title>
-{% include "partials/admin-head-assets.html" %}
-</head>
-<body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
-<div class="flex h-screen overflow-hidden">
-{% include "partials/admin-sidebar.html" %}
-<main class="flex-1 flex flex-col overflow-hidden">
-{% with title="Department HODs", subtitle="Invite and manage HOD accounts" %}{% include "partials/admin-topbar.html" %}{% endwith %}
-<div class="flex-1 overflow-y-auto p-5 lg:p-8 space-y-4">
-{% if session.get('success') %}<div class="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-4 py-3">{{ session.get('success') }}</div>{% endif %}
-{% if errors and errors.get('inviteHod') %}<div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ (error_messages.get('inviteHod', [''])[0] if error_messages.get('inviteHod') else '') }}</div>
-{% elif errors %}<div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ (error_messages.values()|map('first')|list|first if error_messages else '') }}</div>{% endif %}
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, person, empty_state with context %}
+{% block title %}Department HODs | {{ siteName }}{% endblock %}
+{% block topbar_title %}Department HODs{% endblock %}
+{% block topbar_subtitle %}Departmental leadership{% endblock %}
+{% block topbar_icon %}ri-user-star-line{% endblock %}
 
-<section class="content-card p-4 lg:p-5">
-<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-<div><h2 class="text-base font-bold text-gray-900">Active HOD Accounts</h2><p class="text-xs text-gray-500 mt-0.5">{{ "{:,}".format(hods|length) }} records</p></div>
-<button type="button" data-open-invite-hod class="h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors"><i class="ri-user-star-line text-base"></i><span>Invite HOD</span></button>
-</div>
-<div class="mt-4 overflow-x-auto"><table class="w-full min-w-[780px] text-sm">
-<thead><tr class="border-b border-gray-100"><th class="table-header py-3 pr-4">HOD</th><th class="table-header py-3 pr-4">Department</th><th class="table-header py-3 pr-4">Branch</th><th class="table-header py-3 pr-4">Status</th><th class="table-header py-3 text-right">Actions</th></tr></thead>
-<tbody class="divide-y divide-gray-100">
-{% for hod in hods %}
+{% block page_header %}
+  {{ page_header("Department HODs", "Heads of department and their invitations. Invite anyone who is not a minister here; to make a minister a HOD, open them under Ministers.",
+      actions=('<a href="' ~ url_for('admin_ministers') ~ '" class="btn btn-secondary"><i class="ri-user-voice-line"></i>From ministers</a> ' if can('ministers.view') else '') ~ '<a href="' ~ url_for('admin_hods_invite_page') ~ '" class="btn btn-primary"><i class="ri-user-add-line"></i>Invite HOD</a>',
+      audit=[('Active accounts', hods|length), ('Recent invitations', invitations|length), ('Departments', departments|length)]) }}
+{% endblock %}
 
-<tr class="hover:bg-gray-50/50 transition-colors">
-<td class="py-3 pr-4"><p class="font-semibold text-gray-900">{{ hod.name }}</p><p class="text-xs text-gray-500">{{ hod.email }}</p></td>
-<td class="py-3 pr-4 text-gray-600">{{ hod.department.name or 'N/A' }}</td>
-<td class="py-3 pr-4 text-gray-500">{{ hod.branch.name or 'N/A' }}</td>
-<td class="py-3 pr-4"><span class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide {{ 'bg-emerald-50 text-emerald-600' if hod.is_active else 'bg-gray-100 text-gray-500' }}">{{ 'Active' if hod.is_active else 'Disabled' }}</span></td>
-<td class="py-3 text-right"><button type="button" class="hod-edit-btn w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50 transition-colors" title="Edit HOD"
-data-action="{{ url_for('admin_hods_update', hod_id=hod.id) }}" data-name="{{ hod.name|e }}" data-phone="{{ hod.phone|e }}" data-department-id="{{ hod.department_id }}" data-is-active="{{ 1 if hod.is_active else 0 }}"><i class="ri-edit-line text-base"></i></button></td>
-</tr>
-{% else %}
-
-<tr><td colspan="5" class="py-10 text-center text-sm text-gray-500">No HOD accounts yet.</td></tr>
-{% endfor %}
-</tbody></table></div>
-
+{% block content %}
+<div class="flex flex-col gap-4">
+  <div class="panel-flush">
+    <div class="px-4 pt-4 pb-1"><h2 class="text-[14px] font-semibold text-ink">HOD accounts</h2></div>
+    {% if hods %}
+      <div class="overflow-x-auto">
+        <table class="dtable dtable-responsive">
+          <thead><tr><th>HOD</th><th>Department</th><th>Branch</th><th>Status</th><th class="text-right">Actions</th></tr></thead>
+          <tbody>
+            {% for hod in hods %}
+              <tr>
+                <td data-label="HOD">{{ person(hod.name, hod.email, (hod.name[0] if hod.name else 'H')) }}</td>
+                <td data-label="Department">{{ hod.department.name if hod.department else '—' }}</td>
+                <td data-label="Branch">{{ hod.branch.name if hod.branch else '—' }}</td>
+                <td data-label="Status">{{ badge('Active' if hod.is_active else 'Disabled', 'ok' if hod.is_active else 'neut') }}</td>
+                <td data-label="Actions" class="text-right">
+                  <a href="{{ url_for('admin_hods_edit_page', hod_id=hod.id) }}" class="icon-btn" aria-label="Edit {{ hod.name }}"><i class="ri-edit-line"></i></a>
+                  {% if can('system') %}
+                    <form method="POST" action="{{ url_for('admin_hods_make_rp', hod_id=hod.id) }}" class="inline"
+                          data-confirm="Make {{ hod.name }} the Resident Pastor of {{ hod.branch.name if hod.branch else 'their church' }}? They will review that church's department reports instead of submitting their own." data-confirm-title="Appoint Resident Pastor" data-confirm-accept="Appoint">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                      <button type="submit" class="icon-btn" aria-label="Make {{ hod.name }} Resident Pastor" title="Make Resident Pastor"><i class="ri-user-star-fill"></i></button>
+                    </form>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {{ empty_state("ri-user-star-line", "No HOD accounts yet", "Invite a head of department to give them access to monthly reporting.",
+                     '<a href="' ~ url_for('admin_hods_invite_page') ~ '" class="btn btn-primary"><i class="ri-user-add-line"></i>Invite HOD</a>') }}
+    {% endif %}
   </div>
-</section>
 
-<section class="content-card p-4 lg:p-5">
-<div class="flex items-center justify-between gap-3 mb-3"><div><h2 class="text-base font-bold text-gray-900">Recent Invitations</h2><p class="text-xs text-gray-500 mt-0.5">{{ "{:,}".format(invitations|length) }} latest</p></div></div>
-<div class="space-y-2">
-{% for inv in invitations %}
-
-<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl border border-gray-100 p-3">
-<div class="min-w-0"><p class="font-semibold text-sm text-gray-900 truncate">{{ inv.name }} <span class="text-xs text-gray-500">({{ inv.email }})</span></p><p class="text-xs text-gray-500 truncate">{{ inv.department.name }} <span class="text-gray-300">&middot;</span> {{ inv.branch.name }} <span class="text-gray-300">&middot;</span> {{ 'Accepted' if inv.accepted_at else 'Pending' }}</p></div>
-{% if not inv.accepted_at %}<form method="POST" action="{{ url_for('admin_hod_invitations_resend', invitation_id=inv.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="text-xs font-bold text-primary hover:text-primary-dark transition-colors">Resend</button></form>{% endif %}
+  <div class="panel">
+    <h2 class="text-[14px] font-semibold text-ink mb-3">Recent invitations</h2>
+    {% for inv in invitations %}
+      <div class="flex flex-col sm:flex-row sm:items-center gap-2 py-2.5 {{ 'border-b border-line' if not loop.last }}">
+        <div class="min-w-0 flex-grow">
+          <p class="text-[13px] font-medium text-ink truncate">{{ inv.name or inv.email }} <span class="font-mono text-[11px] text-ink-3">{{ inv.email }}</span></p>
+          <p class="text-[11px] text-ink-3 truncate">{{ inv.department.name if inv.department else '—' }} &middot; {{ inv.branch.name if inv.branch else '—' }}</p>
+        </div>
+        {{ badge('Accepted' if inv.accepted_at else 'Pending', 'ok' if inv.accepted_at else 'warn') }}
+        {% if not inv.accepted_at %}
+          <button type="button" class="btn btn-secondary btn-sm" data-copy="{{ siteUrl }}{{ url_for('hod_invitation_accept_page', token=inv.token) }}"><i class="ri-link"></i>Copy invite link</button>
+          <form method="POST" action="{{ url_for('admin_hod_invitations_resend', invitation_id=inv.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn btn-ghost btn-sm" title="Extend expiry by 7 days">Renew</button>
+          </form>
+        {% endif %}
+      </div>
+    {% else %}
+      <p class="text-[13px] text-ink-3">No invitations yet.</p>
+    {% endfor %}
+  </div>
 </div>
-{% else %}
-
-<p class="text-sm text-gray-500">No invitations available.</p>
-{% endfor %}
-</div>
-</section>
-</div></main></div>
-
-<div id="invite-hod-modal" class="fixed inset-0 z-50 hidden" aria-hidden="true"><div class="absolute inset-0 bg-black/50" data-close-hod-modal></div><div class="absolute inset-x-4 top-10 mx-auto max-w-2xl rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
-<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4"><h3 class="text-sm font-bold text-gray-900">Invite HOD</h3><button type="button" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-50" data-close-hod-modal><i class="ri-close-line text-lg"></i></button></div>
-<form method="POST" action="{{ url_for('admin_hods_invite') }}" class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3 modal-scroll overflow-y-auto max-h-[calc(100vh-9rem)]"><input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-<label><span class="form-label">Name</span><input name="name" value="{{ request.form.get('name', '') }}" class="form-input" required></label>
-<label><span class="form-label">Email</span><input type="email" name="email" value="{{ request.form.get('email', '') }}" class="form-input" required></label>
-<label><span class="form-label">Department</span><select name="department_id" class="form-input" required><option value="">Select department</option>{% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if request.form.get('department_id', '') == d.id|string else '' }}>{{ d.name }}</option>{% endfor %}</select></label>
-{% if isSuper %}<label><span class="form-label">Branch</span><select name="branch_id" class="form-input" required><option value="">Select branch</option>{% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if request.form.get('branch_id', admin.branch_id|string) == b.id|string else '' }}>{{ b.name }}</option>{% endfor %}</select></label>{% endif %}
-<div class="sm:col-span-2 flex justify-end gap-2 pt-2"><button type="button" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900" data-close-hod-modal>Cancel</button><button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814] hover:bg-primary-dark">Send Invitation</button></div>
-</form></div></div>
-
-<div id="edit-hod-modal" class="fixed inset-0 z-50 hidden" aria-hidden="true"><div class="absolute inset-0 bg-black/50" data-close-hod-modal></div><div class="absolute inset-x-4 top-10 mx-auto max-w-2xl rounded-2xl border border-gray-200 bg-white shadow-lg overflow-hidden">
-<div class="flex items-center justify-between border-b border-gray-100 px-5 py-4"><h3 class="text-sm font-bold text-gray-900">Edit HOD</h3><button type="button" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-800 hover:bg-gray-50" data-close-hod-modal><i class="ri-close-line text-lg"></i></button></div>
-<form id="edit-hod-form" method="POST" action="" class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3 modal-scroll overflow-y-auto max-h-[calc(100vh-9rem)]"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"> <input type="hidden" name="_method" value="PUT">
-<label><span class="form-label">Name</span><input id="edit-hod-name" name="name" class="form-input" required></label>
-<label><span class="form-label">Phone</span><input id="edit-hod-phone" name="phone" class="form-input"></label>
-<label class="sm:col-span-2"><span class="form-label">Department</span><select id="edit-hod-department-id" name="department_id" class="form-input">{% for d in departments %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}</select></label>
-<label class="sm:col-span-2 flex items-center gap-2 text-sm font-semibold text-gray-600"><input id="edit-hod-is-active" type="checkbox" name="is_active" value="1" class="rounded border-gray-300 text-primary focus:ring-primary"> Active</label>
-<label><span class="form-label">New Password</span><input type="password" name="password" class="form-input"></label>
-<label><span class="form-label">Confirm Password</span><input type="password" name="password_confirmation" class="form-input"></label>
-<div class="sm:col-span-2 flex justify-end gap-2 pt-2"><button type="button" class="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:text-gray-900" data-close-hod-modal>Cancel</button><button class="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-[#1a1814] hover:bg-primary-dark">Save Changes</button></div>
-</form></div></div>
-
-<script>
-(() => {
-const body=document.body, inviteModal=document.getElementById('invite-hod-modal'), editModal=document.getElementById('edit-hod-modal'), editForm=document.getElementById('edit-hod-form');
-const open=m=>{m.classList.remove('hidden');m.setAttribute('aria-hidden','false');body.classList.add('overflow-hidden')};
-const close=()=>{[inviteModal,editModal].forEach(m=>{m.classList.add('hidden');m.setAttribute('aria-hidden','true')});body.classList.remove('overflow-hidden')};
-document.querySelector('[data-open-invite-hod]')?.addEventListener('click',()=>open(inviteModal));
-document.querySelectorAll('[data-close-hod-modal]').forEach(el=>el.addEventListener('click',close));
-document.querySelectorAll('.hod-edit-btn').forEach(btn=>btn.addEventListener('click',()=>{editForm.action=btn.dataset.action||'';document.getElementById('edit-hod-name').value=btn.dataset.name||'';document.getElementById('edit-hod-phone').value=btn.dataset.phone||'';document.getElementById('edit-hod-department-id').value=btn.dataset.departmentId||'';document.getElementById('edit-hod-is-active').checked=btn.dataset.isActive==='1';open(editModal)}));
-document.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
-{% if errors and errors.get('inviteHod') %} open(inviteModal); {% endif %}
-})();
-</script>
-</body>
-</html>
+{% endblock %}

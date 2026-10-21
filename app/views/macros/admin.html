@@ -1,0 +1,233 @@
+{#
+  Shared component macros for the admin redesign — banking-grade, black/grey/
+  gold, Geist + Geist Mono. Backed by app/static/css/admin-src.css (compiled
+  to admin.css). Import with:
+    {% from "macros/admin.html" import field, select, textarea, checkbox,
+       badge, kpi, page_header, pagination_bar, avatar, person, empty_state %}
+#}
+
+{% macro badge(text, tone='neut') -%}
+  <span class="badge badge-{{ tone }}">{{ text }}</span>
+{%- endmacro %}
+
+{% macro avatar(initials, size=28, gold=False) -%}
+  <span class="inline-flex items-center justify-center rounded-full font-mono font-semibold flex-shrink-0 border {{ 'bg-gold text-[#121110] border-gold' if gold else 'bg-sunken text-ink-2 border-line-2' }}"
+        style="width:{{ size }}px; height:{{ size }}px; font-size:{{ (size * 0.38)|round|int }}px;">{{ initials }}</span>
+{%- endmacro %}
+
+{% macro person(name, sub, initials, gold=False) -%}
+  <div class="flex items-center gap-2.5 min-w-0">
+    {{ avatar(initials, 30, gold) }}
+    <div class="min-w-0">
+      <p class="text-[13px] font-medium text-ink truncate">{{ name }}</p>
+      {% if sub %}<p class="text-[11px] text-ink-3 truncate">{{ sub }}</p>{% endif %}
+    </div>
+  </div>
+{%- endmacro %}
+
+{#- Form field: preserves the sticky-value-on-error pattern
+   (request.form.get(name, value)) used across every existing admin form. -#}
+{% macro field(label, name, value='', type='text', placeholder='', required=False, mono=False, hint=None, id=None, autocomplete=None) -%}
+  <div>
+    <label for="{{ id or name }}" class="field-label">{{ label }}{% if required %}<span class="text-bad ml-0.5">*</span>{% endif %}</label>
+    <input id="{{ id or name }}" name="{{ name }}" type="{{ type }}"
+           value="{{ request.form.get(name, value) }}"
+           {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+           {% if required %}required{% endif %}
+           {% if autocomplete %}autocomplete="{{ autocomplete }}"{% endif %}
+           class="field-input{{ ' field-mono' if mono else '' }}">
+    {% if hint %}<p class="field-hint">{{ hint }}</p>{% endif %}
+  </div>
+{%- endmacro %}
+
+{#- Write-only secret input. The saved value is never sent to the browser: `status` is
+   {state: unset|set|unreadable, hint: last4}. Blank = keep, typed = replace, tick = remove. -#}
+{% macro secret_field(label, name, status, env_fallback=False, placeholder='', hint=None) -%}
+  <div>
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <label for="{{ name }}" class="field-label mb-0">{{ label }}</label>
+      {% if status.state == 'set' %}<span class="badge badge-ok">Saved{% if status.hint %} · ••••{{ status.hint }}{% endif %}</span>
+      {% elif status.state == 'unreadable' %}<span class="badge badge-bad">Saved but unreadable</span>
+      {% elif env_fallback %}<span class="badge badge-warn">Using server .env value</span>
+      {% else %}<span class="badge badge-neut">Not set</span>{% endif %}
+    </div>
+    <input id="{{ name }}" name="{{ name }}" type="password" value="" autocomplete="new-password" spellcheck="false"
+           placeholder="{{ 'Leave blank to keep the saved key' if status.state == 'set' else (placeholder or 'Paste the key') }}"
+           class="field-input field-mono mt-1.5">
+    {% if status.state == 'unreadable' %}<p class="field-hint text-bad">The stored value can no longer be decrypted (the server SECRET_KEY changed). Enter the key again to replace it.</p>{% endif %}
+    {% if hint %}<p class="field-hint">{{ hint }}</p>{% endif %}
+    {% if status.state != 'unset' %}
+      <label class="mt-1.5 inline-flex items-center gap-2 text-[11.5px] text-ink-3 cursor-pointer">
+        <input type="checkbox" name="clear_{{ name }}" value="1" class="field-checkbox"> Remove the saved key
+      </label>
+    {% endif %}
+  </div>
+{%- endmacro %}
+
+{% macro select(label, name, options, selected='', required=False, id=None, hint=None) -%}
+  <div>
+    <label for="{{ id or name }}" class="field-label">{{ label }}{% if required %}<span class="text-bad ml-0.5">*</span>{% endif %}</label>
+    <select id="{{ id or name }}" name="{{ name }}" class="field-select" {% if required %}required{% endif %}>
+      {% for opt_value, opt_label in options %}
+        <option value="{{ opt_value }}" {{ 'selected' if request.form.get(name, selected)|string == opt_value|string else '' }}>{{ opt_label }}</option>
+      {% endfor %}
+    </select>
+    {% if hint %}<p class="field-hint">{{ hint }}</p>{% endif %}
+  </div>
+{%- endmacro %}
+
+{#- Plain text by default: admin-richtext.js upgrades every <textarea> unless data-richtext="off". Pass rich=True only where stored HTML is intended (e.g. story content). -#}
+{% macro textarea(label, name, value='', rows=4, placeholder='', hint=None, id=None, required=False, rich=False) -%}
+  <div>
+    <label for="{{ id or name }}" class="field-label">{{ label }}{% if required %}<span class="text-bad ml-0.5">*</span>{% endif %}</label>
+    <textarea id="{{ id or name }}" name="{{ name }}" rows="{{ rows }}"
+              {% if not rich %}data-richtext="off"{% endif %}
+              {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+              {% if required %}required{% endif %}
+              class="field-textarea">{{ request.form.get(name, value) }}</textarea>
+    {% if hint %}<p class="field-hint">{{ hint }}</p>{% endif %}
+  </div>
+{%- endmacro %}
+
+{% macro checkbox(label, name, checked=False, hint=None, id=None, value='1') -%}
+  <div>
+    <label for="{{ id or name }}" class="flex items-center gap-2.5 cursor-pointer">
+      <input type="hidden" name="{{ name }}" value="0">
+      <input id="{{ id or name }}" type="checkbox" name="{{ name }}" value="{{ value }}"
+             {{ 'checked' if (request.form.get(name, '1' if checked else '0')|string) in ('1', 'true', 'on') else '' }}
+             class="field-checkbox">
+      <span class="text-[12.5px] font-medium text-ink">{{ label }}</span>
+    </label>
+    {% if hint %}<p class="field-hint ml-6">{{ hint }}</p>{% endif %}
+  </div>
+{%- endmacro %}
+
+{% macro file_field(label, name, hint='', multiple=False, accept=None, required=False, id=None) -%}
+  <div>
+    <label class="field-label">{{ label }}{% if required %}<span class="text-bad ml-0.5">*</span>{% endif %}</label>
+    <label for="{{ id or name }}" class="relative flex items-center gap-2.5 rounded-md border border-dashed border-line-2 bg-sunken px-3.5 py-3 cursor-pointer">
+      <i class="ri-upload-2-line text-lg text-ink-3"></i>
+      <span class="flex-grow min-w-0">
+        <span class="block text-[12.5px] font-semibold text-ink" data-file-name>{{ 'Choose files' if multiple else 'Choose a file' }}</span>
+        {% if hint %}<span class="block text-[10.5px] text-ink-3 mt-0.5">{{ hint }}</span>{% endif %}
+      </span>
+      <span class="text-[11px] font-semibold text-gold-text border border-line-2 rounded px-2.5 py-1 whitespace-nowrap">Browse</span>
+      <input id="{{ id or name }}" type="file" name="{{ name }}" class="sr-only"
+             onchange="var n=this.closest('label').querySelector('[data-file-name]'); if(n) n.textContent = this.files.length > 1 ? this.files.length + ' files selected' : (this.files[0] ? this.files[0].name : '{{ 'Choose files' if multiple else 'Choose a file' }}');"
+             {% if multiple %}multiple{% endif %}
+             {% if accept %}accept="{{ accept }}"{% endif %}
+             {% if required %}required{% endif %}>
+    </label>
+  </div>
+{%- endmacro %}
+
+{#- KPI tile. tone: 'ok'|'bad'|'neut' colors the delta and its arrow. -#}
+{% macro kpi(label, value, delta=None, tone='neut', note=None) -%}
+  <div class="panel flex-grow">
+    <p class="mono-label">{{ label }}</p>
+    <p class="kpi-value mt-2.5">{{ value }}</p>
+    {% if delta %}
+      <div class="mt-2 inline-flex items-center gap-1 font-mono text-[11px] font-semibold
+                  {{ 'text-ok' if tone == 'ok' else ('text-bad' if tone == 'bad' else 'text-ink-3') }}">
+        <i class="ri-arrow-{{ 'up' if tone == 'ok' else ('down' if tone == 'bad' else 'right') }}-line"></i>{{ delta }}
+      </div>
+    {% endif %}
+    {% if note %}<p class="mt-2 font-mono text-[10px] text-ink-3">{{ note }}</p>{% endif %}
+  </div>
+{%- endmacro %}
+
+{#- Standard page header: title, subtitle, right-aligned actions slot (raw
+   HTML passed in), and an optional audit strip of (label, value) pairs. -#}
+{% macro page_header(title, subtitle='', actions='', audit=None) -%}
+  <div class="bg-surface border-b border-line flex-shrink-0">
+    <div class="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-5 px-4 sm:px-6 pt-4 sm:pt-5 pb-4">
+      <div class="flex-grow min-w-0">
+        <h1 class="text-lg sm:text-xl font-semibold text-ink tracking-tight">{{ title }}</h1>
+        {% if subtitle %}<p class="mt-1 text-[12.5px] text-ink-3 leading-relaxed">{{ subtitle }}</p>{% endif %}
+      </div>
+      {% if actions %}<div class="flex items-center gap-2 flex-wrap">{{ actions|safe }}</div>{% endif %}
+    </div>
+    {% if audit %}
+      <div class="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-2 bg-sunken border-t border-line overflow-x-auto admin-scrollbar">
+        {% for label, value in audit %}
+          <div class="flex items-center gap-1.5 whitespace-nowrap {{ 'pl-3 sm:pl-4 border-l border-line' if not loop.first else '' }}">
+            <span class="mono-label">{{ label }}</span>
+            <span class="font-mono text-[11px] font-medium text-ink-2">{{ value }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+{%- endmacro %}
+
+{#- Search + filter toolbar. filter_options: list of (name, options[(value,label)], selected).
+   action/method let a filter form GET the current page with query params. -#}
+{% macro toolbar(search_name='q', search_value='', search_placeholder='Search…', filters=None, actions='') -%}
+  <form method="get" class="flex flex-wrap items-center gap-2.5 mb-3.5">
+    <div class="flex items-center gap-2 w-full sm:w-72 px-3 py-2 rounded-md border border-line-2 bg-surface">
+      <i class="ri-search-line text-ink-3 text-sm"></i>
+      <input type="search" name="{{ search_name }}" value="{{ search_value }}" placeholder="{{ search_placeholder }}"
+             class="flex-grow border-none bg-transparent text-[12.5px] text-ink outline-none min-w-0">
+    </div>
+    {% if filters %}
+      {% for fname, foptions, fselected in filters %}
+        <select name="{{ fname }}" onchange="this.form.submit()"
+                class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2 cursor-pointer">
+          {% for ov, ol in foptions %}
+            <option value="{{ ov }}" {{ 'selected' if fselected|string == ov|string else '' }}>{{ ol }}</option>
+          {% endfor %}
+        </select>
+      {% endfor %}
+      <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+    {% endif %}
+    <span class="flex-grow"></span>
+    {% if actions %}<div class="flex items-center gap-2 flex-wrap">{{ actions|safe }}</div>{% endif %}
+  </form>
+{%- endmacro %}
+
+{#- Real pagination bar — only render this where a genuine `pagination` dict
+   from app.core.pagination.paginate() exists. Never fabricate page counts. -#}
+{% macro pagination_bar(pagination, base_path) -%}
+  <div class="flex items-center gap-3 sm:gap-4 pt-3.5 mt-1 border-t border-line flex-wrap">
+    <span class="font-mono text-[11.5px] text-ink-3">
+      Showing <b class="text-ink font-semibold">{{ ((pagination.page - 1) * pagination.per_page + 1) if pagination.total else 0 }}&ndash;{{ [pagination.page * pagination.per_page, pagination.total]|min }}</b>
+      of <b class="text-ink font-semibold">{{ pagination.total }}</b>
+    </span>
+    <span class="flex-grow"></span>
+    <a href="{{ base_path }}?page={{ pagination.page - 1 }}"
+       class="icon-btn {{ 'pointer-events-none opacity-40' if not pagination.has_prev else '' }}" aria-label="Previous page"><i class="ri-arrow-left-s-line"></i></a>
+    <span class="font-mono text-xs text-ink-2 px-1">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+    <a href="{{ base_path }}?page={{ pagination.page + 1 }}"
+       class="icon-btn {{ 'pointer-events-none opacity-40' if not pagination.has_next else '' }}" aria-label="Next page"><i class="ri-arrow-right-s-line"></i></a>
+  </div>
+{%- endmacro %}
+
+{% macro empty_state(icon, title, subtitle, action='') -%}
+  <div class="flex flex-col items-center justify-center text-center py-16 px-6">
+    <span class="inline-flex items-center justify-center w-13 h-13 rounded-full bg-sunken mb-4" style="width:52px;height:52px;">
+      <i class="{{ icon }} text-2xl text-ink-3"></i>
+    </span>
+    <h3 class="text-[15px] font-semibold text-ink mb-1.5">{{ title }}</h3>
+    <p class="max-w-sm text-[12.5px] text-ink-3 leading-relaxed">{{ subtitle }}</p>
+    {% if action %}<div class="mt-4.5">{{ action|safe }}</div>{% endif %}
+  </div>
+{%- endmacro %}
+
+{% macro progress_bar(pct, tone='gold') -%}
+  <div class="w-full h-1.5 bg-sunken rounded-full overflow-hidden">
+    <div class="h-full rounded-full {{ 'bg-gold' if tone == 'gold' else ('bg-ok' if tone == 'ok' else 'bg-bad') }}" style="width:{{ pct }}%;"></div>
+  </div>
+{%- endmacro %}
+
+{#- Pager that keeps the active filters: uses the prev_url/next_url the route built (with its query string). -#}
+{% macro filter_pager(pagination) -%}
+  <div class="flex items-center gap-3 sm:gap-4 pt-3.5 mt-1 border-t border-line flex-wrap">
+    <span class="font-mono text-[11.5px] text-ink-3">
+      {{ pagination.total }} result{{ '' if pagination.total == 1 else 's' }}
+    </span>
+    <span class="flex-grow"></span>
+    <a href="{{ pagination.prev_url or '#' }}" class="icon-btn {{ 'pointer-events-none opacity-40' if not pagination.has_prev else '' }}" aria-label="Previous page"><i class="ri-arrow-left-s-line"></i></a>
+    <span class="font-mono text-xs text-ink-2 px-1">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+    <a href="{{ pagination.next_url or '#' }}" class="icon-btn {{ 'pointer-events-none opacity-40' if not pagination.has_next else '' }}" aria-label="Next page"><i class="ri-arrow-right-s-line"></i></a>
+  </div>
+{%- endmacro %}

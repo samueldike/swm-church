@@ -8,6 +8,7 @@
     ('messages',    'Audio Messages'),
     ('casom',       'CASOM'),
     ('events',      'Events'),
+    ('branches',    'Branches'),
     ('contact',     'Contact')
 ] %}
 <style>
@@ -230,6 +231,7 @@
         .nav { display: none; }
     }
 </style>
+<a class="skip-link" href="#main">Skip to main content</a>
 <header class="mast">
     <div class="mast-in">
         <a href="{{ url_for('home') }}" class="brand">
@@ -240,14 +242,14 @@
 
         <nav class="nav" aria-label="Primary">
             {% for route, label in nav_items %}
-            <a class="{{ 'is-active' if request.url.path == url_for(route).path else '' }}"
-               href="{{ url_for(route) }}">{{ label }}</a>
+            <a class="{{ 'is-active' if request.url.path == url_for(route) else '' }}"
+               href="{{ url_for(route) }}"{% if request.url.path == url_for(route) %} aria-current="page"{% endif %}>{{ label }}</a>
             {% endfor %}
         </nav>
 
         <div class="flex items-center gap-2.5 shrink-0">
             <a href="{{ url_for('give') }}" class="btn btn-ghost btn-sm">Give</a>
-            <a href="{{ url_for('calendar') }}" class="btn btn-gold btn-sm mast-cta">Calendar</a>
+            <a href="{{ url_for('visit') }}" class="btn btn-gold btn-sm mast-cta">Plan a visit</a>
             <button class="burger" id="burger" type="button"
                     aria-expanded="false" aria-controls="menu" aria-label="Open menu">
                 <span class="burger-bars" aria-hidden="true"><i></i><i></i></span>
@@ -270,7 +272,7 @@
 
     <nav class="menu-nav" aria-label="Menu">
         {% for route, label in nav_items %}
-        <a href="{{ url_for(route) }}" class="{{ 'is-active' if request.url.path == url_for(route).path else '' }}">
+        <a href="{{ url_for(route) }}" class="{{ 'is-active' if request.url.path == url_for(route) else '' }}"{% if request.url.path == url_for(route) %} aria-current="page"{% endif %}>
             <span class="mono menu-i">{{ '%02d'|format(loop.index) }}</span>
             <span>{{ label }}</span>
         </a>
@@ -287,7 +289,8 @@
 
     <div class="menu-foot">
         <div class="menu-cta">
-            <a href="{{ url_for('give') }}" class="btn btn-gold">Give</a>
+            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan a visit</a>
+            <a href="{{ url_for('give') }}" class="btn btn-ghost">Give</a>
             <a href="{{ url_for('calendar') }}" class="btn btn-ghost">Church Calendar</a>
         </div>
         {% if counsellingPhone %}

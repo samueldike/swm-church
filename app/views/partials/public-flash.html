@@ -1,0 +1,20 @@
+{# One place for every public-page notice (success / error / info). render_template merges the session
+   flash into `flash_messages` and clears it after rendering, so each message shows once. #}
+{% if flash_messages %}
+<div id="pub-flash" role="status" aria-live="polite"
+     style="position:fixed;left:50%;top:1rem;transform:translateX(-50%);z-index:9999;width:min(92vw,34rem);display:flex;flex-direction:column;gap:.6rem;">
+  {% for m in flash_messages %}
+    <div class="alert {{ 'alert-bad' if m.type in ['error', 'danger'] else '' }}" role="{{ 'alert' if m.type in ['error', 'danger'] else 'status' }}"
+         style="margin:0;display:flex;align-items:flex-start;gap:.8rem;box-shadow:0 10px 30px rgba(0,0,0,.35);background:#15130f;">
+      <span style="flex:1;">{{ m.message }}</span>
+      <button type="button" aria-label="Dismiss" onclick="this.parentElement.remove()" style="background:none;border:0;color:inherit;font-size:1.2rem;line-height:1;cursor:pointer;">&times;</button>
+    </div>
+  {% endfor %}
+</div>
+<script>
+  (function () {
+    var box = document.getElementById('pub-flash');
+    if (box) setTimeout(function () { if (box) box.style.transition = 'opacity .5s'; if (box) box.style.opacity = '0'; setTimeout(function () { if (box) box.remove(); }, 600); }, 12000);
+  })();
+</script>
+{% endif %}

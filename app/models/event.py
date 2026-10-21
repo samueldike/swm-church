@@ -28,5 +28,5 @@ class Event(Base):
         onupdate=lambda: datetime.utcnow(),
     )
 
-    branch = relationship("Branch", back_populates="events")
-    creator = relationship("Admin", foreign_keys=[created_by])
+    branch = relationship("Branch", back_populates="events", lazy="selectin")
+    creator = relationship("Admin", foreign_keys=[created_by], lazy="selectin")

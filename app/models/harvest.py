@@ -16,7 +16,7 @@ class HarvestTeam(Base):
         default=lambda: datetime.utcnow()
     )
 
-    branch = relationship("Branch", back_populates="harvest_teams")
+    branch = relationship("Branch", back_populates="harvest_teams", lazy="selectin")
     workers = relationship("HarvestWorker", back_populates="team")
 
 
@@ -45,8 +45,8 @@ class HarvestWorker(Base):
     tokens = relationship("HarvestWorkerToken", back_populates="worker", cascade="all, delete-orphan")
     contacts = relationship("HarvestContact", back_populates="worker", cascade="all, delete-orphan")
     reminders = relationship("HarvestReminder", back_populates="worker", cascade="all, delete-orphan")
-    branch = relationship("Branch", back_populates="harvest_workers")
-    team = relationship("HarvestTeam", back_populates="workers")
+    branch = relationship("Branch", back_populates="harvest_workers", lazy="selectin")
+    team = relationship("HarvestTeam", back_populates="workers", lazy="selectin")
 
 
 class HarvestWorkerToken(Base):

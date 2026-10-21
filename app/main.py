@@ -3,7 +3,8 @@ from __future__ import annotations
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
+from sqlalchemy.exc import IntegrityError
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -15,8 +16,31 @@ async def lifespan(app: FastAPI):
     from app.database import init_db
 
     await init_db()
+    try:
+        from app.database import sync_sequences
+
+        fixed = await sync_sequences()
+        if fixed:
+            import logging
+
+            logging.getLogger(__name__).warning("Resynced %d out-of-date id sequences", fixed)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("Could not resync id sequences")
     await _seed_defaults()
+    from app.core import scheduler
+
+    job_loop = scheduler.start()
+    if not settings.is_development and settings.SECRET_KEY in ("", "change-me"):
+        import logging
+
+        logging.getLogger(__name__).critical(
+            "SECRET_KEY is the default value: admin sessions can be forged and saved API keys are trivially decryptable. "
+            "Set a long random SECRET_KEY in .env."
+        )
     yield
+    await scheduler.stop(job_loop)
 
 
 app = FastAPI(
@@ -36,9 +60,17 @@ app.add_middleware(
 )
 
 
+from app.core.analytics import AnalyticsMiddleware
+
+app.add_middleware(AnalyticsMiddleware)
+
 _base_dir = os.path.dirname(os.path.abspath(__file__))
 _static_dir = os.path.join(_base_dir, "static")
-_media_dir = os.path.join(_base_dir, "media")
+# Single-sourced so the app, the Celery worker and the telegram-bot-api
+# container all resolve uploads to the same absolute path (see MEDIA_ROOT).
+from app.config import settings as _app_settings
+
+_media_dir = _app_settings.media_root
 
 os.makedirs(_static_dir, exist_ok=True)
 os.makedirs(_media_dir, exist_ok=True)
@@ -49,14 +81,23 @@ app.mount(
 )
 app.mount("/media", StaticFiles(directory=_media_dir), name="media")
 
+from app.core.csrf import CSRFError, csrf_protect
+from app.core.policy import AccessDenied, PasswordChangeRequired, admin_policy
 from app.routes.public import router as public_router
 
-app.include_router(public_router)
+# Every browser form POST/PUT/DELETE must carry the session's csrf_token
+# (see app/core/csrf.py). The token-authenticated /api router is exempt.
+app.include_router(public_router, dependencies=[Depends(csrf_protect)])
+
+from app.routes.public_extra import open_router as public_open_router, router as public_extra_router
+
+app.include_router(public_extra_router, dependencies=[Depends(csrf_protect)])
+app.include_router(public_open_router)      # token-authorised POSTs (unsubscribe) — mail clients cannot send a CSRF token
 
 try:
     from app.routes.admin import router as admin_router
 
-    app.include_router(admin_router, prefix="/admin")
+    app.include_router(admin_router, prefix="/admin", dependencies=[Depends(csrf_protect), Depends(admin_policy)])
 except ImportError as e:
     import logging
 
@@ -72,6 +113,69 @@ except ImportError as e:
     logging.error("Failed to load API routes: %s", e)
 
 
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(request, exc):
+    """Safety net: a unique/foreign-key violation we did not pre-check becomes a message, not a 500 page."""
+    import logging
+
+    from fastapi.responses import JSONResponse, RedirectResponse
+
+    logging.getLogger(__name__).warning("IntegrityError on %s %s: %s", request.method, request.url.path, str(exc.orig)[:200])
+    message = "That change conflicts with an existing record (for example a duplicate name or email). Nothing was saved."
+    accept = request.headers.get("accept", "")
+    if request.url.path.startswith("/api/") or ("application/json" in accept and "text/html" not in accept):
+        return JSONResponse({"error": message}, status_code=409)
+    try:
+        request.session["flash_messages"] = [{"type": "error", "message": message}]
+        request.session["error"] = message
+    except Exception:
+        pass
+    return RedirectResponse(url=request.headers.get("referer") or "/", status_code=303)
+
+
+@app.exception_handler(AccessDenied)
+async def access_denied_handler(request, exc):
+    """A signed-in admin asked for something their role does not include."""
+    from fastapi.responses import JSONResponse, RedirectResponse
+
+    from app.core.access import home_for
+
+    message = "You do not have access to that page."
+    accept = request.headers.get("accept", "")
+    if request.url.path.endswith(("/metrics", "/status")) or ("application/json" in accept and "text/html" not in accept):
+        return JSONResponse({"error": message}, status_code=403)
+    request.session["flash_messages"] = [{"type": "error", "message": message}]
+    request.session["error"] = message
+    return RedirectResponse(url=home_for(exc.role), status_code=303)
+
+
+@app.exception_handler(PasswordChangeRequired)
+async def password_change_required_handler(request, exc):
+    from fastapi.responses import JSONResponse, RedirectResponse
+
+    message = "Set your own password before you continue."
+    accept = request.headers.get("accept", "")
+    if request.url.path.endswith(("/metrics", "/status")) or ("application/json" in accept and "text/html" not in accept):
+        return JSONResponse({"error": message}, status_code=403)
+    request.session["flash_messages"] = [{"type": "error", "message": message}]
+    return RedirectResponse(url="/admin/profile", status_code=303)
+
+
+@app.exception_handler(CSRFError)
+async def csrf_error_handler(request, exc):
+    """Bounce a form with a missing/stale csrf_token back to where it came from."""
+    from fastapi.responses import JSONResponse, RedirectResponse
+
+    if "application/json" in request.headers.get("accept", "") and "text/html" not in request.headers.get("accept", ""):
+        return JSONResponse({"error": "Invalid or missing CSRF token"}, status_code=403)
+
+    message = "Your session expired or the form was invalid. Please try again."
+    request.session["flash_messages"] = [{"type": "error", "message": message}]
+    request.session["error"] = message
+    target = request.headers.get("referer") or "/admin"
+    return RedirectResponse(url=target, status_code=303)
+
+
 async def _seed_defaults():
     from app.database import async_session
 
@@ -80,6 +184,10 @@ async def _seed_defaults():
         from sqlalchemy import select, func
 
         async with async_session() as db:
+            from app.core.settings_cache import encrypt_plaintext_secrets
+
+            if await encrypt_plaintext_secrets(db):
+                await db.commit()
             count_result = await db.execute(
                 select(func.count()).select_from(SiteSetting)
             )

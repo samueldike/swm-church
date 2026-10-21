@@ -1,0 +1,41 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, textarea, checkbox with context %}
+{% block title %}{{ 'Edit Department' if department else 'New Department' }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ 'Edit Department' if department else 'New Department' }}{% endblock %}
+{% block topbar_subtitle %}Departments{% endblock %}
+{% block topbar_icon %}ri-building-2-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header('Edit department' if department else 'New department',
+      department.name if department else 'Create a ministry department',
+      actions='<a href="' ~ url_for('admin_departments') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All departments</a>') }}
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4 items-start max-w-4xl">
+  <div class="panel">
+    <form method="POST" action="{{ url_for('admin_departments_update', department_id=department.id) if department else url_for('admin_departments_store') }}" class="flex flex-col gap-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {{ field('Department name', 'name', value=department.name if department else '', required=True) }}
+      {{ textarea('Description', 'description', value=department.description or '' if department else '', rows=4, placeholder='What does this department do?') }}
+      {% if department %}{{ checkbox('Department is active', 'is_active', checked=department.is_active) }}{% endif %}
+      <div class="flex items-center gap-2.5 pt-4 border-t border-line">
+        <button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>{{ 'Save changes' if department else 'Create department' }}</button>
+        <a href="{{ url_for('admin_departments') }}" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  {% if department %}
+    <div class="panel">
+      <h2 class="text-[14px] font-semibold text-ink mb-2">Danger zone</h2>
+      <p class="text-[12px] text-ink-3 mb-3">Deleting a department cannot be undone.</p>
+      <form method="POST" action="{{ url_for('admin_departments_destroy', department_id=department.id) }}"
+            data-confirm="Delete the {{ department.name }} department? This cannot be undone." data-confirm-title="Delete Department" data-confirm-accept="Delete">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-danger w-full"><i class="ri-delete-bin-line"></i>Delete department</button>
+      </form>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

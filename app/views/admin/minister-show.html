@@ -1,0 +1,106 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, avatar with context %}
+{% block title %}{{ m.full_name }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ m.full_name }}{% endblock %}
+{% block topbar_subtitle %}Minister{% endblock %}
+{% block topbar_icon %}ri-user-voice-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header((m.title ~ ' ' if m.title else '') ~ m.full_name, (m.branch.name if m.branch else '') ~ (' · ' ~ m.ministry_rank if m.ministry_rank else ''),
+      actions=('<a href="' ~ url_for('admin_ministers') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All ministers</a>')
+              ~ (('<a href="' ~ url_for('admin_ministers_edit', minister_id=m.id) ~ '" class="btn btn-primary"><i class="ri-edit-line"></i>Edit</a>') if can_manage else ''),
+      audit=[('Status', m.status|replace('_', ' ')|capitalize), ('Joined', m.date_joined.strftime('%d %b %Y') if m.date_joined else '—'), ('Ordained', m.ordination_date.strftime('%d %b %Y') if m.ordination_date else '—')]) }}
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 max-w-6xl items-start">
+  <div class="panel flex flex-col items-center text-center">
+    {% if m.photo %}<img src="{{ url_for('static', path=m.photo) }}" alt="" class="w-28 h-28 rounded-full object-cover border border-line-2">
+    {% else %}{{ avatar((m.full_name[0] if m.full_name else 'M'), 88, True) }}{% endif %}
+    <h2 class="mt-3.5 text-base font-semibold text-ink">{{ (m.title ~ ' ' if m.title else '') ~ m.full_name }}</h2>
+    <p class="text-[12px] text-ink-3">{{ m.branch.name if m.branch else '' }}</p>
+    <div class="mt-3 flex flex-wrap justify-center gap-1.5">
+      {% if role_info.role == 'resident_pastor' %}{{ badge('Resident Pastor', 'ok' if role_info.active else 'neut') }}{% endif %}
+      {% if role_info.role == 'hod' %}{{ badge('HOD · ' ~ (role_info.department or '—'), 'warn') }}{% endif %}
+      {{ badge(m.status|replace('_', ' ')|capitalize, 'ok' if m.status == 'active' else 'neut') }}
+    </div>
+  </div>
+
+  <div class="lg:col-span-2 flex flex-col gap-4">
+    <section class="panel">
+      <h2 class="text-[14px] font-semibold text-ink mb-3">Bio-data</h2>
+      <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-[12.5px]">
+        {% for label, val in [('Gender', (m.gender or '')|capitalize), ('Date of birth', m.date_of_birth.strftime('%d %b %Y') if m.date_of_birth else ''), ('Marital status', m.marital_status), ('Spouse', m.spouse_name),
+                              ('State of origin', m.state_of_origin), ('Education', m.education), ('Phone', m.phone), ('Email', m.email), ('Address', m.address)] %}
+          <div><dt class="mono-label">{{ label }}</dt><dd class="text-ink mt-0.5 {{ 'font-mono' if label in ['Phone', 'Email'] else '' }}">{{ val or '—' }}</dd></div>
+        {% endfor %}
+      </dl>
+      {% if m.bio %}<div class="mt-4 pt-4 border-t border-line"><p class="mono-label mb-1">Biography</p><p class="text-[13px] text-ink-2 leading-relaxed whitespace-pre-line">{{ m.bio }}</p></div>{% endif %}
+      {% if m.notes and can_manage %}<div class="mt-4 pt-4 border-t border-line"><p class="mono-label mb-1">Internal notes</p><p class="text-[13px] text-ink-2 leading-relaxed whitespace-pre-line">{{ m.notes }}</p></div>{% endif %}
+    </section>
+
+    {% if can_manage %}
+    <section class="panel flex flex-col gap-5">
+      <div>
+        <h2 class="text-[14px] font-semibold text-ink">Appointments</h2>
+        <p class="text-[12px] text-ink-3 mt-1">Giving a minister a role creates their console login. A temporary password is shown once.</p>
+      </div>
+
+      {# ── Department head ── #}
+      {% if role_info.role != 'resident_pastor' %}
+        <form method="POST" action="{{ url_for('admin_ministers_make_hod', minister_id=m.id) }}" class="flex flex-col gap-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <p class="text-[13px] font-semibold text-ink">{{ 'Change department' if role_info.role == 'hod' else 'Make head of a department (HOD)' }}</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label for="dept" class="field-label">Department</label>
+              <select id="dept" name="department_id" class="field-select" required>
+                {% for d in departments %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+              </select>
+            </div>
+            {% if not m.account and not m.email %}
+              <div><label for="hod-email" class="field-label">Login email</label><input id="hod-email" name="email" type="email" class="field-input field-mono" required></div>
+            {% endif %}
+          </div>
+          <button type="submit" class="btn btn-secondary self-start"><i class="ri-user-star-line"></i>{{ 'Save department' if role_info.role == 'hod' else 'Appoint as HOD' }}</button>
+        </form>
+      {% endif %}
+
+      {# ── Resident Pastor (HQ Administrator only) ── #}
+      {% if can_appoint_rp %}
+        <div class="pt-5 border-t border-line">
+          <p class="text-[13px] font-semibold text-ink">Resident Pastor of {{ m.branch.name if m.branch else 'this church' }}</p>
+          {% if role_info.role == 'resident_pastor' %}
+            <p class="text-[12px] text-ink-3 mt-1">Reviews the church's department reports and appends a comment before they reach the Super Admin's office.</p>
+            <form method="POST" action="{{ url_for('admin_ministers_remove_rp', minister_id=m.id) }}" class="mt-3"
+                  data-confirm="Remove {{ m.full_name }} as Resident Pastor? Department reports will go straight to the Super Admin's office again." data-confirm-title="Remove Resident Pastor" data-confirm-accept="Remove">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button type="submit" class="btn btn-secondary text-bad"><i class="ri-user-unfollow-line"></i>Remove as Resident Pastor</button>
+            </form>
+          {% elif branch_rp %}
+            <p class="text-[12px] text-ink-3 mt-1"><b class="text-ink-2">{{ branch_rp.full_name }}</b> is the Resident Pastor here. Remove them before appointing someone else.</p>
+          {% else %}
+            <p class="text-[12px] text-ink-3 mt-1">With a Resident Pastor, every department report must carry their comment before the Super Admin's office sees it.</p>
+            <form method="POST" action="{{ url_for('admin_ministers_make_rp', minister_id=m.id) }}" class="mt-3 flex flex-wrap items-end gap-3"
+                  data-confirm="Appoint {{ m.full_name }} Resident Pastor of {{ m.branch.name if m.branch else 'this church' }}? New department reports will need their comment first." data-confirm-title="Appoint Resident Pastor" data-confirm-accept="Appoint">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              {% if not m.account and not m.email %}
+                <div><label for="rp-email" class="field-label">Login email</label><input id="rp-email" name="email" type="email" class="field-input field-mono" required></div>
+              {% endif %}
+              <button type="submit" class="btn btn-primary"><i class="ri-user-star-fill"></i>Appoint Resident Pastor</button>
+            </form>
+          {% endif %}
+        </div>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    {% if can_manage and not m.admin_id %}
+      <form method="POST" action="{{ url_for('admin_ministers_delete', minister_id=m.id) }}" data-confirm="Remove {{ m.full_name }} from the ministers record?" data-confirm-title="Remove minister" data-confirm-accept="Remove">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-secondary text-bad"><i class="ri-delete-bin-line"></i>Remove from record</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

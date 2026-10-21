@@ -1,0 +1,70 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, empty_state, filter_pager, person with context %}
+{% block title %}Ministers | {{ siteName }}{% endblock %}
+{% block topbar_title %}Ministers{% endblock %}
+{% block topbar_subtitle %}{{ 'HQ and every branch' if can('system') else 'Ministers on record' }}{% endblock %}
+{% block topbar_icon %}ri-user-voice-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header("Ministers", "Bio-data of the ministers at " ~ ("HQ and in every branch." if can('system') else "your church.") ~ " A minister can be appointed head of a department or Resident Pastor.",
+      actions=('<a href="' ~ url_for('admin_ministers_create') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add minister</a>') if can_manage else '',
+      audit=[('On this page', pagination.total)]) }}
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-3.5">
+  <form method="get" action="{{ url_for('admin_ministers') }}" class="flex flex-wrap items-center gap-2.5" data-no-loading>
+    <div class="flex items-center gap-2 w-full sm:w-72 px-3 py-2 rounded-md border border-line-2 bg-surface">
+      <i class="ri-search-line text-ink-3 text-sm"></i>
+      <label for="min-q" class="sr-only">Search ministers</label>
+      <input id="min-q" type="search" name="q" value="{{ filters.q }}" placeholder="Name, email, phone or rank…" class="flex-grow border-none bg-transparent text-[12.5px] text-ink outline-none min-w-0">
+    </div>
+    {% if branches %}
+      <select name="branch_id" onchange="this.form.submit()" aria-label="Filter by church" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
+        <option value="">HQ + all branches</option>
+        {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if filters.branch_id == b.id|string else '' }}>{{ b.name }}{{ ' (HQ)' if b.is_hq else '' }}</option>{% endfor %}
+      </select>
+    {% endif %}
+    <select name="status" onchange="this.form.submit()" aria-label="Filter by status" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
+      <option value="">Any status</option>
+      {% for v, l in statuses %}<option value="{{ v }}" {{ 'selected' if filters.status == v else '' }}>{{ l }}</option>{% endfor %}
+    </select>
+    <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+    {% if filters.q or filters.status or filters.branch_id %}<a href="{{ url_for('admin_ministers') }}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
+  </form>
+
+  <div class="panel-flush">
+    {% if items %}
+      <div class="overflow-x-auto">
+        <table class="dtable dtable-responsive">
+          <thead><tr><th>Minister</th><th>Church</th><th>Rank</th><th>Role in the console</th><th>Status</th><th class="text-right">Actions</th></tr></thead>
+          <tbody>
+            {% for m in items %}
+              {% set r = roles[m.id] %}
+              <tr>
+                <td data-label="Minister"><a href="{{ url_for('admin_ministers_show', minister_id=m.id) }}" class="block no-underline">{{ person((m.title ~ ' ' if m.title else '') ~ m.full_name, m.phone or m.email, (m.full_name[0] if m.full_name else 'M')) }}</a></td>
+                <td data-label="Church">{{ m.branch.name if m.branch else '—' }}</td>
+                <td data-label="Rank" class="text-[12.5px]">{{ m.ministry_rank or '—' }}</td>
+                <td data-label="Role in the console">
+                  {% if r.role == 'resident_pastor' %}{{ badge('Resident Pastor', 'ok' if r.active else 'neut') }}
+                  {% elif r.role == 'hod' %}{{ badge('HOD · ' ~ (r.department or '—'), 'warn') }}
+                  {% else %}<span class="text-ink-3 text-xs">—</span>{% endif %}
+                </td>
+                <td data-label="Status">{{ badge(m.status|replace('_', ' ')|capitalize, 'ok' if m.status == 'active' else 'neut') }}</td>
+                <td data-label="Actions" class="text-right whitespace-nowrap">
+                  <a href="{{ url_for('admin_ministers_show', minister_id=m.id) }}" class="icon-btn" aria-label="Open"><i class="ri-eye-line"></i></a>
+                  {% if can_manage %}<a href="{{ url_for('admin_ministers_edit', minister_id=m.id) }}" class="icon-btn" aria-label="Edit"><i class="ri-edit-line"></i></a>{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {{ empty_state("ri-user-voice-line", "No ministers recorded", "Record the ministers serving here so their details are kept in one place.",
+                     ('<a href="' ~ url_for('admin_ministers_create') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add minister</a>') if can_manage else '') }}
+    {% endif %}
+  </div>
+  {{ filter_pager(pagination) }}
+</div>
+{% endblock %}

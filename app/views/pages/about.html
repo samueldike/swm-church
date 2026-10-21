@@ -2,6 +2,7 @@
 {% set pageEyebrow = 'About' %}
 {% set pageTitle = 'A message of restoration and hope.' %}
 {% set pageLede = 'Scent of Water Ministry is a divine mandate received from the Lord Jesus Christ, to the downtrodden, the downcast and the weary.' %}
+{% set metaTitle = 'About us' %}
 {% include "partials/theme-page-open.html" %}
 
 <section class="band band-dark has-crest">
@@ -65,7 +66,33 @@
     </div>
 </section>
 
-<section class="band band-dark">
+<section class="band band-dark" id="teach">
+    <div class="shell">
+        <p class="mono eyebrow"><span class="rule"></span>What we teach</p>
+        <h2 class="t-h2" style="margin-top:1rem;max-width:22ch;">The ground we stand on</h2>
+        <ul class="rows" style="margin-top:2rem;max-width:74ch;">
+            {% for title, text in teaching %}
+            <li class="row"><span class="row-in">
+                <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
+                <span class="row-main"><span class="t-h3">{{ title }}</span>{% if text %}<span class="t-sm row-sub">{{ text }}</span>{% endif %}</span>
+            </span></li>
+            {% endfor %}
+        </ul>
+        {% if faithUrl %}<a href="{{ faithUrl }}" class="lnk" style="margin-top:1.6rem;">Read our full statement of faith</a>{% endif %}
+    </div>
+</section>
+
+{% if ourStory %}
+<section class="band band-light" id="story">
+    <div class="shell" style="max-width:78ch;">
+        <p class="mono eyebrow"><span class="rule"></span>Our story</p>
+        <h2 class="t-h2" style="margin-top:1rem;max-width:22ch;">How this house began</h2>
+        <div class="t-body story-text" style="margin-top:1.6rem;">{% for para in ourStory.replace('\r\n', '\n').split('\n\n') if para.strip() %}<p>{{ para.strip() }}</p>{% endfor %}</div>
+    </div>
+</section>
+{% endif %}
+
+<section class="band band-{{ 'dark' if ourStory else 'light' }}">
     <div class="shell split">
         <div class="split-media portrait">
             <img src="{{ pastorPhoto if pastorPhoto.startswith('/') else '/' ~ pastorPhoto }}"
@@ -84,7 +111,7 @@
     </div>
 </section>
 
-<section class="band band-light">
+<section class="band band-{{ 'light' if ourStory else 'dark' }}">
     <div class="shell">
         <div class="head">
             <div>
@@ -93,21 +120,13 @@
             </div>
             <a href="{{ url_for('calendar') }}" class="lnk">Full calendar</a>
         </div>
-        {% set services = [
-            ('Sunday',      'First Service',       '7:00 — 9:30 am',     true),
-            ('Sunday',      'Second Service',      '9:30 am — 12:00 pm', true),
-            ('Monday',      'Prayers',             '4:40 — 6:00 pm',     false),
-            ('Wednesday',   'Midweek Bible Study', '5:00 pm',            false),
-            ('Saturday',    'Preservice Prayer',   '5:00 — 6:00 pm',     false),
-            ('Last Friday', 'Monthly Vigil',       'from 9:00 pm',       false)
-        ] %}
         <table class="sched" style="margin-top:2rem;">
             <tbody>
-            {% for day, name, time, lead in services %}
-            <tr class="{{ 'lead' if lead else '' }}">
-                <td class="s-day mono">{{ day }}</td>
-                <td class="s-name t-h3">{{ name }}</td>
-                <td class="s-time mono">{{ time }}</td>
+            {% for svc in services %}
+            <tr class="{{ 'lead' if svc.lead else '' }}">
+                <td class="s-day mono">{{ svc.day }}</td>
+                <td class="s-name t-h3">{{ svc.name }}</td>
+                <td class="s-time mono">{{ svc.time }}</td>
             </tr>
             {% endfor %}
             </tbody>
@@ -118,14 +137,16 @@
     </div>
 </section>
 
-<section class="band band-dark">
+<section class="band band-{{ 'dark' if ourStory else 'light' }}">
     <div class="shell" style="text-align:center;">
         <h2 class="t-h2" style="max-width:22ch;margin-inline:auto;">Come as you are.</h2>
         <div class="flex flex-wrap items-center justify-center gap-3" style="margin-top:1.8rem;">
-            <a href="{{ url_for('contact') }}" class="btn btn-gold">Plan your visit</a>
+            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan your visit</a>
             <a href="{{ url_for('messages') }}" class="btn btn-ghost">Listen to a message</a>
         </div>
     </div>
 </section>
+
+<style>.story-text p + p { margin-top: 1.1rem; }</style>
 
 {% include "partials/theme-page-close.html" %}

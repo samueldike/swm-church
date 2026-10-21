@@ -1,0 +1,72 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, empty_state, progress_bar with context %}
+{% block title %}{{ kmeta.plural }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ kmeta.plural }}{% endblock %}
+{% block topbar_subtitle %}Books Pub{% endblock %}
+{% block topbar_icon %}{{ kmeta.icon }}{% endblock %}
+
+{% block page_header %}
+  {{ page_header(kmeta.plural, "Turn sermon transcripts into a " ~ (kmeta.label|lower) ~ " with AI, then edit and export it",
+      actions='<a href="' ~ url_for('admin_pubs_new', kind=kind) ~ '" class="btn btn-primary"><i class="ri-add-line"></i>New ' ~ kmeta.label ~ '</a>',
+      audit=[('Projects', rows|length), ('With a document', rows|selectattr('prog.has_document')|list|length)]) }}
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-3.5">
+  <form method="get" action="{{ url_for('admin_pubs', kind=kind) }}" class="flex flex-wrap items-center gap-2.5" data-no-loading>
+    <div class="flex items-center gap-2 w-full sm:w-72 px-3 py-2 rounded-md border border-line-2 bg-surface">
+      <i class="ri-search-line text-ink-3 text-sm"></i>
+      <label for="pub-q" class="sr-only">Search projects</label>
+      <input id="pub-q" type="search" name="q" value="{{ search }}" placeholder="Search by title…" class="flex-grow border-none bg-transparent text-[12.5px] text-ink outline-none min-w-0">
+    </div>
+    <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+    {% if search %}<a href="{{ url_for('admin_pubs', kind=kind) }}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
+  </form>
+
+  <div class="panel-flush">
+    {% if rows %}
+      <div class="overflow-x-auto">
+        <table class="dtable dtable-responsive">
+          <thead><tr><th>Project</th><th>Messages</th><th>{{ 'Days written' if kind == 'devotionals' else 'Sections written' }}</th><th>Document</th><th>Updated</th><th class="text-right">Actions</th></tr></thead>
+          <tbody>
+            {% for row in rows %}
+              {% set p = row.pub %}{% set g = row.prog %}
+              <tr>
+                <td data-label="Project" class="min-w-[220px]">
+                  <a href="{{ url_for('admin_pubs_show', kind=kind, pub_id=p.id) }}" class="font-semibold text-ink block">{{ p.title }}</a>
+                  <span class="font-mono text-[11px] text-ink-3">{{ row.period or kmeta.label }}{% if p.author_name %} · {{ p.author_name }}{% endif %}</span>
+                </td>
+                <td data-label="Messages" class="font-mono text-xs">{{ g.messages }}{% if g.no_transcript %} <span class="text-warn">({{ g.no_transcript }} without transcript)</span>{% endif %}</td>
+                <td data-label="{{ 'Days written' if kind == 'devotionals' else 'Sections written' }}" class="min-w-[170px]">
+                  {% if kind == 'devotionals' and g.days_total %}
+                    <div class="font-mono text-xs text-ink-2 mb-1.5">{{ g.with_content }} / {{ g.days_total }}</div>
+                    {{ progress_bar(((g.days_filled / g.days_total) * 100)|round|int, 'gold') }}
+                  {% else %}
+                    <span class="font-mono text-xs text-ink-2">{{ g.with_content }} of {{ g.subtopics }}</span>
+                  {% endif %}
+                </td>
+                <td data-label="Document">{{ badge('Ready' if g.has_document else 'Not built', 'ok' if g.has_document else 'neut') }}{% if g.busy %} {{ badge('AI working', 'warn') }}{% endif %}</td>
+                <td data-label="Updated" class="font-mono text-xs text-ink-3">{{ p.updated_at|timesince }}</td>
+                <td data-label="Actions" class="text-right whitespace-nowrap">
+                  <a href="{{ url_for('admin_pubs_show', kind=kind, pub_id=p.id) }}" class="icon-btn" aria-label="Open project"><i class="ri-folder-open-line"></i></a>
+                  {% if g.has_document %}<a href="{{ url_for('admin_pubs_editor', kind=kind, pub_id=p.id) }}" class="icon-btn" aria-label="Open editor"><i class="ri-file-word-2-line"></i></a>{% endif %}
+                  <a href="{{ url_for('admin_pubs_edit', kind=kind, pub_id=p.id) }}" class="icon-btn" aria-label="Edit settings"><i class="ri-edit-line"></i></a>
+                  <form method="POST" action="{{ url_for('admin_pubs_delete', kind=kind, pub_id=p.id) }}" class="inline"
+                        data-confirm="Delete “{{ p.title }}” and everything generated for it? The messages themselves are not deleted." data-confirm-title="Delete project" data-confirm-accept="Delete">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="icon-btn text-bad" aria-label="Delete project"><i class="ri-delete-bin-line"></i></button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {{ empty_state(kmeta.icon, "No " ~ (kmeta.plural|lower) ~ " yet",
+                     "Start a project, pick the messages it comes from, and let AI draft the topics and content for you to edit.",
+                     '<a href="' ~ url_for('admin_pubs_new', kind=kind) ~ '" class="btn btn-primary"><i class="ri-add-line"></i>New ' ~ kmeta.label ~ '</a>') }}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

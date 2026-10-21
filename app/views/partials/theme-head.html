@@ -43,19 +43,19 @@
 
         /* Single accent, sampled from the logo. Saturation held under 80%. */
         --gold:       #B8891F;
-        --gold-deep:  #8F6A14;
+        --gold-deep:  #7D5C0F;          /* 5.6:1 on paper, 5.1:1 on paper-2 (was 4.5 / 4.1) */
         --gold-lt:    #E8C870;
 
         --fg:         #F2F2F0;
         --fg-dim:     #A3A3A5;
-        --fg-faint:   #6E6E72;
+        --fg-faint:   #8E8E94;          /* 6.1:1 on ink (was 3.9:1, below AA for small text) */
 
         /* Light surface for interior-page content bands. */
         --paper:      #F5F4F1;
         --paper-2:    #EBE9E4;
         --on-paper:   #16161A;
         --on-paper-dim: #55555C;
-        --on-paper-faint: #85858E;
+        --on-paper-faint: #62626A;      /* 5.5:1 on paper (was 3.3:1) */
         --paper-line: rgba(0, 0, 0, 0.11);
 
         --mast-h: 76px;
@@ -77,6 +77,16 @@
     }
     ::selection { background: var(--gold); color: var(--ink); }
     :focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+    main:focus { outline: none; }
+    .hp { position: absolute !important; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+    .lnk-inline { color: var(--gold-lt); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+    .lnk-inline:hover { color: var(--gold); }
+    .skip-link {
+        position: absolute; left: 1rem; top: -4rem; z-index: 200;
+        background: var(--gold); color: var(--ink); font-weight: 600; font-size: 0.9rem;
+        padding: 0.8rem 1.1rem; transition: top 160ms var(--ease);
+    }
+    .skip-link:focus { top: 0.8rem; outline: 2px solid var(--ink); outline-offset: 2px; }
 
     /* Grain: fixed + pointer-events-none only, never on a scrolling layer. */
     body::after {
@@ -186,6 +196,11 @@
         --surface: var(--paper-2);
         --gold-lt: var(--gold-deep);
     }
+    /* Gold text on paper needs the deep gold: --gold itself is only 2.9:1 on paper. */
+    .band-light .gold, .band-light .eyebrow, .band-light .gold-lt { color: var(--gold-deep); }
+    /* Focus indicators need 3:1 against the background: the bright gold is only 2.9:1 on paper. */
+    .band-light :focus-visible { outline-color: var(--gold-deep); }
+    .band-light .field input:focus, .band-light .field textarea:focus, .band-light .field select:focus { border-bottom-color: var(--gold-deep); box-shadow: 0 1px 0 0 var(--gold-deep); }
     .band-light .btn-ghost { border-color: rgba(0, 0, 0, 0.22); }
     .band-light .btn-gold:hover { background: var(--gold-deep); color: #fff; }
 
@@ -450,5 +465,12 @@
             transition: none !important;
         }
         [data-marquee] { animation: none !important; }
+    }
+    /* Touch targets: every control on a phone is at least 44px tall. */
+    @media (max-width: 767.98px) {
+        .check { min-height: 44px; }
+        .foot-news input[type="email"], .msg-filters select, .bx-filter input, .bx-filter select, .search-row input { min-height: 44px; }
+        .field select { min-height: 44px; }
+        .note .lnk-inline, .msg-share .lnk-inline, .visit-branches .lnk-inline { display: inline-flex; align-items: center; min-height: 44px; }
     }
 </style>

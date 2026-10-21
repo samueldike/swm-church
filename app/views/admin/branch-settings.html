@@ -1,0 +1,146 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, textarea, secret_field, checkbox with context %}
+{% block title %}Branch settings — {{ branch.name }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}Branch settings{% endblock %}
+{% block topbar_subtitle %}{{ branch.name }}{% endblock %}
+{% block topbar_icon %}ri-settings-3-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header("Branch settings", branch.name ~ " — its own Telegram channel, bank accounts and payment gateway. Nothing here is shared with HQ or other branches.",
+      actions=('<a href="' ~ url_for('admin_branch', branch_id=branch.id) ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>Branch page</a>') if as_hq else '') }}
+{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ action_base }}" class="flex flex-col gap-4 max-w-4xl">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+  <section class="panel flex flex-col gap-4">
+    <div>
+      <h2 class="text-[15px] font-semibold text-ink">Audio distribution — Telegram</h2>
+      <p class="text-[12px] text-ink-3 mt-1">Create a bot with @BotFather, add it to your channel as an administrator, then paste its token and the channel ID here. Your messages are sent only through this bot — never through HQ's — and are not shown on the HQ website.</p>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {{ secret_field('Bot token', 'telegram_bot_token', secret_status.telegram_bot_token, placeholder='123456:ABC…') }}
+      {{ field('Channel / chat ID', 'telegram_audio_chat_id', value=values.get('telegram_audio_chat_id', ''), mono=True, placeholder='@yourchannel or -100…') }}
+    </div>
+    <div class="flex flex-wrap items-center gap-3 pt-3 border-t border-line">
+      <button type="submit" form="tg-test" class="btn btn-secondary btn-sm"><i class="ri-plug-line"></i>Test saved Telegram settings</button>
+      <span class="text-[11.5px] text-ink-3">Tests what is already saved, so save first.</span>
+    </div>
+  </section>
+
+  <section class="panel flex flex-col gap-4">
+    <div>
+      <h2 class="text-[15px] font-semibold text-ink">Giving</h2>
+      <p class="text-[12px] text-ink-3 mt-1">Shown on the Give page when HQ has set giving to “each branch collects”. Bank details are for direct transfers.</p>
+    </div>
+    <input type="hidden" name="accounts_present" value="1"><input type="hidden" name="giving_present" value="1">
+    <div id="accounts" class="flex flex-col gap-3">
+      {% for a in accounts %}
+        <div class="acc grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end">
+          {{ field('Bank', 'accounts[' ~ loop.index0 ~ '][bank_name]', value=a.get('bank_name', ''), id='acc-b-' ~ loop.index0) }}
+          {{ field('Account number', 'accounts[' ~ loop.index0 ~ '][account_number]', value=a.get('account_number', ''), mono=True, id='acc-n-' ~ loop.index0) }}
+          {{ field('Account name', 'accounts[' ~ loop.index0 ~ '][account_name]', value=a.get('account_name', ''), id='acc-a-' ~ loop.index0) }}
+          <button type="button" class="btn btn-danger btn-sm acc-remove" aria-label="Remove account"><i class="ri-delete-bin-line"></i></button>
+        </div>
+      {% endfor %}
+    </div>
+    <button type="button" id="acc-add" class="btn btn-secondary btn-sm self-start"><i class="ri-add-line"></i>Add a bank account</button>
+
+    <div class="pt-4 border-t border-line flex flex-col gap-4">
+      {{ checkbox('Collect online gifts with this branch’s own payment account', 'collects_own_giving', checked=values.get('collects_own_giving') == '1', hint='Off: online gifts for this branch go through HQ’s gateway and are tracked as held by HQ for the branch.') }}
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label for="active_giving_gateway" class="field-label">Gateway</label>
+          <select id="active_giving_gateway" name="active_giving_gateway" class="field-select">
+            {% for v, l in [('paystack', 'Paystack'), ('flutterwave', 'Flutterwave')] %}<option value="{{ v }}" {{ 'selected' if (values.get('active_giving_gateway') or 'paystack') == v else '' }}>{{ l }}</option>{% endfor %}
+          </select>
+        </div>
+        <div></div>
+        {{ field('Paystack public key', 'paystack_public_key', value=values.get('paystack_public_key', ''), mono=True) }}
+        {{ secret_field('Paystack secret key', 'paystack_secret_key', secret_status.paystack_secret_key) }}
+        {{ field('Flutterwave public key', 'flutterwave_public_key', value=values.get('flutterwave_public_key', ''), mono=True) }}
+        {{ secret_field('Flutterwave secret key', 'flutterwave_secret_key', secret_status.flutterwave_secret_key) }}
+        {{ secret_field('Flutterwave encryption key', 'flutterwave_encryption_key', secret_status.flutterwave_encryption_key) }}
+      </div>
+    </div>
+
+    {% if as_hq %}
+      <div class="pt-4 border-t border-line grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {{ field('HQ share of this branch’s giving (%)', 'hq_share_percent', value=values.get('hq_share_percent', '0'), type='number', mono=True, hint='Used by Remittances to show what the branch owes HQ, or HQ owes the branch. 0 = tracking only.') }}
+        <div>
+          <label for="transcription_enabled" class="field-label">Automatic transcription</label>
+          <select id="transcription_enabled" name="transcription_enabled" class="field-select">
+            <option value="1" {{ 'selected' if values.get('transcription_enabled', '1') != '0' else '' }}>On</option>
+            <option value="0" {{ 'selected' if values.get('transcription_enabled') == '0' else '' }}>Off (saves HQ server time)</option>
+          </select>
+        </div>
+      </div>
+    {% elif values.get('hq_share_percent') and values.get('hq_share_percent') != '0.0' %}
+      <p class="text-[12px] text-ink-3">HQ share of this branch’s giving: <span class="font-mono text-ink">{{ values.get('hq_share_percent') }}%</span> (set by HQ).</p>
+    {% endif %}
+  </section>
+
+  <section class="panel flex flex-col gap-4">
+    <h2 class="text-[15px] font-semibold text-ink">Branch details</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {{ field('Phone', 'phone', value=branch.phone or '', mono=True) }}
+      {{ field('Email', 'email', value=branch.email or '', type='email', mono=True) }}
+      {{ field('Address', 'address', value=branch.address or '') }}
+      {{ field('City', 'city', value=branch.city or '') }}
+      {{ field('State', 'state', value=branch.state or '') }}
+    </div>
+    {{ textarea('Service times', 'service_times', value=values.get('service_times', ''), rows=4, hint='One per line, e.g. “Sunday 8:00 am — Main service”.') }}
+  </section>
+
+  <section class="panel flex flex-col gap-4">
+    <div>
+      <h2 class="text-[15px] font-semibold text-ink">Public profile</h2>
+      <p class="text-[12px] text-ink-3 mt-1">What visitors see on the “Find a branch” page. The branch appears there only after HQ approves the listing. Your address, phone, email and service times above are used too.</p>
+    </div>
+    {% if as_hq %}
+      <input type="hidden" name="public_present" value="1">
+      <label class="flex items-start gap-2.5 text-[13px] text-ink"><input type="checkbox" name="listed_publicly" value="1" {{ 'checked' if values.get('listed_publicly') == '1' else '' }} class="field-checkbox mt-0.5"><span><b>List this branch on the public website</b><span class="block text-[11.5px] text-ink-3">Tick only when its details below are correct and ready for visitors.</span></span></label>
+    {% else %}
+      <p class="text-[12.5px] {{ 'text-ok' if values.get('listed_publicly') == '1' else 'text-ink-3' }}"><i class="{{ 'ri-checkbox-circle-fill' if values.get('listed_publicly') == '1' else 'ri-time-line' }}" aria-hidden="true"></i> {{ 'Listed on the public website.' if values.get('listed_publicly') == '1' else 'Not listed yet. Fill in the details, then ask HQ to approve the listing.' }}</p>
+    {% endif %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {{ field('Resident pastor (name shown publicly)', 'public_pastor', value=values.get('public_pastor', '')) }}
+      {{ field('WhatsApp number', 'public_whatsapp', value=values.get('public_whatsapp', ''), mono=True, hint='A number visitors can message.') }}
+    </div>
+    {{ field('Directions link (optional)', 'directions_url', value=values.get('directions_url', ''), type='url', mono=True, hint='A Google Maps link to your building. Left empty, a map search for your address is used.') }}
+    {{ textarea('About this branch', 'public_about', value=values.get('public_about', ''), rows=4, hint='A few sentences for visitors. Optional.') }}
+  </section>
+
+  <div class="flex items-center gap-2.5">
+    <button type="submit" class="btn btn-primary"><i class="ri-save-line"></i>Save branch settings</button>
+  </div>
+</form>
+<form id="tg-test" method="POST" action="{{ action_base }}/test-telegram" data-turbo="false"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"></form>
+
+<template id="acc-tpl">
+  <div class="acc grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-3 items-end">
+    <div><label class="field-label">Bank</label><input name="accounts[__i__][bank_name]" class="field-input"></div>
+    <div><label class="field-label">Account number</label><input name="accounts[__i__][account_number]" class="field-input field-mono"></div>
+    <div><label class="field-label">Account name</label><input name="accounts[__i__][account_name]" class="field-input"></div>
+    <button type="button" class="btn btn-danger btn-sm acc-remove" aria-label="Remove account"><i class="ri-delete-bin-line"></i></button>
+  </div>
+</template>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+(() => {
+  window.__swmBranchAbort?.abort();
+  const ctl = new AbortController(); window.__swmBranchAbort = ctl;
+  const list = document.getElementById('accounts'), tpl = document.getElementById('acc-tpl'), add = document.getElementById('acc-add');
+  if (!list || !tpl || !add) return;
+  let next = list.querySelectorAll('.acc').length + 100;
+  add.addEventListener('click', () => {
+    list.insertAdjacentHTML('beforeend', tpl.innerHTML.replaceAll('__i__', next++));
+    list.lastElementChild.querySelector('input').focus();
+  }, { signal: ctl.signal });
+  list.addEventListener('click', (e) => { const b = e.target.closest('.acc-remove'); if (b) b.closest('.acc').remove(); }, { signal: ctl.signal });
+})();
+</script>
+{% endblock %}

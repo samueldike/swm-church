@@ -1,0 +1,45 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, empty_state with context %}
+{% block title %}Email campaigns | {{ siteName }}{% endblock %}
+{% block topbar_title %}Email campaigns{% endblock %}
+{% block topbar_subtitle %}Messages to your subscribers{% endblock %}
+{% block topbar_icon %}ri-mail-star-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header("Email campaigns", "Send a new message, a devotional day or a note to everyone subscribed to your updates. Every email carries a one-click unsubscribe link.",
+      actions='<a href="' ~ url_for('admin_subscribers') ~ '" class="btn btn-secondary"><i class="ri-mail-send-line"></i>Subscribers</a> <a href="' ~ url_for('admin_campaigns_create') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>New campaign</a>',
+      audit=[('Active subscribers', active_subscribers), ('Campaigns', items|length)]) }}
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-3.5 max-w-5xl">
+  {% if not mail_ready %}
+    <div class="rounded-md border border-[#e6c9c5] bg-bad-bg text-bad px-3.5 py-2.5 text-[12.5px] flex gap-2" role="alert">
+      <i class="ri-alert-line text-base mt-0.5" aria-hidden="true"></i>
+      <span>Email delivery is not set up, so nothing can be sent. Add the Resend key and a verified sender under <a class="underline" href="{{ url_for('admin_settings') }}#email">Settings → Email delivery</a>.</span>
+    </div>
+  {% endif %}
+  <div class="panel-flush">
+    {% if items %}
+      <div class="overflow-x-auto">
+        <table class="dtable dtable-responsive">
+          <thead><tr><th>Subject</th><th>Status</th><th>Sent</th><th>Created</th><th class="text-right">Actions</th></tr></thead>
+          <tbody>
+            {% for c in items %}
+              <tr>
+                <td data-label="Subject"><a href="{{ url_for('admin_campaigns_show', campaign_id=c.id) }}" class="font-semibold text-ink hover:underline">{{ c.subject }}</a><span class="block text-[11px] text-ink-3">{{ c.kind|capitalize }}</span></td>
+                <td data-label="Status">{{ badge(c.status|capitalize, 'ok' if c.status == 'sent' else ('warn' if c.status == 'sending' else 'neut')) }}</td>
+                <td data-label="Sent" class="font-mono text-xs">{% if c.status in ('sending', 'sent', 'cancelled') %}{{ c.sent_count }}{% if c.total %} / {{ c.total }}{% endif %}{% if c.failed_count %} · {{ c.failed_count }} failed{% endif %}{% else %}—{% endif %}</td>
+                <td data-label="Created" class="font-mono text-xs">{{ c.created_at.strftime('%d %b %Y') }}</td>
+                <td data-label="Actions" class="text-right whitespace-nowrap"><a href="{{ url_for('admin_campaigns_show', campaign_id=c.id) }}" class="icon-btn" aria-label="Open {{ c.subject }}"><i class="ri-eye-line"></i></a></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {{ empty_state("ri-mail-star-line", "No campaigns yet", "Start from a new message or a devotional day, or write your own.", '<a href="' ~ url_for('admin_campaigns_create') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>New campaign</a>') }}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

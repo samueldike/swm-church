@@ -1,0 +1,46 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, textarea with context %}
+{% set editing = item is not none %}
+{% block title %}{{ 'Edit' if editing else 'New' }} announcement | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ 'Edit announcement' if editing else 'New announcement' }}{% endblock %}
+{% block topbar_subtitle %}Announcements{% endblock %}
+{% block topbar_icon %}ri-megaphone-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header('Edit announcement' if editing else 'New announcement', "Branch admins and Resident Pastors read this in their console.",
+      actions='<a href="' ~ url_for('admin_announcements') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>Cancel</a>') }}
+{% endblock %}
+
+{% block content %}
+<form method="POST" data-turbo="false" action="{{ url_for('admin_announcements_update', announcement_id=item.id) if editing else url_for('admin_announcements_store') }}" class="panel flex flex-col gap-4 max-w-3xl">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {{ field('Title', 'title', value=item.title if editing else '', required=True) }}
+  {{ textarea('Message', 'body', value=item.body if editing else '', rows=8, required=True) }}
+
+  <fieldset class="flex flex-col gap-2.5">
+    <legend class="field-label">Send to</legend>
+    <label class="flex items-center gap-2 text-[13px] text-ink"><input type="radio" name="audience" value="all" {{ 'checked' if not editing or item.audience == 'all' else '' }}> Every branch</label>
+    <label class="flex items-center gap-2 text-[13px] text-ink"><input type="radio" name="audience" value="selected" {{ 'checked' if editing and item.audience == 'selected' else '' }}> Only the branches I tick</label>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pl-6">
+      {% for b in branches %}
+        <label class="flex items-center gap-2 text-[12.5px] text-ink-2"><input type="checkbox" name="branch_ids" value="{{ b.id }}" {{ 'checked' if editing and b.id in (item.branch_ids or []) else '' }}> {{ b.name }}</label>
+      {% else %}
+        <p class="text-[12px] text-ink-3">No branches yet.</p>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    {{ field('Show until (optional)', 'expires_at', value=(item.expires_at.strftime('%Y-%m-%d') if editing and item.expires_at else ''), type='date', mono=True) }}
+    <div class="flex flex-col gap-2 justify-end">
+      <label class="flex items-center gap-2 text-[13px] text-ink"><input type="checkbox" name="is_pinned" value="1" {{ 'checked' if editing and item.is_pinned else '' }}> Pin to the top</label>
+      <label class="flex items-center gap-2 text-[13px] text-ink"><input type="checkbox" name="hidden" value="1" {{ 'checked' if editing and not item.is_active else '' }}> Hide for now</label>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-2.5">
+    <button type="submit" class="btn btn-primary"><i class="ri-send-plane-line"></i>{{ 'Save changes' if editing else 'Publish' }}</button>
+    <a href="{{ url_for('admin_announcements') }}" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}

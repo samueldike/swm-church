@@ -1,0 +1,62 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, checkbox with context %}
+{% block title %}{{ 'Edit Worker' if worker else 'New Worker' }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ 'Edit Worker' if worker else 'New Worker' }}{% endblock %}
+{% block topbar_subtitle %}HarvestTrack{% endblock %}
+{% block topbar_icon %}ri-seedling-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header('Edit worker' if worker else 'Add worker', worker.email if worker else 'Creates a login for the HarvestTrack mobile app',
+      actions='<a href="' ~ url_for('admin_harvesttrack') ~ '?tab=teams" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>Teams &amp; workers</a>') }}
+{% endblock %}
+
+{% block content %}
+<div class="panel max-w-3xl">
+  <form method="POST" action="{{ url_for('admin_harvesttrack_workers_update', worker_id=worker.id) if worker else url_for('admin_harvesttrack_workers_store') }}" class="flex flex-col gap-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {{ field('Full name', 'full_name', value=worker.full_name if worker else '', required=True) }}
+      {{ field('Phone number', 'phone', value=worker.phone or '' if worker else '', mono=True) }}
+    </div>
+    {% if not worker %}
+      {{ field('Email address', 'email', type='email', mono=True, required=True, hint='Used to sign in to the mobile app.') }}
+    {% endif %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label for="role" class="field-label">Role</label>
+        <select id="role" name="role" class="field-select">
+          {% for r in roles %}<option value="{{ r }}" {{ 'selected' if (worker and worker.role == r) or (not worker and r == 'field_member') else '' }}>{{ roleLabels[r] }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="team_id" class="field-label">Team</label>
+        <select id="team_id" name="team_id" class="field-select">
+          <option value="">Unassigned</option>
+          {% for t in teams %}<option value="{{ t.id }}" {{ 'selected' if worker and worker.team_id == t.id else '' }}>{{ t.name }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    {% if is_super %}
+      <div>
+        <label for="branch_id" class="field-label">Branch</label>
+        <select id="branch_id" name="branch_id" class="field-select">
+          {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if worker and worker.branch_id == b.id else '' }}>{{ b.name }}</option>{% endfor %}
+        </select>
+      </div>
+    {% endif %}
+
+    {% if worker %}
+      {{ checkbox('Account is active', 'is_active', checked=worker.is_active) }}
+    {% else %}
+      <div class="pt-3 border-t border-line">
+        {{ field('Initial password (optional)', 'password', type='password', mono=True, hint='Leave blank to generate a temporary password. It is shown once after saving.', autocomplete='new-password') }}
+      </div>
+    {% endif %}
+
+    <div class="flex items-center gap-2.5 pt-4 border-t border-line">
+      <button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>{{ 'Save changes' if worker else 'Create worker' }}</button>
+      <a href="{{ url_for('admin_harvesttrack') }}?tab=teams" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

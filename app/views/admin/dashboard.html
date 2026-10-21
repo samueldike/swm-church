@@ -1,674 +1,218 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Dashboard Overview | {{ siteName }}</title>
-<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
-{% include "partials/admin-head-assets.html" %}
-</head>
-<body class="m-0 bg-[#f7f6f3] text-gray-900 font-sans antialiased overflow-hidden">
-<div class="flex h-screen bg-[#f7f6f3] overflow-hidden">
-{% include "partials/admin-sidebar.html" %}
-<div class="flex-1 flex flex-col min-w-0 overflow-hidden">
-{% with title="Dashboard Overview", subtitle="Live system metrics and operational activity", headerIcon="ri-dashboard-3-line" %}{% include "partials/admin-topbar.html" %}{% endwith %}
-<main class="flex-1 overflow-y-auto">
-<div class="p-6 space-y-6 max-w-screen-2xl mx-auto">
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, kpi, badge, avatar, person, empty_state with context %}
+{% block title %}Dashboard | {{ siteName }}{% endblock %}
+{% block topbar_title %}Dashboard{% endblock %}
+{% block topbar_subtitle %}Live system overview{% endblock %}
+{% block topbar_icon %}ri-dashboard-3-line{% endblock %}
 
-{% if session.get('success') %}
-<div class="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-4 py-3">{{ request.session.get('success') }}</div>
-{% endif %}
+{% block page_header %}
+  {{ page_header(
+      "Dashboard",
+      "Here is what is happening " ~ dashboardScopeLabel ~ " today",
+      actions=(('<a href="' ~ url_for('admin_unit_reports') ~ '" class="btn btn-secondary btn-sm"><i class="ri-file-chart-line"></i>Reports</a>' if can('reports') else '')
+               ~ (' <a href="' ~ url_for('admin_messages_create') ~ '" class="btn btn-primary btn-sm"><i class="ri-upload-2-line"></i>Upload message</a>' if can('audio') else '')),
+      audit=[('Scope', dashboardScopeLabel), ('Date', current_date), ('Role', role_label)]
+  ) }}
+{% endblock %}
 
-{% if isSuper and securityAlerts|length > 0 %}
-<section class="rounded-2xl border border-red-200 bg-red-50 p-4 sm:p-5">
-  <div class="flex items-start sm:items-center justify-between gap-3 mb-3 flex-col sm:flex-row">
-    <div>
-      <h2 class="font-bold text-red-800 text-sm">Security Alerts</h2>
-      <p class="text-xs text-red-700 mt-0.5">Multiple failed admin login attempts in the last 10 minutes.</p>
-    </div>
-    <a href="{{ url_for('admin.security-logs', action='admin.login.failed') }}" class="text-xs font-semibold text-red-700 hover:text-red-900 whitespace-nowrap">Open Logs &rarr;</a>
-  </div>
-  <div class="space-y-2">
-    {% for alert in securityAlerts %}
-      <div class="flex items-center justify-between rounded-lg border border-red-200 bg-white px-3 py-2 text-sm">
-        <span class="font-mono text-red-800 text-xs sm:text-sm truncate">{{ alert.ip_address }}</span>
-        <span class="font-semibold text-red-700 text-xs whitespace-nowrap ml-3">{{ alert.failures }} failed</span>
-      </div>
-    {% endfor %}
-  </div>
-</section>
-{% endif %}
+{% block content %}
+<div class="flex flex-col gap-4 sm:gap-5">
 
-<section class="relative overflow-hidden rounded-2xl bg-[#1a1814] p-6">
-  <div class="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
-  <div class="absolute bottom-0 left-0 w-48 h-48 bg-primary/5 rounded-full translate-y-1/2 -translate-x-1/4 pointer-events-none"></div>
-  <div class="relative z-10 flex items-center justify-between gap-4">
-    <div>
-      <p class="text-primary text-xs font-medium tracking-widest uppercase mb-1">{{ siteName }}</p>
-      <h2 class="text-xl font-bold text-white">Welcome back, {{ admin.name or 'Admin' }}</h2>
-      <p class="text-sm text-gray-400 mt-1">Here is what is happening {{ dashboardScopeLabel }} today.</p>
-    </div>
-    <div class="hidden md:flex items-center gap-6">
-      <div class="text-right">
-        <p class="text-[10px] text-gray-500 uppercase tracking-wider">Today</p>
-        <p class="text-sm font-semibold text-white whitespace-nowrap">{{ current_date }}</p>
+  {% if site_todo %}
+    <section class="panel" aria-label="Website checklist">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-[14px] font-semibold text-ink"><i class="ri-checkbox-multiple-line text-gold" aria-hidden="true"></i> {{ site_todo|length }} thing{{ '' if site_todo|length == 1 else 's' }} to finish on the public website</h2>
+        <a href="{{ url_for('admin_settings') }}#website" class="text-xs font-semibold text-ink-2">Open checklist &rarr;</a>
       </div>
-      <div class="w-px h-10 bg-[#2d2820]"></div>
-      <div class="text-right">
-        <p class="text-[10px] text-gray-500 uppercase tracking-wider">Next Service</p>
-        <p class="text-sm font-semibold text-primary whitespace-nowrap">
-          {% if nextEvent %}
-            {% set isToday = nextEvent.start_date.isToday() %}
-{% set isTomorrow = nextEvent.start_date.isTomorrow() %}
-{% set when = 'Today' if isToday else ('Tomorrow' if isTomorrow else nextEvent.start_date.strftime('%b %d')) %}
-            {{ when }}{% if nextEvent.start_time %}, {{ nextEvent.start_time.strftime('%I:%M %p') }}{% endif %}
-          {% else %}
-            None scheduled
-          {% endif %}
-        </p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section class="bg-white rounded-xl border border-gray-100 px-4 py-3">
-  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-    <div>
-      <p class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Overview Range</p>
-      <p class="text-xs text-gray-500 mt-0.5">Controls all metrics, attendance, and giving data below.</p>
-    </div>
-    <div class="flex flex-wrap items-center gap-1 bg-gray-50 rounded-lg p-0.5 relative self-start sm:self-auto" id="dashboard-range-controls">
-      <button type="button" data-dashboard-range="7d" class="dashboard-range-btn px-2.5 py-1 rounded-md text-[10px] font-medium bg-white text-gray-800 shadow-sm">7D</button>
-      <button type="button" data-dashboard-range="30d" class="dashboard-range-btn px-2.5 py-1 rounded-md text-[10px] font-medium text-gray-400 hover:text-gray-600 transition-all">30D</button>
-      <button type="button" data-dashboard-range="90d" class="dashboard-range-btn px-2.5 py-1 rounded-md text-[10px] font-medium text-gray-400 hover:text-gray-600 transition-all">90D</button>
-      <button type="button" data-dashboard-range="1y" class="dashboard-range-btn px-2.5 py-1 rounded-md text-[10px] font-medium text-gray-400 hover:text-gray-600 transition-all">1Y</button>
-      <button type="button" data-dashboard-range="all" class="dashboard-range-btn px-2.5 py-1 rounded-md text-[10px] font-medium text-gray-400 hover:text-gray-600 transition-all">All</button>
-      <button type="button" id="dashboard-custom-range-toggle" data-dashboard-range="range" class="dashboard-range-btn px-2.5 py-1 rounded-md text-[10px] font-medium text-gray-400 hover:text-gray-600 transition-all">Range</button>
-      <form id="dashboard-custom-range-form" data-turbo="false" class="hidden absolute top-full right-0 mt-2 w-64 rounded-xl border border-gray-200 bg-white p-2 shadow-lg z-30">
-        <label class="block text-[10px] font-bold uppercase tracking-wide text-gray-400">Start
-          <input type="date" name="start_date" class="mt-1 form-input text-xs">
-        </label>
-        <label class="block text-[10px] font-bold uppercase tracking-wide text-gray-400 mt-2">End
-          <input type="date" name="end_date" class="mt-1 form-input text-xs">
-        </label>
-        <button type="submit" class="mt-2 w-full rounded-lg bg-primary px-3 py-2 text-xs font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">Apply</button>
-      </form>
-    </div>
-  </div>
-</section>
-
-{% set statCards = [
-    {'key': 'members', 'icon': 'ri-team-line', 'tone': 'amber', 'value': membersCount, 'label': 'Total Members', 'delta': membersDelta, 'suffix': '%', 'href': url_for('admin.members')},
-    {'key': 'events', 'icon': 'ri-calendar-event-line', 'tone': 'emerald', 'value': eventsCount, 'label': 'Active Programs', 'delta': eventsDelta, 'suffix': '', 'href': url_for('admin.events')},
-    {'key': 'inquiries', 'icon': 'ri-mail-open-line', 'tone': 'rose', 'value': newInquiries, 'label': 'Pending Inquiries', 'delta': inquiriesDelta, 'suffix': '%', 'href': url_for('admin.inquiries')},
-    {'key': 'departments', 'icon': 'ri-building-2-line', 'tone': 'sky', 'value': departmentsCount, 'label': 'Departments', 'delta': 0, 'suffix': '', 'href': url_for('admin.departments') if isSuper else '#'},
-    {'key': 'branches', 'icon': 'ri-map-pin-2-line', 'tone': 'violet', 'value': branchesCount, 'label': 'Branches', 'delta': 0, 'suffix': '', 'href': url_for('admin.branches') if isSuper else '#'},
-    {'key': 'messages', 'icon': 'ri-message-3-line', 'tone': 'orange', 'value': sermonsCount, 'label': 'Audio Messages', 'delta': messagesDelta, 'suffix': '%', 'href': url_for('admin.messages')},
-] %}
-{% set tones = {
-    'amber': 'bg-amber-50 text-amber-600',
-    'emerald': 'bg-emerald-50 text-emerald-600',
-    'rose': 'bg-rose-50 text-rose-500',
-    'sky': 'bg-sky-50 text-sky-600',
-    'violet': 'bg-violet-50 text-violet-600',
-    'orange': 'bg-orange-50 text-orange-600',
-} %}
-<div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-  {% for c in statCards %}
-    {% set isDeadLink = (c['href'] == '#') %}
-    {% if isDeadLink %}
-      <div class="bg-white rounded-xl border border-gray-100 p-4 transition-all block" data-stat-card="{{ c['key'] }}">
-    {% else %}
-      <a href="{{ c['href'] }}" class="bg-white rounded-xl border border-gray-100 p-4 transition-all block hover:border-primary/30 cursor-pointer group" data-stat-card="{{ c['key'] }}">
-    {% endif %}
-      <div class="flex items-center justify-between mb-3">
-        <div class="w-9 h-9 flex items-center justify-center rounded-lg {{ tones[c['tone']] }}"><i class="{{ c['icon'] }} text-base"></i></div>
-        <div class="flex items-center gap-0.5" data-stat-delta>
-          {% if c['delta'] > 0 %}
-            <div class="w-3 h-3 flex items-center justify-center"><i class="text-[10px] ri-arrow-up-line text-emerald-500"></i></div>
-            <span class="text-[10px] font-medium text-emerald-500">+{{ c['delta'] }}{{ c['suffix'] }}</span>
-          {% elif c['delta'] < 0 %}
-            <div class="w-3 h-3 flex items-center justify-center"><i class="text-[10px] ri-arrow-down-line text-rose-500"></i></div>
-            <span class="text-[10px] font-medium text-rose-500">{{ c['delta'] }}{{ c['suffix'] }}</span>
-          {% else %}
-            <div class="w-3 h-3 flex items-center justify-center"><i class="text-[10px] ri-subtract-line text-gray-400"></i></div>
-            <span class="text-[10px] font-medium text-gray-400">+0</span>
-          {% endif %}
-        </div>
-      </div>
-      <p class="text-2xl font-bold text-gray-900 leading-tight" data-stat-value>{{ "{:,}".format(c['value']) }}</p>
-      <p class="text-[11px] text-gray-500 mt-0.5">{{ c['label'] }}</p>
-    {% if isDeadLink %}
-      </div>
-    {% else %}
-      </a>
-    {% endif %}
-  {% endfor %}
-</div>
-
-<div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
-  <div class="lg:col-span-8 space-y-5">
-    <section class="bg-white rounded-xl border border-gray-100 p-5">
-      <div class="flex items-center justify-between mb-5 gap-3">
-        <div>
-          <h3 class="text-sm font-bold text-gray-800">Attendance Trends</h3>
-          <p class="text-[11px] text-gray-400 mt-0.5">Monthly attendance across {{ 'all branches' if isSuper else 'your branch' }}</p>
-        </div>
-      </div>
-      {% set palette = ['#c9a227', '#34d399', '#38bdf8', '#a78bfa', '#fb923c'] %}
-      <div class="flex items-end gap-3 h-40" id="attendance-trend-chart">
-        {% for month in attendanceTrend %}
-          <div class="flex-1 flex flex-col items-center gap-1.5 min-w-0">
-            <div class="w-full flex items-end gap-[2px] h-28">
-              {% for branch, i in branchesForChart.items() %}
-                {% set val = month['branches'].get(branch.name, 0) %}
-{% set h = (val / maxAttendance * 100)|round(2) if maxAttendance > 0 else 0 %}
-                <div class="flex-1 rounded-t transition-all hover:opacity-100" style="height: {{ h }}%; background-color: {{ palette[i % palette|length] }}; min-height: 2px; opacity: {{ (0.8) if i < 3 else (0.6) }};" title="{{ branch.name }}: {{ '{:,.0f}'.format(val) }}"></div>
-              {% endfor %}
-            </div>
-            <span class="text-[10px] text-gray-400">{{ month['label'] }}</span>
-          </div>
-        {% endfor %}
-      </div>
-      <div class="flex items-center gap-5 mt-4 pt-3 border-t border-gray-50 flex-wrap" id="attendance-trend-legend">
-        {% for branch, i in branchesForChart.items() %}
-          <div class="flex items-center gap-1.5">
-            <div class="w-2.5 h-2.5 rounded-full" style="background-color: {{ palette[i % palette|length] }};"></div>
-            <span class="text-[10px] text-gray-500">{{ branch.name }}</span>
-          </div>
-        {% endfor %}
-      </div>
+      <ul class="flex flex-col gap-1.5">
+        {% for it in site_todo[:4] %}<li class="text-[12.5px] text-ink-2"><i class="ri-error-warning-line text-warn" aria-hidden="true"></i> {{ it.label }}</li>{% endfor %}
+        {% if site_todo|length > 4 %}<li class="text-[11.5px] text-ink-3">and {{ site_todo|length - 4 }} more…</li>{% endif %}
+      </ul>
     </section>
+  {% endif %}
 
-    <div class="space-y-5">
-      <section class="bg-white rounded-xl border border-gray-100 p-5 relative">
-        <div class="mb-4">
-          <h3 class="text-sm font-bold text-gray-800">This Week's Attendance</h3>
-          <p class="text-[11px] text-gray-400 mt-0.5">Daily service attendance vs capacity</p>
+  {% if announcements %}
+    <section class="panel" aria-label="Announcements from HQ">
+      <div class="flex items-center justify-between mb-2.5">
+        <h2 class="text-[14px] font-semibold text-ink"><i class="ri-megaphone-line text-gold"></i> From HQ</h2>
+        <a href="{{ url_for('admin_announcements') }}" class="text-xs font-semibold text-ink-2">All announcements &rarr;</a>
+      </div>
+      <ul class="flex flex-col gap-3">
+        {% for a in announcements %}
+          <li><p class="text-[13px] font-semibold text-ink">{% if a.is_pinned %}<i class="ri-pushpin-fill text-gold"></i> {% endif %}{{ a.title }} <span class="font-normal text-[11px] text-ink-3">· {{ a.created_at.strftime('%d %b') }}</span></p>
+            <p class="text-[12.5px] text-ink-2 mt-0.5 leading-relaxed">{{ a.body|truncate(220) }}</p></li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  {% if is_super and critical_alerts|length > 0 %}
+    <div class="flex items-start sm:items-center gap-3 p-3.5 sm:p-4 rounded-md border border-[#e6c9c5] bg-bad-bg">
+      <i class="ri-alert-line text-lg text-bad flex-shrink-0 mt-0.5 sm:mt-0"></i>
+      <div class="flex-grow min-w-0">
+        <p class="text-[12.5px] font-semibold text-ink">{{ critical_alerts|length }} critical security event{{ 's' if critical_alerts|length != 1 else '' }} awaiting review</p>
+        <p class="text-[11.5px] text-ink-2 mt-0.5 font-mono">{{ critical_alerts[0].action }}{% if critical_alerts|length > 1 %} and {{ critical_alerts|length - 1 }} more{% endif %} · last 24 hours</p>
+      </div>
+      <a href="{{ url_for('admin_security_logs') }}?reviewed=no&amp;severity=critical" class="text-xs font-semibold text-bad whitespace-nowrap flex-shrink-0">Review &rarr;</a>
+    </div>
+  {% endif %}
+
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+    {{ kpi("Total members", "{:,}".format(membersCount), note="Across " ~ branchesCount ~ " branch" ~ ('es' if branchesCount != 1 else '')) }}
+    {{ kpi("Upcoming events", eventsCount, note="Next 5 shown below") }}
+    {{ kpi("New inquiries", newInquiries, tone=('bad' if newInquiries > 0 else 'neut')) }}
+    {{ kpi("Departments", departmentsCount) }}
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-3.5">
+    <div class="panel lg:col-span-2">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div>
+          <h2 class="text-[14px] font-semibold text-ink">Giving trend</h2>
+          <p class="text-[11.5px] text-ink-3 mt-0.5">Six-month rolling total, by purpose</p>
         </div>
-        <div class="space-y-3" id="weekly-attendance-list">
-          {% for day in weeklyAttendance %}
-
-            <div class="flex items-center gap-3">
-              <span class="text-xs font-medium text-gray-500 w-8 flex-shrink-0">{{ day['label'] }}</span>
-              <div class="flex-1 h-6 bg-gray-50 rounded-full overflow-hidden relative">
-                <div class="h-full bg-primary/80 rounded-full transition-all" style="width: {{ [100, day['pct']]|min }}%;"></div>
-                <span class="absolute inset-0 flex items-center px-2 text-[10px] text-gray-600">{{ "{:,}".format(day['attendance']) }} / {{ "{:,}".format(day['capacity']) }}</span>
+        {{ badge("₦" ~ "{:,.0f}".format(totalThisMonth), "gold") }}
+      </div>
+      {% if givingTrend and maxGiving > 0 %}
+        <div class="flex items-end gap-2 sm:gap-3" style="height:140px;">
+          {% for period in givingTrend %}
+            {% set total = period.tithe + period.offering + period.special %}
+            <div class="flex-1 flex flex-col items-center gap-1.5 min-w-0">
+              <div class="w-full flex flex-col justify-end rounded-t-sm overflow-hidden" style="height:110px;" title="₦{{ '{:,.0f}'.format(total) }}">
+                <div class="w-full bg-line-2" style="height:{{ (period.special / maxGiving * 110)|round|int }}px;"></div>
+                <div class="w-full bg-gold-hi" style="height:{{ (period.offering / maxGiving * 110)|round|int }}px;"></div>
+                <div class="w-full bg-gold" style="height:{{ (period.tithe / maxGiving * 110)|round|int }}px;"></div>
               </div>
-              <span class="text-[10px] text-gray-400 w-10 text-right flex-shrink-0">{{ day['pct'] }}%</span>
+              <span class="font-mono text-[9.5px] text-ink-3 truncate">{{ period.label }}</span>
             </div>
-          {% else %}
-
-            <p class="text-xs text-gray-500">No attendance data yet.</p>
           {% endfor %}
         </div>
-      </section>
-      <section class="bg-white rounded-xl border border-gray-100 p-5">
-        <div class="mb-4">
-          <h3 class="text-sm font-bold text-gray-800">Giving & Contributions</h3>
-          <p class="text-[11px] text-gray-400 mt-0.5">Monthly tithe, offering & special giving</p>
+        <div class="flex items-center gap-4 mt-4 pt-3 border-t border-line flex-wrap">
+          <span class="inline-flex items-center gap-1.5 text-[11px] text-ink-2"><span class="w-2 h-2 rounded-sm bg-gold"></span>Tithe</span>
+          <span class="inline-flex items-center gap-1.5 text-[11px] text-ink-2"><span class="w-2 h-2 rounded-sm bg-gold-hi"></span>Offering</span>
+          <span class="inline-flex items-center gap-1.5 text-[11px] text-ink-2"><span class="w-2 h-2 rounded-sm bg-line-2"></span>Special</span>
         </div>
-        <div class="overflow-x-auto">
-          <div class="min-w-[560px] relative">
-            <svg id="giving-trend-chart" class="w-full h-36 block" viewBox="0 0 560 144" preserveAspectRatio="none" role="img" aria-label="Giving and contributions line chart"></svg>
-            <div id="giving-trend-labels" class="mt-1 flex justify-between gap-3 text-[10px] text-gray-400"></div>
-          </div>
-        </div>
-        <div id="giving-chart-tooltip" class="hidden pointer-events-none absolute z-40 rounded-md bg-black px-2 py-1 text-[10px] font-semibold text-white shadow-lg whitespace-nowrap"></div>
-        <div class="flex items-center gap-4 pt-2 border-t border-gray-50">
-          <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full bg-primary"></div><span class="text-[10px] text-gray-500">Tithe</span></div>
-          <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full bg-emerald-400"></div><span class="text-[10px] text-gray-500">Offering</span></div>
-          <div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full bg-sky-400"></div><span class="text-[10px] text-gray-500">Special</span></div>
-        </div>
-        <div class="mt-3 p-3 bg-gray-50 rounded-lg">
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] text-gray-500" id="giving-total-label">Total Selected Range</span>
-            <span class="text-sm font-bold text-gray-800" id="giving-total-value">NGN {{ '{:,.0f}'.format(totalThisMonth) }}</span>
-          </div>
-        </div>
-      </section>
+      {% else %}
+        {{ empty_state("ri-line-chart-line", "No giving recorded yet", "Giving totals will appear here once payments are recorded.") }}
+      {% endif %}
     </div>
 
-    <section class="bg-white rounded-xl border border-gray-100 overflow-hidden">
-      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-50">
-        <div>
-          <h3 class="text-sm font-bold text-gray-800">Recent Members</h3>
-          <p class="text-[11px] text-gray-400 mt-0.5">Latest registrations across all branches</p>
+    <div class="panel">
+      <h2 class="text-[14px] font-semibold text-ink mb-1">Department distribution</h2>
+      <p class="text-[11.5px] text-ink-3 mb-4">Members by department</p>
+      {% if departmentDistribution %}
+        <div class="flex flex-col gap-2.5">
+          {% for i, d in departmentDistribution.items() %}
+            {% if loop.index <= 6 %}
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-[12px] text-ink-2 truncate">{{ d.name or 'Unassigned' }}</span>
+                  <span class="font-mono text-[11px] font-semibold text-ink">{{ d.members_count }}</span>
+                </div>
+                <div class="w-full h-1.5 bg-sunken rounded-full overflow-hidden">
+                  <div class="h-full bg-gold rounded-full" style="width:{{ d.pct }}%;"></div>
+                </div>
+              </div>
+            {% endif %}
+          {% endfor %}
         </div>
-        <a href="{{ url_for('admin.members') }}" class="text-xs text-primary font-medium hover:underline whitespace-nowrap">View All Members</a>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="w-full">
-          <thead>
-            <tr class="border-b border-gray-50">
-              <th class="table-header px-5 py-3">Member</th>
-              <th class="table-header px-5 py-3 hidden sm:table-cell">Branch</th>
-              <th class="table-header px-5 py-3 hidden md:table-cell">Department</th>
-              <th class="table-header px-5 py-3 hidden md:table-cell">Role</th>
-              <th class="table-header px-5 py-3">Status</th>
-              <th class="table-header px-5 py-3 hidden lg:table-cell">Joined</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-50">
-            {% for member in recentMembers %}
+      {% else %}
+        {{ empty_state("ri-pie-chart-line", "No data yet", "Department membership will appear here.") }}
+      {% endif %}
+    </div>
+  </div>
 
-              {% set initials = ((member.first_name or 'M')[:1] ~ (member.last_name or '')[:1])|upper %}
-{% set statusTone = 'bg-emerald-50 text-emerald-600' if member.membership_status == 'active' else 'bg-gray-100 text-gray-500' %}
-{% set roleTone = 'bg-gray-100 text-gray-500' %}
-              <tr class="hover:bg-gray-50/50 transition-colors cursor-pointer">
-                <td class="px-5 py-3">
-                  <div class="flex items-center gap-3 min-w-0">
-                    <div class="w-8 h-8 flex items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold flex-shrink-0">{{ initials }}</div>
-                    <div class="min-w-0">
-                      <p class="text-sm font-medium text-gray-800 truncate">{{ member.full_name }}</p>
-                      <p class="text-[10px] text-gray-400 truncate">{{ member.email or 'N/A' }}</p>
-                    </div>
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-3.5">
+    <div class="panel">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-[14px] font-semibold text-ink">Recent members</h2>
+        <a href="{{ url_for('admin_members') }}" class="text-[11.5px] font-semibold text-gold-text">View all &rarr;</a>
+      </div>
+      {% if recentMembers %}
+        <div class="flex flex-col">
+          {% for m in recentMembers[:5] %}
+            <div class="flex items-center gap-2.5 py-2 {{ 'border-b border-line' if not loop.last }}">
+              {{ avatar((m.first_name[0] if m.first_name else 'M') ~ (m.last_name[0] if m.last_name else ''), 26) }}
+              <div class="min-w-0 flex-grow">
+                <p class="text-[12.5px] font-medium text-ink truncate">{{ m.first_name }} {{ m.last_name }}</p>
+                <p class="text-[10.5px] text-ink-3 truncate">{{ m.branch.name if m.branch else 'No branch' }}</p>
+              </div>
+              <span class="font-mono text-[10px] text-ink-3 whitespace-nowrap flex-shrink-0">{{ m.created_at|timesince }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        {{ empty_state("ri-team-line", "No members yet", "New registrations will appear here.") }}
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-[14px] font-semibold text-ink">Upcoming events</h2>
+        <a href="{{ url_for('admin_events') }}" class="text-[11.5px] font-semibold text-gold-text">View all &rarr;</a>
+      </div>
+      {% if upcomingEvents %}
+        <div class="flex flex-col">
+          {% for e in upcomingEvents %}
+            <div class="flex items-center gap-2.5 py-2 {{ 'border-b border-line' if not loop.last }}">
+              <span class="w-0.5 h-7 rounded-full bg-gold flex-shrink-0"></span>
+              <div class="min-w-0 flex-grow">
+                <p class="text-[12.5px] font-medium text-ink truncate">{{ e.title }}</p>
+                <p class="font-mono text-[10.5px] text-ink-3">{{ e.starts_at.strftime('%b %d, %I:%M %p') if e.starts_at else '' }}</p>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        {{ empty_state("ri-calendar-event-line", "Nothing scheduled", "Upcoming programme events will appear here.") }}
+      {% endif %}
+    </div>
+
+    <div class="panel">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-[14px] font-semibold text-ink">Recent activity</h2>
+        {% if is_super %}<a href="{{ url_for('admin_security_logs') }}" class="text-[11.5px] font-semibold text-gold-text">Full log &rarr;</a>{% endif %}
+      </div>
+      {% if activityFeed %}
+        <div class="flex flex-col">
+          {% for log in activityFeed[:6] %}
+            <div class="flex items-center gap-2.5 py-2 {{ 'border-b border-line' if not loop.last }}">
+              <span class="w-1.5 h-1.5 rounded-full bg-gold flex-shrink-0"></span>
+              <span class="flex-grow min-w-0 font-mono text-[11.5px] text-ink-2 truncate">{{ log.action }}</span>
+              <span class="font-mono text-[10px] text-ink-3 whitespace-nowrap flex-shrink-0">{{ log.created_at|timesince }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        {{ empty_state("ri-pulse-line", "No recent activity", "Console actions will be logged here.") }}
+      {% endif %}
+    </div>
+  </div>
+
+  {% if branchPerformance and is_super %}
+    <div class="panel">
+      <h2 class="text-[14px] font-semibold text-ink mb-1">Branch performance</h2>
+      <p class="text-[11.5px] text-ink-3 mb-4">Member count by branch</p>
+      <div class="overflow-x-auto">
+        <table class="dtable dtable-responsive">
+          <thead><tr><th>Branch</th><th class="text-right">Members</th><th>Share</th></tr></thead>
+          <tbody>
+            {% for b in branchPerformance %}
+              <tr>
+                <td data-label="Branch" class="font-medium">{{ b.name }}</td>
+                <td data-label="Members" class="text-right font-mono">{{ b.members_count }}</td>
+                <td data-label="Share">
+                  <div class="w-full sm:w-40 h-1.5 bg-sunken rounded-full overflow-hidden ml-auto sm:ml-0">
+                    <div class="h-full bg-gold rounded-full" style="width:{{ b.bar_pct }}%;"></div>
                   </div>
                 </td>
-                <td class="px-5 py-3 text-xs text-gray-600 hidden sm:table-cell">{{ member.branch.name if member.branch else 'N/A' }}</td>
-                <td class="px-5 py-3 text-xs text-gray-600 hidden md:table-cell">Member</td>
-                <td class="px-5 py-3 hidden md:table-cell"><span class="text-[10px] font-semibold px-2 py-0.5 rounded-full {{ roleTone }}">Member</span></td>
-                <td class="px-5 py-3"><span class="text-[10px] font-semibold px-2 py-0.5 rounded-full {{ statusTone }}">{{ (member.membership_status or 'unknown')|capitalize }}</span></td>
-                <td class="px-5 py-3 text-[11px] text-gray-400 hidden lg:table-cell">{{ member.joined_at.strftime('%b %d, %Y') if member.joined_at else member.created_at.strftime('%b %d, %Y') }}</td>
               </tr>
-            {% else %}
-
-              <tr><td colspan="6" class="px-5 py-8 text-center text-sm text-gray-500">No members yet.</td></tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
-    </section>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-      <section class="bg-white rounded-xl border border-gray-100 p-5">
-        <div class="mb-4"><h3 class="text-sm font-bold text-gray-800">Department Distribution</h3><p class="text-[11px] text-gray-400 mt-0.5">Members by department</p></div>
-        {% set deptColors = ['#c9a227', '#34d399', '#fbbf24', '#fb923c', '#a78bfa', '#94a3b8'] %}
-        <div class="space-y-3">
-          {% for i, dept in departmentDistribution.items() %}
-
-            <div>
-              <div class="flex items-center justify-between mb-1 gap-2"><span class="text-xs text-gray-700 truncate">{{ dept.name }}</span><span class="text-[11px] text-gray-500 whitespace-nowrap">{{ dept.members_count }} ({{ dept.pct }}%)</span></div>
-              <div class="h-2 bg-gray-100 rounded-full overflow-hidden"><div class="h-full rounded-full transition-all" style="width: {{ [2, dept.pct]|max }}%; background-color: {{ deptColors[i % deptColors|length] }};"></div></div>
-            </div>
-          {% else %}
-
-            <p class="text-xs text-gray-500">No departments yet.</p>
-          {% endfor %}
-        </div>
-      </section>
-      <section class="bg-white rounded-xl border border-gray-100 p-5">
-        <div class="mb-4"><h3 class="text-sm font-bold text-gray-800">Branch Performance</h3><p class="text-[11px] text-gray-400 mt-0.5">Member growth by branch</p></div>
-        <div class="space-y-3">
-          {% for branch in branchPerformance %}
-
-            <div class="flex items-center gap-3">
-              <div class="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-50 flex-shrink-0"><i class="ri-map-pin-line text-sm text-gray-400"></i></div>
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center justify-between mb-1 gap-2"><span class="text-xs font-medium text-gray-700 truncate">{{ branch.name }}</span><span class="text-[11px] {{ 'text-emerald-500' if branch.growth > 0 else ('text-rose-500' if branch.growth < 0 else 'text-gray-500') }} font-medium whitespace-nowrap">{{ '+' if branch.growth > 0 else '' }}{{ branch.growth }}%</span></div>
-                <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-primary/80 rounded-full" style="width: {{ [2, branch.bar_pct]|max }}%;"></div></div>
-              </div>
-              <span class="text-[11px] text-gray-500 w-10 text-right whitespace-nowrap">{{ '{:,.0f}'.format(branch.members_count) }}</span>
-            </div>
-          {% else %}
-
-            <p class="text-xs text-gray-500">{{ 'No branches yet.' if isSuper else 'Branch performance available to super admins.' }}</p>
-          {% endfor %}
-        </div>
-      </section>
     </div>
-  </div>
-
-  <div class="lg:col-span-4 space-y-5">
-    <section class="bg-white rounded-xl border border-gray-100 p-4">
-      <h3 class="text-sm font-bold text-gray-800 mb-3">Quick Actions</h3>
-      <div class="grid grid-cols-2 gap-2">
-        <a href="{{ url_for('admin.members') }}" class="flex flex-col items-center gap-2 p-3 rounded-lg border border-gray-100 hover:border-primary/30 transition-all group cursor-pointer"><div class="w-9 h-9 flex items-center justify-center rounded-lg text-emerald-600 bg-emerald-50"><i class="ri-user-add-line text-base"></i></div><span class="text-[11px] font-medium text-gray-600 group-hover:text-gray-800 whitespace-nowrap">Add Member</span></a>
-        <a href="{{ url_for('admin.events.create') }}" class="flex flex-col items-center gap-2 p-3 rounded-lg border border-gray-100 hover:border-primary/30 transition-all group cursor-pointer"><div class="w-9 h-9 flex items-center justify-center rounded-lg text-primary bg-amber-50"><i class="ri-calendar-check-line text-base"></i></div><span class="text-[11px] font-medium text-gray-600 group-hover:text-gray-800 whitespace-nowrap">Add Program</span></a>
-        <a href="{{ url_for('admin.messages') }}" class="flex flex-col items-center gap-2 p-3 rounded-lg border border-gray-100 hover:border-primary/30 transition-all group cursor-pointer"><div class="w-9 h-9 flex items-center justify-center rounded-lg text-sky-600 bg-sky-50"><i class="ri-send-plane-line text-base"></i></div><span class="text-[11px] font-medium text-gray-600 group-hover:text-gray-800 whitespace-nowrap">Upload Audio</span></a>
-        <a href="{{ url_for('admin.unit-reports') }}" class="flex flex-col items-center gap-2 p-3 rounded-lg border border-gray-100 hover:border-primary/30 transition-all group cursor-pointer"><div class="w-9 h-9 flex items-center justify-center rounded-lg text-violet-600 bg-violet-50"><i class="ri-file-chart-2-line text-base"></i></div><span class="text-[11px] font-medium text-gray-600 group-hover:text-gray-800 whitespace-nowrap">View Reports</span></a>
-      </div>
-    </section>
-
-    <section class="bg-white rounded-xl border border-gray-100">
-      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-50"><h3 class="text-sm font-bold text-gray-800">Activity Feed</h3>{% if isSuper %}<a href="{{ url_for('admin.security-logs') }}" class="text-[10px] text-primary font-medium hover:underline">View All</a>{% endif %}</div>
-      <div class="p-3 space-y-0">
-        {% for log in activityFeed %}
-
-          {% set action = log.action|string %}
-{% if 'member' in action %}
-  {% set icon = 'ri-user-add-line' %}
-  {% set tone = 'bg-emerald-50 text-emerald-600' %}
-{% elif 'event' in action %}
-  {% set icon = 'ri-calendar-check-line' %}
-  {% set tone = 'bg-amber-50 text-amber-600' %}
-{% elif 'inquiry' in action %}
-  {% set icon = 'ri-mail-line' %}
-  {% set tone = 'bg-rose-50 text-rose-500' %}
-{% elif 'report' in action %}
-  {% set icon = 'ri-file-chart-line' %}
-  {% set tone = 'bg-sky-50 text-sky-600' %}
-{% elif 'message' in action or 'sermon' in action %}
-  {% set icon = 'ri-message-3-line' %}
-  {% set tone = 'bg-violet-50 text-violet-600' %}
-{% else %}
-  {% set icon = 'ri-pulse-line' %}
-  {% set tone = 'bg-gray-50 text-gray-500' %}
-{% endif %}
-{% set verb = action %}
-{% set target = log.extra_data.get('target_label', '') if log.extra_data else '' %}
-          <div class="flex items-start gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"><div class="w-8 h-8 flex items-center justify-center rounded-lg flex-shrink-0 {{ tone }}"><i class="{{ icon }} text-sm"></i></div><div class="flex-1 min-w-0"><p class="text-xs text-gray-700 leading-relaxed"><span class="font-semibold">Admin #{{ log.admin_id }}</span> {{ verb }} {% if target %}<span class="font-medium text-gray-800">{{ target }}</span>{% endif %}</p><p class="text-[10px] text-gray-400 mt-0.5">{{ log.created_at|timesince }}</p></div></div>
-        {% else %}
-
-          <p class="text-xs text-gray-500 px-2 py-3">No recent activity.</p>
-        {% endfor %}
-      </div>
-    </section>
-
-    <section class="bg-white rounded-xl border border-gray-100">
-      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-50"><h3 class="text-sm font-bold text-gray-800">Upcoming Programs</h3><a href="{{ url_for('admin.events') }}" class="text-[10px] text-primary font-medium hover:underline">View All</a></div>
-      <div class="p-3 space-y-2">
-        {% for event in upcomingEvents %}
-
-          <article class="flex items-start gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"><div class="w-10 h-10 flex flex-col items-center justify-center rounded-lg bg-primary/10 flex-shrink-0"><span class="text-[11px] font-bold text-primary leading-none">{{ event.starts_at.strftime('%d') }}</span><span class="text-[9px] text-primary/70">{{ event.starts_at.strftime('%b') }}</span></div><div class="flex-1 min-w-0"><p class="text-xs font-semibold text-gray-800 leading-tight truncate">{{ event.title }}</p><p class="text-[10px] text-gray-400 mt-0.5 truncate">{% if event.starts_at %}{{ event.starts_at.strftime('%I:%M %p') }}{% endif %} {% if event.location %} &middot; {{ event.location }}{% endif %}</p>{% if event.expected_attendance %}<p class="text-[9px] text-gray-400 mt-1 flex items-center gap-1"><i class="ri-user-line text-[9px] text-gray-400"></i>{{ '{:,.0f}'.format(event.expected_attendance) }} expected</p>{% endif %}</div></article>
-        {% else %}
-
-          <p class="text-xs text-gray-500 px-2 py-3">No upcoming programs.</p>
-        {% endfor %}
-      </div>
-    </section>
-
-    <section class="bg-white rounded-xl border border-gray-100">
-      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-50"><h3 class="text-sm font-bold text-gray-800">Recent Audio Messages</h3>{% set drafts = recentMessages|selectattr('status', 'eq', 'draft')|list|length %} {% if drafts > 0 %}<span class="bg-rose-50 text-rose-500 text-[10px] font-bold px-2 py-0.5 rounded-full">{{ drafts }} Draft</span>{% endif %}</div>
-      <div class="p-3 space-y-1">
-        {% for msg in recentMessages %}
-
-          {% set parts = (msg.preacher or '').split() %}{% set speakerInitials = ((parts[0][:1] ~ parts[1][:1])|upper if parts|length > 1 else ((parts[0][:1])|upper if parts else 'SP')) %}
-          <div class="flex items-start gap-3 p-2.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer {{ 'bg-amber-50/30' if msg.status == 'draft' else '' }}"><div class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 text-[10px] font-bold flex-shrink-0">{{ speakerInitials or 'SP' }}</div><div class="flex-1 min-w-0"><p class="text-xs font-semibold text-gray-800 truncate flex items-center gap-2">{{ msg.preacher }} {% if msg.status == 'draft' %}<span class="w-1.5 h-1.5 bg-primary rounded-full flex-shrink-0"></span>{% endif %}</p><p class="text-[10px] text-gray-500 truncate">{{ msg.title }}</p><p class="text-[10px] text-gray-400 mt-0.5">{{ (msg.published_at or msg.created_at)|timesince }}</p></div></div>
-        {% else %}
-
-          <p class="text-xs text-gray-500 px-2 py-3">No audio messages yet.</p>
-        {% endfor %}
-      </div>
-    </section>
-
-    <section class="bg-white rounded-xl border border-gray-100">
-      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-50"><h3 class="text-sm font-bold text-gray-800">Pending Inquiries</h3>{% set pendingInquiries = recentInquiries|selectattr('status', 'eq', 'new')|list + recentInquiries|selectattr('status', 'eq', 'pending')|list %} {% if pendingInquiries|length > 0 %}<span class="bg-rose-50 text-rose-500 text-[10px] font-bold px-2 py-0.5 rounded-full">{{ pendingInquiries|length }} Pending</span>{% endif %}</div>
-      <div class="p-3 space-y-2">
-        {% for inq in pendingInquiries %}
-
-          <article class="p-2.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer border border-gray-50"><div class="flex items-center justify-between mb-1 gap-2"><p class="text-xs font-semibold text-gray-800 truncate">{{ inq.name }}</p><span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-500 flex-shrink-0">{{ (inq.status or '')|capitalize }}</span></div><p class="text-[10px] text-gray-500 truncate">{{ inq.subject or 'General Inquiry' }}</p><p class="text-[10px] text-gray-400 mt-0.5">{{ inq.created_at.strftime('%b %d, %Y') }}</p></article>
-        {% else %}
-
-          <p class="text-xs text-gray-500 px-2 py-3">No pending inquiries.</p>
-        {% endfor %}
-      </div>
-    </section>
-  </div>
-</div>
+  {% endif %}
 
 </div>
-</main>
-</div>
-</div>
-<script>
-(() => {
-  const endpoint = {{ url_for('admin.dashboard.metrics')|tojson }};
-  const numberFmt = new Intl.NumberFormat();
-  const moneyFmt = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
-  const controls = document.getElementById('dashboard-range-controls');
-  const rangeButtons = document.querySelectorAll('.dashboard-range-btn');
-  const customToggle = document.getElementById('dashboard-custom-range-toggle');
-  const customForm = document.getElementById('dashboard-custom-range-form');
-  const chart = document.getElementById('attendance-trend-chart');
-  const legend = document.getElementById('attendance-trend-legend');
-  const weeklyList = document.getElementById('weekly-attendance-list');
-  const givingChart = document.getElementById('giving-trend-chart');
-  const givingLabels = document.getElementById('giving-trend-labels');
-  const givingTooltip = document.getElementById('giving-chart-tooltip');
-  const givingTotal = document.getElementById('giving-total-value');
-  const initialGivingPayload = {
-    givingTrend: {{ givingTrend|tojson }},
-    maxGiving: {{ maxGiving|tojson }},
-    totalThisMonth: {{ totalThisMonth|tojson }},
-  };
-  let activeMode = '7d';
-  const animatedRegions = [
-    ...document.querySelectorAll('[data-stat-card]'),
-    chart,
-    legend,
-    weeklyList,
-    givingChart,
-    givingLabels,
-    givingTotal,
-  ].filter(Boolean);
-
-  const setLoading = (loading) => {
-    controls.classList.toggle('opacity-60', loading);
-    rangeButtons.forEach((button) => button.disabled = loading);
-  };
-
-  const setActive = (mode) => {
-    activeMode = mode;
-    rangeButtons.forEach((button) => {
-      const active = button.dataset.dashboardRange === mode;
-      button.classList.toggle('bg-white', active);
-      button.classList.toggle('text-gray-800', active);
-      button.classList.toggle('shadow-sm', active);
-      button.classList.toggle('text-gray-400', !active);
-    });
-  };
-
-  const animateOut = () => {
-    animatedRegions.forEach((el) => {
-      el.classList.add('transition-all', 'duration-200', 'ease-out', 'opacity-50', 'translate-y-1');
-    });
-  };
-
-  const animateIn = () => {
-    requestAnimationFrame(() => {
-      animatedRegions.forEach((el) => {
-        el.classList.remove('opacity-50', 'translate-y-1');
-        el.classList.add('opacity-100', 'translate-y-0');
-      });
-      window.setTimeout(() => {
-        animatedRegions.forEach((el) => {
-          el.classList.remove('transition-all', 'duration-200', 'ease-out', 'opacity-100', 'translate-y-0');
-        });
-      }, 220);
-    });
-  };
-
-  const deltaHtml = (delta, suffix = '') => {
-    const value = Number(delta || 0);
-    if (value > 0) {
-      return `<div class="w-3 h-3 flex items-center justify-center"><i class="text-[10px] ri-arrow-up-line text-emerald-500"></i></div><span class="text-[10px] font-medium text-emerald-500">+${value}${suffix}</span>`;
-    }
-    if (value < 0) {
-      return `<div class="w-3 h-3 flex items-center justify-center"><i class="text-[10px] ri-arrow-down-line text-rose-500"></i></div><span class="text-[10px] font-medium text-rose-500">${value}${suffix}</span>`;
-    }
-    return `<div class="w-3 h-3 flex items-center justify-center"><i class="text-[10px] ri-subtract-line text-gray-400"></i></div><span class="text-[10px] font-medium text-gray-400">+0</span>`;
-  };
-
-  const renderStats = (stats) => {
-    Object.entries(stats || {}).forEach(([key, stat]) => {
-      const card = document.querySelector(`[data-stat-card="${key}"]`);
-      if (!card) return;
-      card.querySelector('[data-stat-value]').textContent = numberFmt.format(Number(stat.value || 0));
-      card.querySelector('[data-stat-delta]').innerHTML = deltaHtml(stat.delta, stat.suffix || '');
-    });
-  };
-
-  const renderAttendance = (payload) => {
-    const trend = payload.attendanceTrend || [];
-    const branches = payload.branches || [];
-    const palette = payload.palette || [];
-    const max = Math.max(1, Number(payload.maxAttendance || 1));
-    chart.innerHTML = trend.map((period) => {
-      const bars = branches.map((branch, i) => {
-        const value = Number((period.branches || {})[branch] || 0);
-        const height = Math.max(2, Math.round((value / max) * 10000) / 100);
-        const color = palette[i % palette.length] || '#c9a227';
-        const opacity = i < 3 ? '0.8' : '0.6';
-        return `<div class="flex-1 rounded-t transition-all hover:opacity-100" style="height:${height}%;background-color:${color};min-height:2px;opacity:${opacity};" title="${branch}: ${numberFmt.format(value)}"></div>`;
-      }).join('');
-      return `<div class="flex-1 flex flex-col items-center gap-1.5 min-w-0"><div class="w-full flex items-end gap-[2px] h-28">${bars}</div><span class="text-[10px] text-gray-400">${period.label}</span></div>`;
-    }).join('');
-    legend.innerHTML = branches.map((branch, i) => {
-      const color = palette[i % palette.length] || '#c9a227';
-      return `<div class="flex items-center gap-1.5"><div class="w-2.5 h-2.5 rounded-full" style="background-color:${color};"></div><span class="text-[10px] text-gray-500">${branch}</span></div>`;
-    }).join('');
-  };
-
-  const renderWeekly = (rows) => {
-    weeklyList.innerHTML = (rows || []).map((day) => {
-      const pct = Math.min(100, Number(day.pct || 0));
-      return `<div class="flex items-center gap-3"><span class="text-xs font-medium text-gray-500 w-8 flex-shrink-0">${day.label}</span><div class="flex-1 h-6 bg-gray-50 rounded-full overflow-hidden relative"><div class="h-full bg-primary/80 rounded-full transition-all" style="width:${pct}%;"></div><span class="absolute inset-0 flex items-center px-2 text-[10px] text-gray-600">${numberFmt.format(day.attendance || 0)} / ${numberFmt.format(day.capacity || 0)}</span></div><span class="text-[10px] text-gray-400 w-10 text-right flex-shrink-0">${day.pct || 0}%</span></div>`;
-    }).join('') || '<p class="text-xs text-gray-500">No attendance data yet.</p>';
-  };
-
-  const renderGiving = (payload) => {
-    const rows = payload.givingTrend || [];
-    const width = 560;
-    const height = 144;
-    const pad = 14;
-    const plotW = width - pad * 2;
-    const plotH = height - pad * 2;
-    const max = Math.max(1, ...rows.flatMap((g) => [Number(g.tithe || 0), Number(g.offering || 0), Number(g.special || 0)]));
-    const xFor = (i) => rows.length <= 1 ? width / 2 : pad + (i / (rows.length - 1)) * plotW;
-    const pointsFor = (key) => rows.map((g, i) => {
-      const value = Number(g[key] || 0);
-      return [xFor(i), pad + plotH - (value / max) * plotH];
-    });
-    const smoothPath = (points) => {
-      if (!points.length) return '';
-      if (points.length === 1) return `M ${points[0][0]} ${points[0][1]}`;
-      let d = `M ${points[0][0]} ${points[0][1]}`;
-      for (let i = 0; i < points.length - 1; i++) {
-        const p0 = points[i - 1] || points[i];
-        const p1 = points[i];
-        const p2 = points[i + 1];
-        const p3 = points[i + 2] || p2;
-        const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
-        const cp1y = p1[1] + (p2[1] - p0[1]) / 6;
-        const cp2x = p2[0] - (p3[0] - p1[0]) / 6;
-        const cp2y = p2[1] - (p3[1] - p1[1]) / 6;
-        d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2[0]} ${p2[1]}`;
-      }
-      return d;
-    };
-    const series = [
-      ['tithe', '#c9a227', 'Tithe'],
-      ['offering', '#34d399', 'Offering'],
-      ['special', '#38bdf8', 'Special'],
-    ];
-    const grid = [0.25, 0.5, 0.75].map((ratio) => {
-      const y = pad + plotH * ratio;
-      return `<line x1="${pad}" y1="${y}" x2="${width - pad}" y2="${y}" stroke="currentColor" class="text-gray-100" stroke-width="1"/>`;
-    }).join('');
-    const paths = series.map(([key, color, label]) => {
-      const points = pointsFor(key);
-      const dots = points.map(([x, y], i) => {
-        const value = numberFmt.format(rows[i]?.[key] || 0);
-        const period = rows[i]?.label || '';
-        return `<circle class="giving-chart-node" cx="${x}" cy="${y}" r="${i === points.length - 1 ? 3.5 : 2.5}" fill="${color}" opacity="${i === points.length - 1 ? '1' : '0.65'}" data-tooltip="${label}: ${value}" data-period="${period}"></circle>`;
-      }).join('');
-      return `<path d="${smoothPath(points)}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><path d="${smoothPath(points)}" fill="none" stroke="${color}" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.08"/>${dots}`;
-    }).join('');
-    givingChart.innerHTML = `${grid}${paths}`;
-    const shownLabels = rows.length > 10
-      ? rows.filter((_, i) => i === 0 || i === rows.length - 1 || i % Math.ceil(rows.length / 6) === 0)
-      : rows;
-    givingLabels.innerHTML = shownLabels.map((g) => `<span>${g.label}</span>`).join('');
-    givingTotal.textContent = `NGN ${moneyFmt.format(Number(payload.totalThisMonth || 0))}`;
-  };
-
-  const showGivingTooltip = (event) => {
-    const node = event.target.closest('.giving-chart-node');
-    if (!node || !givingTooltip) {
-      givingTooltip.classList.add('hidden');
-      return;
-    }
-    givingTooltip.innerHTML = `${node.dataset.tooltip}<span class="block text-[9px] font-medium text-gray-300">${node.dataset.period}</span>`;
-    givingTooltip.classList.remove('hidden');
-    const host = givingChart.closest('section').getBoundingClientRect();
-    const svgBox = givingChart.getBoundingClientRect();
-    const viewBox = givingChart.viewBox.baseVal;
-    const nodeX = Number(node.getAttribute('cx'));
-    const nodeY = Number(node.getAttribute('cy'));
-    const tooltipW = givingTooltip.offsetWidth;
-    const tooltipH = givingTooltip.offsetHeight;
-    const anchorX = svgBox.left - host.left + (nodeX / viewBox.width) * svgBox.width;
-    const anchorY = svgBox.top - host.top + (nodeY / viewBox.height) * svgBox.height;
-    const maxLeft = Math.max(8, host.width - tooltipW - 8);
-    const left = Math.max(Math.min(anchorX - tooltipW / 2, 8), maxLeft);
-    const top = anchorY - tooltipH - 8;
-    givingTooltip.style.left = `${left}px`;
-    givingTooltip.style.top = `${top > 8 ? top : anchorY + 10}px`;
-  };
-  givingChart.addEventListener('pointerover', showGivingTooltip);
-  givingChart.addEventListener('pointermove', showGivingTooltip);
-
-  givingChart.addEventListener('pointerleave', () => {
-    givingTooltip.classList.add('hidden');
-  });
-
-  const loadMetrics = async (params) => {
-    const url = new URL(endpoint, window.location.origin);
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, value);
-    });
-    setLoading(true);
-    animateOut();
-    try {
-      const response = await fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' });
-      if (!response.ok) throw new Error(await response.text());
-      const payload = await response.json();
-      renderStats(payload.stats);
-      renderAttendance(payload);
-      renderWeekly(payload.weeklyAttendance);
-      renderGiving(payload);
-      animateIn();
-      setActive(payload.range.mode || params.mode || '7d');
-      if (params.mode === 'range') customForm.classList.add('hidden');
-    } catch (error) {
-      const alertBox = document.createElement('div');
-      alertBox.className = 'rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 mb-4';
-      alertBox.textContent = 'Failed to load updated metrics. Please try again.';
-      const main = document.querySelector('section.bg-white.rounded-xl.border');
-      main.parentElement.prepend(alertBox);
-      setTimeout(() => alertBox.remove(), 5000);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  rangeButtons.forEach((button) => {
-    button.addEventListener('click', () => {
-      if (button.dataset.dashboardRange === 'range') {
-        customForm.classList.toggle('hidden');
-        setActive('range');
-        return;
-      }
-      customForm.classList.add('hidden');
-      loadMetrics({ mode: button.dataset.dashboardRange });
-    });
-  });
-  customForm.addEventListener('submit', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const form = new FormData(customForm);
-    loadMetrics({ mode: 'range', start_date: form.get('start_date'), end_date: form.get('end_date') });
-  });
-  customForm.addEventListener('click', (event) => event.stopPropagation());
-  document.addEventListener('click', (event) => {
-    if (customForm && customToggle && !customForm.contains(event.target) && !customToggle.contains(event.target)) {
-      customForm.classList.add('hidden');
-    }
-  });
-  renderGiving(initialGivingPayload);
-  setActive(activeMode);
-})();
-</script>
-</body>
-</html>
+{% endblock %}

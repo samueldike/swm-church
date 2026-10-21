@@ -1,0 +1,66 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, textarea with context %}
+{% block title %}Branch report — {{ report.report_month|month_label }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}Branch report{% endblock %}
+{% block topbar_subtitle %}{{ report.branch.name if report.branch else '' }} · {{ report.report_month|month_label }}{% endblock %}
+{% block topbar_icon %}ri-file-list-3-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header((report.branch.name if report.branch else 'Branch') ~ ' — ' ~ (report.report_month|month_label), 'Monthly report from the branch admin' ~ (' · ' ~ report.author.full_name if report.author else ''),
+      actions=('<a href="' ~ url_for('admin_branch_reports') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All reports</a>')
+              ~ (('<a href="' ~ url_for('admin_branch_reports_edit', report_id=report.id) ~ '" class="btn btn-primary"><i class="ri-edit-line"></i>Edit</a>') if can_edit else ''),
+      audit=[('Status', report.status|capitalize), ('Submitted', report.submitted_at.strftime('%Y-%m-%d %H:%M') if report.submitted_at else 'Not yet'),
+             ('Departments', ((rollup.get('submitted', 0) ~ ' of ' ~ rollup.get('expected', 0)) if rollup else '—'))]) }}
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-4 items-start max-w-6xl">
+  <div class="flex flex-col gap-4">
+    {% if own and report.status == 'draft' %}
+      <div class="rounded-md border border-[#ebdfc0] bg-gold-tint text-gold-text px-3.5 py-2.5 text-[12.5px] flex gap-2"><i class="ri-information-line text-base mt-0.5"></i><span>This is a draft. HQ cannot see it until you submit it.</span></div>
+    {% endif %}
+    <section class="panel"><h2 class="text-[14px] font-semibold text-ink mb-2">Summary</h2><p class="text-[13px] text-ink-2 leading-relaxed whitespace-pre-line">{{ report.summary }}</p></section>
+
+    <section class="panel">
+      <h2 class="text-[14px] font-semibold text-ink mb-3">Numbers</h2>
+      <dl class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        {% for key, label in metrics_def %}
+          <div><dt class="mono-label">{{ label }}</dt><dd class="font-mono text-[18px] font-semibold text-ink mt-1">{{ (report.metrics or {}).get(key) if (report.metrics or {}).get(key) is not none else '—' }}</dd></div>
+        {% endfor %}
+      </dl>
+      {% if report.finance_note %}<div class="mt-4 pt-4 border-t border-line"><p class="mono-label">Giving and finances</p><p class="text-[13px] text-ink-2 leading-relaxed whitespace-pre-line mt-1">{{ report.finance_note }}</p></div>{% endif %}
+    </section>
+
+    {% for label, val in [('Highlights', report.highlights), ('Challenges', report.challenges), ('Requests to HQ', report.requests_to_hq), ('Projections for next month', report.projections)] %}
+      {% if val %}<section class="panel"><h2 class="text-[14px] font-semibold text-ink mb-2">{{ label }}</h2><p class="text-[13px] text-ink-2 leading-relaxed whitespace-pre-line">{{ val }}</p></section>{% endif %}
+    {% endfor %}
+  </div>
+
+  <aside class="flex flex-col gap-4">
+    <section class="panel">
+      <h2 class="text-[14px] font-semibold text-ink mb-2">HQ response</h2>
+      {% if report.hq_comment %}
+        <p class="text-[13px] text-ink-2 leading-relaxed whitespace-pre-line">{{ report.hq_comment }}</p>
+        <p class="mt-2 font-mono text-[10.5px] text-ink-3">Acknowledged {{ report.hq_commented_at.strftime('%d %b %Y') if report.hq_commented_at else '' }}</p>
+      {% elif report.status == 'acknowledged' %}
+        <p class="text-[12.5px] text-ok"><i class="ri-checkbox-circle-line"></i> Acknowledged by HQ.</p>
+      {% else %}
+        <p class="text-[12.5px] text-ink-3">{{ 'Waiting for HQ.' if report.status == 'submitted' else 'Not submitted yet.' }}</p>
+      {% endif %}
+      {% if can_comment %}
+        <form method="POST" action="{{ url_for('admin_branch_reports_comment', report_id=report.id) }}" class="mt-4 pt-4 border-t border-line flex flex-col gap-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          {{ textarea('Comment to the branch', 'hq_comment', value=report.hq_comment or '', rows=4, id='hq-comment') }}
+          <button type="submit" class="btn btn-primary"><i class="ri-check-double-line"></i>{{ 'Update response' if report.status == 'acknowledged' else 'Acknowledge report' }}</button>
+        </form>
+      {% endif %}
+    </section>
+    {% if own and report.status == 'draft' %}
+      <form method="POST" action="{{ url_for('admin_branch_reports_delete', report_id=report.id) }}" data-confirm="Delete this draft?" data-confirm-title="Delete draft" data-confirm-accept="Delete">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-secondary w-full text-bad"><i class="ri-delete-bin-line"></i>Delete draft</button>
+      </form>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

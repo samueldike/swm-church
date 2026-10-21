@@ -54,8 +54,14 @@ async def get_current_admin(request: Request):
         ).isoformat()
 
     admin = await _load_admin(admin_id)
-    if not admin:
-        logout_admin(request)
+    if not admin or not admin.is_active:
+        logout_admin(request)                 # deleted or switched off: an open session must not survive it
+        return None
+    if (admin.session_version or 0) != request.session.get("admin_sv", 0):
+        logout_admin(request)                 # password reset / access changed since this session began
+        return None
+    if admin.branch is not None and not admin.branch.is_active and not admin.branch.is_hq:
+        logout_admin(request)                 # a closed branch's people cannot use the console
         return None
 
     return admin
@@ -79,8 +85,9 @@ async def require_super_admin(request: Request):
     return admin
 
 
-def login_admin(request: Request, admin_id: int) -> None:
+def login_admin(request: Request, admin_id: int, session_version: int = 0) -> None:
     request.session["admin_id"] = admin_id
+    request.session["admin_sv"] = session_version or 0
     request.session["admin_authenticated"] = True
     request.session["admin_last_activity_at"] = datetime.now(timezone.utc).isoformat()
 

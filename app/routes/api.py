@@ -27,6 +27,11 @@ router = APIRouter(prefix="/api", tags=["api"])
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _client_ip(request: Request) -> str:
+    return (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+            or (request.client.host if request.client else "unknown"))
+
+
 def _json(data: dict | list, status: int = 200) -> JSONResponse:
     return JSONResponse(content=data, status_code=status)
 
@@ -404,12 +409,21 @@ async def ht_register(request: Request, db: AsyncSession = Depends(get_db)):
     except Exception:
         return _error("Invalid JSON body")
 
+    from app.core import throttle
+
+    reg_key = f"ht-register:{_client_ip(request)}"
+    if throttle.is_blocked(reg_key, limit=10, window=3600):
+        return _error("Too many registrations from this address. Try again later.", 429)
+    throttle.record_failure(reg_key, window=3600)
+
     full_name = (body.get("full_name") or "").strip()
     email = (body.get("email") or "").strip().lower()
     password = body.get("password") or ""
 
     if not full_name:
         return _error("Full name is required")
+    if len(full_name) > 255 or len(email) > 255 or "@" not in email:
+        return _error("Please provide a valid name and email")
     if not email:
         return _error("Email is required")
     if len(password) < 6:
@@ -449,13 +463,23 @@ async def ht_login(request: Request, db: AsyncSession = Depends(get_db)):
     if not email or not password:
         return _error("Email and password are required")
 
+    from app.core import throttle
+
+    keys = (f"ht-login:ip:{_client_ip(request)}", f"ht-login:email:{email}")
+    if any(throttle.is_blocked(k, limit=10 if "ip" in k else 5) for k in keys):
+        return _error("Too many failed attempts. Try again in a few minutes.", 429)
+
     result = await db.execute(
         select(HarvestWorker).where(HarvestWorker.email == email)
     )
     worker = result.scalar_one_or_none()
 
     if not worker or not verify_password(password, worker.password_hash):
+        for k in keys:
+            throttle.record_failure(k)
         return _error("Invalid email or password", 401)
+    for k in keys:
+        throttle.clear(k)
 
     if not worker.is_active:
         return _error("Account is deactivated", 403)

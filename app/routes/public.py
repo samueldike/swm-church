@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import logging
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Form, Query, Request
@@ -22,6 +23,110 @@ from app.core.template import render_template
 router = APIRouter(tags=["public"])
 
 
+async def _hq_only(db):
+    """Only HQ-owned messages are ever public. A branch's messages belong to that branch's own
+    channels (its Telegram bot) and must never appear on the HQ website, feed or stream URLs.
+    Legacy rows without a branch are treated as HQ's."""
+    from sqlalchemy import or_
+
+    from app.core.hq_branch import get_hq_branch_id
+    from app.models.sermon import Sermon
+
+    return or_(Sermon.branch_id == await get_hq_branch_id(db), Sermon.branch_id.is_(None))
+
+
+async def _public_branches(db):
+    """Active branches for the public forms, HQ first."""
+    from app.models.branch import Branch
+
+    rows = (await db.execute(select(Branch).where(Branch.is_active == True).order_by(Branch.is_hq.desc(), Branch.name))).scalars().all()  # noqa: E712
+    return list(rows)
+
+
+async def _pick_branch_id(db, posted) -> int:
+    """Branch chosen on a public form, falling back to HQ when missing or invalid."""
+    from app.core.hq_branch import get_hq_branch_id
+
+    branches = await _public_branches(db)
+    try:
+        wanted = int(posted) if posted not in (None, "") else None
+    except (TypeError, ValueError):
+        wanted = None
+    if wanted and any(b.id == wanted for b in branches):
+        return wanted
+    return await get_hq_branch_id(db)
+
+
+def _content_disposition(kind: str, title: str, ext: str) -> str:
+    """Header-safe Content-Disposition. Titles with curly quotes, accents or non-Latin letters used
+    to raise UnicodeEncodeError (a 500) because HTTP headers are latin-1."""
+    from urllib.parse import quote
+    import re as _re
+
+    full = f"{(title or 'sermon').strip() or 'sermon'}{ext}"
+    ascii_name = _re.sub(r"[^A-Za-z0-9._ -]+", "_", full).strip(" ._") or f"sermon{ext}"
+    return f"{kind}; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(full, safe='')}"
+
+
+def _serve_local_audio(request: Request, path: str, disposition: str):
+    """Serve a local audio file with HTTP Range support so players can seek and resume."""
+    import mimetypes
+    import os
+
+    from fastapi.responses import Response
+
+    size = os.path.getsize(path)
+    media_type = mimetypes.guess_type(path)[0] or "audio/mpeg"
+    headers = {"Accept-Ranges": "bytes", "Content-Disposition": disposition, "Cache-Control": "public, max-age=3600"}
+    start, end, status = 0, size - 1, 200
+    rng = request.headers.get("range", "")
+    if rng.startswith("bytes=") and "," not in rng:
+        first, _, last = rng[6:].partition("-")
+        try:
+            if first == "":                      # suffix range: the last N bytes
+                start = max(0, size - int(last))
+            else:
+                start = int(first)
+                end = min(int(last), size - 1) if last else size - 1
+        except ValueError:
+            start, end = 0, size - 1
+        else:
+            if start > end or start >= size:
+                return Response(status_code=416, headers={"Content-Range": f"bytes */{size}"})
+            status = 206
+            headers["Content-Range"] = f"bytes {start}-{end}/{size}"
+    length = end - start + 1
+    headers["Content-Length"] = str(length)
+
+    def body():
+        with open(path, "rb") as f:
+            f.seek(start)
+            left = length
+            while left > 0:
+                chunk = f.read(min(65536, left))
+                if not chunk:
+                    break
+                left -= len(chunk)
+                yield chunk
+
+    if request.method == "HEAD":
+        return Response(status_code=status, headers=headers, media_type=media_type)
+    return StreamingResponse(body(), status_code=status, media_type=media_type, headers=headers)
+
+
+def _rate_limited(request: Request, bucket: str, limit: int = 8, window: float = 600.0) -> bool:
+    """Per-IP cap on public form submissions (spam / abuse guard). Counts every attempt."""
+    from app.core import throttle
+
+    ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+          or (request.client.host if request.client else "unknown"))
+    key = f"public:{bucket}:{ip}"
+    if throttle.is_blocked(key, limit=limit, window=window):
+        return True
+    throttle.record_failure(key, window=window)
+    return False
+
+
 def _redirect(
     request: Request,
     url: str,
@@ -37,7 +142,12 @@ def _redirect(
 
 
 def _paginate_url(request: Request, page: int, base_path: str) -> str:
-    return f"{base_path}?page={page}"
+    """Page link that keeps the filters (search, series, ...) already on the URL."""
+    from urllib.parse import urlencode
+
+    params = [(k, v) for k, v in request.query_params.multi_items() if k != "page" and v != ""]
+    params.append(("page", str(page)))
+    return f"{base_path}?{urlencode(params)}"
 
 
 def _public_base_url(request: Request) -> str:
@@ -57,6 +167,7 @@ async def home(request: Request, db: AsyncSession = Depends(get_db)):
     from app.models.site_settings import SiteSetting
     from app.models.slider import Slider
     from app.models.sermon import Sermon
+    from app.models.program_flyer import ProgramFlyer
 
     sliders = []
     try:
@@ -80,7 +191,7 @@ async def home(request: Request, db: AsyncSession = Depends(get_db)):
     try:
         result = await db.execute(
             select(Sermon)
-            .where(Sermon.status == "published")
+            .where(Sermon.status == "published", await _hq_only(db))
             .order_by(Sermon.published_at.desc())
             .limit(HOME2_MESSAGE_LIMIT)
         )
@@ -102,25 +213,42 @@ async def home(request: Request, db: AsyncSession = Depends(get_db)):
     except Exception:
         pass
 
+    # "Visit us": headquarters (from the site-wide settings) plus only the branches HQ has approved for the public directory.
     branches = []
     try:
-        from app.models.branch import Branch
+        from app.routes.public_extra import listed_branches
 
-        result = await db.execute(
-            select(Branch).where(Branch.is_active == True).order_by(Branch.name)
-        )
-        branches = list(result.scalars().all())
+        branches = await listed_branches(db, settings)
     except Exception:
-        pass
+        logging.exception("home branches")
 
     gallery = await _photos(db, "gallery") or _build_gallery(sliders, featuredStories)
     outreach = await _photos(db, "outreach")
 
+    program_flyers = []
+    try:
+        result = await db.execute(
+            select(ProgramFlyer)
+            .where(ProgramFlyer.is_active == True)
+            .order_by(ProgramFlyer.created_at.desc(), ProgramFlyer.id.desc())
+        )
+        program_flyers = list(result.scalars().all())
+    except Exception:
+        pass
+
+    from app.core import site_content as _sc
+    from app.routes.public_extra import _church_jsonld
+
+    _base = _public_base_url(request)
+    _addr = (settings.get("siteHeadquartersAddress") or "").strip()
+    _home_ld = _church_jsonld(request, settings, settings.get("siteName") or "Scent of Water Ministry", _addr, _sc.clean_phone(settings.get("siteSupportPhone")),
+                              (settings.get("siteContactEmail") or "").strip(), _sc.get_services(settings), _base + "/")
     return await render_template(
         request,
         "pages/home.html",
         {
             "_db": db,
+            "jsonld": _home_ld,
             "sliders": sliders,
             "settings": settings,
             "latest_sermons": latest_sermons,
@@ -128,6 +256,7 @@ async def home(request: Request, db: AsyncSession = Depends(get_db)):
             "branches": branches,
             "gallery": gallery,
             "outreach": outreach,
+            "program_flyers": program_flyers,
         },
     )
 
@@ -295,7 +424,7 @@ async def our_pastor(request: Request, db: AsyncSession = Depends(get_db)):
     try:
         result = await db.execute(
             select(Sermon)
-            .where(Sermon.status == "published")
+            .where(Sermon.status == "published", await _hq_only(db))
             .order_by(Sermon.published_at.desc())
             .limit(4)
         )
@@ -303,14 +432,22 @@ async def our_pastor(request: Request, db: AsyncSession = Depends(get_db)):
     except Exception:
         pass
 
+    from app.core.settings_cache import get_settings
+
+    site = await get_settings(db)
     return await render_template(
-        request, "pages/our-pastor.html", {"_db": db, "sermons": sermons}
+        request, "pages/our-pastor.html", {"_db": db, "sermons": sermons, "pastorStory": (site.get("pastorStory") or "").strip()}
     )
 
 
 @router.get("/about", name="about")
 async def about(request: Request, db: AsyncSession = Depends(get_db)):
-    return await render_template(request, "pages/about.html", {"_db": db})
+    from app.core import site_content as _sc
+    from app.core.settings_cache import get_settings
+
+    _site = await get_settings(db)
+    _extra = {"teaching": _sc.get_teaching(_site), "ourStory": (_site.get("ourStory") or "").strip(), "faithUrl": _sc.safe_https(_site.get("faithStatementUrl"))}
+    return await render_template(request, "pages/about.html", {"_db": db, **_extra})
 
 
 @router.get("/departments", name="departments")
@@ -342,25 +479,49 @@ async def messages_list(
     request: Request,
     db: AsyncSession = Depends(get_db),
     search: str = Query("", alias="search"),
+    series: str = Query(""),
+    preacher: str = Query(""),
+    year: str = Query(""),
     page: int = Query(1, ge=1),
 ):
+    from sqlalchemy import and_, extract
+
     from app.models.sermon import Sermon
 
+    base_where = (Sermon.status == "published", await _hq_only(db))
     query = (
         select(Sermon)
-        .where(Sermon.status == "published")
+        .where(*base_where)
         .options(selectinload(Sermon.branch))
     )
 
+    search = search.strip()[:100]
     if search:
         search_pattern = f"%{search}%"
         query = query.where(
             or_(
                 Sermon.title.ilike(search_pattern),
                 Sermon.preacher.ilike(search_pattern),
+                Sermon.caption.ilike(search_pattern),
                 Sermon.description.ilike(search_pattern),
+                Sermon.series.ilike(search_pattern),
+                Sermon.scripture.ilike(search_pattern),
+                # a transcript is searched only once an administrator has reviewed and published it
+                and_(Sermon.transcript_public == True, Sermon.transcript.ilike(search_pattern)),  # noqa: E712
             )
         )
+    if series.strip():
+        query = query.where(Sermon.series == series.strip())
+    if preacher.strip():
+        query = query.where(Sermon.preacher == preacher.strip())
+    if year.strip().isdigit():
+        query = query.where(extract("year", Sermon.published_at) == int(year))
+
+    # Filter choices come from what is actually published.
+    series_opts = [r[0] for r in (await db.execute(select(Sermon.series).where(*base_where, Sermon.series.isnot(None), Sermon.series != "").distinct().order_by(Sermon.series))).all()]
+    preacher_opts = [r[0] for r in (await db.execute(select(Sermon.preacher).where(*base_where, Sermon.preacher.isnot(None), Sermon.preacher != "").distinct().order_by(Sermon.preacher))).all()]
+    year_opts = sorted({int(r[0]) for r in (await db.execute(select(extract("year", Sermon.published_at)).where(*base_where, Sermon.published_at.isnot(None)).distinct())).all() if r[0]}, reverse=True)
+    filtered = bool(search or series.strip() or preacher.strip() or year.strip())
 
     query = query.order_by(Sermon.published_at.desc())
 
@@ -371,7 +532,7 @@ async def messages_list(
     try:
         feat_result = await db.execute(
             select(Sermon)
-            .where(Sermon.status == "published", Sermon.is_featured == True)
+            .where(Sermon.status == "published", await _hq_only(db), Sermon.is_featured == True)
             .order_by(Sermon.published_at.desc())
             .limit(1)
         )
@@ -379,7 +540,9 @@ async def messages_list(
     except Exception:
         pass
 
-    if featured_sermon is None and sermons:
+    if filtered:
+        featured_sermon = None          # a filtered list is a plain result list; no "featured" hero
+    elif featured_sermon is None and sermons:
         featured_sermon = sermons[0]
 
     for i in range(len(sermons)):
@@ -408,6 +571,9 @@ async def messages_list(
             "featured_sermon": featured_sermon,
             "search": search,
             "pagination": pagination,
+            "series_opts": series_opts, "preacher_opts": preacher_opts, "year_opts": year_opts,
+            "f_series": series.strip(), "f_preacher": preacher.strip(), "f_year": year.strip(), "filtered": filtered,
+            "metaDescription": "Audio messages from Scent of Water Ministry — search by title, preacher, series or scripture.",
         },
     )
 
@@ -416,10 +582,14 @@ async def messages_list(
 async def sermon_detail(
     slug: str, request: Request, db: AsyncSession = Depends(get_db)
 ):
+    from sqlalchemy.orm import selectinload
+
     from app.models.sermon import Sermon
 
     result = await db.execute(
-        select(Sermon).where(Sermon.slug == slug, Sermon.status == "published")
+        select(Sermon)
+        .options(selectinload(Sermon.branch))
+        .where(Sermon.slug == slug, Sermon.status == "published", await _hq_only(db))
     )
     sermon = result.scalar_one_or_none()
     if not sermon:
@@ -427,15 +597,39 @@ async def sermon_detail(
 
     related = []
     try:
-        result = await db.execute(
-            select(Sermon)
-            .where(Sermon.status == "published", Sermon.id != sermon.id)
-            .order_by(Sermon.published_at.desc())
-            .limit(3)
-        )
-        related = list(result.scalars().all())
+        if sermon.series:
+            result = await db.execute(
+                select(Sermon).options(selectinload(Sermon.branch))
+                .where(Sermon.status == "published", await _hq_only(db), Sermon.id != sermon.id, Sermon.series == sermon.series)
+                .order_by(Sermon.published_at.asc()).limit(3)
+            )
+            related = list(result.scalars().all())
+        if len(related) < 3:
+            have = {r.id for r in related} | {sermon.id}
+            result = await db.execute(
+                select(Sermon).options(selectinload(Sermon.branch))
+                .where(Sermon.status == "published", await _hq_only(db), Sermon.id.notin_(have))
+                .order_by(Sermon.published_at.desc()).limit(3 - len(related))
+            )
+            related += list(result.scalars().all())
     except Exception:
         pass
+
+    import json as _json
+
+    base = _public_base_url(request)
+    ld = {"@context": "https://schema.org", "@type": "AudioObject", "name": sermon.title, "description": (sermon.caption or sermon.description or sermon.title)[:500],
+          "url": f"{base}/messages/{sermon.slug}", "encodingFormat": "audio/mpeg",
+          "publisher": {"@type": "Organization", "name": "Scent of Water Ministry", "url": base}}
+    if sermon.published_at:
+        ld["uploadDate"] = sermon.published_at.strftime("%Y-%m-%d")
+    if sermon.preacher:
+        ld["author"] = {"@type": "Person", "name": sermon.preacher}
+    if sermon.audio_file_path or sermon.media_url:
+        ld["contentUrl"] = f"{base}/messages/{sermon.id}/stream"
+    from app.core.site_content import jsonld_script
+
+    show_transcript = bool(sermon.transcript_public and (sermon.transcript or "").strip())
 
     return await render_template(
         request,
@@ -444,6 +638,8 @@ async def sermon_detail(
             "_db": db,
             "sermon": sermon,
             "related": related,
+            "show_transcript": show_transcript,
+            "jsonld": jsonld_script(ld),
         },
     )
 
@@ -468,7 +664,7 @@ async def podcast_feed(request: Request, db: AsyncSession = Depends(get_db)):
 
     result = await db.execute(
         select(Sermon)
-        .where(Sermon.status == "published")
+        .where(Sermon.status == "published", await _hq_only(db))
         .where(or_(Sermon.media_url.isnot(None), Sermon.telegram_file_id.isnot(None)))
         .order_by(Sermon.published_at.desc())
         .limit(200)
@@ -525,7 +721,7 @@ async def podcast_feed(request: Request, db: AsyncSession = Depends(get_db)):
     return HTMLResponse(content=xml_bytes, media_type="application/rss+xml")
 
 
-@router.get("/messages/{sermon_id}/stream", name="messages_stream")
+@router.api_route("/messages/{sermon_id}/stream", methods=["GET", "HEAD"], name="messages_stream")
 async def stream_sermon(
     sermon_id: int, request: Request, db: AsyncSession = Depends(get_db)
 ):
@@ -533,12 +729,24 @@ async def stream_sermon(
     from app.core.telegram import TelegramDistributor
 
     result = await db.execute(
-        select(Sermon).where(Sermon.id == sermon_id, Sermon.status == "published")
+        select(Sermon).where(Sermon.id == sermon_id, Sermon.status == "published", await _hq_only(db))
     )
     sermon = result.scalar_one_or_none()
 
     if not sermon:
         return HTMLResponse("Audio not found", status_code=404)
+
+    if sermon.audio_file_path:
+        from app.core.media import to_abspath
+
+        own_file = to_abspath(sermon.audio_file_path)
+        if own_file:
+            import os
+
+            return _serve_local_audio(
+                request, own_file,
+                _content_disposition("inline", sermon.title, os.path.splitext(own_file)[1] or ".mp3"),
+            )
 
     if sermon.media_url:
         return RedirectResponse(url=sermon.media_url, status_code=302)
@@ -547,7 +755,12 @@ async def stream_sermon(
         return HTMLResponse("Audio not found", status_code=404)
 
     tg = TelegramDistributor()
-    file_url = await tg.file_download_url(sermon.telegram_file_id)
+    local_path, file_url = await tg.resolve_file(sermon.telegram_file_id)
+
+    # A --local Bot API server hands back a filesystem path, not a URL.
+    if local_path:
+        return _serve_local_audio(request, local_path, _content_disposition("inline", sermon.title, ".mp3"))
+
     if not file_url:
         return HTMLResponse("Unable to retrieve audio", status_code=502)
 
@@ -559,24 +772,18 @@ async def stream_sermon(
                 async for chunk in upstream.aiter_bytes(chunk_size=65536):
                     yield chunk
 
-    headers = {}
-    range_header = request.headers.get("range")
-    if range_header:
-        headers["Accept-Ranges"] = "bytes"
-        headers["Content-Range"] = f"bytes */-1"
-
     return StreamingResponse(
         audio_stream(),
         media_type="audio/mpeg",
         headers={
-            "Content-Disposition": f'inline; filename="{sermon.title or "sermon"}.mp3"',
-            "Accept-Ranges": "bytes",
+            "Content-Disposition": _content_disposition("inline", sermon.title, ".mp3"),
+            "Accept-Ranges": "none",   # this branch proxies Telegram without byte-range support
             "Cache-Control": "public, max-age=3600",
         },
     )
 
 
-@router.get("/messages/{sermon_id}/download", name="messages_download")
+@router.api_route("/messages/{sermon_id}/download", methods=["GET", "HEAD"], name="messages_download")
 async def download_sermon(
     sermon_id: int, request: Request, db: AsyncSession = Depends(get_db)
 ):
@@ -584,7 +791,7 @@ async def download_sermon(
     from app.core.telegram import TelegramDistributor
 
     result = await db.execute(
-        select(Sermon).where(Sermon.id == sermon_id, Sermon.status == "published")
+        select(Sermon).where(Sermon.id == sermon_id, Sermon.status == "published", await _hq_only(db))
     )
     sermon = result.scalar_one_or_none()
 
@@ -596,22 +803,27 @@ async def download_sermon(
     if sermon.audio_file_path:
         import os
         from fastapi.responses import FileResponse
+        from app.core.media import to_abspath
 
-        file_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            sermon.audio_file_path,
-        )
-        if os.path.exists(file_path):
+        # Resolve through MEDIA_ROOT so this matches where the app actually writes.
+        file_path = to_abspath(sermon.audio_file_path)
+        if file_path:
             ext = os.path.splitext(file_path)[1] or ".mp3"
-            return FileResponse(
-                file_path, media_type="audio/mpeg", filename=f"{safe_title}{ext}"
-            )
+            return _serve_local_audio(request, file_path, _content_disposition("attachment", sermon.title, ext))
 
     if not sermon.telegram_file_id:
         return HTMLResponse("Audio not found", status_code=404)
 
     tg = TelegramDistributor()
-    file_url = await tg.file_download_url(sermon.telegram_file_id)
+    local_path, file_url = await tg.resolve_file(sermon.telegram_file_id)
+
+    if local_path:
+        import os
+        from fastapi.responses import FileResponse
+
+        ext = os.path.splitext(local_path)[1] or ".mp3"
+        return _serve_local_audio(request, local_path, _content_disposition("attachment", sermon.title, ext))
+
     if not file_url:
         return HTMLResponse("Unable to retrieve audio", status_code=502)
 
@@ -627,7 +839,7 @@ async def download_sermon(
         audio_download(),
         media_type="audio/mpeg",
         headers={
-            "Content-Disposition": f'attachment; filename="{safe_title}.mp3"',
+            "Content-Disposition": _content_disposition("attachment", sermon.title, ".mp3"),
             "Content-Type": "audio/mpeg",
         },
     )
@@ -722,7 +934,8 @@ async def _calendar_month_context(db: AsyncSession, month: str | None) -> dict:
         select(Event)
         .where(
             Event.is_published == True,
-            Event.starts_at <= range_end,
+            # the grid's last day is a date (midnight): include the whole of it
+            Event.starts_at < datetime.combine(range_end, datetime.min.time()) + timedelta(days=1),
             or_(Event.ends_at == None, Event.ends_at >= range_start),
         )
         .order_by(Event.starts_at.asc())
@@ -821,7 +1034,7 @@ async def casom(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.get("/contact", name="contact")
 async def contact(request: Request, db: AsyncSession = Depends(get_db)):
-    return await render_template(request, "pages/contact.html", {"_db": db})
+    return await render_template(request, "pages/contact.html", {"_db": db, "branches": await _public_branches(db)})
 
 
 @router.post("/contact", name="contact_store")
@@ -832,29 +1045,51 @@ async def contact_store(
     phone: str = Form(""),
     subject: str = Form(""),
     message: str = Form(...),
+    branch_id: str = Form(""),
+    website: str = Form(""),                     # honeypot: real visitors never see or fill it
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.contact_inquiry import ContactInquiry
 
+    if website.strip():
+        return _redirect(request, "/contact", "Thank you for reaching out! We will get back to you shortly.")
+    if _rate_limited(request, "contact"):
+        return _redirect(request, "/contact", "You have sent several messages in a short time. Please wait a few minutes and try again.", "error")
     if not name.strip() or not email.strip() or not message.strip():
         return _redirect(
             request, "/contact", "Please fill in all required fields.", "error"
         )
+    if len(message) > 5000:
+        return _redirect(request, "/contact", "Please keep your message under 5,000 characters.", "error")
 
     inquiry = ContactInquiry(
-        name=name.strip(),
-        email=email.strip(),
-        phone=phone.strip() if phone else None,
-        subject=subject.strip() if subject else "General Inquiry",
+        name=name.strip()[:255],
+        email=email.strip()[:255],
+        phone=phone.strip()[:50] if phone else None,
+        subject=subject.strip()[:255] if subject else "General Inquiry",
         message=message.strip(),
+        branch_id=await _pick_branch_id(db, branch_id),
     )
     db.add(inquiry)
     await db.flush()
 
+    from app.core import mailer
+
+    base = _public_base_url(request)
+    if mailer.valid_email(inquiry.email):
+        mailer.fire(mailer.send_notice(
+            inquiry.email, "We have received your message", base_url=base, kind="contact", heading="Thank you for writing to us",
+            paragraphs=[f"Hello {inquiry.name.split()[0]}, your message has reached us and a real person will read it.",
+                        "We usually reply within a few working days. If it is urgent, please call us or send a WhatsApp message."],
+            details=[("Subject", inquiry.subject)], footnote="You can reply to this email if you want to add something."))
+    mailer.fire(mailer.notify_staff(inquiry.branch_id, "A new message is waiting", base_url=base, kind="staff", heading="A new message is waiting",
+                                    paragraphs=["Someone has written through the website contact form. Please open it and reply."], link_path="/admin/inquiries"))
+
     return _redirect(
         request,
         "/contact",
-        "Thank you for reaching out! We will get back to you shortly.",
+        "Thank you for reaching out! We will get back to you shortly."
+        + (" A confirmation has been emailed to you." if mailer.valid_email(inquiry.email) else ""),
     )
 
 
@@ -896,6 +1131,17 @@ async def give(request: Request, db: AsyncSession = Depends(get_db)):
             church_accounts = json.loads(settings["church_accounts"])
         except Exception:
             church_accounts = []
+    from app.core.branch_settings import get_branch_settings, parse_accounts
+
+    giving_model = (settings.get("giving_model") or "central").strip()
+    give_branches = []
+    if giving_model == "branch":
+        for b in await _public_branches(db):
+            if b.is_hq:
+                give_branches.append({"id": b.id, "name": b.name, "is_hq": True, "accounts": church_accounts})
+            else:
+                bs = await get_branch_settings(db, b.id)
+                give_branches.append({"id": b.id, "name": b.name, "is_hq": False, "accounts": parse_accounts(bs.get("church_accounts"))})
     return await render_template(
         request,
         "pages/give.html",
@@ -903,6 +1149,8 @@ async def give(request: Request, db: AsyncSession = Depends(get_db)):
             "_db": db,
             "giving_purposes": giving_purposes,
             "church_accounts": church_accounts,
+            "giving_model": giving_model,
+            "give_branches": give_branches,
         },
     )
 
@@ -919,6 +1167,7 @@ async def give_checkout(
     anonymous: bool = Form(False),
     dedication: str = Form(""),
     payment_gateway: str = Form("paystack"),
+    branch_id: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     from app.config import settings as app_settings
@@ -926,18 +1175,42 @@ async def give_checkout(
     from app.core.settings_cache import get_settings
     from app.models.giving import Giving
 
-    if amount <= 0:
+    import math
+    import re as _re
+
+    if _rate_limited(request, "give", limit=15):
+        return _redirect(request, "/give", "Too many attempts. Please wait a few minutes and try again.", "error")
+
+    if not math.isfinite(amount) or amount <= 0 or amount > 100_000_000:
         return _redirect(request, "/give", "Please enter a valid amount.", "error")
+    amount = round(amount, 2)
+    if not _re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email.strip()) or len(email) > 255:
+        return _redirect(request, "/give", "Please enter a valid email address.", "error")
 
     site_settings = await get_settings(db)
     payment_gateway = (
         site_settings.get("active_giving_gateway") or payment_gateway or "paystack"
     ).strip()
+
+    # Who is this gift for, and whose payment account takes it? (Admin switch: giving_model.)
+    from app.core.branch_settings import get_branch_settings
+    from app.core.hq_branch import get_hq_branch_id
+
+    hq_id = await get_hq_branch_id(db)
+    target_branch, gateway_owner, secret_override = hq_id, "hq", ""
+    if (site_settings.get("giving_model") or "central") == "branch":
+        target_branch = await _pick_branch_id(db, branch_id)
+        if target_branch != hq_id:
+            bs = await get_branch_settings(db, target_branch)
+            own_gw = bs.get("active_giving_gateway") or "paystack"
+            if bs.get("collects_own_giving") == "1" and bs.get(f"{own_gw}_secret_key"):
+                gateway_owner, payment_gateway, secret_override = "branch", own_gw, bs[f"{own_gw}_secret_key"]
     giving_type = purpose.strip() or "Tithe"
     if giving_type == "Others" and purpose_text.strip():
         giving_type = purpose_text.strip()
+    giving_type = giving_type[:50]     # column is VARCHAR(50): a longer purpose used to 500 on Postgres
 
-    amount_kobo = int(amount * 100)
+    amount_kobo = int(round(amount * 100))
 
     reference = f"swm_{secrets.token_urlsafe(16)}"
     callback_url = f"{app_settings.APP_URL}/give/callback?reference={reference}"
@@ -945,20 +1218,53 @@ async def give_checkout(
     giving = Giving(
         reference=reference,
         email=email.strip(),
-        full_name=full_name.strip() if full_name else None,
-        phone=phone.strip() if phone else None,
+        full_name=full_name.strip()[:255] if full_name else None,
+        phone=phone.strip()[:50] if phone else None,
         amount=amount,
         giving_type=giving_type,
         is_anonymous=anonymous,
         dedication=dedication.strip() if dedication else None,
         payment_gateway=payment_gateway,
+        branch_id=target_branch,
+        gateway_owner=gateway_owner,
+        method="online",
         status="pending",
     )
     db.add(giving)
     await db.flush()
 
     authorization_url = None
+    try:
+        authorization_url = await _init_gateway(
+            payment_gateway, secret_override or _hq_secret(site_settings, app_settings, payment_gateway), email, full_name, phone, amount,
+            amount_kobo, reference, callback_url, giving_type, anonymous, dedication,
+            initialize_flutterwave, initialize_paystack,
+        )
+    except Exception:
+        logging.exception("Payment gateway initialisation failed")
+        giving.status = "failed"
+        await db.flush()
 
+    if not authorization_url:
+        giving.status = "failed"
+        await db.flush()
+        return _redirect(
+            request, "/give", "Unable to initialize payment. Please try again.", "error"
+        )
+
+    return RedirectResponse(url=authorization_url, status_code=303)
+
+
+def _hq_secret(site_settings, app_settings, gateway: str) -> str:
+    if gateway == "flutterwave":
+        return site_settings.get("flutterwave_secret_key") or app_settings.FLUTTERWAVE_SECRET_KEY
+    return site_settings.get("paystack_secret_key") or app_settings.PAYSTACK_SECRET_KEY
+
+
+async def _init_gateway(payment_gateway, secret_key, email, full_name, phone, amount,
+                        amount_kobo, reference, callback_url, giving_type, anonymous, dedication,
+                        initialize_flutterwave, initialize_paystack):
+    """Call the selected gateway; returns the hosted-checkout URL or ``None``."""
     if payment_gateway == "flutterwave":
         authorization_url = await initialize_flutterwave(
             email=email.strip(),
@@ -974,8 +1280,7 @@ async def give_checkout(
                 "title": "Scent of Water Ministry - Giving",
                 "description": f"Donation: {giving_type}",
             },
-            secret_key=site_settings.get("flutterwave_secret_key")
-            or app_settings.FLUTTERWAVE_SECRET_KEY,
+            secret_key=secret_key,
         )
     else:
         authorization_url = await initialize_paystack(
@@ -990,16 +1295,9 @@ async def give_checkout(
                 "anonymous": anonymous,
                 "dedication": dedication,
             },
-            secret_key=site_settings.get("paystack_secret_key")
-            or app_settings.PAYSTACK_SECRET_KEY,
+            secret_key=secret_key,
         )
-
-    if not authorization_url:
-        return _redirect(
-            request, "/give", "Unable to initialize payment. Please try again.", "error"
-        )
-
-    return RedirectResponse(url=authorization_url, status_code=303)
+    return authorization_url
 
 
 @router.get("/give/callback", name="give_callback")
@@ -1036,50 +1334,108 @@ async def give_callback(
 
     site_settings = await get_settings(db)
 
-    if giving.payment_gateway == "flutterwave":
-        fw_secret = site_settings.get("flutterwave_secret_key") or app_settings.FLUTTERWAVE_SECRET_KEY
-        verification = await verify_flutterwave(
-            transaction_id=transaction_id,
-            tx_ref=actual_ref,
-            secret_key=fw_secret,
-        )
-    else:
-        ps_secret = site_settings.get("paystack_secret_key") or app_settings.PAYSTACK_SECRET_KEY
-        verification = await verify_paystack(
-            reference=actual_ref,
-            secret_key=ps_secret,
+    try:
+        branch_secret = ""
+        if giving.gateway_owner == "branch" and giving.branch_id:
+            from app.core.branch_settings import get_branch_settings
+
+            branch_secret = (await get_branch_settings(db, giving.branch_id)).get(f"{giving.payment_gateway}_secret_key", "")
+        if giving.payment_gateway == "flutterwave":
+            fw_secret = branch_secret or site_settings.get("flutterwave_secret_key") or app_settings.FLUTTERWAVE_SECRET_KEY
+            verification = await verify_flutterwave(
+                transaction_id=transaction_id,
+                tx_ref=actual_ref,
+                secret_key=fw_secret,
+            )
+        else:
+            ps_secret = branch_secret or site_settings.get("paystack_secret_key") or app_settings.PAYSTACK_SECRET_KEY
+            verification = await verify_paystack(
+                reference=actual_ref,
+                secret_key=ps_secret,
+            )
+    except Exception:
+        logging.exception("Payment verification failed for %s", actual_ref)
+        return _redirect(
+            request, "/give",
+            "We could not reach the payment provider to confirm your gift. If you were charged, please contact us with reference "
+            + actual_ref + ".", "error",
         )
 
-    if verification.get("success"):
+    state = verification.get("state") or ("paid" if verification.get("success") else "failed")
+    if state == "paid":
+        # Never trust "paid" alone: the amount the provider took must match the gift we recorded.
+        expected = round(float(giving.amount) * 100)
+        if "amount_kobo" in verification:
+            paid_ok = int(verification["amount_kobo"]) >= expected
+        else:
+            paid_ok = round(float(verification.get("amount", 0)) * 100) >= expected
+        if not paid_ok:
+            giving.status = "mismatch"
+            await db.flush()
+            logging.warning("Giving %s amount mismatch: expected %s", giving.reference, giving.amount)
+            return _redirect(
+                request, "/give",
+                "Your payment was received but the amount does not match what was entered. "
+                "Please contact us with reference " + giving.reference + ".", "error",
+            )
         giving.status = "completed"
         giving.paid_at = datetime.utcnow()
         await db.flush()
+        from app.core import mailer
+
+        if mailer.valid_email(giving.email):
+            church = site_settings.get("siteName") or "Scent of Water Ministry"
+            if giving.branch_id:
+                from app.models.branch import Branch
+
+                b = (await db.execute(select(Branch).where(Branch.id == giving.branch_id))).scalar_one_or_none()
+                church = b.name if b else church
+            mailer.fire(mailer.send_notice(
+                giving.email, f"Your gift receipt — {giving.reference}", base_url=_public_base_url(request), kind="receipt",
+                heading="Thank you for your gift",
+                paragraphs=[f"Dear {(giving.full_name or 'friend').split()[0] if not giving.is_anonymous or giving.full_name else 'friend'}, your gift has been received. God bless you for your generosity.",
+                            "Please keep this email as your record of the gift."],
+                details=[("Amount", f"₦{float(giving.amount):,.2f}"), ("For", giving.giving_type.replace("_", " ").title()), ("Given to", church),
+                         ("Reference", giving.reference), ("Date", (giving.paid_at or datetime.utcnow()).strftime("%d %B %Y"))],
+                footnote="If anything on this receipt looks wrong, reply to this email with your reference and we will look into it."))
         return _redirect(
             request, "/give",
-            "Thank you for your generous giving! God bless you.",
+            "Thank you for your generous giving! God bless you." + (" A receipt has been emailed to you." if mailer.valid_email(giving.email) else ""),
             "success",
         )
-    else:
-        giving.status = "failed"
-        await db.flush()
+    if state == "pending":
         return _redirect(
             request, "/give",
-            "Payment could not be confirmed. Please contact us if you were charged.",
-            "error",
+            "Your payment is still being processed. If you completed it, we will record it shortly; "
+            "otherwise you can try again.", "info",
         )
+    giving.status = "failed"
+    await db.flush()
+    return _redirect(
+        request, "/give",
+        "Payment could not be confirmed. Please contact us if you were charged.",
+        "error",
+    )
 
 
 @router.get("/privacy-policy", name="privacy_policy")
 async def privacy_policy(request: Request, db: AsyncSession = Depends(get_db)):
     from app.core.settings_cache import get_setting
 
-    content = await get_setting(db, "privacy_policy", "")
+    from app.core.legal_defaults import LEGAL_UPDATED, privacy_html
+    from app.core.settings_cache import get_settings
+    from app.core.site_content import clean_phone
+
+    s = await get_settings(db)
+    content = (s.get("privacy_policy") or "").strip() or privacy_html(
+        s.get("siteName") or "Scent of Water Ministry", s.get("siteHeadquartersAddress") or "", s.get("siteContactEmail") or "", clean_phone(s.get("siteSupportPhone")))
     return await render_template(
         request,
         "pages/privacy-policy.html",
         {
             "_db": db,
             "content": content,
+            "legalUpdated": LEGAL_UPDATED,
         },
     )
 
@@ -1088,13 +1444,20 @@ async def privacy_policy(request: Request, db: AsyncSession = Depends(get_db)):
 async def terms_of_service(request: Request, db: AsyncSession = Depends(get_db)):
     from app.core.settings_cache import get_setting
 
-    content = await get_setting(db, "terms_of_service", "")
+    from app.core.legal_defaults import LEGAL_UPDATED, terms_html
+    from app.core.settings_cache import get_settings
+    from app.core.site_content import clean_phone
+
+    s = await get_settings(db)
+    content = (s.get("terms_of_service") or "").strip() or terms_html(
+        s.get("siteName") or "Scent of Water Ministry", s.get("siteHeadquartersAddress") or "", s.get("siteContactEmail") or "", clean_phone(s.get("siteSupportPhone")))
     return await render_template(
         request,
         "pages/terms-of-service.html",
         {
             "_db": db,
             "content": content,
+            "legalUpdated": LEGAL_UPDATED,
         },
     )
 
@@ -1183,42 +1546,84 @@ async def story_detail(slug: str, request: Request, db: AsyncSession = Depends(g
 
 @router.get("/prayer", name="prayer")
 async def prayer(request: Request, db: AsyncSession = Depends(get_db)):
-    return await render_template(request, "pages/prayer.html", {"_db": db})
+    return await render_template(request, "pages/prayer.html", {"_db": db, "branches": await _public_branches(db)})
 
 
 @router.post("/prayer", name="prayer_store")
 async def prayer_store(
     request: Request,
-    full_name: str = Form(...),
+    name: str = Form(""),
     email: str = Form(""),
     phone: str = Form(""),
-    prayer_request: str = Form(...),
+    request_text: str = Form("", alias="request"),
+    anonymous: str = Form(""),
+    notify_me: str = Form(""),
+    branch_id: str = Form(""),
+    # Older clients/tests used these names; the public form sends name / request / anonymous.
+    full_name: str = Form(""),
+    prayer_request: str = Form(""),
     is_public: bool = Form(False),
+    website: str = Form(""),                     # honeypot
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.prayer_request import PrayerRequest
 
-    if not full_name.strip() or not prayer_request.strip():
+    if website.strip():
+        return _redirect(request, "/prayer/thanks")
+    if _rate_limited(request, "prayer"):
+        return _redirect(request, "/prayer", "You have sent several requests in a short time. Please wait a few minutes and try again.", "error")
+    text = (request_text or prayer_request or "").strip()
+    who = (name or full_name or "").strip()
+    hide_name = anonymous.lower() in ("1", "true", "on", "yes")
+    if not text or (not who and not hide_name):
         return _redirect(
-            request, "/prayer", "Please fill in all required fields.", "error"
+            request, "/prayer", "Please write your request and your name (or tick anonymous).", "error"
         )
+    if len(text) > 5000:
+        return _redirect(request, "/prayer", "Please keep your request under 5,000 characters.", "error")
 
     req = PrayerRequest(
-        full_name=full_name.strip(),
-        email=email.strip() if email else None,
-        phone=phone.strip() if phone else None,
-        prayer_request=prayer_request.strip(),
+        full_name=("Anonymous" if hide_name or not who else who)[:255],
+        email=email.strip()[:255] if email else None,
+        phone=phone.strip()[:50] if phone else None,
+        prayer_request=text,
         is_public=is_public,
-        status="pending",
+        notify_me=notify_me.lower() in ("1", "true", "on", "yes") and bool(email.strip() or phone.strip()),
+        status="new",
+        branch_id=await _pick_branch_id(db, branch_id),
     )
     db.add(req)
     await db.flush()
 
-    return _redirect(
-        request,
-        "/prayer",
-        "Your prayer request has been submitted. We are standing with you in prayer!",
-    )
+    from app.core import mailer
+    from app.core.settings_cache import get_settings
+    from app.core.site_content import DEFAULT_PRAYER_RESPONSE
+
+    site = await get_settings(db)
+    response = (site.get("prayerResponseTime") or "").strip() or DEFAULT_PRAYER_RESPONSE
+    base = _public_base_url(request)
+    emailed = bool(req.email and mailer.valid_email(req.email))
+    if emailed:
+        who = req.full_name.split()[0] if req.full_name and req.full_name != "Anonymous" else "friend"
+        mailer.fire(mailer.send_notice(
+            req.email, "We have received your prayer request", base_url=base, kind="prayer", heading="We are standing with you",
+            paragraphs=[f"Dear {who}, your prayer request has reached our prayer team. Thank you for trusting us with it.",
+                        f"We pray over every request within {response}." + (" You asked us to let you know, and we will write again when it has been lifted up in prayer." if req.notify_me else ""),
+                        "Your request is never published, and only the prayer team of the branch you chose can see it."],
+            footnote="If this is urgent or you need to speak to someone, please reply or call us. In an emergency, contact the emergency services first."))
+    mailer.fire(mailer.notify_staff(req.branch_id, "A prayer request is waiting", base_url=base, kind="staff", heading="A prayer request is waiting",
+                                    paragraphs=["Someone has sent a prayer request through the website. For their privacy the request is not included in this email — please sign in to read it."],
+                                    link_path="/admin/prayer-requests"))
+    request.session["prayer_thanks"] = {"notify": req.notify_me, "email": req.email if emailed else "", "emailed": emailed,
+                                        "branch": None}
+    try:
+        from app.models.branch import Branch
+
+        b = (await db.execute(select(Branch).where(Branch.id == req.branch_id))).scalar_one_or_none()
+        request.session["prayer_thanks"]["branch"] = b.name if b and not b.is_hq else None
+    except Exception:
+        pass
+    return _redirect(request, "/prayer/thanks")
 
 
 @router.get("/watch", name="watch")
@@ -1238,34 +1643,31 @@ async def newsletter_subscribe(
     ref_parsed = urlparse(ref)
     if ref_parsed.netloc and ref_parsed.netloc != request.url.netloc:
         ref = "/"
+    if _rate_limited(request, "newsletter", limit=10):
+        return _redirect(request, ref, "Too many attempts. Please try again in a few minutes.", "error")
 
-    if not email.strip():
+    import re as _re
+
+    if not _re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email.strip()) or len(email.strip()) > 255:
         return _redirect(request, ref, "Please enter a valid email address.", "error")
 
     email_lower = email.strip().lower()
 
-    result = await db.execute(
-        select(NewsletterSubscriber).where(NewsletterSubscriber.email == email_lower)
-    )
-    existing = result.scalar_one_or_none()
+    from app.core import mailer
+    from app.routes.public_extra import subscribe_email
 
-    if existing:
-        if existing.is_active:
-            return _redirect(request, ref, "You are already subscribed!", "info")
-        existing.is_active = True
-        existing.unsubscribed_at = None
-        await db.flush()
-        return _redirect(
-            request, ref, "Welcome back! Your subscription has been reactivated."
-        )
-
-    subscriber = NewsletterSubscriber(
-        email=email_lower,
-        is_active=True,
-    )
-    db.add(subscriber)
-    await db.flush()
-
+    existing = (await db.execute(select(NewsletterSubscriber).where(NewsletterSubscriber.email == email_lower))).scalar_one_or_none()
+    if existing and existing.is_active:
+        return _redirect(request, ref, "You are already subscribed!", "info")
+    was_back = existing is not None
+    await subscribe_email(db, email_lower, "footer")
+    row = (await db.execute(select(NewsletterSubscriber).where(NewsletterSubscriber.email == email_lower))).scalar_one()
+    base = _public_base_url(request)
+    mailer.fire(mailer.send_notice(
+        email_lower, "You are subscribed", base_url=base, kind="welcome", heading="Welcome — you are on the list",
+        paragraphs=["Thank you for subscribing. We will send you new messages, event notices and the occasional devotional — never spam, and never more than we should.",
+                    "Every email has an unsubscribe link, and you can use the one below at any time."],
+        button=("Listen to the latest message", f"{base}/messages"), unsubscribe_url=f"{base}/unsubscribe/{row.token}"))
     return _redirect(
-        request, ref, "Thank you for subscribing! You will receive updates from us."
+        request, ref, "Welcome back! Your subscription has been reactivated." if was_back else "Thank you for subscribing! A welcome email is on its way.",
     )

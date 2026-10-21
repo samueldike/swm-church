@@ -1,0 +1,40 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, textarea, checkbox, file_field with context %}
+{% block title %}{{ 'Edit Slider' if slider else 'New Slider' }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ 'Edit Slider' if slider else 'New Slider' }}{% endblock %}
+{% block topbar_subtitle %}Sliders{% endblock %}
+{% block topbar_icon %}ri-slideshow-3-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header('Edit slider' if slider else 'New slider', 'Hero image shown on the public homepage',
+      actions='<a href="' ~ url_for('admin_sliders') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All sliders</a>') }}
+{% endblock %}
+
+{% block content %}
+<div class="panel max-w-3xl">
+  <form method="POST" action="{{ url_for('admin_sliders_update', slider_id=slider.id) if slider else url_for('admin_sliders_store') }}"
+        enctype="multipart/form-data" class="flex flex-col gap-4" data-turbo="false">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% if slider %}
+      <div class="aspect-video max-w-sm rounded-md overflow-hidden bg-sunken border border-line">
+        <img src="{{ url_for('static', path=slider.image_path) }}" alt="Current slider image" class="w-full h-full object-cover">
+      </div>
+    {% endif %}
+    {{ file_field('Replace image' if slider else 'Hero image', 'image', hint='JPG, PNG, WebP or GIF · up to 5 MB · 1920×1080 recommended', accept='image/*', required=not slider) }}
+    <div class="grid grid-cols-1 sm:grid-cols-[1fr_140px] gap-4">
+      {{ field('Title', 'title', value=slider.title or '' if slider else '') }}
+      {{ field('Sort order', 'sort_order', value=slider.sort_order if slider else 0, type='number', mono=True) }}
+    </div>
+    {{ textarea('Description', 'description', value=slider.description or '' if slider else '', rows=3) }}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {{ field('Button label', 'cta_label', value=slider.cta_label or '' if slider else '', placeholder='e.g. Plan a visit') }}
+      {{ field('Button link', 'cta_url', value=slider.cta_url or '' if slider else '', placeholder='/calendar', mono=True) }}
+    </div>
+    {{ checkbox('Active on homepage', 'is_active', checked=(slider.is_active if slider else True)) }}
+    <div class="flex items-center gap-2.5 pt-4 border-t border-line">
+      <button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>{{ 'Save changes' if slider else 'Publish slider' }}</button>
+      <a href="{{ url_for('admin_sliders') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, textarea with context %}
+{% block title %}Add Inquiry | {{ siteName }}{% endblock %}
+{% block topbar_title %}Add Inquiry{% endblock %}
+{% block topbar_subtitle %}Inquiries{% endblock %}
+{% block topbar_icon %}ri-question-answer-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header('Add inquiry', 'Log a phone call or walk-in inquiry manually',
+      actions='<a href="' ~ url_for('admin_inquiries') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All inquiries</a>') }}
+{% endblock %}
+
+{% block content %}
+<div class="panel max-w-3xl">
+  <form method="POST" action="{{ url_for('admin_inquiries_store') }}" class="flex flex-col gap-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {{ field('Sender name', 'name', required=True) }}
+      {{ field('Sender email', 'email', type='email', mono=True, required=True) }}
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {{ field('Phone number', 'phone', mono=True) }}
+      <div>
+        <label for="status" class="field-label">Status</label>
+        <select id="status" name="status" class="field-select">
+          {% for v, l in [('new', 'New'), ('in_progress', 'In progress'), ('resolved', 'Resolved')] %}<option value="{{ v }}">{{ l }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    {% if is_super %}
+      <div>
+        <label for="branch_id" class="field-label">Branch<span class="text-bad ml-0.5">*</span></label>
+        <select id="branch_id" name="branch_id" class="field-select" required>
+          <option value="">Select branch</option>
+          {% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
+        </select>
+      </div>
+    {% endif %}
+    {{ field('Subject', 'subject', required=True) }}
+    {{ textarea('Message', 'message', rows=5, required=True) }}
+    <div class="flex items-center gap-2.5 pt-4 border-t border-line">
+      <button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>Save inquiry</button>
+      <a href="{{ url_for('admin_inquiries') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

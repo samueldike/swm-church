@@ -13,7 +13,7 @@
 <body class="home-page">
 {% include "partials/theme-header.html" %}
 
-<main>
+<main id="main" tabindex="-1">
 
 {# ═══ 01 · HERO ═══════════════════════════════════════════════════════════ #}
 <section class="frame frame-hero" id="f-hero" data-frame style="padding-block:0;">
@@ -43,7 +43,7 @@
         </p>
 
         <div class="flex flex-wrap items-center gap-3 fade" style="--d:580ms;margin-top:2rem;">
-            <a href="{{ url_for('contact') }}" class="btn btn-gold">Plan your visit</a>
+            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan your visit</a>
             <a href="{{ url_for('messages') }}" class="btn btn-ghost">Listen to messages</a>
         </div>
 
@@ -64,6 +64,30 @@
         <i></i>
     </div>
 </section>
+
+{% if program_flyers %}
+<section class="frame program-flyers-frame" id="f-program-flyers" data-frame>
+    <div class="shell">
+        <div class="program-flyers">
+            {% for flyer in program_flyers %}
+            <button type="button" class="program-flyer-card fade" style="--d:{{ 120 + loop.index0 * 80 }}ms"
+                    data-flyer-open data-src="{{ flyer.src }}" data-title="{{ flyer.title or 'Upcoming program flyer' }}"
+                    aria-label="Open {{ flyer.title or 'program flyer' }}">
+                <img src="{{ flyer.src }}" alt="{{ flyer.title or 'Upcoming program flyer' }}" loading="lazy" decoding="async"/>
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<div class="flyer-lightbox" data-flyer-lightbox hidden aria-hidden="true">
+    <button type="button" class="flyer-lightbox__backdrop" data-flyer-close aria-label="Close flyer"></button>
+    <div class="flyer-lightbox__panel" role="dialog" aria-modal="true" aria-label="Program flyer preview">
+        <button type="button" class="flyer-lightbox__close" data-flyer-close aria-label="Close flyer">&times;</button>
+        <img src="" alt="" data-flyer-image/>
+    </div>
+</div>
+{% endif %}
 
 {# ═══ 02 · WHO WE ARE — the anchor scripture ══════════════════════════════ #}
 <section class="frame has-crest" id="f-anchor" data-frame style="background:var(--ink);">
@@ -200,22 +224,13 @@
             </div>
             <a href="{{ url_for('calendar') }}" class="lnk fade" style="--d:180ms">Full calendar</a>
         </div>
-
-        {% set services = [
-            ('Sunday',      'First Service',       '7:00 — 9:30 am',  true),
-            ('Sunday',      'Second Service',      '9:30 am — 12:00 pm', true),
-            ('Monday',      'Prayers',             '4:40 — 6:00 pm',  false),
-            ('Wednesday',   'Midweek Bible Study', '5:00 pm',         false),
-            ('Saturday',    'Preservice Prayer',   '5:00 — 6:00 pm',  false),
-            ('Last Friday', 'Monthly Vigil',       'from 9:00 pm',    false)
-        ] %}
         <table class="sched fade" style="--d:240ms;margin-top:2rem;">
             <tbody>
-            {% for day, name, time, lead in services %}
-            <tr class="{{ 'lead' if lead else '' }}">
-                <td class="s-day mono">{{ day }}</td>
-                <td class="s-name t-h3">{{ name }}</td>
-                <td class="s-time mono">{{ time }}</td>
+            {% for svc in services %}
+            <tr class="{{ 'lead' if svc.lead else '' }}">
+                <td class="s-day mono">{{ svc.day }}</td>
+                <td class="s-name t-h3">{{ svc.name }}</td>
+                <td class="s-time mono">{{ svc.time }}</td>
             </tr>
             {% endfor %}
             </tbody>
@@ -290,7 +305,12 @@
 
     {% if gallery %}
     {% set half = (gallery|length / 2)|round(0, 'ceil')|int %}
-    <div class="belts fade" style="--d:240ms">
+    <div class="shell" style="margin-top:1.4rem;">
+        <button type="button" class="btn btn-ghost btn-sm" id="belt-toggle" aria-pressed="false" aria-controls="belts">
+            <span class="material-symbols-outlined" style="font-size:16px" aria-hidden="true">pause</span><span id="belt-toggle-label">Pause moving photos</span>
+        </button>
+    </div>
+    <div class="belts fade" id="belts" style="--d:240ms">
         <div class="belt" data-belt>
             <div class="belt-track" data-marquee style="--dur:{{ 52 }}s;">
                 {% for pass in [1, 2] %}
@@ -490,22 +510,21 @@
             </div>
             <p class="t-sm fade" style="--d:180ms;text-align:right;">
                 {{ branches|length if branches else 1 }} location{{ 's' if branches and branches|length != 1 else '' }}
+                &middot; <a class="lnk-inline" href="{{ url_for('branches') }}">Find a branch</a>
             </p>
         </div>
 
         <div class="branch-rail no-scrollbar fade" style="--d:240ms">
             {% for branch in branches %}
             <article class="branch">
-                <p class="mono {{ 'gold' if loop.first else 'faint' }}">{{ 'Headquarters' if loop.first else 'Branch' }}</p>
+                <p class="mono {{ 'gold' if branch.is_hq else 'faint' }}">{{ 'Headquarters' if branch.is_hq else 'Branch' }}</p>
                 <h3 class="t-h3" style="margin-top:0.7rem;">{{ branch.name }}</h3>
-                <p class="t-sm" style="margin-top:0.5rem;">
-                    {{ branch.address or 'Address not available' }}{% if branch.city %}, {{ branch.city }}{% endif %}
-                </p>
+                <p class="t-sm" style="margin-top:0.5rem;">{{ branch.address or branch.place or 'Address not available' }}</p>
                 {% if branch.phone %}<p class="mono faint" style="margin-top:0.5rem;">{{ branch.phone }}</p>{% endif %}
-                {% if branch.address %}
-                <a class="lnk" style="margin-top:0.9rem;" target="_blank" rel="noopener"
-                   href="https://www.google.com/maps/search/?api=1&query={{ (branch.address ~ ' ' ~ (branch.city or '') ~ ' ' ~ (branch.state or '') ~ ' ' ~ (branch.country or ''))|urlencode }}">Directions</a>
+                {% if branch.directions %}
+                <a class="lnk" style="margin-top:0.9rem;" target="_blank" rel="noopener" href="{{ branch.directions }}">Directions<span class="sr-only"> (opens in a new tab)</span></a>
                 {% endif %}
+                {% if not branch.is_hq %}<a class="lnk" style="margin-top:0.5rem;" href="{{ url_for('branch_detail', slug=branch.slug) }}">Service times</a>{% endif %}
             </article>
             {% else %}
             <article class="branch">
@@ -585,12 +604,22 @@
             (socialTelegram,  'Telegram')
         ] %}
         <div class="foot fade" style="--d:460ms">
+            <form class="foot-news" method="POST" action="{{ url_for('newsletter_subscribe') }}" style="display:flex;flex-wrap:wrap;align-items:center;gap:0.7rem 1rem;margin-bottom:1.6rem;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <label class="mono gold" for="foot-news-email">Newsletter</label>
+                <input id="foot-news-email" type="email" name="email" required autocomplete="email" placeholder="Your email address" aria-label="Email address for the newsletter" style="flex:1 1 16rem;max-width:24rem;min-width:0;"/>
+                <button type="submit" class="btn btn-gold">Subscribe</button>
+            </form>
             <div class="foot-in">
                 <span class="t-sm">© {{ now().year }} {{ siteName }}</span>
                 <nav class="foot-links t-sm">
                     {% for href, label in socials %}{% if href %}
-                    <a href="{{ href }}" target="_blank" rel="noopener">{{ label }}</a>
+                    <a href="{{ href }}" target="_blank" rel="noopener">{{ label }}<span class="sr-only"> (opens in a new tab)</span></a>
                     {% endif %}{% endfor %}
+                    {% if whatsappChat %}<a href="{{ whatsappChat }}" target="_blank" rel="noopener">WhatsApp<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
+                    {% if whatsappChannel %}<a href="{{ whatsappChannel }}" target="_blank" rel="noopener">WhatsApp channel<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
+                    {% if telegramJoin and telegramJoin != socialTelegram %}<a href="{{ telegramJoin }}" target="_blank" rel="noopener">Join on Telegram<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
+                    <a href="{{ url_for('branches') }}">Branches</a>
                     <a href="{{ url_for('privacy_policy') }}">Privacy</a>
                     <a href="{{ url_for('terms_of_service') }}">Terms</a>
                 </nav>
@@ -601,6 +630,7 @@
 
 </main>
 
+{% include "partials/public-flash.html" %}
 {# ═══ LIGHTBOX ════════════════════════════════════════════════════════════ #}
 <div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Photo viewer" hidden>
     <button class="lb-close" id="lb-close" aria-label="Close photo viewer">

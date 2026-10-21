@@ -24,3 +24,5 @@ itsdangerous
 pymysql
 bcrypt==4.0.1
 Pillow==10.4.0
+python-docx
+reportlab

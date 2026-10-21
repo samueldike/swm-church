@@ -49,13 +49,16 @@ async def verify_paystack(reference: str, secret_key: str = "") -> dict:
             headers={"Authorization": f"Bearer {secret_key}"},
         )
     if response.status_code != 200:
-        return {"success": False}
+        return {"success": False, "state": "error"}
     data = response.json()
     if not data.get("status"):
-        return {"success": False}
+        return {"success": False, "state": "error"}
     tx = data.get("data", {})
+    raw = tx.get("status")
     return {
-        "success": tx.get("status") == "success",
+        "success": raw == "success",
+        # "pending" = the customer has not finished paying yet (do not brand it failed)
+        "state": "paid" if raw == "success" else ("pending" if raw in ("abandoned", "pending", "ongoing", "processing", "queued") else "failed"),
         "amount_kobo": tx.get("amount", 0),
         "currency": tx.get("currency", "NGN"),
         "email": tx.get("customer", {}).get("email", ""),
@@ -65,7 +68,7 @@ async def verify_paystack(reference: str, secret_key: str = "") -> dict:
 async def verify_flutterwave(transaction_id: str, tx_ref: str, secret_key: str = "") -> dict:
     """Verify a Flutterwave transaction. Returns a dict with 'success' bool and 'amount' float."""
     if not transaction_id:
-        return {"success": False}
+        return {"success": False, "state": "pending"}
     url = f"https://api.flutterwave.com/v3/transactions/{transaction_id}/verify"
     async with httpx.AsyncClient(timeout=30) as client:
         response = await client.get(
@@ -73,13 +76,16 @@ async def verify_flutterwave(transaction_id: str, tx_ref: str, secret_key: str =
             headers={"Authorization": f"Bearer {secret_key}"},
         )
     if response.status_code != 200:
-        return {"success": False}
+        return {"success": False, "state": "error"}
     data = response.json()
     if data.get("status") != "success":
-        return {"success": False}
+        return {"success": False, "state": "error"}
     tx = data.get("data", {})
+    raw = tx.get("status")
+    ok = raw == "successful" and tx.get("tx_ref") == tx_ref
     return {
-        "success": tx.get("status") == "successful" and tx.get("tx_ref") == tx_ref,
+        "success": ok,
+        "state": "paid" if ok else ("pending" if raw in ("pending", "processing", "new") else "failed"),
         "amount": float(tx.get("amount", 0)),
         "currency": tx.get("currency", "NGN"),
         "email": tx.get("customer", {}).get("email", ""),

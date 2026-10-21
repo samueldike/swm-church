@@ -1,0 +1,52 @@
+{% set pageKey = 'prayer' %}
+{% set pageEyebrow = 'Prayer' %}
+{% set pageTitle = 'We are standing with you.' %}
+{% set pageLede = 'Your request has reached the prayer team. You do not have to carry this alone.' %}
+{% include "partials/theme-page-open.html" %}
+
+<section class="band band-light">
+    <div class="shell pt-split">
+        <div>
+            <p class="mono eyebrow"><span class="rule"></span>What happens next</p>
+            <ul class="rows" style="margin-top:1.6rem;">
+                <li class="row"><span class="row-in"><span class="mono faint row-i">01</span><span class="row-main"><span class="t-h3">It is read by people, not a system</span><span class="t-sm row-sub">Your request goes to the prayer team of the branch you chose{% if done.branch %} ({{ done.branch }}){% endif %}. It is never published, and only that team can see it.</span></span></span></li>
+                <li class="row"><span class="row-in"><span class="mono faint row-i">02</span><span class="row-main"><span class="t-h3">What to expect from us</span><span class="t-sm row-sub">
+                    {% if done.notify %}You asked us to let you know: you can expect to hear from us within {{ prayerResponse }}, by {{ 'email' if done.email else 'the contact details you gave' }}.
+                    {% else %}We pray over every request within {{ prayerResponse }}. You did not ask for a reply, so we will not contact you — but you are welcome to write to us any time.{% endif %}</span></span></span></li>
+                <li class="row"><span class="row-in"><span class="mono faint row-i">03</span><span class="row-main"><span class="t-h3">Someone to speak to</span><span class="t-sm row-sub">If this is urgent or you need to talk to a pastor in confidence, please reach out directly below. In an emergency, contact the emergency services first.</span></span></span></li>
+            </ul>
+            {% if done.emailed %}<p class="t-sm" style="margin-top:1.4rem;">A confirmation has been sent to {{ done.email }}.</p>{% endif %}
+            <div class="flex flex-wrap items-center gap-3" style="margin-top:2rem;">
+                <a href="{{ url_for('prayer') }}" class="btn btn-ghost">Send another request</a>
+                <a href="{{ url_for('messages') }}" class="btn btn-ghost">Listen to a message</a>
+                <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan your visit</a>
+            </div>
+        </div>
+        <aside>
+            {% if counsellingPhone %}
+            <div class="note">
+                <p class="t-h3">Speak to a pastor</p>
+                <a class="counsel-tel" href="tel:{{ counsellingPhone|replace(' ', '') }}"><span class="material-symbols-outlined" style="font-size:19px" aria-hidden="true">call</span>{{ counsellingPhone }}</a>
+                {% if counsellingHours %}<p class="mono faint" style="margin-top:0.6rem;">{{ counsellingHours }}</p>{% endif %}
+            </div>
+            {% endif %}
+            {% if whatsappChat %}
+            <div class="note" style="margin-top:1.6rem;">
+                <p class="t-h3">Message us on WhatsApp</p>
+                <a class="lnk" style="margin-top:0.7rem;" href="{{ whatsappChat }}" target="_blank" rel="noopener">Open WhatsApp<span class="sr-only"> (opens in a new tab)</span></a>
+            </div>
+            {% endif %}
+            <div class="note" style="margin-top:1.6rem;">
+                <p class="t-h3">Job 14 : 7-9</p>
+                <p class="t-sm" style="margin-top:0.5rem;">“There is hope for a tree, if it is cut down, that it will sprout again… yet at the scent of water it will bud.”</p>
+            </div>
+        </aside>
+    </div>
+</section>
+
+<style>
+    .pt-split { display: grid; gap: clamp(2.2rem, 5vw, 4.5rem); grid-template-columns: 1fr; align-items: start; }
+    @media (min-width: 940px) { .pt-split { grid-template-columns: 1.35fr 0.65fr; } }
+</style>
+
+{% include "partials/theme-page-close.html" %}

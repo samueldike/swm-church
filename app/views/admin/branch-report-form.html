@@ -1,0 +1,66 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, textarea with context %}
+{% set editing = report is not none %}
+{% block title %}{{ 'Edit' if editing else 'New' }} branch report | {{ siteName }}{% endblock %}
+{% block topbar_title %}Branch report{% endblock %}
+{% block topbar_subtitle %}{{ month|month_label }}{% endblock %}
+{% block topbar_icon %}ri-file-list-3-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header(('Edit' if editing else 'New') ~ ' report — ' ~ (month|month_label), "Your report to HQ for the month. HQ cannot see a draft until you submit it.",
+      actions='<a href="' ~ url_for('admin_branch_reports') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All reports</a>') }}
+{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('admin_branch_reports_update', report_id=report.id) if editing else url_for('admin_branch_reports_store') }}" class="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 items-start max-w-6xl">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="report_month" value="{{ month }}">
+
+  <div class="flex flex-col gap-4">
+    <section class="panel flex flex-col gap-4">
+      <h2 class="text-[14px] font-semibold text-ink">Summary <span class="text-bad">*</span></h2>
+      {{ textarea('How did the month go?', 'summary', value=report.summary if editing else '', rows=6, required=True, hint='A short overview for HQ: the tone of the month, what stood out.') }}
+    </section>
+
+    <section class="panel flex flex-col gap-4">
+      <h2 class="text-[14px] font-semibold text-ink">Numbers</h2>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+        {% for key, label in metrics_def %}
+          {{ field(label, key, value=((report.metrics or {}).get(key) if editing else '') or '', type='number', mono=True, id='m-' ~ key) }}
+        {% endfor %}
+      </div>
+      {{ textarea('Giving and finances', 'finance_note', value=(report.finance_note or '') if editing else '', rows=3, hint='Offerings, tithes, remittance to HQ, notable expenses. Amounts you actually recorded are on the Donations page.') }}
+    </section>
+
+    <section class="panel flex flex-col gap-4">
+      <h2 class="text-[14px] font-semibold text-ink">Highlights, challenges and requests</h2>
+      {{ textarea('Highlights', 'highlights', value=(report.highlights or '') if editing else '', rows=4) }}
+      {{ textarea('Challenges', 'challenges', value=(report.challenges or '') if editing else '', rows=4) }}
+      {{ textarea('Requests to HQ', 'requests_to_hq', value=(report.requests_to_hq or '') if editing else '', rows=3, hint='Anything you need HQ to decide, send, approve or pray about.') }}
+      {{ textarea('Projections for next month', 'projections', value=(report.projections or '') if editing else '', rows=3) }}
+    </section>
+
+    <div class="flex flex-wrap items-center gap-2.5">
+      <button type="submit" name="submit_now" value="1" class="btn btn-primary"><i class="ri-send-plane-line"></i>Submit to HQ</button>
+      <button type="submit" class="btn btn-secondary"><i class="ri-save-line"></i>Save draft</button>
+    </div>
+  </div>
+
+  <aside class="panel">
+    <h2 class="text-[14px] font-semibold text-ink mb-2">Your departments this month</h2>
+    <p class="text-[12px] text-ink-3 mb-3">Department heads report to you. HQ will only see how many have reported, not what they wrote.</p>
+    {% if rollup.expected %}
+      <p class="font-mono text-[22px] font-semibold text-ink">{{ rollup.submitted }} <span class="text-ink-3 text-[14px]">of {{ rollup.expected }}</span></p>
+      {% if rollup.missing %}
+        <p class="mt-3 text-[11.5px] font-semibold text-warn">Still to report</p>
+        <ul class="mt-1 text-[12px] text-ink-2 list-disc pl-4">{% for n in rollup.missing %}<li>{{ n }}</li>{% endfor %}</ul>
+      {% else %}
+        <p class="mt-2 text-[12px] text-ok"><i class="ri-checkbox-circle-line"></i> Every department has reported.</p>
+      {% endif %}
+    {% else %}
+      <p class="text-[12.5px] text-ink-3">No department heads are set up for your branch yet.</p>
+    {% endif %}
+    <a href="{{ url_for('admin_unit_reports') }}" class="btn btn-secondary btn-sm w-full mt-4"><i class="ri-file-chart-line"></i>Read department reports</a>
+  </aside>
+</form>
+{% endblock %}

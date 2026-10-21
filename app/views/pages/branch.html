@@ -1,0 +1,62 @@
+{% set pageKey = 'branches' %}
+{% set pageEyebrow = 'Branch' %}
+{% set pageTitle = b.name %}
+{% set pageLede = b.place or b.address %}
+{% set metaTitle = b.name %}
+{% set metaDescription = pageMetaDescription %}
+{% include "partials/theme-page-open.html" %}
+
+<section class="band band-light">
+    <div class="shell br-split">
+        <div>
+            {% if b.about %}
+            <p class="mono eyebrow"><span class="rule"></span>About this branch</p>
+            <p class="t-body" style="margin-top:1rem;max-width:62ch;white-space:pre-line;">{{ b.about }}</p>
+            {% endif %}
+
+            <p class="mono eyebrow" style="margin-top:{{ '2.6rem' if b.about else '0' }};"><span class="rule"></span>When we gather</p>
+            {% if b.services %}
+            <ul class="rows" style="margin-top:1.4rem;">
+                {% for line in b.services %}
+                <li class="row"><span class="row-in"><span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span><span class="row-main"><span class="t-h3">{{ line }}</span></span></span></li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="t-body" style="margin-top:1rem;">Please contact the branch for its service times.</p>
+            {% endif %}
+
+            <div class="flex flex-wrap items-center gap-3" style="margin-top:2rem;">
+                <a href="{{ url_for('visit') }}?branch={{ b.id }}#plan" class="btn btn-gold">Plan a visit here</a>
+                {% if b.directions %}<a href="{{ b.directions }}" class="btn btn-ghost" target="_blank" rel="noopener">Get directions<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
+                <a href="{{ url_for('branches') }}" class="btn btn-ghost">All branches</a>
+            </div>
+        </div>
+
+        <aside>
+            {% if b.address %}<div class="note"><p class="t-h3">Address</p><p class="t-sm" style="margin-top:0.5rem;">{{ b.address }}</p></div>{% endif %}
+            {% if b.pastor %}<div class="note" style="margin-top:1.6rem;"><p class="t-h3">Pastor</p><p class="t-sm" style="margin-top:0.5rem;">{{ b.pastor }}</p></div>{% endif %}
+            {% if b.phone or b.email or b.whatsapp %}
+            <div class="note" style="margin-top:1.6rem;">
+                <p class="t-h3">Contact</p>
+                <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:0.7rem;font-size:0.9rem;">
+                    {% if b.phone %}<a class="lnk-inline" href="tel:{{ b.phone|replace(' ', '') }}">{{ b.phone }}</a>{% endif %}
+                    {% if b.whatsapp %}<a class="lnk-inline" href="{{ b.whatsapp }}" target="_blank" rel="noopener">WhatsApp<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
+                    {% if b.email %}<a class="lnk-inline" href="mailto:{{ b.email }}">{{ b.email }}</a>{% endif %}
+                </div>
+            </div>
+            {% endif %}
+            <div class="note" style="margin-top:1.6rem;">
+                <p class="t-h3">Need prayer?</p>
+                <p class="t-sm" style="margin-top:0.5rem;">Send a request and choose this branch — its prayer team will receive it.</p>
+                <a class="lnk" style="margin-top:0.8rem;" href="{{ url_for('prayer') }}">Send a prayer request</a>
+            </div>
+        </aside>
+    </div>
+</section>
+
+<style>
+    .br-split { display: grid; gap: clamp(2.2rem, 5vw, 4.5rem); grid-template-columns: 1fr; align-items: start; }
+    @media (min-width: 940px) { .br-split { grid-template-columns: 1.35fr 0.65fr; } }
+</style>
+
+{% include "partials/theme-page-close.html" %}

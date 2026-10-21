@@ -39,9 +39,14 @@ class Sermon(Base):
     )
 
     transcript: Mapped[str | None] = mapped_column(Text)
+    # Public page facets: a series the message belongs to, its main scripture, and whether the (machine-made)
+    # transcript has been reviewed and may be shown to visitors.
+    series: Mapped[str | None] = mapped_column(String(150), index=True)
+    scripture: Mapped[str | None] = mapped_column(String(150))
+    transcript_public: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     transcription_status: Mapped[str] = mapped_column(String(20), default="none")
     transcription_started_at: Mapped[datetime | None] = mapped_column()
     transcription_completed_at: Mapped[datetime | None] = mapped_column()
 
-    branch = relationship("Branch", back_populates="sermons")
-    creator = relationship("Admin", back_populates="sermons")
+    branch = relationship("Branch", back_populates="sermons", lazy="selectin")
+    creator = relationship("Admin", back_populates="sermons", lazy="selectin")

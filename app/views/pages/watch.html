@@ -1,6 +1,7 @@
 {% set pageKey = 'watch' %}
 {% set pageEyebrow = 'Watch' %}
 {% set pageTitle = 'Join the service from wherever you are.' %}
+{% set metaTitle = 'Watch online' %}
 {% set pageLede = 'If you cannot be in the room at Mile 50, be in the room online.' %}
 {% include "partials/theme-page-open.html" %}
 
@@ -68,7 +69,7 @@
     <div class="shell" style="text-align:center;">
         <h2 class="t-h2" style="max-width:24ch;margin-inline:auto;">Watching is good. Being here is better.</h2>
         <div class="flex flex-wrap items-center justify-center gap-3" style="margin-top:1.8rem;">
-            <a href="{{ url_for('contact') }}" class="btn btn-gold">Plan your visit</a>
+            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan your visit</a>
             <a href="{{ url_for('prayer') }}" class="btn btn-ghost">Request prayer</a>
         </div>
     </div>

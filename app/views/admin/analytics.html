@@ -1,0 +1,67 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, kpi, empty_state with context %}
+{% block title %}Site traffic | {{ siteName }}{% endblock %}
+{% block topbar_title %}Site traffic{% endblock %}
+{% block topbar_subtitle %}Which pages people use{% endblock %}
+{% block topbar_icon %}ri-bar-chart-2-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header("Site traffic", "Counts only — no cookies, no IP addresses, nothing that identifies a person. Bots, admin pages and visitors who send “Do Not Track” are left out.",
+      audit=[('Period', 'Last ' ~ data.days ~ ' days'), ('Since', data.since.strftime('%d %b %Y'))]) }}
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-4 max-w-6xl">
+  <nav class="flex flex-wrap gap-1.5" aria-label="Period">
+    {% for d in [7, 30, 90, 365] %}
+      <a href="{{ url_for('admin_analytics') }}?days={{ d }}" class="btn btn-sm {{ 'btn-primary' if data.days == d else 'btn-secondary' }}" {% if data.days == d %}aria-current="true"{% endif %}>{{ '1 year' if d == 365 else d ~ ' days' }}</a>
+    {% endfor %}
+  </nav>
+
+  <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+    {{ kpi('Page views', '{:,}'.format(data.views)) }}
+    {{ kpi('Daily visitors', '{:,}'.format(data.visitor_days), note='Distinct visitors per day, added up') }}
+    {{ kpi('Pages per visit', ('%.1f'|format(data.views / data.visitor_days)) if data.visitor_days else '—') }}
+  </div>
+
+  <section class="panel" aria-label="Views per day">
+    <h2 class="text-[14px] font-semibold text-ink mb-3">Views per day</h2>
+    {% if data.views %}
+      <div class="flex items-end gap-px h-40" role="img" aria-label="Bar chart of page views per day, peak {{ peak }}">
+        {% for p in data.series %}
+          <div class="flex-1 min-w-[2px] bg-gold" style="height:{{ [ (p.views / peak * 100)|round(1), 1 ]|max }}%" title="{{ p.day.strftime('%d %b') }}: {{ p.views }} views, {{ p.visitors }} visitors"></div>
+        {% endfor %}
+      </div>
+      <div class="flex justify-between font-mono text-[10.5px] text-ink-3 mt-1.5"><span>{{ data.series[0].day.strftime('%d %b') }}</span><span>{{ data.series[-1].day.strftime('%d %b') }}</span></div>
+    {% else %}
+      {{ empty_state("ri-bar-chart-2-line", "No visits recorded yet", "Counts appear here as people open the public pages. They are saved every few seconds.") }}
+    {% endif %}
+  </section>
+
+  <div class="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-4 items-start">
+    <section class="panel-flush">
+      <h2 class="text-[14px] font-semibold text-ink px-4 pt-4 pb-2">Most-used pages</h2>
+      {% if data.pages %}
+        <table class="dtable">
+          <thead><tr><th>Page</th><th class="text-right">Views</th></tr></thead>
+          <tbody>{% for path, n in data.pages %}<tr><td class="font-mono text-xs">{{ path }}</td><td class="text-right font-mono text-xs">{{ '{:,}'.format(n) }}</td></tr>{% endfor %}</tbody>
+        </table>
+      {% else %}<p class="px-4 pb-4 text-[12.5px] text-ink-3">Nothing yet.</p>{% endif %}
+    </section>
+    <div class="flex flex-col gap-4">
+      <section class="panel-flush">
+        <h2 class="text-[14px] font-semibold text-ink px-4 pt-4 pb-2">Where visitors come from</h2>
+        {% if data.referrers %}
+          <table class="dtable"><tbody>{% for name, n in data.referrers %}<tr><td class="text-[12.5px]">{{ name|capitalize if name == 'direct' else name }}</td><td class="text-right font-mono text-xs">{{ n }}</td></tr>{% endfor %}</tbody></table>
+        {% else %}<p class="px-4 pb-4 text-[12.5px] text-ink-3">Nothing yet.</p>{% endif %}
+      </section>
+      <section class="panel-flush">
+        <h2 class="text-[14px] font-semibold text-ink px-4 pt-4 pb-2">Devices</h2>
+        {% if data.devices %}
+          <table class="dtable"><tbody>{% for name, n in data.devices %}<tr><td class="text-[12.5px]">{{ name|capitalize }}</td><td class="text-right font-mono text-xs">{{ n }}</td></tr>{% endfor %}</tbody></table>
+        {% else %}<p class="px-4 pb-4 text-[12.5px] text-ink-3">Nothing yet.</p>{% endif %}
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}

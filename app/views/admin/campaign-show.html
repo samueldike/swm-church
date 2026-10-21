@@ -1,0 +1,62 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge with context %}
+{% block title %}{{ c.subject }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}Campaign{% endblock %}
+{% block topbar_subtitle %}{{ c.status|capitalize }}{% endblock %}
+{% block topbar_icon %}ri-mail-star-line{% endblock %}
+{% block extra_head %}{% if c.status == 'sending' %}<meta http-equiv="refresh" content="15">{% endif %}{% endblock %}
+
+{% block page_header %}
+  {{ page_header(c.subject, "Preview of exactly what subscribers will receive.",
+      actions='<a href="' ~ url_for('admin_campaigns') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All campaigns</a>',
+      audit=[('Status', c.status|capitalize), ('Active subscribers', active_subscribers), ('Sent', c.sent_count ~ (' / ' ~ c.total if c.total else ''))]) }}
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 max-w-6xl items-start">
+  <div class="panel-flush overflow-hidden">
+    <iframe title="Email preview" sandbox srcdoc="{{ preview_html|e }}" class="w-full border-0 bg-white" style="height:70vh;min-height:420px;"></iframe>
+  </div>
+
+  <aside class="flex flex-col gap-4">
+    {% if c.status == 'draft' %}
+      <div class="panel flex flex-col gap-3">
+        <h2 class="text-[13px] font-semibold text-ink">Before you send</h2>
+        <form method="POST" action="{{ url_for('admin_campaigns_test', campaign_id=c.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="btn btn-secondary w-full"><i class="ri-send-plane-line"></i>Send a test to me</button>
+        </form>
+        <a href="{{ url_for('admin_campaigns_edit', campaign_id=c.id) }}" class="btn btn-secondary w-full"><i class="ri-edit-line"></i>Edit</a>
+        {% if not mail_ready %}<p class="text-[12px] text-bad">Email delivery is not set up yet.</p>{% endif %}
+        <form method="POST" action="{{ url_for('admin_campaigns_send', campaign_id=c.id) }}"
+              data-confirm="Send “{{ c.subject }}” to {{ active_subscribers }} subscriber(s) now? This cannot be undone." data-confirm-title="Send campaign" data-confirm-accept="Send now">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="btn btn-primary w-full" {{ 'disabled' if not mail_ready or not active_subscribers else '' }}><i class="ri-mail-send-line"></i>Send to {{ active_subscribers }} subscriber{{ '' if active_subscribers == 1 else 's' }}</button>
+        </form>
+        <form method="POST" action="{{ url_for('admin_campaigns_delete', campaign_id=c.id) }}" data-confirm="Delete this draft?" data-confirm-title="Delete draft" data-confirm-accept="Delete">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="btn btn-secondary w-full text-bad"><i class="ri-delete-bin-line"></i>Delete draft</button>
+        </form>
+      </div>
+    {% elif c.status == 'sending' %}
+      <div class="panel flex flex-col gap-3" role="status">
+        <h2 class="text-[13px] font-semibold text-ink">Sending…</h2>
+        <p class="text-[12.5px] text-ink-2"><span class="font-mono">{{ c.sent_count }}</span> of <span class="font-mono">{{ c.total }}</span> sent{% if c.failed_count %}, <span class="text-bad">{{ c.failed_count }} failed</span>{% endif %}. This page refreshes itself.</p>
+        <form method="POST" action="{{ url_for('admin_campaigns_cancel', campaign_id=c.id) }}" data-confirm="Stop sending now?" data-confirm-title="Stop sending" data-confirm-accept="Stop">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="btn btn-secondary w-full text-bad">Stop sending</button>
+        </form>
+      </div>
+    {% else %}
+      <div class="panel flex flex-col gap-2">
+        <h2 class="text-[13px] font-semibold text-ink">{{ 'Sent' if c.status == 'sent' else 'Stopped' }}</h2>
+        <p class="text-[12.5px] text-ink-2"><span class="font-mono">{{ c.sent_count }}</span> delivered to the provider{% if c.failed_count %}, <span class="text-bad">{{ c.failed_count }} failed</span>{% endif %}{% if c.finished_at %} · {{ c.finished_at.strftime('%d %b %Y %H:%M') }}{% endif %}.</p>
+        <form method="POST" action="{{ url_for('admin_campaigns_delete', campaign_id=c.id) }}" data-confirm="Delete this campaign record?" data-confirm-title="Delete campaign" data-confirm-accept="Delete">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="btn btn-secondary w-full text-bad">Delete record</button>
+        </form>
+      </div>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="color-scheme" content="light"/>
+<title>{{ heading }} — {{ siteName }}</title>
+</head>
+<body style="margin:0;padding:0;background:#EDECE8;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1A1A1C;">
+<span style="display:none !important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;overflow:hidden;">{{ preheader }}</span>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EDECE8;padding:28px 12px;">
+<tr><td align="center">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFFFF;">
+    <tr><td style="background:#0A0A0B;padding:22px 28px;border-bottom:3px solid #B8891F;">
+      <p style="margin:0;font-size:17px;font-weight:600;letter-spacing:-0.01em;color:#F2F2F0;">{{ siteName }}</p>
+      {% if siteTagline %}<p style="margin:4px 0 0;font-size:12px;color:#C9C9CB;">{{ siteTagline }}</p>{% endif %}
+    </td></tr>
+    <tr><td style="padding:30px 28px 8px;">
+      <h1 style="margin:0 0 16px;font-size:22px;line-height:1.25;font-weight:600;letter-spacing:-0.02em;color:#0A0A0B;">{{ heading }}</h1>
+      {% for p in paragraphs %}
+      <p style="margin:0 0 14px;font-size:15px;line-height:1.65;color:#2B2B2E;">{{ p }}</p>
+      {% endfor %}
+      {% if details %}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 18px;border-top:1px solid #DDDBD5;">
+        {% for label, value in details %}
+        <tr>
+          <td style="padding:9px 0;border-bottom:1px solid #DDDBD5;font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#5C5C60;width:38%;vertical-align:top;">{{ label }}</td>
+          <td style="padding:9px 0;border-bottom:1px solid #DDDBD5;font-size:14px;color:#0A0A0B;vertical-align:top;">{{ value }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% endif %}
+      {% if button %}
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:6px 0 20px;"><tr>
+        <td style="background:#B8891F;"><a href="{{ button[1] }}" style="display:inline-block;padding:13px 26px;font-size:14px;font-weight:600;color:#0A0A0B;text-decoration:none;">{{ button[0] }}</a></td>
+      </tr></table>
+      {% endif %}
+      {% if footnote %}<p style="margin:0 0 14px;font-size:13px;line-height:1.6;color:#5C5C60;">{{ footnote }}</p>{% endif %}
+    </td></tr>
+    <tr><td style="padding:18px 28px 26px;border-top:1px solid #E6E4DF;">
+      <p style="margin:0;font-size:12px;line-height:1.7;color:#5C5C60;">
+        {{ siteName }}{% if siteAddress %}<br/>{{ siteAddress }}{% endif %}{% if sitePhone %}<br/>{{ sitePhone }}{% endif %}{% if siteEmail %}<br/>{{ siteEmail }}{% endif %}
+      </p>
+      {% if unsubscribe_url %}
+      <p style="margin:12px 0 0;font-size:12px;line-height:1.6;color:#5C5C60;">You are receiving this because you asked for updates from us. <a href="{{ unsubscribe_url }}" style="color:#5C5C60;text-decoration:underline;">Unsubscribe</a> at any time.</p>
+      {% endif %}
+    </td></tr>
+  </table>
+</td></tr>
+</table>
+</body>
+</html>

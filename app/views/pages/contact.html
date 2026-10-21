@@ -1,7 +1,8 @@
 {% set pageKey = 'contact' %}
 {% set pageEyebrow = 'Contact' %}
-{% set pageTitle = 'Plan your visit, or just say hello.' %}
-{% set pageLede = 'Whether you are coming for the first time or you need someone to talk to, this reaches a real person at Mile 50.' %}
+{% set pageTitle = 'Say hello, or ask us anything.' %}
+{% set pageLede = 'Whether you have a question or you need someone to talk to, this reaches a real person. Coming for the first time? Use Plan your visit instead.' %}
+{% set metaTitle = 'Contact us' %}
 {% include "partials/theme-page-open.html" %}
 
 <section class="band band-light">
@@ -10,15 +11,13 @@
             <p class="mono eyebrow"><span class="rule"></span>Send a message</p>
             <h2 class="t-h2" style="margin-top:1rem;max-width:18ch;">We read every one.</h2>
 
-            {% if session.get('success') %}
-            <div class="alert" role="status" style="margin-top:1.6rem;">{{ session.get('success') }}</div>
-            {% endif %}
             {% if errors %}
             <div class="alert alert-bad" role="alert" style="margin-top:1.6rem;">{{ errors | first }}</div>
             {% endif %}
 
             <form class="form-grid" method="POST" action="{{ url_for('contact_store') }}" style="margin-top:1.8rem;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
+                <div class="hp" aria-hidden="true"><label>Leave this empty<input type="text" name="website" tabindex="-1" autocomplete="off"/></label></div>
                 <label class="field"><span>Your name</span>
                     <input type="text" name="name" required value="{{ request.form.get('name', '') if request.form else '' }}" placeholder="Full name"/>
                 </label>
@@ -31,6 +30,13 @@
                 <label class="field"><span>Subject</span>
                     <input type="text" name="subject" required value="{{ request.form.get('subject', '') if request.form else '' }}" placeholder="What is this about?"/>
                 </label>
+                {% if branches and branches|length > 1 %}
+                <label class="field span-2"><span>Which branch is this for?</span>
+                    <select name="branch_id">
+                        {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if request.form.get('branch_id', '') == b.id|string else '' }}>{{ b.name }}{{ ' (Headquarters)' if b.is_hq else '' }}</option>{% endfor %}
+                    </select>
+                </label>
+                {% endif %}
                 <label class="field span-2"><span>Message</span>
                     <textarea name="message" rows="5" required placeholder="Tell us what you need.">{{ request.form.get('message', '') if request.form else '' }}</textarea>
                 </label>
@@ -46,7 +52,18 @@
             <div class="note" style="margin-top:1.4rem;">
                 <p class="t-h3">Visit us</p>
                 <p class="t-sm" style="margin-top:0.5rem;">{{ siteHeadquartersAddress or 'Mile 50, Abakaliki, Ebonyi State' }}</p>
+                <a href="{{ url_for('visit') }}" class="lnk" style="margin-top:0.8rem;">Plan your visit</a>
             </div>
+            {% if whatsappChat or whatsappChannel or telegramJoin %}
+            <div class="note" style="margin-top:1.6rem;">
+                <p class="t-h3">Chat with us</p>
+                <div style="display:flex;flex-direction:column;gap:0.55rem;margin-top:0.7rem;font-size:0.9rem;">
+                    {% if whatsappChat %}<a class="lnk-inline" href="{{ whatsappChat }}" target="_blank" rel="noopener">Message us on WhatsApp<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
+                    {% if whatsappChannel %}<a class="lnk-inline" href="{{ whatsappChannel }}" target="_blank" rel="noopener">Follow our WhatsApp channel<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
+                    {% if telegramJoin %}<a class="lnk-inline" href="{{ telegramJoin }}" target="_blank" rel="noopener">Join us on Telegram<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
+                </div>
+            </div>
+            {% endif %}
 
             {% if counsellingPhone %}
             <div class="note" style="margin-top:1.6rem;">
@@ -70,12 +87,12 @@
                 <p class="t-h3">Service times</p>
                 <table class="sched" style="margin-top:0.8rem;">
                     <tbody>
-                        <tr><td class="s-day mono">Sunday</td><td class="s-time mono">7:00 &amp; 9:30 am</td></tr>
-                        <tr><td class="s-day mono">Monday</td><td class="s-time mono">4:40 pm</td></tr>
-                        <tr><td class="s-day mono">Wednesday</td><td class="s-time mono">5:00 pm</td></tr>
+                        {% for svc in services %}{% if svc.lead or loop.index <= 4 %}
+                        <tr><td class="s-day mono">{{ svc.day }}</td><td class="s-time mono">{{ svc.time }}</td></tr>
+                        {% endif %}{% endfor %}
                     </tbody>
                 </table>
-                <a href="{{ url_for('calendar') }}" class="lnk" style="margin-top:1rem;">Full calendar</a>
+                <a href="{{ url_for('visit') }}" class="lnk" style="margin-top:1rem;">Plan your visit</a>
             </div>
         </aside>
     </div>

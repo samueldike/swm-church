@@ -1,6 +1,7 @@
 {% set pageKey = 'prayer' %}
 {% set pageEyebrow = 'Prayer' %}
 {% set pageTitle = 'Let us carry it with you.' %}
+{% set metaTitle = 'Send a prayer request' %}
 {% set pageLede = 'The Epaphras Company — our prayer team — receives every request. Nothing is too small, and nothing leaves this room.' %}
 {% include "partials/theme-page-open.html" %}
 
@@ -10,9 +11,6 @@
             <p class="mono eyebrow"><span class="rule"></span>Send a request</p>
             <h2 class="t-h2" style="margin-top:1rem;max-width:18ch;">Tell us what to pray.</h2>
 
-            {% if session.get('prayer_success') %}
-            <div class="alert" role="status" style="margin-top:1.6rem;">{{ session.get('prayer_success') }}</div>
-            {% endif %}
             {% if errors %}
             <div class="alert alert-bad" role="alert" style="margin-top:1.6rem;">
                 {% for error in errors %}<p>{{ error }}</p>{% endfor %}
@@ -21,6 +19,7 @@
 
             <form class="form-grid" method="POST" action="{{ url_for('prayer_store') }}" style="margin-top:1.8rem;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
+                <div class="hp" aria-hidden="true"><label>Leave this empty<input type="text" name="website" tabindex="-1" autocomplete="off"/></label></div>
                 <label class="field"><span>Your name</span>
                     <input type="text" name="name" placeholder="Full name"/>
                 </label>
@@ -30,12 +29,20 @@
                 <label class="field span-2"><span>Phone <span style="text-transform:none;letter-spacing:0">(optional)</span></span>
                     <input type="tel" name="phone" placeholder="+234…"/>
                 </label>
+                {% if branches and branches|length > 1 %}
+                <label class="field span-2"><span>Which branch should pray with you?</span>
+                    <select name="branch_id">
+                        {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if request.form.get('branch_id', '') == b.id|string else '' }}>{{ b.name }}{{ ' (Headquarters)' if b.is_hq else '' }}</option>{% endfor %}
+                    </select>
+                </label>
+                {% endif %}
                 <label class="field span-2"><span>Your request</span>
                     <textarea name="request" rows="6" required placeholder="Write as much or as little as you want."></textarea>
                 </label>
                 <div class="span-2" style="display:flex;flex-direction:column;gap:0.7rem;">
                     <label class="check"><input type="checkbox" name="anonymous" value="1"/> Submit this anonymously</label>
-                    <label class="check"><input type="checkbox" name="notify_me" value="1"/> Let me know when it has been prayed over</label>
+                    <label class="check"><input type="checkbox" name="notify_me" value="1"/> Email me an update when it has been prayed over (needs your email)</label>
+                    <p class="t-sm">You can expect to hear from us within {{ prayerResponse }}. We never publish your request. See our <a class="lnk-inline" href="{{ url_for('privacy_policy') }}">privacy policy</a>.</p>
                 </div>
                 <div class="span-2">
                     <button type="submit" class="btn btn-gold">Send request</button>
@@ -48,9 +55,9 @@
                 <p class="t-h3">When we pray together</p>
                 <table class="sched" style="margin-top:0.9rem;">
                     <tbody>
-                        <tr><td class="s-day mono">Monday</td><td class="s-name">Prayers</td><td class="s-time mono">4:40 pm</td></tr>
-                        <tr><td class="s-day mono">Saturday</td><td class="s-name">Preservice</td><td class="s-time mono">5:00 pm</td></tr>
-                        <tr><td class="s-day mono">Last Fri</td><td class="s-name">Vigil</td><td class="s-time mono">9:00 pm</td></tr>
+                        {% for svc in services if 'pray' in svc.name|lower or 'vigil' in svc.name|lower %}
+                        <tr><td class="s-day mono">{{ svc.day }}</td><td class="s-name">{{ svc.name }}</td><td class="s-time mono">{{ svc.time }}</td></tr>
+                        {% endfor %}
                     </tbody>
                 </table>
             </div>
@@ -80,7 +87,7 @@
     <div class="shell" style="text-align:center;">
         <h2 class="t-h2" style="max-width:24ch;margin-inline:auto;">You do not have to carry it alone.</h2>
         <div class="flex flex-wrap items-center justify-center gap-3" style="margin-top:1.8rem;">
-            <a href="{{ url_for('contact') }}" class="btn btn-gold">Plan a visit</a>
+            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan a visit</a>
             <a href="{{ url_for('get_involved') }}" class="btn btn-ghost">Join a unit</a>
         </div>
     </div>

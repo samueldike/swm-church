@@ -1,0 +1,508 @@
+{% extends "layouts/admin_base.html" %}
+{% block title %}Editor — {{ pub.title }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}Editor{% endblock %}
+{% block topbar_subtitle %}{{ pub.title }}{% endblock %}
+{% block topbar_icon %}ri-file-word-2-line{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* ── Word-like editor. Colours are fixed (not theme tokens): the paper is always white, like a printed page. ── */
+  #ed-shell { --paper-w: 210mm; --page-h: 297mm; }
+  #ed-ribbon { position: sticky; top: 0; z-index: 20; background: var(--color-surface, #fff); border-bottom: 1px solid var(--color-line, #e4e0d6); }
+  #ed-ribbon .row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 4px; padding: 6px 10px; }
+  #ed-ribbon .row + .row { border-top: 1px solid var(--color-line, #e4e0d6); }
+  #ed-ribbon .sep { width: 1px; height: 22px; background: var(--color-line-2, #d8d3c6); margin: 0 4px; }
+  .rb { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px; padding: 0 6px; border-radius: 6px; border: 1px solid transparent;
+        background: transparent; color: var(--color-ink-2, #3a3731); font-size: 16px; cursor: pointer; }
+  .rb:hover { background: var(--color-sunken, #f1eee6); }
+  .rb[aria-pressed="true"], .rb.on { background: var(--color-gold-tint, #f6ecd2); border-color: var(--color-gold, #b8891f); color: var(--color-gold-text, #7a5a10); }
+  .rb:disabled { opacity: .4; cursor: default; }
+  .rs { height: 30px; border: 1px solid var(--color-line-2, #d8d3c6); border-radius: 6px; background: var(--color-surface, #fff); color: var(--color-ink, #1a1a1a); font-size: 12.5px; padding: 0 6px; }
+  .rs.w-style { width: 118px; } .rs.w-font { width: 148px; } .rs.w-size { width: 62px; } .rs.w-sm { width: 86px; }
+  .rc { position: relative; display: inline-flex; }
+  .rc input[type=color] { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+  .rc .bar { position: absolute; left: 6px; right: 6px; bottom: 3px; height: 3px; border-radius: 2px; }
+  #ed-find { display: none; align-items: center; gap: 6px; padding: 6px 10px; border-top: 1px solid var(--color-line, #e4e0d6); flex-wrap: wrap; }
+  #ed-find.open { display: flex; }
+  #ed-find input { height: 30px; border: 1px solid var(--color-line-2, #d8d3c6); border-radius: 6px; padding: 0 8px; font-size: 12.5px; background: var(--color-surface, #fff); color: var(--color-ink, #1a1a1a); min-width: 0; width: 170px; }
+
+  #ed-desk { background: var(--color-sunken, #ebe8df); padding: 24px 12px 48px; overflow-x: auto; }
+  #ed-zoom { width: max-content; margin: 0 auto; }
+  #paper {
+    width: var(--paper-w); min-height: var(--page-h); box-sizing: border-box; padding: 25mm; margin: 0 auto;
+    background-color: #fff;
+    background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--page-h) - 1px), #d9d4c6 calc(var(--page-h) - 1px), #d9d4c6 var(--page-h));
+    box-shadow: 0 1px 3px rgba(0,0,0,.18), 0 8px 28px rgba(0,0,0,.10);
+    color: #1a1a1a; font-family: "Times New Roman", Times, serif; font-size: 12pt; line-height: 1.25; outline: none; word-wrap: break-word;
+  }
+  #paper p { margin: 0 0 8pt; }
+  #paper h1 { font-size: 22pt; font-weight: 700; margin: 0 0 12pt; line-height: 1.2; }
+  #paper h2 { font-size: 17pt; font-weight: 700; margin: 0 0 8pt; line-height: 1.2; }
+  #paper h3 { font-size: 14pt; font-weight: 700; margin: 0 0 8pt; line-height: 1.2; }
+  #paper h4 { font-size: 12pt; font-weight: 700; margin: 0 0 6pt; }
+  #paper blockquote { margin: 0 0 8pt 1cm; padding-left: 10px; border-left: 3px solid #d9d4c6; }
+  #paper ul, #paper ol { margin: 0 0 8pt; padding-left: 1.6em; }
+  #paper a { color: #0563c1; text-decoration: underline; }
+  #paper table { border-collapse: collapse; width: 100%; margin: 0 0 10pt; }
+  #paper td, #paper th { border: 1px solid #9a968b; padding: 4pt 6pt; vertical-align: top; min-width: 24px; }
+  #paper hr.pb { border: 0; border-top: 2px dashed #b8b2a2; margin: 18pt -25mm; height: 0; position: relative; overflow: visible; background: none; }
+  #paper hr.pb::after { content: "Page break"; position: absolute; left: 50%; top: -9px; transform: translateX(-50%); background: #fff; color: #8a8576; font: 600 10px/1 system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; padding: 2px 8px; }
+  #paper hr:not(.pb) { border: 0; border-top: 1px solid #9a968b; margin: 10pt 0; }
+  #paper ::selection { background: #cfe1ff; }
+  #ed-status { position: sticky; bottom: 0; z-index: 15; display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: center; padding: 6px 14px; font: 500 11px/1.4 ui-monospace, monospace;
+               background: var(--color-surface, #fff); border-top: 1px solid var(--color-line, #e4e0d6); color: var(--color-ink-3, #6b675c); }
+  #ed-save-state.dirty { color: #b45309; } #ed-save-state.ok { color: #15803d; } #ed-save-state.err { color: #b91c1c; }
+  .ed-pop { position: absolute; z-index: 30; background: var(--color-surface, #fff); border: 1px solid var(--color-line-2, #d8d3c6); border-radius: 8px; padding: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.14); display: none; }
+  .ed-pop.open { display: block; }
+  .tblgrid { display: grid; grid-template-columns: repeat(8, 18px); gap: 3px; }
+  .tblgrid span { width: 18px; height: 18px; border: 1px solid var(--color-line-2, #cfcabd); border-radius: 2px; }
+  .tblgrid span.on { background: var(--color-gold-tint, #f6ecd2); border-color: var(--color-gold, #b8891f); }
+  /* Phones and small tablets: reflow the text to the screen instead of showing a 210mm sheet you would have to pan across. */
+  @media (max-width: 900px) {
+    #ed-desk { padding: 0; background: #fff; }
+    #ed-zoom { width: auto !important; zoom: 1 !important; }
+    #paper { width: 100%; min-height: 60vh; padding: 18px 16px 48px; box-shadow: none; background-image: none; font-size: 12.5pt; }
+    #paper hr.pb { margin-left: -16px; margin-right: -16px; }
+    #ed-ribbon .row:not(:first-child) { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+    #ed-ribbon .row:not(:first-child) > * { flex-shrink: 0; }
+    #ed-zoom-label { display: none; }
+  }
+</style>
+{% endblock %}
+
+{% block page_header %}{% endblock %}
+
+{% block content %}
+<div id="ed-shell" class="-m-4 sm:-m-6"
+     data-save-url="{{ url_for('admin_pubs_editor_save', kind=kind, pub_id=pub.id) }}"
+     data-csrf="{{ csrf_token }}" data-title="{{ pub.title }}">
+
+  <div id="ed-ribbon">
+    <div class="row">
+      <a href="{{ url_for('admin_pubs_show', kind=kind, pub_id=pub.id) }}" class="btn btn-secondary btn-sm" id="ed-back"><i class="ri-arrow-left-line"></i>Project</a>
+      <span class="text-[13px] font-semibold text-ink truncate max-w-[34ch]" title="{{ pub.title }}">{{ pub.title }}</span>
+      <span id="ed-save-state" class="font-mono text-[11px] ml-1" role="status" aria-live="polite">Loaded</span>
+      <span class="flex-grow"></span>
+      <button type="button" class="btn btn-primary btn-sm" id="ed-save"><i class="ri-save-line"></i>Save</button>
+      <div class="rc" style="position:relative">
+        <button type="button" class="btn btn-secondary btn-sm" id="ed-export-btn" aria-haspopup="true"><i class="ri-download-2-line"></i>Export<i class="ri-arrow-down-s-line"></i></button>
+        <div class="ed-pop" id="ed-export-pop" style="right:0;top:34px;min-width:190px;padding:6px">
+          <a class="btn btn-ghost btn-sm w-full justify-start" data-export href="{{ url_for('admin_pubs_export', kind=kind, pub_id=pub.id, fmt='docx') }}" data-turbo="false"><i class="ri-file-word-line"></i>Word document (.docx)</a>
+          <a class="btn btn-ghost btn-sm w-full justify-start" data-export href="{{ url_for('admin_pubs_export', kind=kind, pub_id=pub.id, fmt='pdf') }}" data-turbo="false"><i class="ri-file-pdf-line"></i>PDF (.pdf)</a>
+          <button type="button" class="btn btn-ghost btn-sm w-full justify-start" id="ed-print"><i class="ri-printer-line"></i>Print / Save as PDF…</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" role="toolbar" aria-label="Formatting">
+      <button type="button" class="rb" data-cmd="undo" title="Undo (Ctrl+Z)" aria-label="Undo"><i class="ri-arrow-go-back-line"></i></button>
+      <button type="button" class="rb" data-cmd="redo" title="Redo (Ctrl+Y)" aria-label="Redo"><i class="ri-arrow-go-forward-line"></i></button>
+      <span class="sep"></span>
+      <select class="rs w-style" id="ed-block" aria-label="Paragraph style" title="Paragraph style">
+        <option value="p">Normal</option><option value="h1">Heading 1</option><option value="h2">Heading 2</option>
+        <option value="h3">Heading 3</option><option value="h4">Heading 4</option><option value="blockquote">Quote</option>
+      </select>
+      <select class="rs w-font" id="ed-font" aria-label="Font" title="Font">
+        {% for f in ['Times New Roman', 'Georgia', 'Cambria', 'Garamond', 'Arial', 'Calibri', 'Verdana', 'Tahoma', 'Trebuchet MS', 'Courier New'] %}<option value="{{ f }}" style="font-family:'{{ f }}'">{{ f }}</option>{% endfor %}
+      </select>
+      <select class="rs w-size" id="ed-size" aria-label="Font size" title="Font size (pt)">
+        {% for n in [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72] %}<option value="{{ n }}" {{ 'selected' if n == 12 else '' }}>{{ n }}</option>{% endfor %}
+      </select>
+      <span class="sep"></span>
+      <button type="button" class="rb" data-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold"><i class="ri-bold"></i></button>
+      <button type="button" class="rb" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic"><i class="ri-italic"></i></button>
+      <button type="button" class="rb" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline"><i class="ri-underline"></i></button>
+      <button type="button" class="rb" data-cmd="strikeThrough" title="Strikethrough" aria-label="Strikethrough"><i class="ri-strikethrough"></i></button>
+      <button type="button" class="rb" data-cmd="subscript" title="Subscript" aria-label="Subscript"><i class="ri-subscript"></i></button>
+      <button type="button" class="rb" data-cmd="superscript" title="Superscript" aria-label="Superscript"><i class="ri-superscript"></i></button>
+      <label class="rb rc" title="Text colour" aria-label="Text colour"><i class="ri-font-color"></i><span class="bar" id="ed-fore-bar" style="background:#1a1a1a"></span><input type="color" id="ed-fore" value="#1a1a1a"></label>
+      <label class="rb rc" title="Highlight colour" aria-label="Highlight colour"><i class="ri-mark-pen-line"></i><span class="bar" id="ed-back-bar" style="background:#fff59d"></span><input type="color" id="ed-hilite" value="#fff59d"></label>
+      <button type="button" class="rb" data-cmd="removeFormat" title="Clear formatting" aria-label="Clear formatting"><i class="ri-format-clear"></i></button>
+    </div>
+
+    <div class="row" role="toolbar" aria-label="Paragraph and insert">
+      <button type="button" class="rb" data-cmd="justifyLeft" title="Align left" aria-label="Align left"><i class="ri-align-left"></i></button>
+      <button type="button" class="rb" data-cmd="justifyCenter" title="Centre" aria-label="Centre"><i class="ri-align-center"></i></button>
+      <button type="button" class="rb" data-cmd="justifyRight" title="Align right" aria-label="Align right"><i class="ri-align-right"></i></button>
+      <button type="button" class="rb" data-cmd="justifyFull" title="Justify" aria-label="Justify"><i class="ri-align-justify"></i></button>
+      <span class="sep"></span>
+      <button type="button" class="rb" data-cmd="insertUnorderedList" title="Bullets" aria-label="Bulleted list"><i class="ri-list-unordered"></i></button>
+      <button type="button" class="rb" data-cmd="insertOrderedList" title="Numbering" aria-label="Numbered list"><i class="ri-list-ordered"></i></button>
+      <button type="button" class="rb" data-cmd="outdent" title="Decrease indent" aria-label="Decrease indent"><i class="ri-indent-decrease"></i></button>
+      <button type="button" class="rb" data-cmd="indent" title="Increase indent" aria-label="Increase indent"><i class="ri-indent-increase"></i></button>
+      <select class="rs w-sm" id="ed-spacing" aria-label="Line spacing" title="Line spacing">
+        <option value="">Spacing</option><option value="1">1.0</option><option value="1.15">1.15</option><option value="1.25">1.25</option><option value="1.5">1.5</option><option value="2">2.0</option>
+      </select>
+      <span class="sep"></span>
+      <button type="button" class="rb" id="ed-link" title="Insert link (Ctrl+K)" aria-label="Insert link"><i class="ri-link"></i></button>
+      <button type="button" class="rb" data-cmd="unlink" title="Remove link" aria-label="Remove link"><i class="ri-link-unlink"></i></button>
+      <div class="rc" style="position:relative">
+        <button type="button" class="rb" id="ed-table-btn" title="Insert table" aria-label="Insert table" aria-haspopup="true"><i class="ri-table-line"></i></button>
+        <div class="ed-pop" id="ed-table-pop" style="left:0;top:34px">
+          <div class="tblgrid" id="ed-tblgrid"></div>
+          <p class="font-mono text-[11px] text-ink-3 mt-2" id="ed-tbllabel">Choose size</p>
+        </div>
+      </div>
+      <button type="button" class="rb" data-table="row" title="Add row below" aria-label="Add table row" hidden><i class="ri-insert-row-bottom"></i></button>
+      <button type="button" class="rb" data-table="col" title="Add column right" aria-label="Add table column" hidden><i class="ri-insert-column-right"></i></button>
+      <button type="button" class="rb" data-table="del" title="Delete table" aria-label="Delete table" hidden><i class="ri-delete-bin-line"></i></button>
+      <button type="button" class="rb" id="ed-pagebreak" title="Insert page break" aria-label="Insert page break"><i class="ri-page-separator"></i></button>
+      <button type="button" class="rb" data-cmd="insertHorizontalRule" title="Horizontal line" aria-label="Horizontal line"><i class="ri-separator"></i></button>
+      <span class="sep"></span>
+      <button type="button" class="rb" id="ed-find-btn" title="Find and replace (Ctrl+H)" aria-label="Find and replace"><i class="ri-search-line"></i></button>
+      <span class="flex-grow"></span>
+      <label id="ed-zoom-label" class="text-[11.5px] text-ink-3 flex items-center gap-1.5">Zoom
+        <select class="rs w-sm" id="ed-zoom-sel" aria-label="Zoom">
+          <option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option>
+        </select>
+      </label>
+    </div>
+
+    <div id="ed-find" role="search">
+      <input id="ed-find-q" placeholder="Find" aria-label="Find">
+      <input id="ed-find-r" placeholder="Replace with" aria-label="Replace with">
+      <button type="button" class="btn btn-secondary btn-sm" id="ed-find-next">Find next</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="ed-replace">Replace</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="ed-replace-all">Replace all</button>
+      <span class="font-mono text-[11px] text-ink-3" id="ed-find-msg"></span>
+      <button type="button" class="rb" id="ed-find-close" aria-label="Close find"><i class="ri-close-line"></i></button>
+    </div>
+  </div>
+
+  <div id="ed-desk">
+    <div id="ed-zoom">
+      <div id="paper" contenteditable="true" spellcheck="true" lang="en-GB" role="textbox" aria-multiline="true" aria-label="Document">{{ pub.document_html|safe }}</div>
+    </div>
+  </div>
+
+  <div id="ed-status">
+    <span><span id="ed-words">0</span> words</span>
+    <span><span id="ed-chars">0</span> characters</span>
+    <span>≈ <span id="ed-pages">1</span> page<span id="ed-pages-s"></span></span>
+    <span class="flex-grow"></span>
+    <span>Ctrl+S saves · autosaves every 20 s</span>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+(() => {
+  window.__swmEdAbort?.abort();
+  window.__swmEdTimer && clearInterval(window.__swmEdTimer);
+  const shell = document.getElementById('ed-shell');
+  const paper = document.getElementById('paper');
+  if (!shell || !paper) return;
+  const ctl = new AbortController();
+  window.__swmEdAbort = ctl;
+  const opt = { signal: ctl.signal };
+  const $ = (id) => document.getElementById(id);
+
+  try { document.execCommand('styleWithCSS', false, true); } catch (_) {}
+  try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (_) {}
+
+  /* ── State: dirty tracking, save, autosave ── */
+  let dirty = false, saving = false;
+  const state = $('ed-save-state');
+  const setState = (text, cls) => { state.textContent = text; state.className = 'font-mono text-[11px] ml-1 ' + (cls || ''); };
+  const markDirty = () => { if (!dirty) { dirty = true; setState('Unsaved changes', 'dirty'); } };
+
+  function cleanForSave() {
+    const clone = paper.cloneNode(true);
+    clone.querySelectorAll('[style*="xxx-large"]').forEach((n) => n.style.removeProperty('font-size'));
+    clone.querySelectorAll('font').forEach((f) => { const s = document.createElement('span'); s.innerHTML = f.innerHTML; f.replaceWith(s); });
+    return clone.innerHTML;
+  }
+
+  async function save(manual) {
+    if (saving) return false;
+    if (!dirty && !manual) return true;
+    saving = true; setState('Saving…');
+    const snapshot = paper.innerHTML;
+    const html = cleanForSave();
+    try {
+      const res = await fetch(shell.dataset.saveUrl, {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': shell.dataset.csrf },
+        body: JSON.stringify({ html }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) throw new Error(j.error || 'Save failed');
+      if (paper.innerHTML === snapshot) { dirty = false; setState('Saved ' + j.saved_at, 'ok'); }
+      else setState('Saved ' + j.saved_at + ' · newer edits pending', 'dirty');
+      return true;
+    } catch (err) {
+      setState(err.message === 'Failed to fetch' ? 'Offline — not saved' : (err.message || 'Save failed'), 'err');
+      return false;
+    } finally { saving = false; }
+  }
+  $('ed-save').addEventListener('click', () => save(true), opt);
+  window.__swmEdTimer = setInterval(() => { if (dirty) save(false); }, 20000);
+  window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } }, opt);
+  document.addEventListener('turbo:before-visit', (e) => {
+    if (dirty && !confirm('You have unsaved changes in the document. Leave without saving?')) e.preventDefault();
+    else dirty = false;
+  }, opt);
+
+  /* ── Stats ── */
+  const PAGE_PX = 297 / 25.4 * 96;
+  function stats() {
+    const text = paper.innerText || '';
+    $('ed-words').textContent = (text.match(/\b[\w’'-]+\b/g) || []).length.toLocaleString();
+    $('ed-chars').textContent = text.replace(/\s/g, '').length.toLocaleString();
+    const pages = Math.max(1, Math.ceil(paper.scrollHeight / PAGE_PX));
+    $('ed-pages').textContent = pages; $('ed-pages-s').textContent = pages === 1 ? '' : 's';
+  }
+  let statTimer;
+  const changed = () => { markDirty(); clearTimeout(statTimer); statTimer = setTimeout(stats, 300); };
+  paper.addEventListener('input', changed, opt);
+  stats();
+
+  /* ── Commands ── */
+  // Toolbar selects/colour pickers can steal focus; remember the caret and put it back.
+  let savedRange = null;
+  document.addEventListener('selectionchange', () => {
+    const s = getSelection();
+    if (s.rangeCount && paper.contains(s.anchorNode)) savedRange = s.getRangeAt(0).cloneRange();
+  }, opt);
+  const focusPaper = () => {
+    if (document.activeElement !== paper) paper.focus();
+    const s = getSelection();
+    if ((!s.rangeCount || !paper.contains(s.anchorNode)) && savedRange) { s.removeAllRanges(); s.addRange(savedRange); }
+  };
+  const exec = (cmd, val) => { focusPaper(); document.execCommand(cmd, false, val ?? null); changed(); syncUI(); };
+
+  shell.addEventListener('mousedown', (e) => {
+    // keep the text selection when clicking toolbar buttons
+    if (e.target.closest('.rb:not(.rc), #ed-ribbon button:not(#ed-save)') && !e.target.closest('select, input')) e.preventDefault();
+  }, opt);
+  shell.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-cmd]');
+    if (b) exec(b.dataset.cmd);
+  }, opt);
+
+  $('ed-block').addEventListener('change', (e) => { exec('formatBlock', '<' + e.target.value + '>'); }, opt);
+  $('ed-font').addEventListener('change', (e) => { exec('fontName', e.target.value); }, opt);
+
+  function applySize(pt) {
+    focusPaper();
+    const sel = getSelection();
+    if (!sel.rangeCount) return;
+    if (sel.isCollapsed) {
+      // Word would style what you type next; here the current paragraph takes the size.
+      let n = sel.anchorNode; n = n.nodeType === 3 ? n.parentElement : n;
+      const blk = n.closest('p,h1,h2,h3,h4,li,blockquote,td,th');
+      if (blk && paper.contains(blk)) { blk.style.fontSize = pt + 'pt'; changed(); }
+      return;
+    }
+    document.execCommand('fontSize', false, '7');
+    paper.querySelectorAll('font[size="7"], [style*="xxx-large"]').forEach((el) => {
+      if (el.tagName === 'FONT') { const s = document.createElement('span'); s.style.fontSize = pt + 'pt'; s.innerHTML = el.innerHTML; el.replaceWith(s); }
+      else el.style.fontSize = pt + 'pt';
+    });
+    changed();
+  }
+  $('ed-size').addEventListener('change', (e) => applySize(e.target.value), opt);
+
+  $('ed-fore').addEventListener('input', (e) => { $('ed-fore-bar').style.background = e.target.value; exec('foreColor', e.target.value); }, opt);
+  $('ed-hilite').addEventListener('input', (e) => { $('ed-back-bar').style.background = e.target.value; exec('hiliteColor', e.target.value); }, opt);
+
+  $('ed-spacing').addEventListener('change', (e) => {
+    const v = e.target.value; if (!v) return;
+    focusPaper();
+    const sel = getSelection(); if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    const blocks = new Set();
+    paper.querySelectorAll('p,h1,h2,h3,h4,li,blockquote').forEach((b) => { if (range.intersectsNode(b)) blocks.add(b); });
+    blocks.forEach((b) => { b.style.lineHeight = v; });
+    e.target.value = ''; changed();
+  }, opt);
+
+  function insertHTML(html) { focusPaper(); document.execCommand('insertHTML', false, html); changed(); }
+
+  $('ed-link').addEventListener('click', () => {
+    const url = prompt('Link address (https://…)', 'https://');
+    if (url && /^(https?:\/\/|mailto:)/i.test(url.trim())) exec('createLink', url.trim());
+  }, opt);
+  $('ed-pagebreak').addEventListener('click', () => insertHTML('<hr class="pb"><p><br></p>'), opt);
+
+  /* ── Tables ── */
+  const grid = $('ed-tblgrid'), tpop = $('ed-table-pop');
+  for (let i = 0; i < 64; i++) { const s = document.createElement('span'); s.dataset.r = Math.floor(i / 8) + 1; s.dataset.c = (i % 8) + 1; grid.appendChild(s); }
+  grid.addEventListener('mouseover', (e) => {
+    const t = e.target.closest('span'); if (!t) return;
+    grid.querySelectorAll('span').forEach((s) => s.classList.toggle('on', +s.dataset.r <= +t.dataset.r && +s.dataset.c <= +t.dataset.c));
+    $('ed-tbllabel').textContent = `${t.dataset.r} × ${t.dataset.c}`;
+  }, opt);
+  grid.addEventListener('click', (e) => {
+    const t = e.target.closest('span'); if (!t) return;
+    let html = '<table><tbody>';
+    for (let r = 0; r < +t.dataset.r; r++) { html += '<tr>' + '<td><br></td>'.repeat(+t.dataset.c) + '</tr>'; }
+    tpop.classList.remove('open');
+    insertHTML(html + '</tbody></table><p><br></p>');
+  }, opt);
+  function placePop(pop, btn, alignRight) {
+    const r = btn.getBoundingClientRect();
+    pop.style.position = 'fixed';
+    pop.style.top = (r.bottom + 4) + 'px';
+    if (alignRight) { pop.style.left = 'auto'; pop.style.right = Math.max(8, window.innerWidth - r.right) + 'px'; }
+    else { pop.style.right = 'auto'; pop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 180)) + 'px'; }
+  }
+  $('ed-table-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    placePop(tpop, e.currentTarget, false);
+    tpop.classList.toggle('open'); $('ed-export-pop').classList.remove('open');
+  }, opt);
+
+  const curCell = () => { const n = getSelection().anchorNode; const el = n && (n.nodeType === 3 ? n.parentElement : n); return el && paper.contains(el) ? el.closest('td,th') : null; };
+  shell.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-table]'); if (!b) return;
+    const cell = curCell(); if (!cell) return;
+    const row = cell.parentElement, table = cell.closest('table');
+    if (b.dataset.table === 'row') { const nr = row.cloneNode(true); nr.querySelectorAll('td,th').forEach((c) => { c.innerHTML = '<br>'; }); row.after(nr); }
+    if (b.dataset.table === 'col') { const idx = [...row.children].indexOf(cell); table.querySelectorAll('tr').forEach((r) => { const c = document.createElement('td'); c.innerHTML = '<br>'; r.children[idx]?.after(c); }); }
+    if (b.dataset.table === 'del') table.remove();
+    changed(); syncUI();
+  }, opt);
+
+  /* ── Find & replace ── */
+  const findBar = $('ed-find');
+  const openFind = () => { findBar.classList.add('open'); $('ed-find-q').focus(); $('ed-find-q').select(); };
+  $('ed-find-btn').addEventListener('click', () => (findBar.classList.contains('open') ? findBar.classList.remove('open') : openFind()), opt);
+  $('ed-find-close').addEventListener('click', () => findBar.classList.remove('open'), opt);
+  const fmsg = (t) => { $('ed-find-msg').textContent = t; };
+  function findNext() {
+    const q = $('ed-find-q').value; if (!q) return false;
+    const found = window.find(q, false, false, true, false, false, false);
+    fmsg(found ? '' : 'Not found');
+    return found;
+  }
+  $('ed-find-next').addEventListener('click', findNext, opt);
+  $('ed-find-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); findNext(); } }, opt);
+  $('ed-replace').addEventListener('click', () => {
+    const q = $('ed-find-q').value; if (!q) return;
+    const sel = getSelection();
+    if (sel.toString().toLowerCase() !== q.toLowerCase() || !paper.contains(sel.anchorNode)) { if (!findNext()) return; }
+    document.execCommand('insertText', false, $('ed-find-r').value); changed(); findNext();
+  }, opt);
+  $('ed-replace-all').addEventListener('click', () => {
+    const q = $('ed-find-q').value, r = $('ed-find-r').value; if (!q) return;
+    const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    const walker = document.createTreeWalker(paper, NodeFilter.SHOW_TEXT);
+    let n = 0, node; const nodes = [];
+    while ((node = walker.nextNode())) nodes.push(node);
+    nodes.forEach((t) => { if (re.test(t.nodeValue)) { re.lastIndex = 0; t.nodeValue = t.nodeValue.replace(re, () => { n++; return r; }); } re.lastIndex = 0; });
+    fmsg(n ? `${n} replaced` : 'Not found'); if (n) changed();
+  }, opt);
+
+  /* ── Paste: keep structure, drop the styling junk from Word/web ── */
+  const KEEP = new Set(['P','H1','H2','H3','H4','STRONG','B','EM','I','U','S','STRIKE','SUB','SUP','UL','OL','LI','BR','A','TABLE','TBODY','THEAD','TR','TD','TH','BLOCKQUOTE']);
+  function cleanNode(node) {
+    const out = document.createDocumentFragment();
+    node.childNodes.forEach((ch) => {
+      if (ch.nodeType === 3) { out.appendChild(document.createTextNode(ch.nodeValue)); return; }
+      if (ch.nodeType !== 1) return;
+      const inner = cleanNode(ch);
+      if (KEEP.has(ch.tagName)) {
+        const el = document.createElement(ch.tagName);
+        if (ch.tagName === 'A' && /^(https?:|mailto:)/i.test(ch.getAttribute('href') || '')) el.setAttribute('href', ch.getAttribute('href'));
+        el.appendChild(inner); out.appendChild(el);
+      } else if (['DIV', 'SECTION', 'ARTICLE'].includes(ch.tagName)) {
+        const p = document.createElement('p'); p.appendChild(inner); out.appendChild(p);
+      } else if (!['SCRIPT', 'STYLE', 'META', 'LINK'].includes(ch.tagName)) {
+        out.appendChild(inner);
+      }
+    });
+    return out;
+  }
+  paper.addEventListener('paste', (e) => {
+    const cd = e.clipboardData; if (!cd) return;
+    e.preventDefault();
+    const html = cd.getData('text/html');
+    if (html && !e.shiftKey) {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const box = document.createElement('div'); box.appendChild(cleanNode(doc.body));
+      document.execCommand('insertHTML', false, box.innerHTML);
+    } else {
+      document.execCommand('insertText', false, cd.getData('text/plain'));
+    }
+    changed();
+  }, opt);
+  paper.addEventListener('drop', (e) => { if (e.dataTransfer?.files?.length) e.preventDefault(); }, opt);
+
+  /* ── Toolbar state follows the caret ── */
+  function syncUI() {
+    ['bold', 'italic', 'underline', 'strikeThrough', 'subscript', 'superscript', 'insertUnorderedList', 'insertOrderedList', 'justifyLeft', 'justifyCenter', 'justifyRight', 'justifyFull'].forEach((c) => {
+      const b = shell.querySelector(`[data-cmd="${c}"]`); if (!b) return;
+      let on = false; try { on = document.queryCommandState(c); } catch (_) {}
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    const sel = getSelection();
+    if (!sel.rangeCount || !paper.contains(sel.anchorNode)) return;
+    let el = sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode;
+    const blk = el.closest('h1,h2,h3,h4,blockquote,p,li,td,th');
+    $('ed-block').value = blk && ['H1','H2','H3','H4','BLOCKQUOTE'].includes(blk.tagName) ? blk.tagName.toLowerCase() : 'p';
+    const cs = getComputedStyle(el);
+    const fam = cs.fontFamily.split(',')[0].replace(/["']/g, '').trim();
+    const fsel = $('ed-font'); if ([...fsel.options].some((o) => o.value === fam)) fsel.value = fam;
+    const pt = Math.round(parseFloat(cs.fontSize) * 0.75);
+    const ssel = $('ed-size'); if ([...ssel.options].some((o) => +o.value === pt)) ssel.value = pt;
+    const inTable = !!el.closest('td,th');
+    shell.querySelectorAll('[data-table]').forEach((b) => { b.hidden = !inTable; });
+  }
+  document.addEventListener('selectionchange', () => { if (paper.contains(getSelection().anchorNode)) syncUI(); }, opt);
+  syncUI();
+
+  /* ── Keyboard shortcuts ── */
+  // Ctrl+S works wherever the focus is on this page (otherwise the browser offers to save the HTML).
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(true); }
+  }, opt);
+  paper.addEventListener('keydown', (e) => {
+    const mod = e.ctrlKey || e.metaKey;
+    if (!mod) { if (e.key === 'Tab') { e.preventDefault(); exec(e.shiftKey ? 'outdent' : 'indent'); } return; }
+    const k = e.key.toLowerCase();
+    if (k === 'h') { e.preventDefault(); openFind(); }
+    else if (k === 'k') { e.preventDefault(); $('ed-link').click(); }
+  }, opt);
+
+  /* ── Menus, zoom, export, print ── */
+  const epop = $('ed-export-pop');
+  $('ed-export-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    placePop(epop, e.currentTarget, true);
+    epop.classList.toggle('open'); tpop.classList.remove('open');
+  }, opt);
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#ed-export-pop, #ed-export-btn')) epop.classList.remove('open');
+    if (!e.target.closest('#ed-table-pop, #ed-table-btn')) tpop.classList.remove('open');
+  }, opt);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { epop.classList.remove('open'); tpop.classList.remove('open'); findBar.classList.remove('open'); } }, opt);
+
+  $('ed-zoom-sel').addEventListener('change', (e) => {
+    $('ed-zoom').style.zoom = e.target.value;
+  }, opt);
+
+  shell.querySelectorAll('[data-export]').forEach((a) => a.addEventListener('click', async (e) => {
+    e.preventDefault();
+    epop.classList.remove('open');
+    if (dirty && !(await save(true))) { alert('Could not save your changes, so the export was cancelled.'); return; }
+    location.href = a.href;
+  }, opt));
+
+  $('ed-print').addEventListener('click', () => {
+    epop.classList.remove('open');
+    const w = window.open('', '_blank');
+    if (!w) { alert('Allow pop-ups to print.'); return; }
+    const css = `@page{size:A4;margin:25mm}html,body{margin:0}body{font-family:"Times New Roman",Times,serif;font-size:12pt;line-height:1.25;color:#000}
+      p{margin:0 0 8pt}h1{font-size:22pt;margin:0 0 12pt}h2{font-size:17pt;margin:0 0 8pt}h3{font-size:14pt;margin:0 0 8pt}h4{font-size:12pt;margin:0 0 6pt}
+      blockquote{margin:0 0 8pt 1cm;padding-left:10px;border-left:3px solid #ccc}table{border-collapse:collapse;width:100%}td,th{border:1px solid #777;padding:4pt 6pt}
+      hr.pb{border:0;height:0;margin:0;page-break-after:always;break-after:page}hr:not(.pb){border:0;border-top:1px solid #777}a{color:#0563c1}`;
+    w.document.write(`<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><title>${shell.dataset.title.replace(/</g, '&lt;')}</title><style>${css}</style></head><body>${cleanForSave()}</body></html>`);
+    w.document.close(); w.focus();
+    setTimeout(() => { w.print(); }, 300);
+  }, opt);
+
+})();
+</script>
+{% endblock %}

@@ -17,7 +17,7 @@
 <html lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>{{ pageTitle }} — {{ siteName }}</title>
+<title>{{ metaTitle or pageTitle }} — {{ siteName }}</title>
 <link rel="icon" href="/images/swm-logo.png" type="image/png"/>
 <link rel="apple-touch-icon" href="/images/swm-logo.png"/>
 {% include "partials/theme-meta.html" %}
@@ -26,7 +26,7 @@
 <body>
 {% include "partials/theme-header.html" %}
 
-<main>
+<main id="main" tabindex="-1">
 <header class="page-hero">
     <div class="page-hero-bed" aria-hidden="true">
         <img src="{{ _hero }}" alt=""/>

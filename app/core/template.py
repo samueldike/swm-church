@@ -50,8 +50,34 @@ def _timesince(value) -> str:
     return f"{int(years)}y ago"
 
 
+def _month_label(value) -> str:
+    """'2026-09' (UnitReport.report_month is stored as text) -> 'September 2026'."""
+    if not value:
+        return ""
+    from datetime import datetime as _dt
+
+    text = str(value)[:7]
+    try:
+        return _dt.strptime(text, "%Y-%m").strftime("%B %Y")
+    except ValueError:
+        return str(value)
+
+
+def _clock(value) -> str:
+    """datetime -> "7:00 am" (no leading zero)."""
+    return value.strftime("%I:%M %p").lstrip("0").lower() if value else ""
+
+
+def _longdate(value) -> str:
+    """datetime/date -> "Sunday, 27 September 2026"."""
+    return value.strftime("%A, %d %B %Y").replace(" 0", " ") if value else ""
+
+
+_env.filters["clock"] = _clock
+_env.filters["longdate"] = _longdate
 _env.filters["nl2br"] = _nl2br
 _env.filters["timesince"] = _timesince
+_env.filters["month_label"] = _month_label
 
 
 class TemplateRequest:
@@ -107,7 +133,10 @@ async def render_template(
     ctx.setdefault("siteName", site.get("siteName", "Scent of Water Ministry"))
     ctx.setdefault("siteTagline", site.get("siteTagline", "Repositioning men for God's best"))
     ctx.setdefault("siteHeadquartersAddress", site.get("siteHeadquartersAddress", ""))
-    ctx.setdefault("siteSupportPhone", site.get("siteSupportPhone", ""))
+    from app.core import site_content as _sc
+
+    # A placeholder number (e.g. "+234 (555) 123-4567") must never reach visitors.
+    ctx.setdefault("siteSupportPhone", _sc.clean_phone(site.get("siteSupportPhone", "")))
     ctx.setdefault("siteContactEmail", site.get("siteContactEmail", ""))
     ctx.setdefault("defaultPageHero", site.get("defaultPageHero", "/images/general-page-header.jpg"))
     _map_embed_url = (site.get("mapEmbedUrl") or "").strip()
@@ -146,6 +175,15 @@ async def render_template(
         ("counsellingHours", "Monday to Friday, 9:00 am — 5:00 pm"),
     ):
         ctx.setdefault(key, (site.get(key) or default))
+    ctx["counsellingPhone"] = _sc.clean_phone(ctx.get("counsellingPhone"))
+
+    # Editable public content (Admin → Settings → Website content) with the published defaults.
+    ctx.setdefault("services", _sc.get_services(site))
+    ctx.setdefault("prayerResponse", (site.get("prayerResponseTime") or "").strip() or _sc.DEFAULT_PRAYER_RESPONSE)
+    ctx.update({k: v for k, v in _sc.channels(site).items() if k not in ctx})
+    ctx.setdefault("plausibleDomain", (site.get("plausibleDomain") or "").strip())
+    ctx.setdefault("plausibleSrc", _sc.safe_https(site.get("plausibleSrc")) or "https://plausible.io/js/script.js")
+    ctx.setdefault("jsonld", "")
 
     def url_for(route_name: str, *args, **path_params: Any) -> str:
         if route_name == "static":

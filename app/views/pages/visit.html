@@ -1,0 +1,160 @@
+{% set pageKey = 'visit' %}
+{% set pageEyebrow = 'Plan your visit' %}
+{% set pageTitle = 'Come as you are.' %}
+{% set pageLede = 'Everything you need for your first visit: when we meet, where to find us, what to expect — and a way to tell us you are coming so we can welcome you.' %}
+{% set metaTitle = 'Plan your visit' %}
+{% set metaDescription = 'Service times, address and what to expect at Scent of Water Ministry, Mile 50, Abakaliki. Tell us you are coming and we will welcome you.' %}
+{% include "partials/theme-page-open.html" %}
+
+<section class="band band-dark" id="times">
+    <div class="shell">
+        <div class="head">
+            <div>
+                <p class="mono eyebrow"><span class="rule"></span>When we gather</p>
+                <h2 class="t-h2" style="margin-top:1rem;">Our weekly services</h2>
+            </div>
+            <a href="{{ url_for('services_ics') }}" class="lnk">Add them to your calendar</a>
+        </div>
+
+        {% if services %}
+        <table class="sched" style="margin-top:2rem;">
+            <caption class="sr-only">Weekly service times</caption>
+            <tbody>
+            {% for svc in services %}
+            <tr class="{{ 'lead' if svc.lead else '' }}">
+                <td class="s-day mono">{{ svc.day }}</td>
+                <td class="s-name t-h3">{{ svc.name }}</td>
+                <td class="s-time mono">{{ svc.time }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty"><p class="t-body">Our service times will be published here soon.</p></div>
+        {% endif %}
+
+        <div class="visit-where">
+            <div>
+                <p class="mono faint">Where</p>
+                <p class="t-body" style="margin-top:0.5rem;max-width:44ch;">{{ siteHeadquartersAddress or 'Mile 50, Abakaliki, Ebonyi State' }}</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+                {% if directionsUrl %}<a href="{{ directionsUrl }}" class="btn btn-gold" target="_blank" rel="noopener">
+                    <span class="material-symbols-outlined" style="font-size:18px" aria-hidden="true">directions</span>Get directions<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
+                {% if whatsappGreeting %}<a href="{{ whatsappGreeting }}" class="btn btn-ghost" target="_blank" rel="noopener">Ask us on WhatsApp<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
+                {% if siteSupportPhone %}<a href="tel:{{ siteSupportPhone|replace(' ', '') }}" class="btn btn-ghost">Call {{ siteSupportPhone }}</a>{% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="band band-light" id="expect">
+    <div class="shell">
+        <p class="mono eyebrow"><span class="rule"></span>Your first visit</p>
+        <h2 class="t-h2" style="margin-top:1rem;max-width:20ch;">What to expect</h2>
+
+        {% if expect %}
+        <ul class="rows" style="margin-top:2rem;">
+            {% for title, text in expect %}
+            <li class="row"><span class="row-in">
+                <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
+                <span class="row-main"><span class="t-h3">{{ title }}</span>{% if text %}<span class="t-sm row-sub">{{ text }}</span>{% endif %}</span>
+            </span></li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% set facts = [('Parking', info.visitParking), ('What to wear', info.visitDress), ('Children', info.visitChildren), ('Accessibility', info.visitAccessibility)] %}
+        {% if facts|selectattr(1)|list %}
+        <dl class="facts">
+            {% for label, value in facts if value %}
+            <div><dt class="mono faint">{{ label }}</dt><dd class="t-body">{{ value }}</dd></div>
+            {% endfor %}
+        </dl>
+        {% endif %}
+        {% if info.visitNote %}<p class="t-body" style="margin-top:2rem;max-width:62ch;">{{ info.visitNote }}</p>{% endif %}
+    </div>
+</section>
+
+{% if mapEmbedUrl %}
+<section class="band band-dark" style="padding-block:0;">
+    <div class="map" style="margin:0;height:clamp(260px,44svh,420px);border-left:0;border-right:0;">
+        <iframe src="{{ mapEmbedUrl }}" title="Map to {{ siteName }}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen=""></iframe>
+    </div>
+</section>
+{% endif %}
+
+<section class="band band-light" id="plan">
+    <div class="shell visit-split">
+        <div>
+            <p class="mono eyebrow"><span class="rule"></span>Tell us you are coming</p>
+            <h2 class="t-h2" style="margin-top:1rem;max-width:18ch;">We would love to welcome you.</h2>
+            <p class="t-body" style="margin-top:1.2rem;max-width:52ch;">Let us know and someone from the welcome team will look out for you. It takes a minute, and you will get a confirmation by email.</p>
+
+            <form class="form-grid" method="POST" action="{{ url_for('visit_store') }}" style="margin-top:1.8rem;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
+                <div class="hp" aria-hidden="true"><label>Leave this empty<input type="text" name="website" tabindex="-1" autocomplete="off"/></label></div>
+                <label class="field"><span>Your name</span>
+                    <input type="text" name="name" required autocomplete="name" value="{{ request.form.get('name', '') }}" placeholder="Full name"/>
+                </label>
+                <label class="field"><span>Email</span>
+                    <input type="email" name="email" required autocomplete="email" value="{{ request.form.get('email', '') }}" placeholder="you@example.com"/>
+                </label>
+                <label class="field"><span>Phone <span style="text-transform:none;letter-spacing:0">(optional)</span></span>
+                    <input type="tel" name="phone" autocomplete="tel" value="{{ request.form.get('phone', '') }}" placeholder="+234…"/>
+                </label>
+                <label class="field"><span>Which day do you plan to come? <span style="text-transform:none;letter-spacing:0">(optional)</span></span>
+                    <input type="date" name="visit_date" min="{{ today }}" value="{{ request.form.get('visit_date', '') }}"/>
+                </label>
+                {% if branches and branches|length > 1 %}
+                <label class="field"><span>Which church?</span>
+                    <select name="branch_id">
+                        {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if (selected_branch or request.form.get('branch_id', '')) == b.id|string else '' }}>{{ b.name }}{{ ' (Headquarters)' if b.is_hq else '' }}</option>{% endfor %}
+                    </select>
+                </label>
+                {% endif %}
+                <label class="field"><span>How many are coming?</span>
+                    <input type="number" name="party" min="1" max="50" value="{{ request.form.get('party', '1') }}" inputmode="numeric"/>
+                </label>
+                <label class="field span-2"><span>Anything we should know? <span style="text-transform:none;letter-spacing:0">(optional)</span></span>
+                    <textarea name="note" rows="3" placeholder="Children coming with you, a question, a need…">{{ request.form.get('note', '') }}</textarea>
+                </label>
+                <div class="span-2" style="display:flex;flex-direction:column;gap:0.7rem;">
+                    <label class="check"><input type="checkbox" name="subscribe" value="1"/> Send me occasional updates and new messages by email</label>
+                    <p class="t-sm">We use this only to welcome you. See our <a class="lnk-inline" href="{{ url_for('privacy_policy') }}">privacy policy</a>.</p>
+                </div>
+                <div class="span-2">
+                    <button type="submit" class="btn btn-gold">Tell us I am coming</button>
+                </div>
+            </form>
+        </div>
+
+        <aside>
+            <div class="note">
+                <p class="t-h3">First time anywhere near us?</p>
+                <p class="t-sm" style="margin-top:0.5rem;">You do not need to book — just come. This form only helps us welcome you properly.</p>
+            </div>
+            {% if listed %}
+            <div class="note" style="margin-top:1.7rem;">
+                <p class="t-h3">Prefer a branch near you?</p>
+                <ul class="visit-branches">
+                    {% for b in listed[:6] %}<li><a class="lnk-inline" href="{{ url_for('branch_detail', slug=b.slug) }}">{{ b.name }}</a>{% if b.place %} <span class="faint">· {{ b.place }}</span>{% endif %}</li>{% endfor %}
+                </ul>
+                <a href="{{ url_for('branches') }}" class="lnk" style="margin-top:0.8rem;">All branches</a>
+            </div>
+            {% endif %}
+        </aside>
+    </div>
+</section>
+
+<style>
+    .visit-where { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 1.6rem 2rem; margin-top: 2.2rem; }
+    .visit-split { display: grid; gap: clamp(2.2rem, 5vw, 4.5rem); grid-template-columns: 1fr; align-items: start; }
+    @media (min-width: 940px) { .visit-split { grid-template-columns: 1.35fr 0.65fr; } }
+    .facts { display: grid; gap: 0; margin-top: 2rem; border-top: 1px solid var(--line); }
+    .facts > div { display: grid; gap: 0.4rem 2rem; padding: 1rem 0; border-bottom: 1px solid var(--line); }
+    @media (min-width: 760px) { .facts > div { grid-template-columns: 11rem 1fr; } }
+    .visit-branches { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.8rem; font-size: 0.9rem; }
+</style>
+
+{% include "partials/theme-page-close.html" %}

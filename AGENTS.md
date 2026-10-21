@@ -6,16 +6,16 @@ FastAPI + async SQLAlchemy + Postgres (asyncpg) + Jinja2 + Celery/Redis. Python 
 ## Commands
 | Purpose | Command | Expected |
 | Typecheck | `py -m py_compile app/routes/admin.py && py -m py_compile app/main.py` | exit 0 |
-| Tests | `pytest -q` | all pass |
+| Tests | `pytest tests -q` | all pass (root-level `test_login_http.py` needs a live server on :8000) |
 | Lint | `ruff check .` (if installed) else `py -m py_compile` | exit 0 |
 | Dev server | `uvicorn app.main:app --reload --port 8000` | http://localhost:8000 |
 | DB | `DATABASE_URL=postgresql+asyncpg://swm_user:swm_password@localhost:5433/swm_db` | — |
 | Migrate | `py migrate_mysql.py` | idempotent, handles `&amp;` ; inside strings |
 
 ## Conventions
-- Routes: `app/routes/admin.py` is god file (~2500 lines). Split by `# ─── Section ───` comments. Keep new admin routes there, use `_get_admin` + `_redirect`.
+- Routes: `app/routes/admin.py` is god file (~6000 lines). Split by `# ─── Section ───` comments. Keep new admin routes there, use `_get_admin` + `_redirect`. Access: see "HQ + branches model" (no bare `role == "super_admin"` checks for module access — use `has_perm`).
 - Templates: `app/views/admin/*.html` — Jinja, `url_for('admin.xxx')` with dots (e.g., `admin.dashboard.metrics`). Check `app/routes/admin.py` name.
-- CSRF: all POST forms include `csrf_token`; `app/main.py` middleware validates against `session["csrf_token"]`.
+- CSRF: all POST forms include `csrf_token`; the `csrf_protect` router dependency (`app/core/csrf.py`, wired in `app/main.py`) validates it against `session["csrf_token"]` (JSON fetches send `X-CSRF-Token`).
 - Flash: `_redirect` sets both `flash_messages` and `session[flash_type]`; `app/core/template.py` pops after render — message shows once.
 - Auth: `app/core/auth.py` reads `admin_session_timeout_minutes` from settings_cache, not hardcoded 1800.
 - Uploads: whitelist `.jpg/.jpeg/.png/.webp/.gif` for images, audio `mp3/wav/m4a/...` max 50MB images 5MB; use `slugify` + suffix for branch/department/story slugs.
@@ -26,6 +26,86 @@ FastAPI + async SQLAlchemy + Postgres (asyncpg) + Jinja2 + Celery/Redis. Python 
 - `Branch.slug` / `Department.slug` must be unique — use loop with `select(...).where(slug==...)`.
 - `ContactInquiry.branch` and `Sermon.branch` need `selectinload` else `MissingGreenlet` on `inquiry.branch.name`.
 - `migrate_mysql.py` regex for `INSERT ... VALUES (...);` breaks on `;` inside `'...&amp;...'` — use scan for `;` outside quotes.
+
+## Telegram audio distribution
+- Uploads go through a **self-hosted `telegram-bot-api` server** (`--local` mode, compose service `telegram-bot-api`). Cloud Bot API caps `sendAudio` at 50MB and `getFile` at 20MB; local mode raises them to 2000MB / unlimited.
+- Needs `TELEGRAM_API_ID` + `TELEGRAM_API_HASH` from my.telegram.org (account-level, **not** the bot token). Without them the container will not start.
+- `TELEGRAM_LOCAL_API=false` falls back to the cloud API and `TelegramDistributor.max_upload_bytes` clamps to 50MB automatically.
+- In local mode files are handed over as `file://` paths, never streamed — so `media_files` must mount at the **same absolute path** in `app`, `worker` and `telegram-bot-api`. That path is `MEDIA_ROOT` (`/app/media` in compose).
+- All media paths resolve via `app/core/media.py:to_abspath()`. Never rebuild them from `__file__` — `MEDIA_ROOT` may differ from the package dir.
+- Distribution is async: the create route queues `distribute_audio_task`, which sends to Telegram, writes `telegram_file_id`, records `Sermon.distribution_status["telegram"]`, then chains `transcribe_audio_task`. The HTTP request returns immediately.
+- Transcription prefers the **local file** and only falls back to Telegram, so it is no longer bound by the 20MB `getFile` ceiling.
+- `Sermon.original_file_size` is a Postgres `INTEGER` — max ~2.1GB. Raising `TELEGRAM_MAX_UPLOAD_MB` past 2048 requires a `BIGINT` migration first.
+
+## Admin frontend (redesign)
+- Layout: `app/views/layouts/admin_base.html` (blocks `title`, `topbar_title/subtitle/icon`, `page_header`, `content`, `extra_head`, `extra_body`). Shared macros in `app/views/macros/admin.html` — **always import `with context`** or `request` is undefined inside them.
+- `textarea` macro is plain by default (`data-richtext="off"`); pass `rich=True` to opt into the rich-text editor.
+- Create/edit are dedicated reloadable pages (`*-form.html`), not modals. Static routes (`/create`, `/import`) must be registered before `/{id}` routes.
+- Styles: Tailwind v4 source `app/static/css/admin-src.css`; **rebuild after changing template classes** (see `app/static/css/README-admin-css.txt`):
+  `./node_modules/.bin/tailwindcss -i app/static/css/admin-src.css -o app/static/css/admin.css --minify --content "./app/views/admin/**/*.html" --content "./app/views/hod/**/*.html" --content "./app/views/layouts/*.html" --content "./app/views/macros/*.html" --content "./app/views/partials/admin-*.html"`
+  `@apply` cannot chain custom classes; use `class="btn btn-primary"` in HTML.
+- Tables use `dtable dtable-responsive` with `data-label` on each `<td>` (stacked cards <768px). Inline scripts re-run on Turbo visits: use the AbortController pattern.
+- CSRF is a router dependency (`app/core/csrf.py`, wired in `app/main.py` for public + admin routers); `/api` is exempt. Fetch uploads must send `csrf_token` in the body or `X-CSRF-Token`.
+- No emails are ever sent: invitations are shared via "Copy invite link" (`data-copy`). The admin theme (presets/custom) is real via `_admin_theme_css`. Settings toggles not yet enforced (2FA, strong passwords, remember-me, audit retention) are shown read-only.
+- HOD routes live under `/admin/hod/...`.
+
+## Secrets & API keys
+- All API keys are managed in Admin → Settings, never in code. Keys in `ENCRYPTED_SETTING_KEYS` (`app/core/settings_cache.py`: Anthropic/OpenRouter/Groq/Gemini keys, Telegram bot token, Paystack/Flutterwave secrets, Flutterwave encryption key, Resend) are Fernet-encrypted in `site_settings` (`enc:v1:` prefix), keyed from `SECRET_KEY`. To add a secret: add it to that set and render it with the `secret_field` macro.
+- Secrets are **write-only in the UI**: `admin_settings` strips them from the template context and passes only `secret_status` (state + last 4). On save a blank box keeps the value, typing replaces it, `clear_<key>=1` removes it. Never echo a secret into HTML.
+- Changing `SECRET_KEY` makes stored secrets unreadable (the page shows "Saved but unreadable"); set a real `SECRET_KEY` before saving keys. Plaintext rows from before encryption are encrypted at startup (`encrypt_plaintext_secrets`).
+- `.env` `PAYSTACK_*`/`FLUTTERWAVE_*`/`ANTHROPIC_*` remain only as fallbacks when nothing is saved in Settings.
+
+## Books Pub (AI devotionals & books)
+- Sidebar **Publishing → Books Pub → Daily Devotional / Book** (`media` permission: HQ media and HQ Administrator). Routes `/admin/publications/{devotionals|books}/...` live in the `# ─── Books Pub` section of `app/routes/admin.py`; every handler starts with `_pub_guard`.
+- Models `app/models/publication.py`: `Publication` → `PublicationSource` (one message = a devotional "main topic" / a book chapter) → `PublicationSubtopic` (a day / a section). Tables are created by `create_all`; no migration script.
+- Pipeline: transcripts (existing message, audio upload → `transcribe_audio_task`, or pasted/.txt/.docx transcript, all stored as **draft** `Sermon`s) → **Generate Topics** → **Generate Contents** → **Generate/Update Devotional** → Word-like editor (`pub-editor.html`) → `.docx`/`.pdf` export.
+- AI: `app/core/ai.py` is a multi-provider client over httpx: **Anthropic, OpenRouter, Groq, Google Gemini** (`PROVIDERS` dict). Admin → Settings → AI drafting holds one key + model per provider and the **default provider** (`ai_default_provider`); all are read from the DB on every call, so the app and Celery worker follow changes with no restart. `.env` `ANTHROPIC_*` is only a fallback. To add a provider: add it to `PROVIDERS` + `build_request`/an extractor in `ai.py` and its `*_api_key` to `ENCRYPTED_SETTING_KEYS`; the settings UI renders from `PROVIDERS`. Models: `SUGGESTED_MODELS` (hand-curated, will age) is what Settings offers until an admin clicks **Refresh model list**, which calls the provider's list-models endpoint with the saved key and caches the live list in `site_settings` (`ai_models_<provider>`); the field is a free-text combobox, so any model id can be typed (validated by `valid_model_id`, and URL-quoted for Gemini). Update `SUGGESTED_MODELS` when providers retire models. There is no per-project provider; a default with no key means drafting is off (no silent fallback to another provider).
+- Jobs run in Celery (`generate_topics_task`, `generate_contents_task`); if the broker is unreachable `enqueue_*` falls back to an in-process asyncio task. From a request handler always queue with `await app.core.jobs.enqueue(task, *args)`, never `task.delay()`: `.delay()` is blocking and retries a dead broker for minutes, freezing the whole event loop. Rows are claimed `queued → processing` atomically. Stuck jobs: "Cancel jobs" (`reset-jobs`). The workspace polls `/status` and swaps `#pub-live`, so reorder/drag listeners are delegated on that element.
+- The editor document is sanitised HTML (`app/core/publication_html.py:sanitize`, a whitelist — never store raw editor HTML). Sections are wrapped in `<div data-block="cover|day:ID|chapter:ID|section:ID">`. **Update** re-assembles from the topics but keeps blocks that already exist in the document (user edits survive) and only renumbers `Day N`/`Chapter N`; **Rebuild** discards edits. Don't remove `data-block` wrappers when changing the generators.
+- Export: `app/core/publication_export.py` (python-docx, reportlab). PDF uses standard fonts (WinAnsi): characters outside cp1252 are folded/`?`. The editor's "Print / Save as PDF…" gives full-Unicode PDFs via the browser.
+- Tests: `tests/test_publications.py` (pure logic, no AI/network). The word-count target (~200/day) is enforced only by one shorten-retry when a draft exceeds 300 words.
+
+## HQ + branches model (read before touching access, audio, giving)
+- **One HQ, many branches.** `Branch.is_hq` marks HQ (`ensure_schema()` flags exactly one at startup; `get_hq_branch_id()` never invents a second). Everything owned by a branch (`branch_id`) stays inside that branch.
+- **Roles** (`app/core/access.py`): `super_admin` (HQ Administrator), `hq_media`, `hq_finance`, `hq_pastoral`, `branch_admin`, `resident_pastor`, `hod`. Legacy strings `admin`/`branch_super_admin` mean `branch_admin` (`normalize_role`; rewritten at startup). HQ staff roles are scoped to HQ's own records + their module; only `super_admin` crosses branches.
+- **Two layers of access control — keep both.** (1) `app/core/policy.py:admin_policy` is a router dependency mapping every `/admin/*` URL to a permission (`access.required_permission`); add new admin URLs to `_RULES` in `access.py`, and the sidebar uses `can('perm')`. (2) Object level: `_foreign(admin, record.branch_id)` in `admin.py` on every update/delete/show of a branch-owned record; never trust a posted `branch_id` for non-HQ admins. `scripts/hq_branch_checks.py` (also run by `tests/test_hq_branch.py`) and `scripts/rbac_matrix.py` must stay green.
+- **Audio:** the public website, home page, podcast feed, stream and download show **HQ-owned messages only** (`_hq_only()` in `public.py`). A branch's messages never reach the HQ site.
+- **Telegram is per branch.** HQ uses the site-wide Settings; a branch uses only what it saved in `branch_settings` (encrypted bot token + channel id, `app/core/branch_settings.py`). `TelegramDistributor(branch_id)` **never falls back to HQ's bot**; the upload form only pre-ticks Telegram when the owner has credentials. Tasks pass `sermon.branch_id`.
+- **Giving has two switchable models** (`giving_model` in Settings: `central` | `branch`). `Giving.branch_id` = who the gift is for; `gateway_owner` = whose payment account took it (`hq` | `branch`, branch keys in `branch_settings`, encrypted); gifts can also be recorded by hand (`method` cash/transfer/...). Remittances (`/admin/remittances`, `app/core/finance.py:branch_position`) show who owes whom from each branch's `hq_share_percent`.
+- Public contact/prayer forms take a branch (`_pick_branch_id`, falls back to HQ). Prayer requests are pastoral: branch admins see only their branch's.
+- Money is need-to-know: only `donations`/`remittances` permission holders see it; branch admins see only their branch; the dashboard giving trend is scoped the same way.
+- **Ministers & Resident Pastor.** `Minister` (`app/models/minister.py`) is bio-data for HQ's and each branch's ministers (`/admin/ministers`; branch admin / HQ pastoral: own church, HQ Administrator: all). A minister can be made a HOD (branch admin or HQ Administrator) or Resident Pastor (**HQ Administrator only**, one per church, HQ counts as a church): creates/converts a console login with a one-time temporary password (no email is sent). `resident_pastor` is not selectable in the manual admin form.
+- **Resident Pastor review gate** (`_unit_report_scope_filter`, `_rp_pending_condition` in `admin.py`): if a church has an active Resident Pastor, a department report submitted after `resident_pastor_since` (branch setting) is invisible to that church's office (branch admin / HQ Administrator for HQ's own church) until the Resident Pastor appends a comment (`status` -> `reviewed`); then the office adds `senior_pastor_comment` and cannot rewrite the RP's. Older reports and churches without an RP are unaffected; drafts are never visible to reviewers. Removing the RP releases held reports.
+- **Ministers & Resident Pastor.** `Minister` (`app/models/minister.py`) = bio-data for HQ's and each branch's ministers (`/admin/ministers`; branch admin / HQ pastoral: own church, HQ Administrator: all). A minister can be made a HOD (branch admin or HQ Administrator; a HOD who is not a minister is invited from the HODs page) or Resident Pastor (**HQ Administrator only**, one per church, HQ counts as one). Both create/convert a login with a one-time temporary password (no email). `resident_pastor` is not selectable on the manual admin form.
+- **Resident Pastor review gate** (`_unit_report_scope_filter`, `_rp_pending_condition`): with an active Resident Pastor, a department report submitted after `resident_pastor_since` is invisible to that church's office (branch admin; HQ Administrator for HQ's own church) until the RP appends a comment (status -> `reviewed`); the office then adds its own comment and cannot rewrite the RP's. Drafts are never visible to reviewers; churches without an RP are unchanged.
+- **Account control.** `Admin.session_version` is bumped on password reset/change, deactivation and role/branch moves; `get_current_admin` refuses a session whose version differs, an inactive account, or a user of a closed branch. `must_change_password` (temporary/reset passwords, minister appointments, well-known defaults like `admin123` flagged at start-up by `flag_default_passwords`) sends the user to `/admin/profile` until they choose their own (`PasswordChangeRequired` in `policy.py`). `hods/{id}/update|edit` only act on `role == "hod"` accounts.
+- **HQ -> branches.** `/admin/announcements` (HQ Administrator writes; branch admins, Resident Pastors and HQ staff read; shown on the dashboard). HQ's published events show read-only on branch calendars (`_visible_event_scope`). Branch admins get `/admin/activity` (their own branch's audit trail). Dashboard attendance comes from submitted Branch Reports only and is scoped to the viewer's branch.
+- `tests/test_hq_branch.py::test_every_admin_route_is_covered_by_the_access_policy` fails if a new `/admin` route has no rule in `access._RULES`.
+- New columns on existing tables must be added to `_ADDED_COLUMNS` in `app/database.py` (create_all does not alter tables).
+
+## Public website (visitor-facing)
+- **Editable content lives in `site_settings`** (Admin → Settings → *Website content*): `serviceTimes`, `visitExpect`, `beliefs`, `ourStory`, `pastorStory`, `whatsappNumber`, `whatsappChannelUrl`, `telegramJoinUrl`, `prayerResponseTime`, `siteUrl`, `plausibleDomain`. `app/core/site_content.py` holds the defaults and parsers; `template.py` injects `services`, `whatsappChat/whatsappChannel/telegramJoin`, `prayerResponse` into every page. Never hard-code service times in a template. Empty = not shown; nothing is invented.
+- `clean_phone()` hides placeholder numbers (e.g. `+234 (555) …`) from every public page. The Settings checklist (`app/core/readiness.py`, also on the HQ dashboard) lists what the church still has to fill in.
+- **New routes** are in `app/routes/public_extra.py`: `/visit`, `/branches[/slug]`, `/events/{id}` (+ `/calendar.ics` files, reminders), `/unsubscribe/{token}` (on `open_router`: no CSRF because mail clients POST it), `/give/transfer-notice`, `/prayer/thanks`, `/sitemap.xml`, `/robots.txt`. Public forms have a honeypot field `website` and a per-IP rate limit.
+- **Branch directory**: a branch appears only when HQ ticks *List this branch* (branch setting `listed_publicly`); branch admins edit the rest of its public profile. HQ is described from the site-wide settings, never from its `Branch` row.
+- **Legal pages** publish the standard NDPA-oriented text in `app/core/legal_defaults.py` until an administrator saves their own. The privacy text makes promises the code must keep (no IP/cookies in analytics, reminders deleted after the event, prayer requests never published or emailed to staff).
+- **Email** (`app/core/mailer.py`, Resend key/sender from Settings): every send is logged in `email_logs`; `send_notice()` is the transactional template (`emails/notice.html`); use `mailer.fire()` so a failure never breaks a page. Reserved domains (example.*, *.test) and `SWM_EMAIL_DRY_RUN=1` never send. Staff notices carry **no personal content**. Subscribers have a `token` (one-click unsubscribe + List-Unsubscribe headers). Campaigns: `/admin/campaigns` (HQ media / Administrator).
+- **Background jobs** run in the web process (`app/core/scheduler.py`: event reminders, campaign batches, analytics flush, daily housekeeping); rows are claimed atomically so several workers are safe. `SWM_DISABLE_SCHEDULER=1` turns it off (tests do).
+- **Analytics** (`app/core/analytics.py`, `analytics_counters`): counts only, no IP/UA/cookie; skips bots, DNT/GPC, admin, files. Optional Plausible via settings.
+- Event times are naive **church time** (UTC+1); `.ics` files and reminders convert accordingly (`app/core/ics.py`).
+- Message pages: series/scripture/`transcript_public` (a transcript is shown and searchable only after an admin ticks it). The audio player URL is `messages_stream` with `sermon_id`, not `slug`.
+- Accessibility rules: skip link + `<main id="main">`, `aria-current` in the nav, 44px touch targets on phones, colour tokens meet WCAG AA (`--fg-faint`, `--on-paper-faint`, `--gold-deep`; gold *text* on paper uses `--gold-deep`). Checks: `scripts/site_checks.py` (also run by `tests/test_public_site.py`).
+
+## Reliability rules learned from the promise audit (`PROMISE_AUDIT.md`)
+- **Test on Postgres, not just SQLite.** SQLite hid: stale id sequences, `VARCHAR(n)` overflows, unique-index violations, timestamptz columns. Clone the real DB (`CREATE DATABASE swm_audit TEMPLATE swm_db` with the app stopped) and run flows against the clone.
+- `app/database.py:sync_sequences()` runs at startup and repoints every Postgres id sequence at `MAX(id)`. Anything that inserts rows with explicit ids (migrations/imports) relies on it.
+- Many-to-one relationships used by templates are `lazy="selectin"`, so `x.branch.name` in a template cannot raise `MissingGreenlet`. Keep that when adding relationships.
+- Unique columns: check first with `_value_taken()` (admin.py) and show a message; `main.py` has an `IntegrityError` handler as a safety net, not a substitute. Clamp public input to the column length.
+- Every public form/API auth path is throttled (`app/core/throttle.py`, per process). Admin login: 5 failures/email, 10/IP per 15 min.
+- Visitor-facing notices go through `partials/public-flash.html` (included by `theme-page-close.html` and `home.html`). Do not read `session[...]` keys directly in page templates.
+- Anything collected from visitors needs an admin page: Prayer Requests, Subscribers, Donations exist; CSV exports use `_csv_response` (neutralises `= + - @`).
+- Giving: canonical paid status is `completed`; callback verifies amount (`mismatch`) and treats provider "pending" as pending. Audio routes use `_content_disposition` (header-safe) and `_serve_local_audio` (HTTP Range).
+- Regression tests: `tests/test_audit_regressions.py`.
 
 ## Verification
 After any admin change: `py -m py_compile app/routes/admin.py` and `pytest -k test_journeys -q` should pass. Manual smoke: login `admin@scentofwater.org` / `admin123`, check `/admin/metrics?mode=7d` 200, `/admin/inquiries` 200, `/admin/stories` 200.

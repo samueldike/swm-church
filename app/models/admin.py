@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Table, Text, JSON
+from sqlalchemy import false, Column, DateTime, ForeignKey, Integer, String, Table, Text, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -25,6 +25,10 @@ class Admin(Base):
     department_id: Mapped[int | None] = mapped_column(ForeignKey("departments.id"))
     phone: Mapped[str | None] = mapped_column(String(50))
     is_active: Mapped[bool] = mapped_column(default=True)
+    # Bumped whenever the account's access changes (password reset, deactivation, role move): every other
+    # signed-in session of this account is then refused. Temporary/reset passwords must be replaced at once.
+    session_version: Mapped[int] = mapped_column(default=0, server_default="0")
+    must_change_password: Mapped[bool] = mapped_column(default=False, server_default=false())
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.utcnow()
     )
@@ -37,7 +41,7 @@ class Admin(Base):
     department = relationship("Department", foreign_keys=[department_id])
     departments = relationship("Department", back_populates="creator", foreign_keys="Department.created_by_admin_id")
     sermons = relationship("Sermon", back_populates="creator")
-    unit_reports = relationship("UnitReport", back_populates="hod_admin")
+    unit_reports = relationship("UnitReport", back_populates="hod_admin", foreign_keys="UnitReport.hod_admin_id")
     branch_invitations_sent = relationship("BranchAdminInvitation", back_populates="invited_by")
     hod_invitations_sent = relationship("HodInvitation", back_populates="invited_by")
 

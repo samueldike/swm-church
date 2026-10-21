@@ -1,0 +1,45 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, empty_state with context %}
+{% block title %}Activity | {{ siteName }}{% endblock %}
+{% block topbar_title %}Activity{% endblock %}
+{% block topbar_subtitle %}What your team has done{% endblock %}
+{% block topbar_icon %}ri-history-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header("Activity", "The latest actions by the people of your church (sign-ins, appointments, reports, records). Only your own branch is shown.",
+      audit=[('Entries', rows|length)]) }}
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-3.5">
+  <form method="get" action="{{ url_for('admin_activity') }}" class="flex items-center gap-2.5" data-no-loading>
+    <div class="flex items-center gap-2 w-full sm:w-72 px-3 py-2 rounded-md border border-line-2 bg-surface">
+      <i class="ri-search-line text-ink-3 text-sm"></i>
+      <label for="act-q" class="sr-only">Filter by action</label>
+      <input id="act-q" type="search" name="q" value="{{ q }}" placeholder="e.g. login, minister, report…" class="flex-grow border-none bg-transparent text-[12.5px] text-ink outline-none min-w-0">
+    </div>
+    <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+  </form>
+  <div class="panel-flush">
+    {% if rows %}
+      <div class="overflow-x-auto">
+        <table class="dtable dtable-responsive">
+          <thead><tr><th>When</th><th>Who</th><th>Action</th></tr></thead>
+          <tbody>
+            {% for r in rows %}
+              {% set who = people.get(r.admin_id) %}
+              <tr>
+                <td data-label="When" class="font-mono text-xs whitespace-nowrap">{{ r.created_at.strftime('%d %b %Y %H:%M') if r.created_at else '—' }}</td>
+                <td data-label="Who">{{ who.full_name if who else '—' }}<span class="block text-[11px] text-ink-3">{{ role_name(who.role) if who else '' }}</span></td>
+                <td data-label="Action" class="font-mono text-xs">{{ r.action }}{% if r.target_type %} <span class="text-ink-3">· {{ r.target_type }}{{ ' #' ~ r.target_id if r.target_id else '' }}</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {{ empty_state("ri-history-line", "No activity yet", "Actions by your team will be listed here.") }}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

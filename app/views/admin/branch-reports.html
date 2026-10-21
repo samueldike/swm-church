@@ -1,0 +1,72 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, empty_state with context %}
+{% block title %}{{ 'Branch Reports' if reader else 'Reports to HQ' }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ 'Branch Reports' if reader else 'Reports to HQ' }}{% endblock %}
+{% block topbar_subtitle %}Monthly reports from branch admins{% endblock %}
+{% block topbar_icon %}ri-file-list-3-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header('Branch Reports' if reader else 'Reports to HQ',
+      ("Each branch admin sends HQ one report a month. Department reports stay with the branch: HQ sees only how many were submitted." if reader
+       else "Your monthly report to HQ. Your department heads' reports stay with you; HQ sees only that they were submitted."),
+      actions=('<a href="' ~ url_for('admin_branch_reports_create') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>New report</a>') if can_write else '') }}
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-4">
+  {% if reader %}
+    <section class="panel">
+      <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
+        <div><p class="mono-label">Who has reported</p><h2 class="text-[15px] font-semibold text-ink mt-1">{{ track_month|month_label }}</h2></div>
+        <form method="get" action="{{ url_for('admin_branch_reports') }}" class="flex items-end gap-2" data-no-loading>
+          <label class="flex flex-col text-[10.5px] font-mono text-ink-3 uppercase tracking-wider">Month
+            <input type="month" name="month" value="{{ track_month }}" class="rounded-md border border-line-2 bg-surface px-2 py-1.5 text-xs text-ink normal-case"></label>
+          <button type="submit" class="btn btn-secondary btn-sm">Show</button>
+        </form>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
+        {% for t in tracker %}
+          <div class="rounded-md border border-line px-3 py-2.5 flex items-center gap-2.5">
+            <span class="min-w-0 flex-grow">
+              <span class="block text-[13px] font-medium text-ink truncate">{{ t.branch.name }}</span>
+              {% if t.report %}<span class="block font-mono text-[10.5px] text-ink-3">Departments {{ (t.report.rollup or {}).get('submitted', '—') }} of {{ (t.report.rollup or {}).get('expected', '—') }} reported</span>{% endif %}
+            </span>
+            {% if t.report %}<a href="{{ url_for('admin_branch_reports_show', report_id=t.report.id) }}" class="no-underline">{{ badge('Acknowledged' if t.report.status == 'acknowledged' else 'Read it', 'ok' if t.report.status == 'acknowledged' else 'warn') }}</a>
+            {% else %}{{ badge('Not yet', 'bad') }}{% endif %}
+          </div>
+        {% else %}
+          <p class="text-[12.5px] text-ink-3">No branches yet.</p>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  <div class="panel-flush">
+    {% if items %}
+      <div class="overflow-x-auto">
+        <table class="dtable dtable-responsive">
+          <thead><tr><th>Month</th>{% if reader %}<th>Branch</th>{% endif %}<th>Attendance</th><th>Departments reported</th><th>Status</th><th class="text-right">Actions</th></tr></thead>
+          <tbody>
+            {% for r in items %}
+              <tr>
+                <td data-label="Month" class="font-mono text-xs">{{ r.report_month|month_label }}</td>
+                {% if reader %}<td data-label="Branch">{{ r.branch.name if r.branch else '—' }}</td>{% endif %}
+                <td data-label="Attendance" class="font-mono text-xs">{{ (r.metrics or {}).get('avg_attendance') or '—' }}</td>
+                <td data-label="Departments reported" class="font-mono text-xs">{% if r.rollup %}{{ r.rollup.get('submitted', 0) }} / {{ r.rollup.get('expected', 0) }}{% else %}—{% endif %}</td>
+                <td data-label="Status">{{ badge('Draft' if r.status == 'draft' else ('Acknowledged' if r.status == 'acknowledged' else 'Submitted'), 'neut' if r.status == 'draft' else ('ok' if r.status == 'acknowledged' else 'warn')) }}</td>
+                <td data-label="Actions" class="text-right whitespace-nowrap">
+                  <a href="{{ url_for('admin_branch_reports_show', report_id=r.id) }}" class="icon-btn" aria-label="Open report"><i class="ri-eye-line"></i></a>
+                  {% if not reader and r.status != 'acknowledged' %}<a href="{{ url_for('admin_branch_reports_edit', report_id=r.id) }}" class="icon-btn" aria-label="Edit report"><i class="ri-edit-line"></i></a>{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {{ empty_state("ri-file-list-3-line", "No reports yet", ("Branch admins' submitted reports appear here." if reader else "Write this month's report and submit it to HQ."),
+                     ('<a href="' ~ url_for('admin_branch_reports_create') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>New report</a>') if can_write else '') }}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

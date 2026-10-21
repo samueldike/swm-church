@@ -1,0 +1,104 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, empty_state, filter_pager, field with context %}
+{% block title %}Donations | {{ siteName }}{% endblock %}
+{% block topbar_title %}Donations{% endblock %}
+{% block topbar_subtitle %}{{ 'All branches' if sees_all else 'Your branch' }}{% endblock %}
+{% block topbar_icon %}ri-hand-coin-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header("Donations", ("Every gift — online and recorded by hand — for all branches. Amounts are in Naira." if sees_all else "Gifts recorded for your branch. Amounts are in Naira."),
+      actions='<a href="' ~ export_url ~ '" class="btn btn-secondary" data-turbo="false"><i class="ri-download-2-line"></i>Export (CSV)</a>',
+      audit=[('Confirmed', '₦{:,.2f}'.format(paid_total)), ('Confirmed gifts', paid_count), ('Records', pagination.total)]) }}
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-3.5">
+  <details class="panel">
+    <summary class="cursor-pointer text-[13px] font-semibold text-ink flex items-center gap-2"><i class="ri-add-circle-line text-gold"></i>Record a gift (cash, transfer, cheque, POS)</summary>
+    <form method="POST" action="{{ url_for('admin_donations_record') }}" class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {{ field('Amount (₦)', 'amount', type='number', mono=True, required=True, id='rec-amount') }}
+      {{ field('Purpose', 'purpose', value='Offering', id='rec-purpose', hint='e.g. Tithe, Offering, Building Fund') }}
+      <div>
+        <label for="rec-method" class="field-label">How it was received</label>
+        <select id="rec-method" name="method" class="field-select">{% for v, l in gift_methods %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select>
+      </div>
+      {{ field('Giver (optional)', 'full_name', id='rec-name') }}
+      {{ field('Date received', 'given_on', type='date', mono=True, id='rec-date') }}
+      {% if sees_all %}
+        <div>
+          <label for="rec-branch" class="field-label">Branch</label>
+          <select id="rec-branch" name="branch_id" class="field-select">{% for b in branches %}<option value="{{ b.id }}">{{ b.name }}{{ ' (HQ)' if b.is_hq else '' }}</option>{% endfor %}</select>
+        </div>
+      {% endif %}
+      <div class="sm:col-span-3">{{ field('Note (optional)', 'note', id='rec-note') }}</div>
+      <div class="sm:col-span-3"><button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>Record gift</button></div>
+    </form>
+  </details>
+
+  <form method="get" action="{{ url_for('admin_donations') }}" class="flex flex-wrap items-end gap-2.5" data-no-loading>
+    <div class="flex items-center gap-2 w-full sm:w-64 px-3 py-2 rounded-md border border-line-2 bg-surface">
+      <i class="ri-search-line text-ink-3 text-sm"></i>
+      <label for="d-q" class="sr-only">Search donations</label>
+      <input id="d-q" type="search" name="q" value="{{ filters.q }}" placeholder="Name, email, reference, purpose…" class="flex-grow border-none bg-transparent text-[12.5px] text-ink outline-none min-w-0">
+    </div>
+    {% if sees_all %}
+      <select name="branch_id" onchange="this.form.submit()" aria-label="Filter by branch" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
+        <option value="">All branches</option>
+        {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if filters.branch_id == b.id|string else '' }}>{{ b.name }}</option>{% endfor %}
+      </select>
+    {% endif %}
+    <select name="status" onchange="this.form.submit()" aria-label="Filter by status" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
+      <option value="">All statuses</option>
+      {% for v, l in [('completed', 'Confirmed'), ('pending', 'Pending'), ('failed', 'Failed'), ('mismatch', 'Amount mismatch')] %}<option value="{{ v }}" {{ 'selected' if filters.status == v else '' }}>{{ l }}</option>{% endfor %}
+    </select>
+    <select name="method" onchange="this.form.submit()" aria-label="Filter by source" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
+      <option value="">Online + recorded</option>
+      <option value="online" {{ 'selected' if filters.method == 'online' else '' }}>Online only</option>
+      <option value="recorded" {{ 'selected' if filters.method == 'recorded' else '' }}>Recorded by hand</option>
+    </select>
+    <select name="gateway" onchange="this.form.submit()" aria-label="Filter by gateway" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
+      <option value="">All gateways</option>
+      <option value="paystack" {{ 'selected' if filters.gateway == 'paystack' else '' }}>Paystack</option>
+      <option value="flutterwave" {{ 'selected' if filters.gateway == 'flutterwave' else '' }}>Flutterwave</option>
+    </select>
+    <label class="flex flex-col text-[10.5px] font-mono text-ink-3 uppercase tracking-wider">From
+      <input type="date" name="start" value="{{ filters.start }}" class="rounded-md border border-line-2 bg-surface px-2 py-1.5 text-xs text-ink normal-case"></label>
+    <label class="flex flex-col text-[10.5px] font-mono text-ink-3 uppercase tracking-wider">To
+      <input type="date" name="end" value="{{ filters.end }}" class="rounded-md border border-line-2 bg-surface px-2 py-1.5 text-xs text-ink normal-case"></label>
+    <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+    {% if filters.q or filters.status or filters.gateway or filters.start or filters.end or filters.branch_id or filters.method %}<a href="{{ url_for('admin_donations') }}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
+  </form>
+
+  <div class="panel-flush">
+    {% if items %}
+      <div class="overflow-x-auto">
+        <table class="dtable dtable-responsive">
+          <thead><tr><th>Date</th><th>Donor</th><th>Purpose</th>{% if sees_all %}<th>Branch</th>{% endif %}<th class="text-right">Amount</th><th>Received via</th><th>Status</th><th>Reference</th></tr></thead>
+          <tbody>
+            {% for g in items %}
+              {% set paid = g.status in ['completed', 'success'] %}
+              <tr>
+                <td data-label="Date" class="font-mono text-xs text-ink-3 whitespace-nowrap">{{ g.created_at.strftime('%d %b %Y %H:%M') }}</td>
+                <td data-label="Donor">
+                  <p class="text-[13px] font-medium text-ink">{{ 'Anonymous' if g.is_anonymous else (g.full_name or '—') }}</p>
+                  <p class="font-mono text-[11px] text-ink-3">{{ g.email }}</p>
+                </td>
+                <td data-label="Purpose">{{ g.giving_type }}{% if g.dedication %}<p class="text-[11px] text-ink-3">“{{ g.dedication }}”</p>{% endif %}{% if g.note %}<p class="text-[11px] text-ink-3">{{ g.note }}</p>{% endif %}</td>
+                {% if sees_all %}<td data-label="Branch" class="text-xs">{{ branch_names.get(g.branch_id, 'HQ') }}{% if g.gateway_owner == 'hq' and g.branch_id and not branch_names.get(g.branch_id, '') == 'HQ' %}<p class="text-[10.5px] text-ink-3">held by HQ</p>{% endif %}</td>{% endif %}
+                <td data-label="Amount" class="text-right font-mono text-[13px] font-semibold text-ink whitespace-nowrap">₦{{ '{:,.2f}'.format(g.amount|float) }}</td>
+                <td data-label="Received via" class="text-xs">{{ (g.payment_gateway|capitalize) if g.method == 'online' else (g.method|capitalize) }}</td>
+                <td data-label="Status">{{ badge('Confirmed' if paid else (g.status|capitalize), 'ok' if paid else ('warn' if g.status == 'pending' else 'bad')) }}</td>
+                <td data-label="Reference" class="font-mono text-[10.5px] text-ink-3 break-all max-w-[190px]">{{ g.reference }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {{ empty_state("ri-hand-coin-line", "No donations found", "Gifts started on the Give page, and gifts you record by hand, appear here.") }}
+    {% endif %}
+  </div>
+  {{ filter_pager(pagination) }}
+</div>
+{% endblock %}

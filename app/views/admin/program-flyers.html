@@ -1,0 +1,41 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, empty_state with context %}
+{% block title %}Program Flyers | {{ siteName }}{% endblock %}
+{% block topbar_title %}Program Flyers{% endblock %}
+{% block topbar_subtitle %}Event flyers for the programme page{% endblock %}
+{% block topbar_icon %}ri-gallery-upload-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header("Program flyers", "Flyers shown on the public programme calendar",
+      actions='<a href="' ~ url_for('admin_program_flyers_create_page') ~ '" class="btn btn-primary"><i class="ri-upload-2-line"></i>Upload flyer</a>',
+      audit=[('Flyers', flyers|length), ('Active', flyers|selectattr('is_active')|list|length)]) }}
+{% endblock %}
+
+{% block content %}
+{% if flyers %}
+  <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3.5">
+    {% for fl in flyers %}
+      <div class="panel-flush flex flex-col">
+        <div class="relative bg-sunken aspect-[3/4]">
+          <img src="{{ url_for('static', path=fl.image_path) }}" alt="{{ fl.title or 'Program flyer' }}" class="w-full h-full object-cover" loading="lazy">
+          <div class="absolute top-2 right-2">{{ badge('Active' if fl.is_active else 'Hidden', 'ok' if fl.is_active else 'neut') }}</div>
+        </div>
+        <p class="px-3 pt-2.5 text-[12.5px] font-semibold text-ink truncate flex-grow">{{ fl.title or 'Untitled flyer' }}</p>
+        <div class="flex items-center gap-1.5 p-3">
+          <a href="{{ url_for('admin_program_flyers_edit_page', flyer_id=fl.id) }}" class="icon-btn" aria-label="Edit flyer"><i class="ri-edit-line"></i></a>
+          <form method="POST" action="{{ url_for('admin_program_flyers_destroy', flyer_id=fl.id) }}" class="inline"
+                data-confirm="Delete this program flyer?" data-confirm-title="Delete Program Flyer" data-confirm-accept="Delete">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="icon-btn text-bad" aria-label="Delete flyer"><i class="ri-delete-bin-line"></i></button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="panel-flush">
+    {{ empty_state("ri-gallery-upload-line", "No program flyers yet", "Upload a flyer to promote an upcoming programme.",
+                   '<a href="' ~ url_for('admin_program_flyers_create_page') ~ '" class="btn btn-primary"><i class="ri-upload-2-line"></i>Upload flyer</a>') }}
+  </div>
+{% endif %}
+{% endblock %}

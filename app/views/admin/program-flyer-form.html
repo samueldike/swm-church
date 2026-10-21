@@ -1,0 +1,32 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, checkbox, file_field with context %}
+{% block title %}{{ 'Edit Program Flyer' if flyer else 'New Program Flyer' }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ 'Edit Flyer' if flyer else 'New Flyer' }}{% endblock %}
+{% block topbar_subtitle %}Program Flyers{% endblock %}
+{% block topbar_icon %}ri-gallery-upload-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header('Edit program flyer' if flyer else 'New program flyer', 'Shown on the public programme calendar',
+      actions='<a href="' ~ url_for('admin_program_flyers') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All flyers</a>') }}
+{% endblock %}
+
+{% block content %}
+<div class="panel max-w-2xl">
+  <form method="POST" action="{{ url_for('admin_program_flyers_update', flyer_id=flyer.id) if flyer else url_for('admin_program_flyers_store') }}"
+        enctype="multipart/form-data" class="flex flex-col gap-4" data-turbo="false">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% if flyer %}
+      <div class="w-40 aspect-[3/4] rounded-md overflow-hidden bg-sunken border border-line">
+        <img src="{{ url_for('static', path=flyer.image_path) }}" alt="Current flyer" class="w-full h-full object-cover">
+      </div>
+    {% endif %}
+    {{ file_field('Replace flyer image' if flyer else 'Flyer image', 'image', hint='JPG, PNG, WebP or GIF · up to 5 MB', accept='image/*', required=not flyer) }}
+    {{ field('Title', 'title', value=flyer.title or '' if flyer else '', placeholder='e.g. Night of Restoration') }}
+    {{ checkbox('Active on programme page', 'is_active', checked=(flyer.is_active if flyer else True)) }}
+    <div class="flex items-center gap-2.5 pt-4 border-t border-line">
+      <button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>{{ 'Save changes' if flyer else 'Upload flyer' }}</button>
+      <a href="{{ url_for('admin_program_flyers') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

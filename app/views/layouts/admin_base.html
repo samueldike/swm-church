@@ -1,0 +1,86 @@
+{#
+  Shared shell for every authenticated admin/HOD page. Child templates:
+    {% extends "layouts/admin_base.html" %}
+    {% block title %}Members | {{ siteName }}{% endblock %}
+    {% block topbar_title %}Members{% endblock %}
+    {% block topbar_subtitle %}Congregation registry{% endblock %}
+    {% block topbar_icon %}ri-team-line{% endblock %}
+    {% block page_header %}{{ m.page_header("Members", "...", actions=..., audit=[...]) }}{% endblock %}
+    {% block content %}...{% endblock %}
+
+  Sidebar/topbar already branch on is_hod/is_super/active_page/badges from
+  _admin_context() — nothing here duplicates that logic.
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>{% block title %}Admin | {{ siteName }}{% endblock %}</title>
+<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
+{% include "partials/admin-head-assets.html" %}
+{% block extra_head %}{% endblock %}
+</head>
+<body class="m-0 bg-paper text-ink font-sans antialiased overflow-clip">
+<div class="fixed inset-0 flex bg-paper overflow-clip">
+  {% include "partials/admin-sidebar.html" %}
+  <div class="flex-1 flex flex-col min-w-0 overflow-clip">
+    {# Blocks are declared inside a never-true branch: they stay overridable (self.x() below) but do not print in place. #}
+    {% if false %}{% block topbar_title %}Admin Portal{% endblock %}{% block topbar_subtitle %}{% endblock %}{% block topbar_icon %}ri-dashboard-3-line{% endblock %}{% endif %}
+    {% with title=self.topbar_title(), subtitle=self.topbar_subtitle(), headerIcon=self.topbar_icon() %}
+      {% include "partials/admin-topbar.html" %}
+    {% endwith %}
+
+    <main class="flex-1 overflow-y-auto admin-scrollbar min-h-0">
+      {% if flash_messages %}
+        <div class="px-4 sm:px-6 pt-4 space-y-2">
+          {% for m in flash_messages %}
+            <div class="rounded-md border px-3.5 py-2.5 text-[13px] font-medium flex items-start gap-2
+              {{ 'bg-ok-bg border-[#cfe3d8] text-ok' if m.type == 'success'
+                 else ('bg-bad-bg border-[#e6c9c5] text-bad' if m.type == 'error'
+                 else ('bg-gold-tint border-[#ebdfc0] text-gold-text' if m.type == 'info'
+                 else 'bg-neut-bg border-line-2 text-neut')) }}">
+              <i class="{{ 'ri-checkbox-circle-line' if m.type == 'success' else ('ri-error-warning-line' if m.type == 'error' else 'ri-information-line') }} text-base flex-shrink-0 mt-0.5"></i>
+              <span>{{ m.message }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% block page_header %}{% endblock %}
+
+      <div class="p-4 sm:p-6">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+</div>
+{% block extra_body %}{% endblock %}
+<script>
+/* Delegated "copy to clipboard" for any [data-copy] button. Registered once; survives Turbo visits. */
+(() => {
+  if (window.__swmCopyBound) return;
+  window.__swmCopyBound = true;
+  document.addEventListener('click', async (event) => {
+    const btn = event.target.closest('[data-copy]');
+    if (!btn) return;
+    const text = btn.getAttribute('data-copy');
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+      }
+      const original = btn.innerHTML;
+      btn.innerHTML = '<i class="ri-check-line"></i>Copied';
+      setTimeout(() => { btn.innerHTML = original; }, 1800);
+    } catch (e) {
+      window.prompt('Copy this link:', text);
+    }
+  });
+})();
+</script>
+</body>
+</html>

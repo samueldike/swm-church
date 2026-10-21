@@ -1,71 +1,39 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>HOD Reports - {{ siteName }}</title>
-{% include "partials/admin-head-assets.html" %}
-</head>
-<body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
-<div class="flex h-screen overflow-hidden">
-{% include "partials/admin-sidebar.html" %}
-<main class="flex-1 flex flex-col overflow-hidden">
-{% with title="Monthly Unit Reports", subtitle="Submit and manage your monthly departmental reports", headerIcon="ri-file-chart-line" %}{% include "partials/admin-topbar.html" %}{% endwith %}
-<div class="flex-1 overflow-y-auto p-5 lg:p-8 space-y-5">
-{% if session.get('success') %}
-<div class="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-4 py-3">{{ session.get('success') }}</div>
-{% endif %}
-{% if errors %}
-<div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ errors | first }}</div>
-{% endif %}
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, empty_state with context %}
+{% block title %}Monthly Reports | {{ siteName }}{% endblock %}
+{% block topbar_title %}Monthly Reports{% endblock %}
+{% block topbar_subtitle %}Your departmental reports{% endblock %}
+{% block topbar_icon %}ri-file-chart-line{% endblock %}
 
-<section class="content-card p-4 lg:p-5">
-<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-<div>
-<h2 class="section-title">My Department Reports</h2>
-<p class="text-xs text-gray-500 mt-0.5">{{ hod.department.name if hod.department else '' }} &bull; {{ hod.branch.name if hod.branch else '' }}</p>
-</div>
-<a href="{{ url_for('hod.reports.create') }}" class="action-btn primary">
-<i class="ri-add-line text-base"></i><span>New Report</span>
-</a>
-</div>
+{% block page_header %}
+  {{ page_header("Monthly reports", (department_name or 'Your department') ~ (' · ' ~ admin_branch_name if admin_branch_name else ''),
+      actions='<a href="' ~ url_for('hod_reports_create') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>New report</a>',
+      audit=[('Reports', reports|length), ('Submitted', reports|selectattr('status', 'equalto', 'submitted')|list|length), ('Drafts', reports|selectattr('status', 'equalto', 'draft')|list|length)]) }}
+{% endblock %}
 
-<div class="overflow-x-auto">
-<table class="w-full min-w-[640px] text-sm">
-<thead>
-<tr class="border-b border-gray-100">
-<th class="table-header py-3 pr-4">Month</th>
-<th class="table-header py-3 pr-4">Status</th>
-<th class="table-header py-3 pr-4">Submitted</th>
-<th class="table-header py-3 pr-4">Action</th>
-</tr>
-</thead>
-<tbody class="divide-y divide-gray-100">
-{% for report in reports %}
-<tr class="hover:bg-gray-50/50">
-<td class="py-3 pr-4 font-semibold text-gray-900">{{ report.report_month.strftime('%B %Y') if report.report_month else '' }}</td>
-<td class="py-3 pr-4">
-{% set statusClass = 'bg-emerald-50 text-emerald-600' if report.status == 'submitted' else ('bg-gray-100 text-gray-600' if report.status == 'draft' else 'bg-amber-50 text-amber-600') %}
-<span class="rounded-full {{ statusClass }} px-2.5 py-1 text-[10px] font-bold uppercase">{{ report.status }}</span>
-</td>
-<td class="py-3 pr-4 text-gray-600">{{ report.submitted_at.strftime('%b %d, %Y %I:%M %p') if report.submitted_at else 'Not submitted' }}</td>
-<td class="py-3 pr-4">
-<a class="action-btn secondary text-xs" href="{{ url_for('hod.reports.edit', id=report.id) }}">
-<i class="ri-edit-line text-sm"></i><span>Edit</span>
-</a>
-</td>
-</tr>
-{% else %}
-<tr><td colspan="4" class="py-10 text-center text-sm text-gray-500">No reports yet. Create your first monthly report to get started.</td></tr>
-{% endfor %}
-</tbody>
-</table>
+{% block content %}
+<div class="panel-flush">
+  {% if reports %}
+    <div class="overflow-x-auto">
+      <table class="dtable dtable-responsive">
+        <thead><tr><th>Month</th><th>Status</th><th>Submitted</th><th class="text-right">Action</th></tr></thead>
+        <tbody>
+          {% for r in reports %}
+            <tr>
+              <td data-label="Month" class="font-semibold">{{ r.report_month|month_label }}</td>
+              <td data-label="Status">{{ badge(r.status|capitalize, 'ok' if r.status == 'reviewed' else ('neut' if r.status == 'draft' else 'warn')) }}</td>
+              <td data-label="Submitted" class="font-mono text-xs text-ink-2">{{ r.submitted_at.strftime('%b %d, %Y %I:%M %p') if r.submitted_at else 'Not submitted' }}</td>
+              <td data-label="Action" class="text-right">
+                <a href="{{ url_for('hod_reports_edit', report_id=r.id) }}" class="btn btn-secondary btn-sm"><i class="ri-edit-line"></i>Edit</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    {{ empty_state("ri-file-chart-line", "No reports yet", "Create your first monthly report to get started.",
+                   '<a href="' ~ url_for('hod_reports_create') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>New report</a>') }}
+  {% endif %}
 </div>
-
-{% if reports | length > 0 %}{% endif %}
-</section>
-</div>
-</main>
-</div>
-</body>
-</html>
+{% endblock %}

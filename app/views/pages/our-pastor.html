@@ -22,7 +22,17 @@
     </div>
 </section>
 
-<section class="band band-dark">
+{% if pastorStory %}
+<section class="band band-dark" id="story">
+    <div class="shell" style="max-width:78ch;">
+        <p class="mono eyebrow"><span class="rule"></span>His story</p>
+        <h2 class="t-h2" style="margin-top:1.1rem;max-width:22ch;">How the call came</h2>
+        <div class="t-body story-text" style="margin-top:1.6rem;">{% for para in pastorStory.replace('\r\n', '\n').split('\n\n') if para.strip() %}<p>{{ para.strip() }}</p>{% endfor %}</div>
+    </div>
+</section>
+{% endif %}
+
+<section class="band band-{{ 'light' if pastorStory else 'dark' }}">
     <div class="shell">
         <p class="mono eyebrow"><span class="rule"></span>What he carries</p>
         <h2 class="t-h2" style="margin-top:1.1rem;max-width:20ch;">The burden of the house</h2>
@@ -51,18 +61,12 @@
             <div>
                 <p class="mono faint">Where to find him</p>
                 <ul class="rows" style="margin-top:0.9rem;">
+                    {% for svc in services[:4] %}
                     <li class="row"><span class="row-in">
-                        <span class="mono faint row-i">01</span>
-                        <span class="row-main"><span>Sunday services</span><span class="t-sm row-sub">7:00 am and 9:30 am</span></span>
+                        <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
+                        <span class="row-main"><span>{{ svc.name }}</span><span class="t-sm row-sub">{{ svc.day }}{% if svc.time %}, {{ svc.time }}{% endif %}</span></span>
                     </span></li>
-                    <li class="row"><span class="row-in">
-                        <span class="mono faint row-i">02</span>
-                        <span class="row-main"><span>Midweek Bible Study</span><span class="t-sm row-sub">Wednesday, 5:00 pm</span></span>
-                    </span></li>
-                    <li class="row"><span class="row-in">
-                        <span class="mono faint row-i">03</span>
-                        <span class="row-main"><span>Monthly Vigil</span><span class="t-sm row-sub">Last Friday, from 9:00 pm</span></span>
-                    </span></li>
+                    {% endfor %}
                 </ul>
             </div>
         </div>
@@ -102,7 +106,7 @@
     <div class="shell" style="text-align:center;">
         <h2 class="t-h2" style="max-width:22ch;margin-inline:auto;">Come and sit under the teaching.</h2>
         <div class="flex flex-wrap items-center justify-center gap-3" style="margin-top:1.8rem;">
-            <a href="{{ url_for('contact') }}" class="btn btn-gold">Plan your visit</a>
+            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan your visit</a>
             <a href="{{ url_for('prayer') }}" class="btn btn-ghost">Request prayer</a>
         </div>
     </div>

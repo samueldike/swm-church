@@ -1,152 +1,39 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Unit Reports - {{ siteName }}</title>
-{% include "partials/admin-head-assets.html" %}
-</head>
-<body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
-<div class="flex h-screen overflow-hidden">
-{% include "partials/admin-sidebar.html" %}
-<main class="flex-1 flex flex-col overflow-hidden">
-{% with title="Unit Reports", subtitle="Search, filter, and review departmental submissions" %}{% include "partials/admin-topbar.html" %}{% endwith %}
-<div class="flex-1 overflow-y-auto p-5 lg:p-8 space-y-4">
-{% if session.get('success') %}<div class="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-4 py-3">{{ session.get('success') }}</div>{% endif %}
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, empty_state with context %}
+{% block title %}Unit Reports | {{ siteName }}{% endblock %}
+{% block topbar_title %}Unit Reports{% endblock %}
+{% block topbar_subtitle %}Monthly department reports{% endblock %}
+{% block topbar_icon %}ri-file-chart-line{% endblock %}
 
-{% set statusTone = {
-  'draft': 'bg-gray-100 text-gray-500',
-  'submitted': 'bg-amber-50 text-amber-600',
-  'reviewed': 'bg-emerald-50 text-emerald-600'
-} %}
+{% block page_header %}
+  {{ page_header("Unit reports", ("Monthly reports from HQ's own heads of department. A branch's department reports go to that branch's admin; HQ receives each branch admin's Branch Report instead." if can('system') or admin.role == 'hq_pastoral' else "Monthly reports submitted by your heads of department"),
+      audit=[('Reports', reports|length), ('Awaiting review', reports|selectattr('status', 'equalto', 'submitted')|list|length), ('Reviewed', reports|selectattr('status', 'equalto', 'reviewed')|list|length)]) }}
+{% endblock %}
 
-<section class="content-card p-4 lg:p-5">
-  <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-    <div>
-      <h2 class="text-base font-bold text-gray-900">Reports</h2>
-      <p class="text-xs text-gray-500 mt-0.5">{{ "{:,}".format(reports|length) }} records found</p>
+{% block content %}
+<div class="panel-flush">
+  {% if reports %}
+    <div class="overflow-x-auto">
+      <table class="dtable dtable-responsive">
+        <thead><tr><th>Department</th><th>Submitted by</th>{% if is_super %}<th>Branch</th>{% endif %}<th>Month</th><th>Status</th><th class="text-right">Actions</th></tr></thead>
+        <tbody>
+          {% for r in reports %}
+            <tr>
+              <td data-label="Department"><a href="{{ url_for('admin_unit_reports_show', report_id=r.id) }}" class="font-semibold text-ink">{{ r.department.name if r.department else 'Department' }}</a></td>
+              <td data-label="Submitted by">{{ r.hod_admin.name if r.hod_admin else '—' }}</td>
+              {% if is_super %}<td data-label="Branch">{{ r.branch.name if r.branch else '—' }}</td>{% endif %}
+              <td data-label="Month" class="font-mono text-xs">{{ r.report_month|month_label or '—' }}</td>
+              <td data-label="Status">{{ badge(r.status|capitalize, 'ok' if r.status == 'reviewed' else ('neut' if r.status == 'draft' else 'warn')) }}</td>
+              <td data-label="Actions" class="text-right">
+                <a href="{{ url_for('admin_unit_reports_show', report_id=r.id) }}" class="icon-btn" aria-label="Open report"><i class="ri-arrow-right-line"></i></a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-  </div>
-
-  <form method="GET" action="{{ url_for('admin.unit-reports') }}" class="mt-4 grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-12">
-    <label class="min-w-0 sm:col-span-2 xl:col-span-4">
-      <span class="form-label">Search</span>
-      <input name="q" value="{{ request.query_params.get('q') }}" placeholder="Branch, department, HOD, notes..." class="form-input">
-    </label>
-    {% if admin.role == 'super_admin' %}
-      <label class="min-w-0 xl:col-span-2"><span class="form-label">Branch</span><select name="branch_id" class="form-input"><option value="">All branches</option>{% for branch in branches %}<option value="{{ branch.id }}" {{ 'selected' if request.query_params.get('branch_id')|string == branch.id|string }}>{{ branch.name }}</option>{% endfor %}</select></label>
-
-    <label class="min-w-0 xl:col-span-2"><span class="form-label">Department</span><select name="department_id" class="form-input"><option value="">All departments</option>{% for department in departments %}<option value="{{ department.id }}" {{ 'selected' if request.query_params.get('department_id')|string == department.id|string }}>{{ department.name }}</option>{% endfor %}</select></label>
-    <label class="min-w-0 xl:col-span-1"><span class="form-label">Status</span><select name="status" class="form-input"><option value="">All</option><option value="draft" {{ 'selected' if request.query_params.get('status') == 'draft' }}>Draft</option><option value="submitted" {{ 'selected' if request.query_params.get('status') == 'submitted' }}>Submitted</option><option value="reviewed" {{ 'selected' if request.query_params.get('status') == 'reviewed' }}>Reviewed</option></select></label>
-    <label class="min-w-0 xl:col-span-1"><span class="form-label">Month</span><input type="month" name="report_month" value="{{ request.query_params.get('report_month') }}" class="form-input"></label>
-    <div class="grid grid-cols-2 gap-2 sm:col-span-2 xl:col-span-2">
-      <button class="h-11 rounded-xl bg-primary px-4 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">Apply</button>
-      <a href="{{ url_for('admin.unit-reports') }}" class="h-11 inline-flex items-center justify-center rounded-xl border border-gray-200 px-4 text-sm font-bold text-gray-600 hover:text-gray-900 transition-colors">Reset</a>
-    </div>
+  {% else %}
+    {{ empty_state("ri-file-chart-line", "No reports yet", "Reports submitted by heads of department will appear here.") }}
   {% endif %}
-  </form>
-</section>
-
-<section class="content-card p-4 lg:p-5">
-  <div class="overflow-x-auto">
-    <table class="w-full min-w-[980px] text-sm">
-      <thead>
-        <tr class="border-b border-gray-100">
-          <th class="table-header py-3 pr-4">Report</th>
-          <th class="table-header py-3 pr-4">Branch</th>
-          <th class="table-header py-3 pr-4">HOD</th>
-          <th class="table-header py-3 pr-4">Attendance</th>
-          <th class="table-header py-3 pr-4">Collections</th>
-          <th class="table-header py-3 pr-4">Status</th>
-          <th class="table-header py-3 pr-4">Submitted</th>
-          <th class="table-header py-3 text-right">Actions</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-gray-100">
-      {% for report in reports %}
-
-        {% set attendanceDays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] %}
-{% set ns = namespace(att=0) %}
-{% if report.attendance %}
-  {% for day in attendanceDays %}
-    {% set ns.att = ns.att + (report.attendance.get(day, 0) or 0) %}
-  {% endfor %}
-{% endif %}
-{% set attendanceTotal = ns.att %}
-{% set collectionsTotal = report.collections.values()|sum if report.collections else none %}
-{% set reviewMissing = not report.resident_pastor_comment and not report.senior_pastor_comment %}
-{% set showRoute = url_for('admin.unit-reports.show', report.id) %}
-        <tr class="cursor-pointer hover:bg-gray-50/50 transition-colors" data-report-row="{{ showRoute }}" tabindex="0" aria-label="Open {{ report.department.name or 'report' }} details">
-          <td class="py-3 pr-4">
-            <p class="font-semibold text-gray-900">{{ report.department.name or 'N/A' }}</p>
-            <p class="text-xs text-gray-500">{{ report.report_month or 'N/A' }}</p>
-          </td>
-          <td class="py-3 pr-4 text-gray-600">{{ report.branch.name or 'N/A' }}</td>
-          <td class="py-3 pr-4"><p class="text-gray-700 font-medium">{{ report.hod_admin.full_name or 'N/A' }}</p><p class="text-xs text-gray-500">{{ report.hod_admin.email }}</p></td>
-          <td class="py-3 pr-4 text-gray-600">{{ '{:,.0f}'.format(attendanceTotal) }}</td>
-          <td class="py-3 pr-4 text-gray-600">{{ "NGN {:,}".format(collectionsTotal|float) if collectionsTotal is not none else "N/A" }}</td>
-          <td class="py-3 pr-4">
-            <span class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide {{ statusTone.get(report.status, 'bg-gray-100 text-gray-500') }}">{{ (report.status or '')|capitalize }}</span>
-            {% if reviewMissing %}<span class="ml-1 inline-flex rounded-full bg-rose-50 px-2 py-1 text-[10px] font-bold uppercase text-rose-500">No comments</span>{% endif %}
-          </td>
-          <td class="py-3 pr-4 text-gray-500">{{ report.submitted_at.strftime('%b %d, %Y %I:%M %p') if report.submitted_at else 'Not submitted' }}</td>
-          <td class="py-3 text-right">
-            <div class="relative inline-flex" data-row-menu>
-              <button type="button" class="row-menu-btn h-8 w-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Report actions"><i class="ri-more-2-fill text-lg"></i></button>
-              <div class="row-menu hidden absolute right-0 top-9 z-20 w-44 rounded-xl border border-gray-200 bg-white p-1 shadow-lg">
-                <a href="{{ showRoute }}" class="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"><i class="ri-eye-line"></i> View report</a>
-                <a href="{{ showRoute }}#review" class="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"><i class="ri-chat-check-line"></i> Review comments</a>
-              </div>
-            </div>
-          </td>
-        </tr>
-      {% else %}
-
-        <tr><td colspan="8" class="py-10 text-center text-sm text-gray-500">No reports match your filters.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  
-  </div>
-</section>
 </div>
-</main>
-</div>
-<script>
-(() => {
-  const closeMenus = () => document.querySelectorAll('.row-menu').forEach(menu => menu.classList.add('hidden'));
-  document.querySelectorAll('[data-report-row]').forEach(row => {
-    const openReport = () => {
-      const url = row.getAttribute('data-report-row');
-      if (url) window.location.href = url;
-    };
-
-    row.addEventListener('click', (event) => {
-      if (event.target.closest('a, button, input, select, textarea, [data-row-menu]')) return;
-      openReport();
-    });
-
-    row.addEventListener('keydown', (event) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-      if (event.target.closest('a, button, input, select, textarea, [data-row-menu]')) return;
-      event.preventDefault();
-      openReport();
-    });
-  });
-
-  document.querySelectorAll('.row-menu-btn').forEach(button => {
-    button.addEventListener('click', (event) => {
-      event.stopPropagation();
-      const menu = button.closest('[data-row-menu]')?.querySelector('.row-menu');
-      const wasHidden = menu.classList.contains('hidden');
-      closeMenus();
-      if (wasHidden) menu.classList.remove('hidden');
-    });
-  });
-  document.addEventListener('click', closeMenus);
-  document.addEventListener('keydown', event => { if (event.key === 'Escape') closeMenus(); });
-})();
-</script>
-</body>
-</html>
+{% endblock %}

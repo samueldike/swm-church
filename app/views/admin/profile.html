@@ -1,87 +1,58 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>My Profile - {{ siteName }}</title>
-{% include "partials/admin-head-assets.html" %}
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, avatar, badge with context %}
+{% block title %}My Profile | {{ siteName }}{% endblock %}
+{% block topbar_title %}My Profile{% endblock %}
+{% block topbar_subtitle %}Account details and security{% endblock %}
+{% block topbar_icon %}ri-user-line{% endblock %}
 
+{% block page_header %}
+  {{ page_header("My profile", "Account details and password", audit=[('Role', role_label), ('Branch', admin_branch_name), ('Email', admin.email)]) }}
+{% endblock %}
 
-</head>
-<body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
-<div class="flex h-screen overflow-hidden">
-{% include "partials/admin-sidebar.html" %}
-<main class="flex-1 flex flex-col overflow-hidden">
-{% with title="My Profile", subtitle="Update your account details and security" %}{% include "partials/admin-topbar.html" %}{% endwith %}
-<div class="flex-1 overflow-y-auto p-5 lg:p-8 space-y-6">
-{% if session.get('success') %}
-<div class="rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-4 py-3">{{ request.session.get('success') }}</div>
-{% endif %}
-{% if errors %}
-<div class="rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">{{ (error_messages.values()|map('first')|list|first if error_messages else '') }}</div>
-{% endif %}
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 items-start max-w-5xl">
+  <div class="panel flex flex-col items-center text-center">
+    {{ avatar(admin_initials, 72, True) }}
+    <h2 class="mt-3.5 text-[15px] font-semibold text-ink">{{ admin.full_name }}</h2>
+    <p class="text-[12px] text-ink-3 mb-3">{{ role_label }}</p>
+    {{ badge('Active', 'ok') }}
+    <dl class="w-full mt-5 pt-4 border-t border-line flex flex-col gap-2 text-[12px] text-left">
+      <div class="flex justify-between gap-2"><dt class="text-ink-3">Branch</dt><dd class="text-ink text-right">{{ admin_branch_name }}</dd></div>
+      <div class="flex justify-between gap-2"><dt class="text-ink-3">Member since</dt><dd class="font-mono text-ink">{{ admin.created_at.strftime('%Y-%m-%d') if admin.created_at else '—' }}</dd></div>
+    </dl>
+  </div>
 
-<section class="content-card p-5 lg:p-6">
-<div class="flex items-center gap-2 mb-4">
-<i class="ri-person-line h-5 w-5 text-primary"></i>
-<h2 class="admin-page-title">Profile Information</h2>
-</div>
-<form method="POST" action="{{ url_for('admin.profile.update') }}" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-<input type="hidden" name="_method" value="PUT">
-<div>
-<label class="form-label">Full Name</label>
-<input name="name" value="{{ request.form.get('name', admin.name) }}" class="mt-1 form-input" required>
-{% if error_messages.get('name') %}<p class="text-xs text-red-600 mt-1">{{ error_messages.get('name', [''])[0] }}</p>{% endif %}
-</div>
-<div>
-<label class="form-label">Email</label>
-<input name="email" type="email" value="{{ request.form.get('email', admin.email) }}" class="mt-1 form-input" required>
-{% if error_messages.get('email') %}<p class="text-xs text-red-600 mt-1">{{ error_messages.get('email', [''])[0] }}</p>{% endif %}
-</div>
-<div class="md:col-span-2">
-<label class="form-label">Phone</label>
-<input name="phone" value="{{ request.form.get('phone', admin.phone) }}" class="mt-1 form-input" placeholder="Optional">
-{% if error_messages.get('phone') %}<p class="text-xs text-red-600 mt-1">{{ error_messages.get('phone', [''])[0] }}</p>{% endif %}
-</div>
-<div class="md:col-span-2 flex justify-end">
-<button type="submit" class="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">Save Profile</button>
-</div>
-</form>
-</section>
+  <div class="flex flex-col gap-4 min-w-0">
+    <div class="panel">
+      <h2 class="text-[14px] font-semibold text-ink mb-4">Profile details</h2>
+      <form method="POST" action="{{ url_for('admin_profile_update') }}" class="flex flex-col gap-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {{ field('Full name', 'full_name', value=admin.full_name, required=True) }}
+          {{ field('Phone number', 'phone', value=admin.phone or '', mono=True, placeholder='Optional') }}
+        </div>
+        {{ field('Email address', 'email', value=admin.email, type='email', mono=True, required=True) }}
+        <div><button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>Save changes</button></div>
+      </form>
+    </div>
 
-<section class="content-card p-5 lg:p-6">
-<div class="flex items-center gap-2 mb-4">
-<i class="ri-lock-line h-5 w-5 text-primary"></i>
-<h2 class="admin-page-title">Change Password</h2>
+    <div class="panel">
+      <h2 class="text-[14px] font-semibold text-ink mb-4">Change password</h2>
+      {% if error_messages %}
+        <div class="mb-4 rounded-md border border-[#e6c9c5] bg-bad-bg px-3.5 py-2.5 text-[13px] text-bad">
+          {% for key, errs in error_messages.items() %}{% for err in errs %}<p>{{ err }}</p>{% endfor %}{% endfor %}
+        </div>
+      {% endif %}
+      <form method="POST" action="{{ url_for('admin_profile_password_update') }}" class="flex flex-col gap-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {{ field('Current password', 'current_password', type='password', mono=True, required=True, autocomplete='current-password') }}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {{ field('New password', 'password', type='password', mono=True, required=True, hint='At least 8 characters.', autocomplete='new-password') }}
+          {{ field('Confirm new password', 'password_confirmation', type='password', mono=True, required=True, autocomplete='new-password') }}
+        </div>
+        <div><button type="submit" class="btn btn-secondary"><i class="ri-lock-password-line"></i>Update password</button></div>
+      </form>
+    </div>
+  </div>
 </div>
-<form method="POST" action="{{ url_for('admin.profile.password.update') }}" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-<input type="hidden" name="_method" value="PUT">
-<div class="md:col-span-2">
-<label class="form-label">Current Password</label>
-<input name="current_password" type="password" class="mt-1 form-input" required>
-{% if error_messages.get('current_password') %}<p class="text-xs text-red-600 mt-1">{{ error_messages.get('current_password', [''])[0] }}</p>{% endif %}
-</div>
-<div>
-<label class="form-label">New Password</label>
-<input name="password" type="password" class="mt-1 form-input" required>
-{% if error_messages.get('password') %}<p class="text-xs text-red-600 mt-1">{{ error_messages.get('password', [''])[0] }}</p>{% endif %}
-</div>
-<div>
-<label class="form-label">Confirm Password</label>
-<input name="password_confirmation" type="password" class="mt-1 form-input" required>
-</div>
-<div class="md:col-span-2 flex justify-end">
-<button type="submit" class="rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-[#1a1814] hover:bg-primary-dark transition-colors">Update Password</button>
-</div>
-</form>
-</section>
-</div>
-</main>
-</div>
-</body>
-</html>
-
-
-
+{% endblock %}

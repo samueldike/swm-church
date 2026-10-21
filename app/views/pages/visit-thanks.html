@@ -1,0 +1,24 @@
+{% set pageKey = 'visit' %}
+{% set pageEyebrow = 'Plan your visit' %}
+{% set pageTitle = 'We will look out for you, ' ~ done.name ~ '.' %}
+{% set pageLede = 'Your plan has reached ' ~ done.branch ~ '. A confirmation is on its way to your inbox.' %}
+{% include "partials/theme-page-open.html" %}
+
+<section class="band band-light">
+    <div class="shell" style="max-width:62ch;">
+        <p class="mono eyebrow"><span class="rule"></span>What happens next</p>
+        <ul class="rows" style="margin-top:1.6rem;">
+            <li class="row"><span class="row-in"><span class="mono faint row-i">01</span><span class="row-main"><span class="t-h3">Check your email</span><span class="t-sm row-sub">We have sent the address and service times. If it does not arrive, look in your spam folder.</span></span></span></li>
+            <li class="row"><span class="row-in"><span class="mono faint row-i">02</span><span class="row-main"><span class="t-h3">Come as you are</span><span class="t-sm row-sub">{{ done.when }}. There is nothing you need to bring.</span></span></span></li>
+            <li class="row"><span class="row-in"><span class="mono faint row-i">03</span><span class="row-main"><span class="t-h3">Say hello</span><span class="t-sm row-sub">Someone from the welcome team will be glad to meet you.</span></span></span></li>
+        </ul>
+        {% if done.subscribed %}<p class="t-sm" style="margin-top:1.6rem;">You are now on our update list. Every email has an unsubscribe link.</p>{% endif %}
+        <div class="flex flex-wrap items-center gap-3" style="margin-top:2rem;">
+            <a href="{{ url_for('services_ics') }}" class="btn btn-gold">Add our services to my calendar</a>
+            <a href="{{ url_for('messages') }}" class="btn btn-ghost">Listen to a message</a>
+            <a href="{{ url_for('home') }}" class="btn btn-ghost">Back home</a>
+        </div>
+    </div>
+</section>
+
+{% include "partials/theme-page-close.html" %}

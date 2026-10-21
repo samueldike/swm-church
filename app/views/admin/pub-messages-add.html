@@ -1,0 +1,140 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, textarea, file_field, badge with context %}
+{% block title %}Add messages | {{ siteName }}{% endblock %}
+{% block topbar_title %}Add messages{% endblock %}
+{% block topbar_subtitle %}{{ pub.title }}{% endblock %}
+{% block topbar_icon %}{{ kmeta.icon }}{% endblock %}
+
+{% block page_header %}
+  {{ page_header("Add messages", "Choose existing messages, upload audio to be transcribed, or add a finished transcript.",
+      actions='<a href="' ~ url_for('admin_pubs_show', kind=kind, pub_id=pub.id) ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>Back to project</a>',
+      audit=[('Project', pub.title), ('Messages so far', pub.sources|length)]) }}
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl flex flex-col gap-4">
+  <div role="tablist" aria-label="How to add messages" id="add-tabs" class="flex gap-1 overflow-x-auto border-b border-line admin-scrollbar">
+    {% for key, label, icon in [('existing', 'Existing messages', 'ri-message-3-line'), ('audio', 'Upload audio', 'ri-upload-2-line'), ('transcript', 'Add a transcript', 'ri-file-text-line')] %}
+      <button type="button" role="tab" id="tab-{{ key }}" data-tab="{{ key }}" aria-controls="{{ key }}" aria-selected="{{ 'true' if loop.first else 'false' }}" tabindex="{{ '0' if loop.first else '-1' }}"
+              class="add-tab inline-flex items-center gap-2 px-4 py-2.5 text-[13px] font-medium text-ink-3 hover:text-ink whitespace-nowrap border-b-2 border-transparent -mb-px">
+        <i class="{{ icon }} text-base"></i>{{ label }}
+      </button>
+    {% endfor %}
+  </div>
+
+  <section class="panel flex flex-col gap-3" id="existing">
+    <div>
+      <h2 class="text-[14px] font-semibold text-ink">From existing messages</h2>
+      <p class="text-[12px] text-ink-3 mt-1">Messages already on the site. Only those with a transcript can have topics generated.</p>
+    </div>
+    <form method="POST" action="{{ url_for('admin_pubs_messages_existing', kind=kind, pub_id=pub.id) }}" class="flex flex-col gap-3" id="existing-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label class="sr-only" for="msg-filter">Filter messages</label>
+      <input id="msg-filter" type="search" placeholder="Filter messages…" class="field-input">
+      <div id="msg-list" class="max-h-[440px] overflow-y-auto admin-scrollbar border border-line rounded-md divide-y divide-line">
+        {% for s in sermons %}
+          <label class="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-sunken" data-title="{{ s.title|lower }} {{ (s.preacher or '')|lower }}">
+            <input type="checkbox" name="sermon_ids" value="{{ s.id }}" class="field-checkbox mt-0.5">
+            <span class="min-w-0 flex-grow">
+              <span class="block text-[12.5px] font-medium text-ink truncate">{{ s.title }}</span>
+              <span class="block font-mono text-[10.5px] text-ink-3">{{ s.preacher or 'Unknown speaker' }}{% if s.published_at %} · {{ s.published_at.strftime('%d %b %Y') }}{% endif %}</span>
+            </span>
+            {% if s.transcript %}{{ badge('Transcript', 'ok') }}
+            {% elif s.transcription_status in ['queued', 'processing'] %}{{ badge('Transcribing', 'warn') }}
+            {% elif s.audio_file_path %}{{ badge('Not transcribed', 'neut') }}
+            {% else %}{{ badge('No audio', 'neut') }}{% endif %}
+          </label>
+        {% else %}
+          <p class="px-3 py-8 text-center text-[12.5px] text-ink-3">Every message is already in this project, or none exist yet.</p>
+        {% endfor %}
+      </div>
+      <div class="flex items-center gap-3">
+        <button type="submit" class="btn btn-primary"><i class="ri-add-line"></i>Add selected</button>
+        <span class="font-mono text-[11px] text-ink-3"><span id="msg-count">0</span> selected</span>
+      </div>
+    </form>
+  </section>
+
+  <div class="contents">
+    <section class="panel" id="audio">
+      <h2 class="text-[14px] font-semibold text-ink">Upload a new message</h2>
+      <p class="text-[12px] text-ink-3 mt-1 mb-4">The audio is transcribed by the system. Long messages can take several minutes; you can leave this page. The message is saved as a draft and is not published on the site.</p>
+      <form method="POST" action="{{ url_for('admin_pubs_messages_upload_audio', kind=kind, pub_id=pub.id) }}" enctype="multipart/form-data" data-turbo="false" class="flex flex-col gap-4" data-busy-text="Uploading…">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {{ field('Title', 'title', hint='Defaults to the file name.') }}
+        {{ field('Speaker', 'preacher') }}
+        {{ file_field('Audio file', 'audio_file', hint='mp3, wav, m4a, ogg, flac, aac, wma — up to 2 GB', accept='audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac,.wma,.mpga', required=True, id='audio_file') }}
+        <button type="submit" class="btn btn-primary self-start"><i class="ri-upload-2-line"></i>Upload &amp; transcribe</button>
+      </form>
+    </section>
+
+    <section class="panel" id="transcript">
+      <h2 class="text-[14px] font-semibold text-ink">Add a transcript</h2>
+      <p class="text-[12px] text-ink-3 mt-1 mb-4">Already have the text? Upload a .txt or .docx file, or paste it. No audio needed.</p>
+      <form method="POST" action="{{ url_for('admin_pubs_messages_upload_transcript', kind=kind, pub_id=pub.id) }}" enctype="multipart/form-data" data-turbo="false" class="flex flex-col gap-4" data-busy-text="Saving…">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {{ field('Title', 'title', required=True, id='tr_title') }}
+        {{ field('Speaker', 'preacher', id='tr_preacher') }}
+        {{ file_field('Transcript file', 'transcript_file', hint='.txt or .docx, up to 10 MB', accept='.txt,.docx,.md,.srt,.vtt', id='transcript_file') }}
+        {{ textarea('…or paste the transcript', 'transcript_text', rows=8, hint='Used when no file is chosen.', id='transcript_text') }}
+        <button type="submit" class="btn btn-primary self-start"><i class="ri-file-text-line"></i>Add transcript</button>
+      </form>
+    </section>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+(() => {
+  window.__swmPubAddTabsAbort?.abort();
+  const tctl = new AbortController();
+  window.__swmPubAddTabsAbort = tctl;
+  const tabs = [...document.querySelectorAll('#add-tabs [data-tab]')];
+  if (tabs.length) {
+    const ids = tabs.map((t) => t.dataset.tab);
+    const show = (id, { focus = false, push = false } = {}) => {
+      if (!ids.includes(id)) id = ids[0];
+      tabs.forEach((t) => {
+        const on = t.dataset.tab === id;
+        t.setAttribute('aria-selected', on ? 'true' : 'false'); t.tabIndex = on ? 0 : -1;
+        t.classList.toggle('text-ink', on); t.classList.toggle('border-gold', on); t.classList.toggle('border-transparent', !on); t.classList.toggle('text-ink-3', !on);
+        if (on && focus) t.focus();
+      });
+      ids.forEach((i) => { const p = document.getElementById(i); if (p) { p.hidden = i !== id; p.setAttribute('role', 'tabpanel'); p.setAttribute('aria-labelledby', 'tab-' + i); } });
+      if (location.hash !== '#' + id) (push ? history.pushState : history.replaceState).call(history, history.state, '', location.pathname + location.search + '#' + id);
+    };
+    show(location.hash.slice(1));
+    const bar = document.getElementById('add-tabs');
+    bar.addEventListener('click', (e) => { const t = e.target.closest('[data-tab]'); if (t) show(t.dataset.tab, { push: true }); }, { signal: tctl.signal });
+    bar.addEventListener('keydown', (e) => {
+      const i = tabs.indexOf(document.activeElement); if (i < 0) return;
+      const n = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key]; if (n === undefined) return;
+      e.preventDefault(); show(tabs[(n + tabs.length) % tabs.length].dataset.tab, { focus: true });
+    }, { signal: tctl.signal });
+    window.addEventListener('hashchange', () => show(location.hash.slice(1)), { signal: tctl.signal });
+  }
+})();
+(() => {
+  window.__swmPubAddAbort?.abort();
+  const ctl = new AbortController();
+  window.__swmPubAddAbort = ctl;
+  const opt = { signal: ctl.signal };
+  const filter = document.getElementById('msg-filter');
+  const list = document.getElementById('msg-list');
+  const count = document.getElementById('msg-count');
+  filter?.addEventListener('input', () => {
+    const q = filter.value.trim().toLowerCase();
+    list.querySelectorAll('[data-title]').forEach((row) => row.classList.toggle('hidden', !!q && !row.dataset.title.includes(q)));
+  }, opt);
+  filter?.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); }, opt);
+  document.getElementById('existing-form')?.addEventListener('change', () => {
+    count.textContent = document.querySelectorAll('#existing-form input[name=sermon_ids]:checked').length;
+  }, opt);
+  document.querySelectorAll('form[data-busy-text]').forEach((f) => f.addEventListener('submit', () => {
+    const b = f.querySelector('button[type=submit]');
+    if (b) { b.disabled = true; b.textContent = f.dataset.busyText; }
+  }, opt));
+})();
+</script>
+{% endblock %}

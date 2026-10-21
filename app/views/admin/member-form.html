@@ -1,0 +1,89 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, select, textarea, checkbox with context %}
+{% block title %}{{ 'Edit Member' if member else 'New Member' }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ 'Edit Member' if member else 'New Member' }}{% endblock %}
+{% block topbar_subtitle %}Members{% endblock %}
+{% block topbar_icon %}ri-team-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header(
+      'Edit Member' if member else 'New Member',
+      ('Reference ID-' ~ member.id if member else 'Register a new member') ~ (' · ' ~ member.branch.name if member and member.branch else ''),
+  ) }}
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start max-w-4xl">
+  <div class="panel">
+    <h2 class="text-[14px] font-semibold text-ink mb-4">Member details</h2>
+    <form method="POST"
+          action="{{ url_for('admin_members_update', member_id=member.id) if member else url_for('admin_members_store') }}"
+          class="flex flex-col gap-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {{ field('First name', 'first_name', value=member.first_name if member else '', required=True) }}
+        {{ field('Last name', 'last_name', value=member.last_name if member else '', required=True) }}
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {{ field('Email address', 'email', value=member.email if member else '', type='email', mono=True) }}
+        {{ field('Phone number', 'phone', value=member.phone if member else '', mono=True) }}
+      </div>
+
+      {% if member %}
+        {# Fields below are only accepted by the update endpoint — create only saves name/email/phone/gender. #}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {{ select('Gender', 'gender', [('', 'Not specified'), ('male', 'Male'), ('female', 'Female')], selected=member.gender or '') }}
+          {{ select('Membership status', 'membership_status', [('active', 'Active'), ('inactive', 'Inactive')], selected=member.membership_status or 'active') }}
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {{ field('Date of birth', 'date_of_birth', value=member.date_of_birth.isoformat() if member.date_of_birth else '', type='date', mono=True) }}
+          {{ field('Joined ministry', 'joined_at', value=member.joined_at.isoformat() if member.joined_at else '', type='date', mono=True) }}
+        </div>
+        {% if branches %}
+          <div>
+            <label for="branch_id" class="field-label">Branch</label>
+            <select id="branch_id" name="branch_id" class="field-select">
+              {% for b in branches %}
+                <option value="{{ b.id }}" {{ 'selected' if b.id == member.branch_id else '' }}>{{ b.name }}</option>
+              {% endfor %}
+            </select>
+            <p class="field-hint">Only super administrators can reassign a member's branch.</p>
+          </div>
+        {% endif %}
+        {{ textarea('Internal notes', 'notes', value=member.notes or '', placeholder='Visible to admins only — not shown to the member') }}
+      {% else %}
+        {{ select('Gender', 'gender', [('', 'Not specified'), ('male', 'Male'), ('female', 'Female')]) }}
+        <div class="flex items-center gap-2 p-3 rounded-md bg-gold-tint border border-[#ebdfc0]">
+          <i class="ri-information-line text-gold-text flex-shrink-0"></i>
+          <p class="text-[11.5px] text-gold-text">New members are registered under your branch. Additional details (date of birth, status, notes) can be added after saving.</p>
+        </div>
+      {% endif %}
+
+      <div class="flex items-center gap-2.5 pt-4 mt-1 border-t border-line">
+        <button type="submit" class="btn btn-primary">
+          <i class="ri-check-line"></i>{{ 'Save changes' if member else 'Add member' }}
+        </button>
+        <a href="{{ url_for('admin_members') }}" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+
+  {% if member %}
+    <div class="panel">
+      <h2 class="text-[14px] font-semibold text-ink mb-3">Record</h2>
+      <dl class="flex flex-col gap-2.5 text-[12px]">
+        <div class="flex justify-between gap-3"><dt class="text-ink-3">Reference</dt><dd class="font-mono font-medium text-ink">ID-{{ member.id }}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-ink-3">Created</dt><dd class="font-mono text-ink">{{ member.created_at.strftime('%Y-%m-%d') if member.created_at else '' }}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="text-ink-3">Last updated</dt><dd class="font-mono text-ink">{{ member.updated_at.strftime('%Y-%m-%d %H:%M') if member.updated_at else '' }}</dd></div>
+      </dl>
+      <form method="POST" action="{{ url_for('admin_members_destroy', member_id=member.id) }}"
+            class="mt-4 pt-4 border-t border-line"
+            data-confirm="Delete {{ member.full_name }}? This cannot be undone." data-confirm-title="Delete Member" data-confirm-accept="Delete">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-danger w-full"><i class="ri-delete-bin-line"></i>Delete member</button>
+      </form>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

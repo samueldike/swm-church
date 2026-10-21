@@ -108,6 +108,43 @@
         onScroll();
     }
 
+    /* Program flyer lightbox */
+    var flyerBox = document.querySelector('[data-flyer-lightbox]');
+    if (flyerBox) {
+        var flyerImg = flyerBox.querySelector('[data-flyer-image]');
+        var lastFlyerFocus = null;
+        var closeFlyer = function () {
+            flyerBox.hidden = true;
+            flyerBox.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+            if (flyerImg) {
+                flyerImg.removeAttribute('src');
+                flyerImg.removeAttribute('alt');
+            }
+            if (lastFlyerFocus) lastFlyerFocus.focus();
+        };
+        document.querySelectorAll('[data-flyer-open]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                lastFlyerFocus = document.activeElement;
+                if (flyerImg) {
+                    flyerImg.src = btn.getAttribute('data-src') || '';
+                    flyerImg.alt = btn.getAttribute('data-title') || 'Program flyer';
+                }
+                flyerBox.hidden = false;
+                flyerBox.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+                var close = flyerBox.querySelector('[data-flyer-close]');
+                if (close) close.focus();
+            });
+        });
+        flyerBox.querySelectorAll('[data-flyer-close]').forEach(function (btn) {
+            btn.addEventListener('click', closeFlyer);
+        });
+        document.addEventListener('keydown', function (e) {
+            if (!flyerBox.hidden && e.key === 'Escape') closeFlyer();
+        });
+    }
+
     /* ── reveal on enter ──────────────────────────────────────────────── */
     /* Section-level trigger; .rise/.fade/.wipe children cascade off `.in`. */
     if ('IntersectionObserver' in window && !reduced) {
@@ -294,4 +331,17 @@
         });
     }
 })();
+
+    /* Pause / resume the moving gallery (accessibility: motion must be stoppable). */
+    (function () {
+        var btn = document.getElementById('belt-toggle'), belts = document.getElementById('belts');
+        if (!btn || !belts) return;
+        var label = document.getElementById('belt-toggle-label'), icon = btn.querySelector('.material-symbols-outlined');
+        btn.addEventListener('click', function () {
+            var paused = belts.classList.toggle('is-paused');
+            btn.setAttribute('aria-pressed', paused ? 'true' : 'false');
+            if (label) label.textContent = paused ? 'Play moving photos' : 'Pause moving photos';
+            if (icon) icon.textContent = paused ? 'play_arrow' : 'pause';
+        });
+    })();
 </script>

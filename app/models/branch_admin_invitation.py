@@ -27,5 +27,5 @@ class BranchAdminInvitation(Base):
         onupdate=lambda: datetime.utcnow(),
     )
 
-    branch = relationship("Branch", back_populates="admin_invitations")
-    invited_by = relationship("Admin", back_populates="branch_invitations_sent")
+    branch = relationship("Branch", back_populates="admin_invitations", lazy="selectin")
+    invited_by = relationship("Admin", back_populates="branch_invitations_sent", lazy="selectin")

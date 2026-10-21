@@ -1,0 +1,27 @@
+{% set pageEyebrow = 'Email updates' %}
+{% set pageTitle = 'You are unsubscribed.' if done and sub else ('Unsubscribe' if sub else 'Link not recognised') %}
+{% set pageLede = ('We will not email this address any more.' if done and sub else ('Confirm that you no longer want updates from us.' if sub else 'This unsubscribe link is not valid. It may already have been used.')) %}
+{% include "partials/theme-page-open.html" %}
+
+<section class="band band-light">
+    <div class="shell" style="max-width:56ch;">
+        {% if sub and done %}
+            <p class="t-body">{{ sub.email }} has been removed from our list. You will not receive newsletters, message alerts or devotionals from us.</p>
+            <p class="t-sm" style="margin-top:1rem;">Changed your mind by accident?</p>
+            <form method="POST" action="{{ url_for('resubscribe', token=token) }}" style="margin-top:0.8rem;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
+                <button class="btn btn-ghost" type="submit">Subscribe again</button>
+            </form>
+        {% elif sub %}
+            <p class="t-body">Stop sending updates to <strong>{{ sub.email }}</strong>?</p>
+            <form method="POST" action="{{ url_for('unsubscribe_confirm', token=token) }}" style="margin-top:1.4rem;">
+                <button class="btn btn-gold" type="submit">Yes, unsubscribe me</button>
+                <a class="btn btn-ghost" href="{{ url_for('home') }}" style="margin-left:0.6rem;">Keep me subscribed</a>
+            </form>
+        {% else %}
+            <p class="t-body">If you still receive emails from us and want them to stop, reply to any of them or <a class="lnk-inline" href="{{ url_for('contact') }}">contact us</a> and we will remove you.</p>
+        {% endif %}
+    </div>
+</section>
+
+{% include "partials/theme-page-close.html" %}

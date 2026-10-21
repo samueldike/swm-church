@@ -9,88 +9,238 @@ import httpx
 
 from app.celery_app import celery_app
 from app.database import async_session
-from app.core.telegram import TelegramDistributor
+from app.core.media import to_abspath
+from app.core.telegram import TelegramDistributor, TelegramUploadTooLarge
 
 logger = logging.getLogger(__name__)
 
 
+async def _load_sermon(db, sermon_id: int):
+    from sqlalchemy import select
+    from app.models.sermon import Sermon
+
+    result = await db.execute(select(Sermon).where(Sermon.id == sermon_id))
+    return result.scalar_one_or_none()
+
+
+async def _set_distribution(sermon_id: int, platform: str, **fields) -> None:
+    async with async_session() as db:
+        sermon = await _load_sermon(db, sermon_id)
+        if not sermon:
+            return
+        status = dict(sermon.distribution_status or {})
+        entry = dict(status.get(platform) or {})
+        entry.update(fields)
+        entry["updated_at"] = datetime.now(timezone.utc).isoformat()
+        status[platform] = entry
+        sermon.distribution_status = status
+        await db.commit()
+
+
+# ─── Distribution ──────────────────────────────────────────────────
+
+@celery_app.task(bind=True, max_retries=2, default_retry_delay=120)
+def distribute_audio_task(self, sermon_id: int, transcribe: bool = True):
+    """Upload a sermon's audio to Telegram, then queue transcription.
+
+    Runs out-of-band because a multi-hundred-megabyte upload would otherwise
+    hold the admin HTTP request open past nginx's proxy timeout.
+    """
+    import asyncio
+
+    asyncio.run(_distribute(sermon_id, transcribe))
+
+
+async def _distribute(sermon_id: int, transcribe: bool) -> None:
+    async with async_session() as db:
+        sermon = await _load_sermon(db, sermon_id)
+        if not sermon:
+            logger.error("Sermon %d not found for distribution", sermon_id)
+            return
+        audio_path = to_abspath(sermon.audio_file_path)
+        filename = sermon.original_file_name or "sermon.mp3"
+        title = sermon.title
+        caption = sermon.caption or sermon.title
+        branch_id = sermon.branch_id
+
+    if not audio_path:
+        logger.error("Sermon %d has no readable audio file on disk", sermon_id)
+        await _set_distribution(sermon_id, "telegram", state="failed", error="audio file missing")
+        return
+
+    tg = TelegramDistributor(branch_id)      # the message's own branch bot; HQ's only for HQ messages
+    if not await tg.configured():
+        await _set_distribution(sermon_id, "telegram", state="skipped", error="this branch has no Telegram bot/channel saved")
+        return
+
+    await _set_distribution(sermon_id, "telegram", state="uploading")
+
+    try:
+        result = await tg.send_audio(
+            file_path=audio_path,
+            filename=filename,
+            title=title,
+            caption=caption,
+        )
+    except TelegramUploadTooLarge as exc:
+        logger.error("Sermon %d too large for Telegram: %s", sermon_id, exc)
+        await _set_distribution(sermon_id, "telegram", state="failed", error=str(exc))
+        return
+    except Exception as exc:
+        logger.exception("Telegram upload failed for sermon %d", sermon_id)
+        await _set_distribution(sermon_id, "telegram", state="failed", error=str(exc))
+        raise
+
+    if not result:
+        await _set_distribution(sermon_id, "telegram", state="failed", error="rejected by Telegram")
+        return
+
+    async with async_session() as db:
+        sermon = await _load_sermon(db, sermon_id)
+        if sermon:
+            sermon.telegram_file_id = result.get("file_id")
+            sermon.telegram_message_id = str(result.get("message_id", ""))
+            await db.commit()
+
+    await _set_distribution(
+        sermon_id, "telegram", state="sent", message_id=result.get("message_id")
+    )
+    logger.info("Sermon %d distributed to Telegram", sermon_id)
+
+    if transcribe:
+        transcribe_audio_task.delay(sermon_id)
+
+
+# ─── Transcription ─────────────────────────────────────────────────
+
 @celery_app.task(bind=True, max_retries=2, default_retry_delay=60)
-def transcribe_audio_task(self, sermon_id: int, telegram_file_id: str):
+def transcribe_audio_task(self, sermon_id: int, telegram_file_id: str | None = None):
     import asyncio
 
     asyncio.run(_transcribe(sermon_id, telegram_file_id))
 
 
-async def _transcribe(sermon_id: int, telegram_file_id: str):
-    from sqlalchemy import select
-    from app.models.sermon import Sermon
+async def _resolve_audio(sermon_id: int, stored_path: str | None, telegram_file_id: str | None, branch_id: int | None = None):
+    """Return ``(path, is_temp)`` for the audio to transcribe.
+
+    The local copy is preferred: it avoids a network round trip and sidesteps
+    the cloud Bot API's 20MB getFile ceiling entirely.
+    """
+    local = to_abspath(stored_path)
+    if local:
+        return local, False
+
+    if not telegram_file_id:
+        return None, False
+
+    tg = TelegramDistributor(branch_id)
+    remote_path, file_url = await tg.resolve_file(telegram_file_id)
+
+    if remote_path:
+        return remote_path, False
+
+    if not file_url:
+        return None, False
+
+    tmp_path = None
+    async with httpx.AsyncClient(timeout=1800) as client:
+        async with client.stream("GET", file_url) as resp:
+            resp.raise_for_status()
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
+                async for chunk in resp.aiter_bytes(chunk_size=65536):
+                    f.write(chunk)
+                tmp_path = f.name
+    return tmp_path, True
+
+
+async def _mark_failed(sermon_id: int) -> None:
+    try:
+        async with async_session() as db:
+            sermon = await _load_sermon(db, sermon_id)
+            if sermon:
+                sermon.transcription_status = "failed"
+                await db.commit()
+    except Exception:
+        logger.exception("Could not mark sermon %d transcription failed", sermon_id)
+
+
+async def _transcribe(sermon_id: int, telegram_file_id: str | None):
+    import asyncio
 
     async with async_session() as db:
-        result = await db.execute(select(Sermon).where(Sermon.id == sermon_id))
-        sermon = result.scalar_one_or_none()
+        sermon = await _load_sermon(db, sermon_id)
         if not sermon:
             logger.error("Sermon %d not found for transcription", sermon_id)
             return
+
+        stored_path = sermon.audio_file_path
+        telegram_file_id = telegram_file_id or sermon.telegram_file_id
+        branch_id = sermon.branch_id
 
         sermon.transcription_status = "processing"
         sermon.transcription_started_at = datetime.now(timezone.utc)
         await db.commit()
 
-    tg = TelegramDistributor()
-    file_url = await tg.file_download_url(telegram_file_id)
-    if not file_url:
-        async with async_session() as db:
-            result = await db.execute(select(Sermon).where(Sermon.id == sermon_id))
-            sermon = result.scalar_one_or_none()
-            if sermon:
-                sermon.transcription_status = "failed"
-                await db.commit()
-        logger.error("Could not get Telegram download URL for sermon %d", sermon_id)
+    audio_path = None
+    is_temp = False
+    try:
+        audio_path, is_temp = await _resolve_audio(sermon_id, stored_path, telegram_file_id, branch_id)
+    except Exception:
+        logger.exception("Could not fetch audio for sermon %d", sermon_id)
+
+    if not audio_path:
+        await _mark_failed(sermon_id)
+        logger.error("No audio source available for sermon %d", sermon_id)
         return
 
-    tmp_path = None
     try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            async with client.stream("GET", file_url) as resp:
-                resp.raise_for_status()
-                suffix = ".mp3"
-                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
-                    async for chunk in resp.aiter_bytes(chunk_size=65536):
-                        f.write(chunk)
-                    tmp_path = f.name
-
         from app.core.transcription import transcribe_audio
 
         transcript = await asyncio.get_event_loop().run_in_executor(
-            None, transcribe_audio, tmp_path
+            None, transcribe_audio, audio_path
         )
 
         async with async_session() as db:
-            result = await db.execute(select(Sermon).where(Sermon.id == sermon_id))
-            sermon = result.scalar_one_or_none()
+            sermon = await _load_sermon(db, sermon_id)
             if sermon:
                 sermon.transcript = transcript
                 sermon.transcription_status = "completed"
                 sermon.transcription_completed_at = datetime.now(timezone.utc)
                 await db.commit()
-                logger.info("Transcription completed for sermon %d (%d chars)", sermon_id, len(transcript))
+                logger.info(
+                    "Transcription completed for sermon %d (%d chars)",
+                    sermon_id,
+                    len(transcript),
+                )
 
     except Exception as exc:
         logger.exception("Transcription failed for sermon %d", sermon_id)
-        try:
-            async with async_session() as db:
-                result = await db.execute(select(Sermon).where(Sermon.id == sermon_id))
-                sermon = result.scalar_one_or_none()
-                if sermon:
-                    sermon.transcription_status = "failed"
-                    await db.commit()
-        except Exception:
-            pass
+        await _mark_failed(sermon_id)
         raise exc
 
     finally:
-        if tmp_path and os.path.exists(tmp_path):
+        if is_temp and audio_path and os.path.exists(audio_path):
             try:
-                os.unlink(tmp_path)
+                os.unlink(audio_path)
             except OSError:
                 pass
+
+
+# ─── Books Pub (AI drafting) ───────────────────────────────────────
+
+@celery_app.task(bind=True, max_retries=0)
+def generate_topics_task(self, publication_id: int):
+    import asyncio
+
+    from app.core.publications import run_topics
+
+    asyncio.run(run_topics(publication_id))
+
+
+@celery_app.task(bind=True, max_retries=0)
+def generate_contents_task(self, publication_id: int):
+    import asyncio
+
+    from app.core.publications import run_contents
+
+    asyncio.run(run_contents(publication_id))

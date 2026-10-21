@@ -1,26 +1,12 @@
+{# Runtime overrides of the admin design tokens, from Settings → Admin Appearance.
+   adminThemeCss is built (and hex-validated) by _admin_theme_css() in app/routes/admin.py;
+   it is empty for the default Ministry Gold theme. #}
 <style id="swm-admin-theme">
   :root {
     {{ adminThemeCss|safe }}
-    --swm-primary: var(--color-primary);
-    --swm-primary-dark: var(--color-primary-dark);
-    --swm-primary-light: var(--color-primary-light);
-    --swm-secondary: var(--color-secondary);
-  }
-
-  #admin-sidebar {
-    background-color: var(--color-sidebar-bg) !important;
-    border-color: var(--admin-sidebar-border) !important;
-  }
-
-  #admin-sidebar [class~="border-[#2d2820]"] {
-    border-color: var(--admin-sidebar-border) !important;
-  }
-
-  .dark input:focus,
-  .dark select:focus,
-  .dark textarea:focus,
-  .dark .form-input:focus,
-  .dark .filter-select:focus {
-    border-color: var(--color-primary) !important;
+    --swm-primary: var(--color-gold);
+    --swm-primary-dark: var(--color-gold-text);
+    --swm-primary-light: var(--color-gold-hi);
+    --swm-secondary: var(--color-chrome);
   }
 </style>

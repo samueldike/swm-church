@@ -47,3 +47,7 @@ swm-backup/
 # Local-only deploy credentials and archived one-off deploy scripts
 .deploy-archive/
 .env.deploy
+
+# Runtime uploads (bind-mounted on the VPS), never committed
+app/media/*
+!app/media/.gitkeep

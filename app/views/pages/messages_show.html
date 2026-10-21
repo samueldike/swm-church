@@ -4,6 +4,7 @@
 {% set pageLede = sermon.caption or '' %}
 {% set pageMeta = (sermon.caption or sermon.description or sermon.title)[:150] %}
 {% set metaType = 'article' %}
+{% set metaTitle = sermon.title %}
 {% include "partials/theme-page-open.html" %}
 
 <section class="band band-light">
@@ -12,17 +13,22 @@
             <div class="msg-meta-row">
                 {% if sermon.preacher %}<span class="mono faint">{{ sermon.preacher }}</span>{% endif %}
                 {% if sermon.published_at %}<span class="mono faint">{{ sermon.published_at.strftime('%d %B %Y') }}</span>{% endif %}
-                {% if sermon.branch and sermon.branch.name %}<span class="mono faint">{{ sermon.branch.name }}</span>{% endif %}
             </div>
+            {% if sermon.series or sermon.scripture %}
+            <p class="msg-facets">
+                {% if sermon.series %}<a class="lnk-inline" href="{{ url_for('messages') }}?series={{ sermon.series|urlencode }}">Series: {{ sermon.series }}</a>{% endif %}
+                {% if sermon.scripture %}<span class="mono faint">{{ sermon.scripture }}</span>{% endif %}
+            </p>
+            {% endif %}
 
             {% if sermon.audio_file_path or sermon.media_url %}
             <div class="player">
                 <audio controls preload="none" style="width:100%;"
-                       src="{{ url_for('messages_stream', slug=sermon.slug) }}">
+                       src="{{ url_for('messages_stream', sermon_id=sermon.id) }}">
                     Your browser does not support audio playback.
                 </audio>
                 <div class="flex flex-wrap items-center gap-3" style="margin-top:1.1rem;">
-                    <a class="btn btn-gold" href="{{ url_for('messages_download', slug=sermon.slug) }}">
+                    <a class="btn btn-gold" href="{{ url_for('messages_download', sermon_id=sermon.id) }}">
                         <span class="material-symbols-outlined" style="font-size:18px">download</span>
                         Download
                     </a>
@@ -42,14 +48,40 @@
                 <p class="t-body" style="margin-top:1rem;">{{ sermon.description }}</p>
             </div>
             {% endif %}
+
+            {% if show_transcript %}
+            <details class="transcript" style="margin-top:2.2rem;">
+                <summary class="mono eyebrow" style="cursor:pointer;"><span class="rule"></span>Read the transcript</summary>
+                <p class="t-sm" style="margin-top:1rem;">Written from the recording. It may contain small errors.</p>
+                <div class="t-body transcript-body">{% for para in sermon.transcript.replace('\r\n', '\n').split('\n\n') if para.strip() %}<p>{{ para.strip() }}</p>{% endfor %}</div>
+            </details>
+            {% endif %}
+
+            <div class="msg-share">
+                <p class="mono faint">Share this message</p>
+                <div style="display:flex;flex-wrap:wrap;gap:1.1rem;margin-top:0.7rem;font-size:0.9rem;">
+                    <a class="lnk-inline" target="_blank" rel="noopener" href="https://wa.me/?text={{ (sermon.title ~ ' — ' ~ canonicalUrl)|urlencode }}">WhatsApp<span class="sr-only"> (opens in a new tab)</span></a>
+                    <a class="lnk-inline" target="_blank" rel="noopener" href="https://www.facebook.com/sharer/sharer.php?u={{ canonicalUrl|urlencode }}">Facebook<span class="sr-only"> (opens in a new tab)</span></a>
+                    <a class="lnk-inline" target="_blank" rel="noopener" href="https://x.com/intent/tweet?url={{ canonicalUrl|urlencode }}&amp;text={{ sermon.title|urlencode }}">X<span class="sr-only"> (opens in a new tab)</span></a>
+                </div>
+            </div>
         </article>
 
         <aside>
             <div class="note">
                 <p class="t-h3">Hear it live</p>
-                <p class="t-sm" style="margin-top:0.5rem;">Sundays at 7:00 am and 9:30 am, Mile 50.</p>
-                <a href="{{ url_for('calendar') }}" class="lnk" style="margin-top:0.9rem;">Service times</a>
+                <p class="t-sm" style="margin-top:0.5rem;">{% for svc in services if svc.lead %}{{ svc.day }} {{ svc.time }}{{ '; ' if not loop.last else '' }}{% else %}Join us for our weekly services.{% endfor %}</p>
+                <a href="{{ url_for('visit') }}" class="lnk" style="margin-top:0.9rem;">Plan your visit</a>
             </div>
+            {% if telegramJoin or whatsappChannel %}
+            <div class="note" style="margin-top:1.7rem;">
+                <p class="t-h3">Get new messages</p>
+                <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:0.7rem;font-size:0.9rem;">
+                    {% if telegramJoin %}<a class="lnk-inline" href="{{ telegramJoin }}" target="_blank" rel="noopener">Join us on Telegram<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
+                    {% if whatsappChannel %}<a class="lnk-inline" href="{{ whatsappChannel }}" target="_blank" rel="noopener">Follow on WhatsApp<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
+                </div>
+            </div>
+            {% endif %}
             {% if counsellingPhone %}
             <div class="note" style="margin-top:1.7rem;">
                 <p class="t-h3">Did this speak to you?</p>
@@ -99,6 +131,14 @@
     .msg-meta-row { display: flex; flex-wrap: wrap; gap: 1.2rem; }
     .player { margin-top: 1.8rem; padding: 1.3rem; border: 1px solid var(--line); background: var(--surface); }
     .player audio { filter: saturate(0.6); }
+    .msg-facets { display: flex; flex-wrap: wrap; gap: 0.5rem 1.4rem; margin-top: 0.9rem; font-size: 0.9rem; }
+    .msg-share { margin-top: 2.4rem; padding-top: 1.4rem; border-top: 1px solid var(--line); }
+    .transcript summary { list-style: none; }
+    .transcript summary::-webkit-details-marker { display: none; }
+    .transcript summary::after { content: '+'; margin-left: 0.6rem; color: var(--gold-lt); }
+    .transcript[open] summary::after { content: '−'; }
+    .transcript-body { max-width: 66ch; margin-top: 1rem; }
+    .transcript-body p + p { margin-top: 1rem; }
 </style>
 
 {% include "partials/theme-page-close.html" %}

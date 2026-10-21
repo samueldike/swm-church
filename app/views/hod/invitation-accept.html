@@ -3,55 +3,53 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Activate HOD Account - {{ siteName }}</title>
+<title>Activate HOD Account | {{ siteName }}</title>
 <link rel="icon" href="/images/swm-logo.png" type="image/png"/>
 {% include "partials/admin-head-assets.html" %}
 {% include "partials/admin-theme.html" %}
 </head>
-<body class="bg-background-light text-secondary font-sans antialiased">
-<main class="min-h-screen flex items-center justify-center bg-background-light px-6">
-  <div class="w-full max-w-md bg-white rounded-2xl border border-gray-100 shadow-soft p-8">
-    <div class="flex items-center gap-3 mb-6">
-      <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center border border-primary/30">
-        <span class="text-primary font-bold text-xs uppercase">SWM</span>
-      </div>
-      <div>
-        <h1 class="text-lg font-bold text-secondary">Activate HOD Account</h1>
-        <p class="text-xs text-gray-500">{{ siteName }}</p>
-      </div>
+<body class="m-0 bg-paper text-ink font-sans antialiased">
+<main class="min-h-screen flex items-center justify-center px-4 sm:px-6 py-10"
+      style="background-image:radial-gradient(circle at 1px 1px, var(--color-line) 1px, transparent 0); background-size:28px 28px;">
+  <div class="w-full max-w-md bg-surface rounded-lg border border-line shadow-sm p-7 sm:p-9">
+    <div class="text-center mb-6">
+      <span class="inline-flex items-center justify-center w-11 h-11 rounded-md border border-line-2 bg-gold-tint mb-4">
+        <i class="ri-shield-check-line text-xl text-gold-text"></i>
+      </span>
+      <h1 class="text-[17px] font-semibold text-ink">Activate your HOD account</h1>
+      <p class="mt-1.5 text-[12.5px] text-ink-3">{{ siteName }} Administration Console</p>
     </div>
 
-    <dl class="grid gap-3 text-sm mb-6">
-      <div class="flex justify-between gap-4"><dt class="text-gray-500">Department</dt><dd class="font-semibold text-right">{{ invitation.department.name if invitation.department else '' }}</dd></div>
-      <div class="flex justify-between gap-4"><dt class="text-gray-500">Branch</dt><dd class="font-semibold text-right">{{ invitation.branch.name if invitation.branch else '' }}</dd></div>
-      <div class="flex justify-between gap-4"><dt class="text-gray-500">Email</dt><dd class="font-semibold text-right">{{ invitation.email }}</dd></div>
+    <dl class="grid gap-2 text-[13px] mb-6 rounded-md bg-sunken p-3.5">
+      <div class="flex justify-between gap-4"><dt class="text-ink-3">Department</dt><dd class="font-semibold text-ink text-right">{{ invitation.department.name if invitation.department else '' }}</dd></div>
+      <div class="flex justify-between gap-4"><dt class="text-ink-3">Branch</dt><dd class="font-semibold text-ink text-right">{{ invitation.branch.name if invitation.branch else '' }}</dd></div>
+      <div class="flex justify-between gap-4"><dt class="text-ink-3">Email</dt><dd class="font-mono font-medium text-ink text-right">{{ invitation.email }}</dd></div>
     </dl>
 
     {% if error_messages %}
-    <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-      {% for key, errors in error_messages.items() %}
-        {% for err in errors %}
-          {{ err }}<br>
+      <div class="mb-4 rounded-md border border-[#e6c9c5] bg-bad-bg px-3.5 py-2.5 text-[13px] text-bad">
+        {% for key, errs in error_messages.items() %}
+          {% for err in errs %}<p>{{ err }}</p>{% endfor %}
         {% endfor %}
-      {% endfor %}
-    </div>
+      </div>
     {% endif %}
 
-    <form method="POST" action="{{ url_for('hod_invitation_accept', token=token) }}" class="space-y-4">
+    <form method="POST" action="{{ url_for('hod_invitation_accept', token=token) }}" class="flex flex-col gap-4">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div>
-        <label class="form-label" for="password">Password</label>
-        <input id="password" type="password" name="password" class="form-input" required>
+        <label for="password" class="field-label">Password</label>
+        <input id="password" type="password" name="password" required minlength="8" autocomplete="new-password" class="field-input field-mono">
+        <p class="field-hint">At least 8 characters.</p>
       </div>
       <div>
-        <label class="form-label" for="password_confirmation">Confirm Password</label>
-        <input id="password_confirmation" type="password" name="password_confirmation" class="form-input" required>
+        <label for="password_confirmation" class="field-label">Confirm password</label>
+        <input id="password_confirmation" type="password" name="password_confirmation" required autocomplete="new-password" class="field-input field-mono">
       </div>
-      <button type="submit" class="w-full h-12 rounded-xl bg-primary text-[#1a1814] font-bold text-sm hover:bg-primary-dark transition-all">Activate Account</button>
+      <button type="submit" class="btn btn-primary btn-lg w-full mt-1">Activate account</button>
     </form>
 
-    <p class="mt-6 text-center text-sm text-gray-500">
-      <a href="{{ url_for('admin_login') }}" class="text-primary hover:underline">Back to Login</a>
+    <p class="mt-6 text-center text-[12.5px] text-ink-3">
+      <a href="{{ url_for('admin_login') }}" class="text-gold-text font-medium">Back to login</a>
     </p>
   </div>
 </main>

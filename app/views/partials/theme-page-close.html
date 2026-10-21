@@ -7,6 +7,7 @@
     (socialYouTube,   'YouTube'),
     (socialTelegram,  'Telegram')
 ] %}
+{% include "partials/public-flash.html" %}
 <footer class="band band-dark site-foot">
     <div class="shell">
         <div class="foot-grid">
@@ -24,6 +25,8 @@
             <nav class="foot-col" aria-label="Explore">
                 <p class="mono gold">Explore</p>
                 <a href="{{ url_for('about') }}">About</a>
+                <a href="{{ url_for('visit') }}">Plan a visit</a>
+                <a href="{{ url_for('branches') }}">Find a branch</a>
                 <a href="{{ url_for('our_pastor') }}">Our Pastor</a>
                 <a href="{{ url_for('departments') }}">Departments</a>
                 <a href="{{ url_for('messages') }}">Audio Messages</a>
@@ -42,10 +45,21 @@
             <nav class="foot-col" aria-label="Follow">
                 <p class="mono gold">Follow</p>
                 {% for href, label in socials %}{% if href %}
-                <a href="{{ href }}" target="_blank" rel="noopener">{{ label }}</a>
+                <a href="{{ href }}" target="_blank" rel="noopener">{{ label }}<span class="sr-only"> (opens in a new tab)</span></a>
                 {% endif %}{% endfor %}
+                {% if whatsappChat %}<a href="{{ whatsappChat }}" target="_blank" rel="noopener">WhatsApp<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
+                {% if whatsappChannel %}<a href="{{ whatsappChannel }}" target="_blank" rel="noopener">WhatsApp channel<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
+                {% if telegramJoin and telegramJoin != socialTelegram %}<a href="{{ telegramJoin }}" target="_blank" rel="noopener">Join on Telegram<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
             </nav>
         </div>
+
+        <form class="foot-news" method="POST" action="{{ url_for('newsletter_subscribe') }}" style="display:flex;flex-wrap:wrap;align-items:center;gap:0.7rem 1rem;margin-top:2.2rem;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label class="mono gold" for="foot-news-email">Newsletter</label>
+            <input id="foot-news-email" type="email" name="email" required autocomplete="email" placeholder="Your email address" aria-label="Email address for the newsletter" style="flex:1 1 16rem;max-width:24rem;min-width:0;"/>
+            <button type="submit" class="btn btn-gold">Subscribe</button>
+            <span class="t-sm faint" style="flex-basis:100%;">Updates, new messages and event notices. Every email has a one-click unsubscribe link.</span>
+        </form>
 
         <div class="hair" style="margin-block:2rem 1.2rem;"></div>
         <div class="foot-in">

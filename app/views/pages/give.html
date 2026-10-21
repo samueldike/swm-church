@@ -1,6 +1,7 @@
 {% set pageKey = 'give' %}
 {% set pageEyebrow = 'Give' %}
 {% set pageTitle = 'Give, and keep the work moving.' %}
+{% set metaTitle = 'Give' %}
 {% set pageLede = 'Your giving funds the teaching, the outreaches, and the care of this house — at home in Abakaliki and beyond its walls.' %}
 {% include "partials/theme-page-open.html" %}
 
@@ -15,25 +16,19 @@
                 {% if errors is string %}{{ errors }}{% else %}{{ errors | first }}{% endif %}
             </div>
             {% endif %}
-            {% if session.get('success') %}
-            <div class="alert" role="status" style="margin-top:1.6rem;">{{ session.get('success') }}</div>
-            {% endif %}
-            {% if session.get('error') %}
-            <div class="alert alert-bad" role="alert" style="margin-top:1.6rem;">{{ session.get('error') }}</div>
-            {% endif %}
-            {% for msg in flash_messages %}
-            {% if msg.type == 'error' or msg.type == 'danger' %}
-            <div class="alert alert-bad" role="alert" style="margin-top:1.6rem;">{{ msg.message }}</div>
-            {% elif msg.type == 'success' %}
-            <div class="alert" role="status" style="margin-top:1.6rem;">{{ msg.message }}</div>
-            {% endif %}
-            {% endfor %}
 
             <div class="give-form-card">
             <form class="form-grid give-form" method="POST" action="{{ url_for('give_checkout') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
                 {# The handler reads `full_name`; the previous form posted `name`,
                    so every donor name was silently dropped. #}
+                {% if giving_model == 'branch' and give_branches %}
+                <label class="field give-field span-2"><span>Give to</span>
+                    <select name="branch_id" id="give-branch">
+                        {% for b in give_branches %}<option value="{{ b.id }}" {{ 'selected' if request.form.get('branch_id', '') == b.id|string else '' }}>{{ b.name }}{{ ' (Headquarters)' if b.is_hq else '' }}</option>{% endfor %}
+                    </select>
+                </label>
+                {% endif %}
                 <label class="field give-field"><span>Your name</span>
                     <input type="text" name="full_name" value="{{ request.form.get('full_name', '') if request.form else '' }}" placeholder="Full name"/>
                 </label>
@@ -77,10 +72,75 @@
                 </div>
             </form>
             </div>
+
+            {% set has_accounts = church_accounts or (giving_model == 'branch' and give_branches|selectattr('accounts')|list) %}
+            {% if has_accounts %}
+            <div class="give-transfer" id="transfer">
+                <p class="mono eyebrow"><span class="rule"></span>Prefer a bank transfer?</p>
+                <h3 class="t-h3" style="margin-top:0.9rem;">Send it to the account shown, then tell us.</h3>
+                <ol class="give-steps">
+                    <li>Copy the account number and transfer from your banking app.</li>
+                    <li>Put your name and the purpose (for example “Tithe — Ada”) in the narration.</li>
+                    <li>Tell us below, so our finance team can match your transfer and send you a receipt.</li>
+                </ol>
+                <details class="give-notice">
+                    <summary class="btn btn-ghost">I have sent a transfer</summary>
+                    <form class="form-grid" method="POST" action="{{ url_for('give_transfer_notice') }}" style="margin-top:1.4rem;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
+                        <div class="hp" aria-hidden="true"><label>Leave this empty<input type="text" name="website" tabindex="-1" autocomplete="off"/></label></div>
+                        {% if giving_model == 'branch' and give_branches %}
+                        <label class="field span-2"><span>Which church did you give to?</span>
+                            <select name="branch_id">{% for b in give_branches %}<option value="{{ b.id }}">{{ b.name }}{{ ' (Headquarters)' if b.is_hq else '' }}</option>{% endfor %}</select>
+                        </label>
+                        {% endif %}
+                        <label class="field"><span>Your name</span><input type="text" name="name" required autocomplete="name"/></label>
+                        <label class="field"><span>Email (for your receipt)</span><input type="email" name="email" required autocomplete="email"/></label>
+                        <label class="field"><span>Amount sent (₦)</span><input type="text" name="amount" required inputmode="decimal" placeholder="10000"/></label>
+                        <label class="field"><span>Purpose</span>
+                            <select name="purpose">{% for p in giving_purposes %}<option value="{{ p }}">{{ p }}</option>{% endfor %}</select>
+                        </label>
+                        <label class="field"><span>Date sent <span style="text-transform:none;letter-spacing:0">(optional)</span></span><input type="date" name="sent_on"/></label>
+                        <label class="field"><span>Bank reference <span style="text-transform:none;letter-spacing:0">(optional)</span></span><input type="text" name="bank_ref" maxlength="120"/></label>
+                        <div class="span-2"><button type="submit" class="btn btn-gold">Tell us about my transfer</button></div>
+                    </form>
+                </details>
+            </div>
+            {% endif %}
         </div>
 
         <aside>
-            {% if church_accounts %}
+            {% if giving_model == 'branch' and give_branches %}
+                {% for b in give_branches %}
+                <div class="note give-branch-accounts" data-branch="{{ b.id }}" {{ '' if loop.first else 'hidden' }}>
+                    <p class="t-h3">{{ b.name }} accounts</p>
+                    {% if b.accounts %}
+                    <ul class="give-accounts">
+                        {% for acct in b.accounts %}
+                        <li class="give-account">
+                            <span class="give-account-bank"><span class="give-bank-initials">{{ (acct.get('bank_name') or 'B')[0] | upper }}</span></span>
+                            <span class="give-account-body">
+                                <span class="give-account-bname">{{ acct.get('bank_name', '') }}</span>
+                                <span class="give-account-num">{{ acct.get('account_number', '') }}</span>
+                                <span class="give-account-holder">{{ acct.get('account_name', '') }}</span>
+                            </span>
+                        <button type="button" class="give-copy" data-copy="{{ acct.get('account_number', '') }}" aria-label="Copy account number {{ acct.get('account_number', '') }} for {{ acct.get('bank_name', '') }}"><span class="material-symbols-outlined" aria-hidden="true">content_copy</span><span class="give-copy-label">Copy</span></button>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="t-sm" style="margin-top:0.8rem;">This branch has not published bank details yet. You can still give online with the form.</p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+                <script>
+                (function () {
+                    var sel = document.getElementById('give-branch');
+                    if (!sel) return;
+                    function show() { document.querySelectorAll('.give-branch-accounts').forEach(function (n) { n.hidden = n.dataset.branch !== sel.value; }); }
+                    sel.addEventListener('change', show); show();
+                })();
+                </script>
+            {% elif church_accounts %}
             <div class="note">
                 <p class="t-h3">Ministry accounts</p>
                 <ul class="give-accounts">
@@ -98,6 +158,7 @@
                             <span class="give-account-num">{{ acct.get('account_number', '') }}</span>
                             <span class="give-account-holder">{{ acct.get('account_name', '') }}</span>
                         </span>
+                        <button type="button" class="give-copy" data-copy="{{ acct.get('account_number', '') }}" aria-label="Copy account number {{ acct.get('account_number', '') }} for {{ acct.get('bank_name', '') }}"><span class="material-symbols-outlined" aria-hidden="true">content_copy</span><span class="give-copy-label">Copy</span></button>
                     </li>
                     {% endfor %}
                 </ul>
@@ -186,7 +247,7 @@
     .give-form .field input::placeholder,
     .give-form .field textarea::placeholder { color: #9898a0; }
     .give-form .field select option { background: #fff; color: #16161A; }
-    .give-secure-note { color: #85858E; }
+    .give-secure-note { color: #62626A; }
 
     /* ── Quick amount chips inside the card ─── */
     .chips { display: flex; flex-wrap: wrap; gap: 0.55rem; }
@@ -207,6 +268,19 @@
         background: rgba(184,137,31,0.06);
     }
 
+    .give-copy {
+        margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: 0.35rem;
+        padding: 0.5rem 0.75rem; min-height: 40px; font-size: 0.78rem; font-family: 'Geist Mono', monospace;
+        color: var(--fg); background: transparent; border: 1px solid var(--line-2); cursor: pointer;
+        transition: border-color 200ms var(--ease), color 200ms var(--ease);
+    }
+    .give-copy:hover { border-color: var(--gold); color: var(--gold); }
+    .give-copy .material-symbols-outlined { font-size: 16px; }
+    .give-copy.is-done { border-color: var(--gold); color: var(--gold); }
+    .give-transfer { margin-top: 2.6rem; padding-top: 2rem; border-top: 1px solid var(--line); max-width: 40rem; }
+    .give-steps { margin: 1rem 0 1.4rem; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.45rem; font-size: 0.92rem; color: var(--fg-dim); list-style: decimal; }
+    .give-notice summary { list-style: none; cursor: pointer; display: inline-flex; }
+    .give-notice summary::-webkit-details-marker { display: none; }
     /* ── Ministry account list ─── */
     .give-accounts {
         list-style: none;
@@ -292,6 +366,30 @@
             document.querySelectorAll('.give-chip').forEach(function (x) { x.classList.remove('on'); });
             b.classList.add('on');
         });
+    });
+})();
+</script>
+
+<p class="sr-only" id="copy-status" role="status" aria-live="polite"></p>
+<script>
+(function () {
+    var status = document.getElementById('copy-status');
+    function done(btn) {
+        var label = btn.querySelector('.give-copy-label');
+        btn.classList.add('is-done'); if (label) label.textContent = 'Copied';
+        if (status) status.textContent = 'Account number copied';
+        setTimeout(function () { btn.classList.remove('is-done'); if (label) label.textContent = 'Copy'; if (status) status.textContent = ''; }, 2200);
+    }
+    function fallback(text, btn) {
+        var t = document.createElement('textarea'); t.value = text; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0';
+        document.body.appendChild(t); t.select();
+        try { document.execCommand('copy'); done(btn); } catch (e) {} document.body.removeChild(t);
+    }
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.give-copy'); if (!btn) return;
+        var text = btn.getAttribute('data-copy') || '';
+        if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(function () { done(btn); }, function () { fallback(text, btn); }); }
+        else { fallback(text, btn); }
     });
 })();
 </script>

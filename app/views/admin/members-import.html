@@ -1,0 +1,42 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, file_field with context %}
+{% block title %}Bulk Import Members | {{ siteName }}{% endblock %}
+{% block topbar_title %}Bulk Import{% endblock %}
+{% block topbar_subtitle %}Members{% endblock %}
+{% block topbar_icon %}ri-team-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header("Bulk import members", "Upload a CSV file to register multiple members at once",
+      actions='<a href="' ~ url_for('admin_members') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>Back to members</a>') }}
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start max-w-4xl">
+  <div class="panel">
+    <form method="POST" action="{{ url_for('admin_members_import') }}" enctype="multipart/form-data" class="flex flex-col gap-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {{ file_field('Member file (.csv)', 'file', hint='UTF-8 CSV with a header row', accept='.csv', required=True) }}
+      <div class="flex items-center gap-3 p-3 rounded-md bg-sunken">
+        <i class="ri-file-text-line text-lg text-ink-3"></i>
+        <div class="flex-grow min-w-0">
+          <p class="text-[12.5px] font-semibold text-ink">member_import_template.csv</p>
+          <p class="font-mono text-[10.5px] text-ink-3 truncate">first_name, last_name, email, phone, gender</p>
+        </div>
+        <a href="{{ url_for('admin_members_import_template') }}" class="btn btn-secondary btn-sm" data-turbo="false"><i class="ri-download-2-line"></i>Template</a>
+      </div>
+      <div class="flex items-center gap-2.5 pt-4 border-t border-line">
+        <button type="submit" class="btn btn-primary"><i class="ri-upload-2-line"></i>Start import</button>
+        <a href="{{ url_for('admin_members') }}" class="btn btn-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+  <div class="panel">
+    <h2 class="text-[14px] font-semibold text-ink mb-3">Before you import</h2>
+    <ul class="flex flex-col gap-2.5 text-[12px] text-ink-2 leading-relaxed">
+      <li class="flex gap-2"><i class="ri-check-line text-ok mt-0.5"></i>Imported members are registered under your branch.</li>
+      <li class="flex gap-2"><i class="ri-check-line text-ok mt-0.5"></i>Columns read: first_name, last_name, email, phone, gender.</li>
+      <li class="flex gap-2"><i class="ri-check-line text-ok mt-0.5"></i>Save spreadsheets as CSV (UTF-8) before uploading.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

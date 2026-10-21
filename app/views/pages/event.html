@@ -1,0 +1,82 @@
+{% set pageKey = 'events' %}
+{% set pageEyebrow = 'Event' %}
+{% set pageTitle = ev.title %}
+{% set pageLede = (ev.starts_at|longdate) ~ ' · ' ~ (ev.starts_at|clock) %}
+{% include "partials/theme-page-open.html" %}
+
+<section class="band band-light">
+    <div class="shell ev-split">
+        <article>
+            <dl class="ev-facts">
+                <div><dt class="mono faint">Date</dt><dd class="t-h3">{{ ev.starts_at|longdate }}{% if ev.ends_at and ev.ends_at.date() != ev.starts_at.date() %} &ndash; {{ ev.ends_at|longdate }}{% endif %}</dd></div>
+                <div><dt class="mono faint">Time</dt><dd class="t-h3">{{ ev.starts_at|clock }}{% if ev.ends_at and ev.ends_at.date() == ev.starts_at.date() %} &ndash; {{ ev.ends_at|clock }}{% endif %}</dd></div>
+                {% if ev.location %}<div><dt class="mono faint">Where</dt><dd class="t-h3">{{ ev.location }}</dd></div>{% endif %}
+                {% if ev.branch and not ev.branch.is_hq %}<div><dt class="mono faint">Hosted by</dt><dd class="t-h3">{{ ev.branch.name }}</dd></div>{% endif %}
+            </dl>
+
+            {% if ev.cover_image %}
+            <div class="split-media" style="margin-top:2rem;aspect-ratio:16/9;">
+                <img src="{{ ev.cover_image if ev.cover_image.startswith('/') else '/' ~ ev.cover_image }}" alt="{{ ev.title }}" decoding="async" style="width:100%;height:100%;object-fit:cover;"/>
+            </div>
+            {% endif %}
+
+            {% if ev.description %}
+            <div style="margin-top:2rem;">
+                <p class="mono eyebrow"><span class="rule"></span>About this event</p>
+                <p class="t-body" style="margin-top:1rem;max-width:62ch;white-space:pre-line;">{{ ev.description }}</p>
+            </div>
+            {% endif %}
+
+            {% if not started %}
+            <div class="ev-cal">
+                <p class="mono faint">Add to your calendar</p>
+                <div class="flex flex-wrap items-center gap-3" style="margin-top:0.9rem;">
+                    <a class="btn btn-gold" href="{{ url_for('event_ics', event_id=ev.id) }}"><span class="material-symbols-outlined" style="font-size:18px" aria-hidden="true">event</span>Apple / Outlook (.ics)</a>
+                    <a class="btn btn-ghost" href="{{ googleUrl }}" target="_blank" rel="noopener">Google Calendar<span class="sr-only"> (opens in a new tab)</span></a>
+                </div>
+            </div>
+            {% else %}
+            <p class="t-sm" style="margin-top:2rem;">This event has already taken place. <a class="lnk-inline" href="{{ url_for('events') }}">See what is coming up</a>.</p>
+            {% endif %}
+        </article>
+
+        <aside>
+            {% if canRemind %}
+            <div class="note" id="remind">
+                <p class="t-h3">Email me a reminder</p>
+                <p class="t-sm" style="margin-top:0.5rem;">We will send one email the day before. That is all — you are not added to a list.</p>
+                <form method="POST" action="{{ url_for('event_remind', event_id=ev.id) }}" class="form-grid" style="margin-top:1.1rem;grid-template-columns:1fr;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
+                    <div class="hp" aria-hidden="true"><label>Leave this empty<input type="text" name="website" tabindex="-1" autocomplete="off"/></label></div>
+                    <label class="field"><span>Your name <span style="text-transform:none;letter-spacing:0">(optional)</span></span><input type="text" name="name" autocomplete="name"/></label>
+                    <label class="field"><span>Email</span><input type="email" name="email" required autocomplete="email" placeholder="you@example.com"/></label>
+                    <div><button type="submit" class="btn btn-gold">Remind me</button></div>
+                </form>
+            </div>
+            {% endif %}
+            <div class="note" style="margin-top:1.7rem;">
+                <p class="t-h3">Share this event</p>
+                <div style="display:flex;flex-wrap:wrap;gap:1.1rem;margin-top:0.8rem;font-size:0.9rem;">
+                    <a class="lnk-inline" target="_blank" rel="noopener" href="https://wa.me/?text={{ (ev.title ~ ' — ' ~ canonicalUrl)|urlencode }}">WhatsApp<span class="sr-only"> (opens in a new tab)</span></a>
+                    <a class="lnk-inline" target="_blank" rel="noopener" href="https://www.facebook.com/sharer/sharer.php?u={{ canonicalUrl|urlencode }}">Facebook<span class="sr-only"> (opens in a new tab)</span></a>
+                    <a class="lnk-inline" target="_blank" rel="noopener" href="https://x.com/intent/tweet?url={{ canonicalUrl|urlencode }}&amp;text={{ ev.title|urlencode }}">X<span class="sr-only"> (opens in a new tab)</span></a>
+                </div>
+            </div>
+            <div class="note" style="margin-top:1.7rem;">
+                <p class="t-h3">Coming for the first time?</p>
+                <a class="lnk" style="margin-top:0.7rem;" href="{{ url_for('visit') }}">Plan your visit</a>
+            </div>
+        </aside>
+    </div>
+</section>
+
+<style>
+    .ev-split { display: grid; gap: clamp(2.2rem, 5vw, 4.5rem); grid-template-columns: 1fr; align-items: start; }
+    @media (min-width: 940px) { .ev-split { grid-template-columns: 1.35fr 0.65fr; } }
+    .ev-facts { display: grid; border-top: 1px solid var(--line); }
+    .ev-facts > div { display: grid; gap: 0.3rem 2rem; padding: 0.95rem 0; border-bottom: 1px solid var(--line); }
+    @media (min-width: 640px) { .ev-facts > div { grid-template-columns: 8rem 1fr; align-items: baseline; } }
+    .ev-cal { margin-top: 2.4rem; padding-top: 1.6rem; border-top: 1px solid var(--line); }
+</style>
+
+{% include "partials/theme-page-close.html" %}

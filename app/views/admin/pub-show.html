@@ -1,0 +1,390 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, empty_state, progress_bar with context %}
+{% set g = prog %}
+{% set dev = kind == 'devotionals' %}
+{% block title %}{{ pub.title }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ pub.title }}{% endblock %}
+{% block topbar_subtitle %}Books Pub · {{ kmeta.label }}{% endblock %}
+{% block topbar_icon %}{{ kmeta.icon }}{% endblock %}
+
+{% block page_header %}
+  {{ page_header(pub.title, (kmeta.label ~ (' · ' ~ period if period else '') ~ (' · ' ~ pub.author_name if pub.author_name else '')),
+      actions='<a href="' ~ url_for('admin_pubs_edit', kind=kind, pub_id=pub.id) ~ '" class="btn btn-secondary"><i class="ri-settings-3-line"></i>Settings</a>'
+              ~ ('<a href="' ~ url_for('admin_pubs_editor', kind=kind, pub_id=pub.id) ~ '" class="btn btn-secondary"><i class="ri-file-word-2-line"></i>Open editor</a>' if g.has_document else '')) }}
+{% endblock %}
+
+{% macro sub_status(t) -%}
+  {% if t.content_status == 'processing' %}{{ badge('Writing…', 'warn') }}
+  {% elif t.content_status == 'queued' %}{{ badge('Queued', 'warn') }}
+  {% elif t.content_status == 'failed' %}{{ badge('Failed', 'bad') }}
+  {% elif t.has_content %}{{ badge('Written · ' ~ t.word_count ~ ' words', 'ok') }}
+  {% else %}{{ badge('No content', 'neut') }}{% endif %}
+{%- endmacro %}
+
+{% block content %}
+{% set day_of = {} %}
+{% for n, s_, t_ in numbered %}{% set _ = day_of.update({t_.id: n}) %}{% endfor %}
+<div id="pub-live" class="flex flex-col gap-4 max-w-6xl"
+     data-status-url="{{ url_for('admin_pubs_status', kind=kind, pub_id=pub.id) }}"
+     data-sig="{{ sig }}" data-busy="{{ '1' if g.busy else '0' }}"
+     data-csrf="{{ csrf_token }}"
+     data-reorder-sources="{{ url_for('admin_pubs_sources_reorder', kind=kind, pub_id=pub.id) }}"
+     data-reorder-subs="{{ url_for('admin_pubs_subtopics_reorder', kind=kind, pub_id=pub.id) }}">
+
+  {% if not ai_ready %}
+    <div class="rounded-md border border-[#ebdfc0] bg-gold-tint text-gold-text px-3.5 py-2.5 text-[12.5px] flex gap-2">
+      <i class="ri-information-line text-base mt-0.5"></i>
+      <span>AI drafting is not configured: no API key is saved for {{ ai_cfg.label }}, the default provider. An administrator can add one, or pick another default, under <a href="{{ url_for('admin_settings') }}#ai" class="underline font-medium">Settings → AI drafting</a>. Until then you can still add messages and write topics by hand.</span>
+    </div>
+  {% endif %}
+
+  {% if ai_ready %}
+    <p class="text-[11.5px] text-ink-3 -mb-2"><i class="ri-magic-line"></i> AI drafting uses <b class="text-ink-2">{{ ai_cfg.label }}</b> · <span class="font-mono">{{ ai_cfg.model }}</span> · <a href="{{ url_for('admin_settings') }}#ai" class="text-gold-text hover:underline">change</a></p>
+  {% endif %}
+
+  {# ───── Coverage ───── #}
+  <section class="panel">
+    {% if dev and g.days_total %}
+      <div class="flex flex-wrap items-end justify-between gap-2 mb-2.5">
+        <div>
+          <p class="mono-label">Coverage</p>
+          <p class="text-[15px] font-semibold text-ink mt-1">{{ g.with_content }} of {{ g.days_total }} days written
+            <span class="font-normal text-ink-3">· {{ g.days_missing }} missing</span></p>
+        </div>
+        <p class="font-mono text-[11px] text-ink-3">{{ period }} · {{ pub.start_date.strftime('%d %b %Y') }} – {{ pub.end_date.strftime('%d %b %Y') }} · {{ '{:,}'.format(g.words) }} words</p>
+      </div>
+      {{ progress_bar(((g.days_filled / g.days_total) * 100)|round|int, 'gold') }}
+      {% if g.overflow %}
+        <p class="mt-2.5 text-[12px] text-warn flex gap-1.5"><i class="ri-alert-line mt-0.5"></i>{{ g.overflow }} more {{ 'entry' if g.overflow == 1 else 'entries' }} than the {{ g.days_total }} days available. The last {{ g.overflow }} will run past {{ pub.end_date.strftime('%d %b %Y') }}. Remove some topics or change the duration.</p>
+      {% elif g.days_missing %}
+        <p class="mt-2.5 text-[12px] text-ink-3">Add more messages, or write more topics, to fill the remaining {{ g.days_missing }} day{{ 's' if g.days_missing != 1 else '' }}.</p>
+      {% endif %}
+    {% else %}
+      <p class="mono-label">Progress</p>
+      <p class="text-[15px] font-semibold text-ink mt-1">{{ g.with_content }} of {{ g.subtopics }} sections written <span class="font-normal text-ink-3">· {{ '{:,}'.format(g.words) }} words</span></p>
+      {% if g.subtopics %}<div class="mt-2.5">{{ progress_bar(((g.with_content / g.subtopics) * 100)|round|int, 'gold') }}</div>{% endif %}
+    {% endif %}
+  </section>
+
+  {# ───── Workflow ───── #}
+  <section class="panel">
+    {% if g.busy %}
+      <div class="flex flex-wrap items-center gap-3 rounded-md bg-gold-tint border border-[#ebdfc0] px-3.5 py-3 mb-4">
+        <i class="ri-loader-4-line animate-spin text-lg text-gold"></i>
+        <p class="text-[12.5px] text-gold-text flex-grow min-w-0">
+          AI is working
+          {%- if g.topics_busy %} · topics for {{ g.topics_busy }} message{{ 's' if g.topics_busy != 1 else '' }}{% endif -%}
+          {%- if g.content_busy %} · {{ g.content_busy }} {{ 'entry' if g.content_busy == 1 else 'entries' }} left to write{% endif -%}
+          {%- if g.transcribing %} · {{ g.transcribing }} transcription{{ 's' if g.transcribing != 1 else '' }} running{% endif -%}.
+          This page updates by itself.
+        </p>
+        {% if g.topics_busy or g.content_busy %}
+          <form method="POST" action="{{ url_for('admin_pubs_reset_jobs', kind=kind, pub_id=pub.id) }}"
+                data-confirm="Cancel queued and running AI jobs? Anything already written is kept." data-confirm-title="Cancel jobs" data-confirm-accept="Cancel jobs">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn btn-secondary btn-sm">Cancel jobs</button>
+          </form>
+        {% endif %}
+      </div>
+    {% endif %}
+
+    <ol class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+      <li class="rounded-md border border-line p-3.5 flex flex-col gap-2.5">
+        <p class="mono-label">1 · Messages</p>
+        <p class="text-[12.5px] text-ink-2 flex-grow">{{ g.messages }} included{% if g.no_transcript %} · <span class="text-warn">{{ g.no_transcript }} without a transcript</span>{% endif %}</p>
+        <a href="{{ url_for('admin_pubs_messages_add', kind=kind, pub_id=pub.id) }}" class="btn btn-secondary btn-sm"><i class="ri-add-line"></i>Add messages</a>
+      </li>
+      <li class="rounded-md border border-line p-3.5 flex flex-col gap-2.5">
+        <p class="mono-label">2 · Topics</p>
+        <p class="text-[12.5px] text-ink-2 flex-grow">{{ g.with_topics }} of {{ g.messages }} messages have {{ 'day topics' if dev else 'sections' }}</p>
+        <form method="POST" action="{{ url_for('admin_pubs_generate_topics', kind=kind, pub_id=pub.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="btn btn-primary btn-sm w-full" {{ 'disabled' if not g.messages else '' }}><i class="ri-magic-line"></i>Generate Topics</button>
+        </form>
+      </li>
+      <li class="rounded-md border border-line p-3.5 flex flex-col gap-2.5">
+        <p class="mono-label">3 · Content</p>
+        <p class="text-[12.5px] text-ink-2 flex-grow">{{ g.without_content }} {{ 'topic' if g.without_content == 1 else 'topics' }} still without content</p>
+        <form method="POST" action="{{ url_for('admin_pubs_generate_contents', kind=kind, pub_id=pub.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="btn btn-primary btn-sm w-full" {{ 'disabled' if not g.without_content else '' }}><i class="ri-quill-pen-line"></i>Generate {{ 'Devotional' if dev else 'Book' }} Contents</button>
+        </form>
+      </li>
+      <li class="rounded-md border border-line p-3.5 flex flex-col gap-2.5">
+        <p class="mono-label">4 · {{ 'Devotional' if dev else 'Book' }}</p>
+        <p class="text-[12.5px] text-ink-2 flex-grow">
+          {% if g.has_document %}Built {{ pub.document_built_at.strftime('%d %b %Y, %H:%M') if pub.document_built_at else '' }}{% if pub.document_saved_at %} · edited {{ pub.document_saved_at|timesince }}{% endif %}.
+          {% else %}Assembles the {{ 'day-by-day devotional' if dev else 'chapters' }} in the order below.{% endif %}
+        </p>
+        <form method="POST" action="{{ url_for('admin_pubs_build', kind=kind, pub_id=pub.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="btn btn-primary btn-sm w-full" {{ 'disabled' if not g.with_content else '' }}>
+            <i class="ri-file-word-2-line"></i>{{ ('Update ' if g.has_document else 'Generate ') ~ ('Devotional' if dev else 'Book') }}
+          </button>
+        </form>
+        {% if g.has_document %}
+          <details class="text-[11.5px] text-ink-3">
+            <summary class="cursor-pointer hover:text-ink">More options</summary>
+            <div class="mt-2 flex flex-col gap-1.5">
+              <p>Update keeps your editor changes and renumbers the {{ 'days' if dev else 'chapters' }}. Rebuild starts over from the topics below.</p>
+              <form method="POST" action="{{ url_for('admin_pubs_build', kind=kind, pub_id=pub.id) }}"
+                    data-confirm="Rebuild the document from scratch? All changes you made in the editor will be lost." data-confirm-title="Rebuild document" data-confirm-accept="Rebuild">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="mode" value="rebuild">
+                <button type="submit" class="btn btn-secondary btn-sm w-full text-bad"><i class="ri-restart-line"></i>Rebuild from scratch</button>
+              </form>
+              <div class="flex gap-1.5">
+                <a href="{{ url_for('admin_pubs_export', kind=kind, pub_id=pub.id, fmt='docx') }}" class="btn btn-secondary btn-sm flex-1" data-turbo="false"><i class="ri-file-word-line"></i>.docx</a>
+                <a href="{{ url_for('admin_pubs_export', kind=kind, pub_id=pub.id, fmt='pdf') }}" class="btn btn-secondary btn-sm flex-1" data-turbo="false"><i class="ri-file-pdf-line"></i>.pdf</a>
+              </div>
+            </div>
+          </details>
+        {% endif %}
+      </li>
+    </ol>
+  </section>
+
+  {# ───── Messages & topics ───── #}
+  <section>
+    <div class="flex flex-wrap items-end justify-between gap-2 mb-2.5">
+      <div>
+        <h2 class="text-[14px] font-semibold text-ink">{{ 'Main topics' if dev else 'Chapters' }}</h2>
+        <p class="text-[12px] text-ink-3 mt-0.5">One per message. Drag the <i class="ri-draggable"></i> handle, or use the arrows, to set the order the {{ 'days' if dev else 'chapters' }} appear in.<span id="order-status" class="ml-2 font-mono text-ok"></span></p>
+      </div>
+    </div>
+
+    {% if pub.sources %}
+      <div class="flex flex-col gap-3" data-list="sources">
+        {% for src in pub.sources %}
+          {% set has_tr = src.sermon and src.sermon.transcript %}
+          {% set tr_words = (src.sermon.transcript.split()|length) if has_tr else 0 %}
+          <article id="source-{{ src.id }}" class="panel-flush scroll-mt-4" data-drag="source" data-id="{{ src.id }}">
+            <header class="flex flex-wrap items-start gap-3 px-4 py-3.5 border-b border-line">
+              <button type="button" class="drag-handle icon-btn cursor-grab hidden sm:inline-flex" aria-label="Drag to reorder" tabindex="-1"><i class="ri-draggable"></i></button>
+              <span class="font-mono text-[11px] font-semibold text-gold-text bg-gold-tint border border-[#ebdfc0] rounded px-1.5 py-0.5 mt-0.5" data-num>{{ loop.index }}</span>
+              <div class="min-w-0 flex-grow basis-64">
+                <details class="group">
+                  <summary class="list-none cursor-pointer [&::-webkit-details-marker]:hidden flex items-center gap-2">
+                    <span class="text-[14px] font-semibold text-ink truncate">{{ src.main_title or (src.sermon.title if src.sermon else 'Untitled') }}</span>
+                    <i class="ri-pencil-line text-ink-3 text-xs opacity-0 group-hover:opacity-100 group-open:opacity-100"></i>
+                  </summary>
+                  <form method="POST" action="{{ url_for('admin_pubs_sources_rename', kind=kind, pub_id=pub.id, source_id=src.id) }}" class="flex gap-2 mt-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <label class="sr-only" for="mt-{{ src.id }}">{{ 'Main topic' if dev else 'Chapter' }} title</label>
+                    <input id="mt-{{ src.id }}" name="main_title" value="{{ src.main_title or '' }}" class="field-input" maxlength="255">
+                    <button type="submit" class="btn btn-secondary btn-sm">Save</button>
+                  </form>
+                </details>
+                <p class="mt-1 text-[11.5px] text-ink-3 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span>From “{{ src.sermon.title if src.sermon else '—' }}”</span>
+                  {% if has_tr %}
+                    {{ badge('Transcript · ' ~ '{:,}'.format(tr_words) ~ ' words', 'ok') }}
+                    <a href="{{ url_for('admin_transcriptions_show', sermon_id=src.sermon.id) }}" class="text-gold-text hover:underline">View / edit transcript</a>
+                  {% elif src.sermon and src.sermon.transcription_status in ['queued', 'processing'] %}
+                    {{ badge('Transcribing…', 'warn') }}
+                  {% elif src.sermon and src.sermon.transcription_status == 'failed' %}
+                    {{ badge('Transcription failed', 'bad') }}
+                    <a href="{{ url_for('admin_transcriptions_show', sermon_id=src.sermon.id) }}" class="text-gold-text hover:underline">Retry</a>
+                  {% else %}
+                    {{ badge('No transcript', 'neut') }}
+                    {% if src.sermon %}<a href="{{ url_for('admin_transcriptions_show', sermon_id=src.sermon.id) }}" class="text-gold-text hover:underline">Open</a>{% endif %}
+                  {% endif %}
+                  {% if src.topics_status == 'processing' or src.topics_status == 'queued' %}{{ badge('Generating topics…', 'warn') }}{% endif %}
+                </p>
+                {% if src.topics_status == 'failed' and src.topics_error %}
+                  <p class="mt-1.5 text-[12px] text-bad flex gap-1.5"><i class="ri-error-warning-line mt-0.5"></i>{{ src.topics_error }}</p>
+                {% endif %}
+              </div>
+              <div class="flex items-center gap-1 flex-wrap ml-auto">
+                <form method="POST" action="{{ url_for('admin_pubs_sources_move', kind=kind, pub_id=pub.id, source_id=src.id) }}" class="inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="direction" value="up">
+                  <button type="submit" class="icon-btn" aria-label="Move up" {{ 'disabled' if loop.first else '' }}><i class="ri-arrow-up-line"></i></button>
+                </form>
+                <form method="POST" action="{{ url_for('admin_pubs_sources_move', kind=kind, pub_id=pub.id, source_id=src.id) }}" class="inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="direction" value="down">
+                  <button type="submit" class="icon-btn" aria-label="Move down" {{ 'disabled' if loop.last else '' }}><i class="ri-arrow-down-line"></i></button>
+                </form>
+                <form method="POST" action="{{ url_for('admin_pubs_generate_topics', kind=kind, pub_id=pub.id) }}" class="inline"
+                      {% if src.subtopics %}data-confirm="Regenerate the topics for this message? The current topics and any content written for them will be replaced." data-confirm-title="Regenerate topics" data-confirm-accept="Regenerate"{% endif %}>
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="source_id" value="{{ src.id }}"><input type="hidden" name="force" value="1">
+                  <button type="submit" class="icon-btn" aria-label="{{ 'Regenerate topics' if src.subtopics else 'Generate topics' }}" title="{{ 'Regenerate topics' if src.subtopics else 'Generate topics' }}" {{ 'disabled' if not has_tr else '' }}><i class="ri-magic-line"></i></button>
+                </form>
+                <form method="POST" action="{{ url_for('admin_pubs_sources_remove', kind=kind, pub_id=pub.id, source_id=src.id) }}" class="inline"
+                      data-confirm="Remove this message from the project? Its topics and content are deleted; the message itself stays." data-confirm-title="Remove message" data-confirm-accept="Remove">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <button type="submit" class="icon-btn text-bad" aria-label="Remove message"><i class="ri-close-line"></i></button>
+                </form>
+              </div>
+            </header>
+
+            {% if src.subtopics %}
+              <ol class="divide-y divide-line" data-list="subtopics" data-source-id="{{ src.id }}">
+                {% for t in src.subtopics %}
+                  <li class="px-4 py-3" data-drag="sub" data-id="{{ t.id }}">
+                    <div class="flex flex-wrap items-start gap-2.5">
+                      <button type="button" class="drag-handle icon-btn cursor-grab hidden sm:inline-flex" aria-label="Drag to reorder" tabindex="-1"><i class="ri-draggable"></i></button>
+                      <div class="min-w-0 flex-grow basis-56">
+                        <p class="text-[13px] font-medium text-ink">
+                          {% if dev and day_of.get(t.id) %}<span class="font-mono text-[11px] text-gold-text mr-1.5">Day {{ day_of[t.id] }}
+                            {%- if pub.start_date %} · {{ (pub.start_date + timedelta(days=day_of[t.id] - 1)).strftime('%d %b') }}{% endif %}</span>{% endif %}
+                          {{ t.title }}
+                        </p>
+                        {% if t.points %}
+                          <p class="mt-0.5 text-[11.5px] text-ink-3 leading-relaxed">{{ t.points|join(' · ') }}</p>
+                        {% endif %}
+                        {% if t.content_status == 'failed' and t.content_error %}
+                          <p class="mt-1 text-[11.5px] text-bad">{{ t.content_error }}</p>
+                        {% endif %}
+                        {% if t.has_content %}
+                          <details class="mt-1.5">
+                            <summary class="cursor-pointer text-[11.5px] font-medium text-gold-text hover:underline">Preview</summary>
+                            <div class="mt-2 rounded-md bg-sunken p-3 text-[12.5px] text-ink-2 leading-relaxed flex flex-col gap-2">
+                              {% if t.scripture %}<p class="italic">{{ t.scripture }}</p>{% endif %}
+                              {% for para in t.body.split('\n\n') %}<p>{{ para }}</p>{% endfor %}
+                              {% if t.action_plan %}<p><b>Action Plan:</b> {{ t.action_plan }}</p>{% endif %}
+                              {% if t.prayer_point %}<p><b>Prayer Point:</b> {{ t.prayer_point }}</p>{% endif %}
+                            </div>
+                          </details>
+                        {% endif %}
+                      </div>
+                      <div class="flex items-center gap-1 flex-wrap ml-auto">
+                        {{ sub_status(t) }}
+                        <form method="POST" action="{{ url_for('admin_pubs_subtopics_move', kind=kind, pub_id=pub.id, sub_id=t.id) }}" class="inline">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="direction" value="up">
+                          <button type="submit" class="icon-btn" aria-label="Move up" {{ 'disabled' if loop.first else '' }}><i class="ri-arrow-up-line"></i></button>
+                        </form>
+                        <form method="POST" action="{{ url_for('admin_pubs_subtopics_move', kind=kind, pub_id=pub.id, sub_id=t.id) }}" class="inline">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="direction" value="down">
+                          <button type="submit" class="icon-btn" aria-label="Move down" {{ 'disabled' if loop.last else '' }}><i class="ri-arrow-down-line"></i></button>
+                        </form>
+                        <a href="{{ url_for('admin_pubs_subtopics_edit', kind=kind, pub_id=pub.id, sub_id=t.id) }}" class="icon-btn" aria-label="Edit"><i class="ri-edit-line"></i></a>
+                        <form method="POST" action="{{ url_for('admin_pubs_generate_contents', kind=kind, pub_id=pub.id) }}" class="inline"
+                              {% if t.has_content %}data-confirm="Replace this content with a new AI draft? Your current text will be overwritten." data-confirm-title="Regenerate content" data-confirm-accept="Regenerate"{% endif %}>
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="subtopic_id" value="{{ t.id }}">
+                          <button type="submit" class="icon-btn" aria-label="{{ 'Regenerate' if t.has_content else 'Write with AI' }}" title="{{ 'Regenerate with AI' if t.has_content else 'Write with AI' }}" {{ 'disabled' if not has_tr else '' }}><i class="ri-quill-pen-line"></i></button>
+                        </form>
+                        <form method="POST" action="{{ url_for('admin_pubs_subtopics_delete', kind=kind, pub_id=pub.id, sub_id=t.id) }}" class="inline"
+                              data-confirm="Delete “{{ t.title }}”{% if t.has_content %} and its content{% endif %}?" data-confirm-title="Delete topic" data-confirm-accept="Delete">
+                          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                          <button type="submit" class="icon-btn text-bad" aria-label="Delete topic"><i class="ri-delete-bin-line"></i></button>
+                        </form>
+                      </div>
+                    </div>
+                  </li>
+                {% endfor %}
+              </ol>
+            {% else %}
+              <p class="px-4 py-5 text-[12.5px] text-ink-3">
+                {% if not has_tr %}Waiting for a transcript. Transcribe the audio or add the transcript, then generate topics.
+                {% else %}No topics yet. Use <b>Generate Topics</b> above, or add one by hand.{% endif %}
+              </p>
+            {% endif %}
+            <footer class="px-4 py-2.5 border-t border-line bg-sunken flex flex-wrap items-center gap-3">
+              <a href="{{ url_for('admin_pubs_subtopics_new', kind=kind, pub_id=pub.id) }}?source_id={{ src.id }}" class="text-[12px] font-medium text-gold-text hover:underline"><i class="ri-add-line"></i> Add a topic</a>
+              {% if src.subtopics %}
+                <form method="POST" action="{{ url_for('admin_pubs_generate_contents', kind=kind, pub_id=pub.id) }}" class="inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="source_id" value="{{ src.id }}">
+                  <button type="submit" class="text-[12px] font-medium text-gold-text hover:underline" {{ 'disabled' if not has_tr else '' }}><i class="ri-quill-pen-line"></i> Write the missing content for this message</button>
+                </form>
+              {% endif %}
+            </footer>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="panel-flush">
+        {{ empty_state("ri-message-3-line", "No messages yet", "Add the messages this " ~ (kmeta.label|lower) ~ " will be built from — existing ones, a new audio upload, or a transcript.",
+                       '<a href="' ~ url_for('admin_pubs_messages_add', kind=kind, pub_id=pub.id) ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add messages</a>') }}
+      </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+(() => {
+  window.__swmPubAbort?.abort();
+  window.__swmPubTimer && clearInterval(window.__swmPubTimer);
+  const live = document.getElementById('pub-live');
+  if (!live) return;
+  const ctl = new AbortController();
+  window.__swmPubAbort = ctl;
+  const opt = { signal: ctl.signal };
+  const csrf = live.dataset.csrf;
+
+  /* ── Live progress: poll the status endpoint and swap the region when something changed ── */
+  async function refresh() {
+    const res = await fetch(location.href, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+    const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+    const fresh = doc.getElementById('pub-live');
+    if (!fresh) return;
+    const open = [...live.querySelectorAll('details[open]')].map((d) => d.closest('[data-id]')?.dataset.id + ':' + (d.querySelector('summary')?.textContent || '').trim());
+    live.innerHTML = fresh.innerHTML;
+    live.dataset.sig = fresh.dataset.sig;
+    live.dataset.busy = fresh.dataset.busy;
+    live.querySelectorAll('details').forEach((d) => {
+      const key = d.closest('[data-id]')?.dataset.id + ':' + (d.querySelector('summary')?.textContent || '').trim();
+      if (open.includes(key)) d.open = true;
+    });
+  }
+  async function poll() {
+    if (document.hidden) return;
+    try {
+      const res = await fetch(live.dataset.statusUrl, { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const j = await res.json();
+      if (j.signature !== live.dataset.sig) await refresh();
+      if (!j.busy) { clearInterval(window.__swmPubTimer); if (live.dataset.busy === '1') await refresh(); }
+    } catch (_) { /* transient network error: try again next tick */ }
+  }
+  if (live.dataset.busy === '1') window.__swmPubTimer = setInterval(poll, 4000);
+
+  /* ── Drag to reorder (buttons remain the keyboard/touch route) ── */
+  let dragging = null;
+  const status = () => document.getElementById('order-status');
+  const say = (t) => { const el = status(); if (el) { el.textContent = t; setTimeout(() => { if (el.textContent === t) el.textContent = ''; }, 2500); } };
+
+  live.addEventListener('pointerdown', (e) => {
+    const h = e.target.closest('.drag-handle');
+    if (h) h.closest('[data-drag]').setAttribute('draggable', 'true');
+  }, opt);
+  live.addEventListener('dragstart', (e) => {
+    const item = e.target.closest?.('[data-drag]');
+    if (!item || item.getAttribute('draggable') !== 'true') return;
+    dragging = item;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', item.dataset.id);
+    requestAnimationFrame(() => item.classList.add('opacity-40'));
+    e.stopPropagation();
+  }, opt);
+  live.addEventListener('dragover', (e) => {
+    if (!dragging) return;
+    const over = e.target.closest('[data-drag]');
+    if (!over || over === dragging || over.dataset.drag !== dragging.dataset.drag || over.parentElement !== dragging.parentElement) return;
+    e.preventDefault();
+    const r = over.getBoundingClientRect();
+    over.parentElement.insertBefore(dragging, (e.clientY - r.top) > r.height / 2 ? over.nextSibling : over);
+  }, opt);
+  live.addEventListener('dragend', async () => {
+    if (!dragging) return;
+    const item = dragging; dragging = null;
+    item.classList.remove('opacity-40'); item.removeAttribute('draggable');
+    const isSource = item.dataset.drag === 'source';
+    const list = item.parentElement;
+    const ids = [...list.children].filter((c) => c.dataset.drag === item.dataset.drag).map((c) => Number(c.dataset.id));
+    const body = isSource ? { ids } : { source_id: Number(list.dataset.sourceId), ids };
+    try {
+      const res = await fetch(isSource ? live.dataset.reorderSources : live.dataset.reorderSubs, {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error();
+      say('Order saved');
+      await refresh();
+    } catch (_) { say('Could not save the order. Reload and try again.'); }
+  }, opt);
+})();
+</script>
+{% endblock %}

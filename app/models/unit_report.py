@@ -28,6 +28,8 @@ class UnitReport(Base):
     projections: Mapped[str | None] = mapped_column(Text)
     resident_pastor_comment: Mapped[str | None] = mapped_column(Text)
     senior_pastor_comment: Mapped[str | None] = mapped_column(Text)
+    resident_reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("admins.id", ondelete="SET NULL"))
+    resident_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime)
     status: Mapped[str] = mapped_column(String(20), default="draft")
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
@@ -38,6 +40,6 @@ class UnitReport(Base):
         onupdate=lambda: datetime.utcnow(),
     )
 
-    branch = relationship("Branch", back_populates="unit_reports")
-    department = relationship("Department", back_populates="unit_reports")
-    hod_admin = relationship("Admin", back_populates="unit_reports")
+    branch = relationship("Branch", back_populates="unit_reports", lazy="selectin")
+    department = relationship("Department", back_populates="unit_reports", lazy="selectin")
+    hod_admin = relationship("Admin", back_populates="unit_reports", foreign_keys=[hod_admin_id], lazy="selectin")

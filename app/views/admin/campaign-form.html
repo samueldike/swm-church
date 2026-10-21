@@ -1,0 +1,65 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, textarea with context %}
+{% set editing = item is not none %}
+{% set d = draft %}
+{% block title %}{{ 'Edit' if editing else 'New' }} campaign | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ 'Edit campaign' if editing else 'New campaign' }}{% endblock %}
+{% block topbar_subtitle %}Email campaigns{% endblock %}
+{% block topbar_icon %}ri-mail-star-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header('Edit campaign' if editing else 'New campaign', "Write the email, preview it, send yourself a test, then send it to your subscribers.",
+      actions='<a href="' ~ url_for('admin_campaigns') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>Cancel</a>') }}
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 max-w-6xl items-start">
+  <form method="POST" data-turbo="false" action="{{ url_for('admin_campaigns_update', campaign_id=item.id) if editing else url_for('admin_campaigns_store') }}" class="panel flex flex-col gap-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="kind" value="{{ item.kind if editing else (d.kind or 'custom') }}">
+    {{ field('Subject', 'subject', value=item.subject if editing else (d.subject or ''), required=True) }}
+    {{ field('Preview text (optional)', 'preheader', value=(item.preheader or '') if editing else (d.preheader or ''), hint='The grey line many inboxes show after the subject.') }}
+    {{ textarea('Message', 'body_text', value=item.body_text if editing else (d.body_text or ''), rows=14, required=True, hint='Plain text. A blank line starts a new paragraph; web addresses become links.') }}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {{ field('Button text (optional)', 'button_label', value=(item.button_label or '') if editing else (d.button_label or ''), placeholder='Listen now') }}
+      {{ field('Button link (optional)', 'button_url', value=(item.button_url or '') if editing else (d.button_url or ''), type='url', mono=True, placeholder='https://…') }}
+    </div>
+    <div class="flex items-center gap-2.5">
+      <button type="submit" class="btn btn-primary"><i class="ri-save-line"></i>{{ 'Save changes' if editing else 'Save draft' }}</button>
+      <a href="{{ url_for('admin_campaigns') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+
+  {% if not editing %}
+  <aside class="flex flex-col gap-4">
+    <div class="panel">
+      <h2 class="text-[13px] font-semibold text-ink mb-2">Start from a new message</h2>
+      {% if recent_messages %}
+        <ul class="flex flex-col gap-1.5">
+          {% for m in recent_messages %}
+            <li><a href="{{ url_for('admin_campaigns_create') }}?message_id={{ m.id }}" class="text-[12.5px] text-ink-2 hover:text-ink hover:underline">{{ m.title }}</a><span class="block font-mono text-[10.5px] text-ink-3">{{ m.preacher or '' }}{% if m.published_at %} · {{ m.published_at.strftime('%d %b %Y') }}{% endif %}</span></li>
+          {% endfor %}
+        </ul>
+      {% else %}<p class="text-[12px] text-ink-3">No published messages yet.</p>{% endif %}
+    </div>
+    <div class="panel">
+      <h2 class="text-[13px] font-semibold text-ink mb-2">Start from a devotional day</h2>
+      {% if devotionals %}
+        <form method="GET" action="{{ url_for('admin_campaigns_create') }}" class="flex flex-col gap-2">
+          <label for="pub" class="sr-only">Devotional</label>
+          <select id="pub" name="publication_id" class="field-select" onchange="this.form.submit()">
+            <option value="">Choose a devotional…</option>
+            {% for p in devotionals %}<option value="{{ p.id }}" {{ 'selected' if publication_id == p.id else '' }}>{{ p.title }}</option>{% endfor %}
+          </select>
+        </form>
+        {% if days %}
+          <ul class="flex flex-col gap-1.5 mt-3 max-h-64 overflow-y-auto">
+            {% for s in days %}<li><a href="{{ url_for('admin_campaigns_create') }}?subtopic_id={{ s.id }}" class="text-[12.5px] text-ink-2 hover:text-ink hover:underline">{{ s.title }}</a></li>{% endfor %}
+          </ul>
+        {% elif publication_id %}<p class="text-[12px] text-ink-3 mt-2">This devotional has no written days yet.</p>{% endif %}
+      {% else %}<p class="text-[12px] text-ink-3">No devotionals in Books Pub yet.</p>{% endif %}
+    </div>
+  </aside>
+  {% endif %}
+</div>
+{% endblock %}

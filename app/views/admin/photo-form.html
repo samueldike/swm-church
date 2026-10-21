@@ -1,0 +1,38 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, checkbox, file_field with context %}
+{% block title %}{{ 'Edit Photo' if photo else 'Upload Photos' }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ 'Edit Photo' if photo else 'Upload Photos' }}{% endblock %}
+{% block topbar_subtitle %}Photos{% endblock %}
+{% block topbar_icon %}ri-image-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header('Edit photo' if photo else 'Upload photos', ('Collection: ' ~ collection|capitalize),
+      actions='<a href="' ~ url_for('admin_photos') ~ '?collection=' ~ collection ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All photos</a>') }}
+{% endblock %}
+
+{% block content %}
+<div class="panel max-w-3xl">
+  <form method="POST" action="{{ url_for('admin_photos_update', photo_id=photo.id) if photo else url_for('admin_photos_store') }}"
+        enctype="multipart/form-data" class="flex flex-col gap-4" data-turbo="false">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% if not photo %}<input type="hidden" name="collection" value="{{ collection }}">{% endif %}
+    {% if photo %}
+      <div class="aspect-video max-w-xs rounded-md overflow-hidden bg-sunken border border-line">
+        <img src="{{ url_for('static', path=photo.image_path) }}" alt="Current photo" class="w-full h-full object-cover">
+      </div>
+      {{ file_field('Replace image', 'image', hint='Optional · JPG, PNG, WebP or GIF · up to 5 MB', accept='image/*') }}
+    {% else %}
+      {{ file_field('Images', 'images', hint='Select several at once · JPG, PNG, WebP or GIF · up to 5 MB each', multiple=True, accept='image/*', required=True) }}
+    {% endif %}
+    <div class="grid grid-cols-1 sm:grid-cols-[1fr_160px] gap-4">
+      {{ field('Caption', 'caption', value=photo.caption or '' if photo else '', hint=None if photo else 'Applied to the first image only.') }}
+      {{ field('Sort order' if photo else 'Starting sort order', 'sort_order', value=photo.sort_order if photo else next_order, type='number', mono=True) }}
+    </div>
+    {{ checkbox('Active on the public site', 'is_active', checked=(photo.is_active if photo else True)) }}
+    <div class="flex items-center gap-2.5 pt-4 border-t border-line">
+      <button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>{{ 'Save changes' if photo else 'Upload photos' }}</button>
+      <a href="{{ url_for('admin_photos') }}?collection={{ collection }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

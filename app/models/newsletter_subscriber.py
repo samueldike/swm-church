@@ -12,6 +12,8 @@ class NewsletterSubscriber(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    token: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)   # one-click unsubscribe
+    source: Mapped[str | None] = mapped_column(String(30))                          # footer | visit | prayer | admin ...
     subscribed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=lambda: datetime.utcnow())
     unsubscribed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(

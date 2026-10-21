@@ -1,6 +1,7 @@
 {% set pageKey = 'calendar' %}
 {% set pageEyebrow = 'Calendar' %}
 {% set pageTitle = 'The church calendar.' %}
+{% set metaTitle = 'Church calendar' %}
 {% set pageLede = 'Every service and programme an admin has published — browse the year, not just this week.' %}
 {% include "partials/theme-page-open.html" %}
 
@@ -52,8 +53,8 @@
                 {% if dayEvents %}
                 <div class="cal-dots">
                     {% for ev in dayEvents[:2] %}
-                    <span class="cal-pill {{ 'is-major' if ev.is_major else '' }}"
-                          title="{{ ev.title }}{% if ev.starts_at %} — {{ ev.starts_at.strftime('%I:%M %p')|replace(' 0',' ') }}{% endif %}">{{ ev.title }}</span>
+                    <a href="{{ url_for('event_detail', event_id=ev.id) }}" class="cal-pill {{ 'is-major' if ev.is_major else '' }}"
+                       title="{{ ev.title }}{% if ev.starts_at %} — {{ ev.starts_at|clock }}{% endif %}">{{ ev.title }}</a>
                     {% endfor %}
                     {% if dayEvents|length > 2 %}
                     <span class="cal-more mono">+{{ dayEvents|length - 2 }} more</span>
@@ -73,25 +74,29 @@
                 <p class="mono eyebrow"><span class="rule"></span>This month</p>
                 <h2 class="t-h2" style="margin-top:1rem;" id="cal-month-list-title">{{ currentMonth.strftime('%B %Y') }}</h2>
             </div>
-            <a href="{{ url_for('events') }}" class="lnk">All upcoming programmes</a>
+            <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
+                <a href="{{ url_for('calendar_ics') }}" class="lnk">Subscribe in your calendar app</a>
+                <a href="{{ url_for('events') }}" class="lnk">All upcoming programmes</a>
+            </div>
         </div>
 
         <div id="cal-month-list">
         {% if monthOnlyEvents %}
         <ul class="rows" style="margin-top:2rem;">
             {% for ev in monthOnlyEvents %}
-            <li class="row">
-                <span class="row-in">
+            <li class="row row-link">
+                <a href="{{ url_for('event_detail', event_id=ev.id) }}">
                     <span class="mono row-i {{ 'gold' if ev.is_major else 'faint' }}" style="min-width:5.5rem;">{{ ev.starts_at.strftime('%d %b')|upper }}</span>
                     <span class="row-main">
                         <span class="t-h3">{{ ev.title }}</span>
                         {% if ev.location %}<span class="t-sm row-sub">{{ ev.location }}</span>{% endif %}
                     </span>
                     <span class="row-meta mono {{ 'gold' if ev.is_major else 'faint' }}">
-                        {{ ev.starts_at.strftime('%I:%M %p')|replace(' 0',' ') }}
+                        {{ ev.starts_at|clock }}
                         {% if ev.ends_at and ev.ends_at.date() != ev.starts_at.date() %}<br/>to {{ ev.ends_at.strftime('%d %b') }}{% endif %}
                     </span>
-                </span>
+                    <span class="row-go material-symbols-outlined" aria-hidden="true">arrow_outward</span>
+                </a>
             </li>
             {% endfor %}
         </ul>
@@ -171,7 +176,7 @@
         </ul>
 
         <div class="flex flex-wrap items-center gap-3" style="margin-top:2.4rem;">
-            <a href="{{ url_for('contact') }}" class="btn btn-gold">Plan your first visit</a>
+            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan your first visit</a>
             <a href="{{ url_for('watch') }}" class="btn btn-ghost">Watch online instead</a>
         </div>
     </div>
@@ -245,6 +250,8 @@
     }
     .cal-dots { display: flex; flex-direction: column; gap: 0.3rem; }
     .cal-pill {
+        display: block;
+        text-decoration: none;
         font-size: 0.66rem;
         line-height: 1.3;
         padding: 0.2rem 0.4rem;
@@ -308,7 +315,7 @@
             if (day.events.length) {
                 var pills = day.events.slice(0, 2).map(function (ev) {
                     var title = esc(ev.title) + (ev.time_label ? " — " + esc(ev.time_label) : "");
-                    return '<span class="cal-pill' + (ev.is_major ? " is-major" : "") + '" title="' + title + '">' + esc(ev.title) + "</span>";
+                    return '<a href="/events/' + ev.id + '" class="cal-pill' + (ev.is_major ? " is-major" : "") + '" title="' + title + '">' + esc(ev.title) + "</a>";
                 }).join("");
                 var more = day.events.length > 2 ? '<span class="cal-more mono">+' + (day.events.length - 2) + " more</span>" : "";
                 dots = '<div class="cal-dots">' + pills + more + "</div>";
@@ -333,12 +340,13 @@
                 var d = new Date(ev.ends_at);
                 toLabel = "<br/>to " + d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
             }
-            return '<li class="row"><span class="row-in">'
+            return '<li class="row row-link"><a href="/events/' + ev.id + '">'
                 + '<span class="mono row-i ' + (ev.is_major ? "gold" : "faint") + '" style="min-width:5.5rem;">' + esc(ev.date_label) + "</span>"
                 + '<span class="row-main"><span class="t-h3">' + esc(ev.title) + "</span>"
                 + (ev.location ? '<span class="t-sm row-sub">' + esc(ev.location) + "</span>" : "") + "</span>"
                 + '<span class="row-meta mono ' + (ev.is_major ? "gold" : "faint") + '">' + esc(ev.time_label) + toLabel + "</span>"
-                + "</span></li>";
+                + '<span class="row-go material-symbols-outlined" aria-hidden="true">arrow_outward</span>'
+                + "</a></li>";
         }).join("");
         wrap.innerHTML = '<ul class="rows" style="margin-top:2rem;">' + rows + "</ul>";
     }

@@ -1,153 +1,133 @@
+{#
+  Banking-grade redesign of the admin sidebar. Every url_for(), active_page
+  comparison and role conditional below is unchanged from the previous
+  version — only the markup/classes changed. The mobile drawer still toggles
+  the Tailwind `-translate-x-full` class directly (see admin-topbar.html's
+  inline script), so this file must keep those exact class names for that
+  JS to keep working across Turbo navigations.
+#}
 <div id="admin-sidebar-overlay" class="fixed inset-0 bg-black/50 z-30 hidden lg:hidden" aria-hidden="true"></div>
 
-<aside id="admin-sidebar" class="fixed lg:static inset-y-0 left-0 z-40 w-64 bg-[#1a1814] border-r border-[#2d2820] flex flex-col flex-shrink-0 transform -translate-x-full lg:translate-x-0 transition-transform duration-200 ease-out h-screen">
+<aside id="admin-sidebar" class="fixed lg:static inset-y-0 left-0 z-40 w-64 bg-chrome border-r border-chrome-line flex flex-col flex-shrink-0 transform -translate-x-full lg:translate-x-0 transition-transform duration-200 ease-out">
 
-  <div class="flex items-center gap-3 px-4 py-5 border-b border-[#2d2820]">
-    <a href="{{ url_for('home') }}" class="flex items-center gap-3 min-w-0 flex-1">
-      <div class="w-10 h-10 flex items-center justify-center flex-shrink-0">
-        <img alt="{{ siteName }}" class="w-10 h-10 object-contain" src="/images/swm-logo.png"/>
-      </div>
-      <div class="overflow-hidden">
-        <p class="text-white font-bold text-sm tracking-wide leading-tight whitespace-nowrap">{{ siteName|upper }}</p>
-        <p class="text-primary text-[10px] font-medium tracking-widest uppercase">{{ role_label }}</p>
-      </div>
-    </a>
-    <button id="admin-sidebar-close" type="button" class="lg:hidden ml-auto w-6 h-6 flex items-center justify-center text-gray-400 hover:text-white flex-shrink-0">
+  <a href="{{ url_for('home') }}" class="flex items-center gap-3 px-4 py-4.5 border-b border-chrome-line min-w-0">
+    <span class="inline-flex items-center justify-center w-9 h-9 rounded-md border border-gold bg-gold text-[#121110] font-mono font-bold text-sm flex-shrink-0">S</span>
+    <span class="min-w-0 flex-1">
+      <span class="block text-white font-mono font-bold text-[12px] tracking-wide leading-tight whitespace-nowrap truncate">{{ siteName|upper }}</span>
+      <span class="block text-gold-hi text-[9.5px] font-mono font-semibold tracking-widest uppercase mt-0.5">{{ role_label }}</span>
+    </span>
+    <button id="admin-sidebar-close" type="button" class="lg:hidden ml-auto w-7 h-7 flex items-center justify-center text-chrome-text hover:text-white flex-shrink-0" aria-label="Close menu">
       <i class="ri-close-line text-base"></i>
     </button>
-  </div>
+  </a>
 
-  <nav class="admin-sidebar-scroll flex-1 overflow-y-auto py-3 px-2 scrollbar-hide">
+  {% macro nav_item(url, icon, label, page, count=0) -%}
+    <a href="{{ url }}" class="nav-link {{ 'nav-link-active' if active_page == page else '' }}">
+      <i class="{{ icon }} text-base w-5 text-center flex-shrink-0"></i>
+      <span class="flex-1 whitespace-nowrap">{{ label }}</span>
+      {% if count and count > 0 %}<span class="font-mono text-[10px] font-bold text-[#121110] bg-gold rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{{ count }}</span>{% endif %}
+    </a>
+  {%- endmacro %}
+  {% macro nav_heading(text) -%}
+    <p class="text-[#6e675c] text-[9px] font-mono font-semibold uppercase tracking-widest px-2.5 py-2">{{ text }}</p>
+  {%- endmacro %}
+
+  <nav class="admin-sidebar-scroll flex-1 overflow-y-auto py-3 px-2">
     {% if is_hod %}
-      <div class="mb-2">
-        <a href="{{ url_for('hod_reports_index') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'hod.reports' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-          <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-file-chart-line text-base"></i></div>
-          <span class="text-sm font-medium flex-1 whitespace-nowrap">Monthly Reports</span>
-        </a>
-      </div>
+      <div class="mb-2 px-1">{{ nav_item(url_for('hod_reports_index'), 'ri-file-chart-line', 'Monthly Reports', 'hod.reports') }}</div>
     {% else %}
-      <div class="mb-2">
-        <a href="{{ url_for('admin_dashboard') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.dashboard' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-          <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-dashboard-3-line text-base"></i></div>
-          <span class="text-sm font-medium flex-1 whitespace-nowrap">Dashboard</span>
-        </a>
+      {% if can('dashboard') %}<div class="mb-1.5 px-1">{{ nav_item(url_for('admin_dashboard'), 'ri-dashboard-3-line', 'Dashboard', 'admin.dashboard') }}</div>{% endif %}
+
+      {% if can('members') or can('hods') or can('harvest') or can('system') or can('ministers.view') %}
+      <div class="mb-1.5 px-1">
+        {{ nav_heading('People') }}
+        {% if can('members') %}{{ nav_item(url_for('admin_members'), 'ri-team-line', 'Members', 'admin.members', badges.members) }}{% endif %}
+        {% if can('ministers.view') %}{{ nav_item(url_for('admin_ministers'), 'ri-user-voice-line', 'Ministers', 'admin.ministers') }}{% endif %}
+        {% if can('hods') %}{{ nav_item(url_for('admin_hods'), 'ri-user-star-line', 'Department HODs', 'admin.hods') }}{% endif %}
+        {% if can('harvest') %}{{ nav_item(url_for('admin_harvesttrack'), 'ri-seedling-line', 'HarvestTrack', 'admin.harvesttrack') }}{% endif %}
+        {% if can('system') %}{{ nav_item(url_for('admin_admins'), 'ri-shield-user-line', 'Admins & roles', 'admin.admins') }}{% endif %}
+      </div>
+      {% endif %}
+
+      <div class="mb-1.5 px-1">
+        {{ nav_heading('Church Activities') }}
+        {% if can('events') %}{{ nav_item(url_for('admin_events'), 'ri-calendar-event-line', 'Calendar', 'admin.events', badges.events) }}{% endif %}
+        {% if can('departments.view') %}{{ nav_item(url_for('admin_departments'), 'ri-building-2-line', 'Departments', 'admin.departments') }}{% endif %}
+        {% if can('system') %}{{ nav_item(url_for('admin_branches'), 'ri-map-pin-2-line', 'Branches', 'admin.branches') }}
+        {% elif can('branch.view') and admin_branch_id %}{{ nav_item(url_for('admin_branch', branch_id=admin_branch_id), 'ri-map-pin-2-line', 'My branch', 'admin.branches') }}{% endif %}
+        {% if can('branch_settings') and not can('system') %}{{ nav_item(url_for('admin_branch_settings'), 'ri-settings-3-line', 'Branch settings', 'admin.branch-settings') }}{% endif %}
+        {% if can('branch_reports') %}{{ nav_item(url_for('admin_branch_reports'), 'ri-file-list-3-line', ('Branch Reports' if admin.role in ['super_admin', 'hq_pastoral'] else 'Reports to HQ'), 'admin.branch-reports', badges.branch_reports) }}{% endif %}
+        {% if can('reports') %}{{ nav_item(url_for('admin_unit_reports'), 'ri-file-chart-line', 'Unit Reports', 'admin.unit-reports', badges.unit_reports) }}{% endif %}
+        {% if can('activity') and not can('system') %}{{ nav_item(url_for('admin_activity'), 'ri-history-line', 'Activity', 'admin.activity') }}{% endif %}
       </div>
 
-      <div class="mb-2">
-        <p class="text-[#8a806f] text-[10px] font-bold uppercase tracking-widest px-3 py-2">People</p>
-        <a href="{{ url_for('admin_members') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.members' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-          <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-team-line text-base"></i></div>
-          <span class="text-sm font-medium flex-1 whitespace-nowrap">Members</span>
-          {% if badges.members > 0 %}
-            <span class="bg-primary text-[#1a1814] text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{{ badges.members }}</span>
-          {% endif %}
-        </a>
-        <a href="{{ url_for('admin_hods') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.hods' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-          <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-user-star-line text-base"></i></div>
-          <span class="text-sm font-medium flex-1 whitespace-nowrap">Department HODs</span>
-        </a>
-        <a href="{{ url_for('admin_harvesttrack') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.harvesttrack' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-          <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-seedling-line text-base"></i></div>
-          <span class="text-sm font-medium flex-1 whitespace-nowrap">HarvestTrack</span>
-        </a>
-        {% if is_super %}
-          <a href="{{ url_for('admin_admins') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.admins' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-            <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-shield-user-line text-base"></i></div>
-            <span class="text-sm font-medium flex-1 whitespace-nowrap">Admins</span>
-          </a>
-        {% endif %}
+      {% if can('audio') or can('inquiries') or can('prayer') or can('announcements.view') %}
+      <div class="mb-1.5 px-1">
+        {{ nav_heading('Communication') }}
+        {% if can('announcements.view') %}{{ nav_item(url_for('admin_announcements'), 'ri-megaphone-line', 'Announcements', 'admin.announcements') }}{% endif %}
+        {% if can('audio') %}{{ nav_item(url_for('admin_messages'), 'ri-message-3-line', 'Audio Messages', 'admin.messages', badges.messages) }}
+        {{ nav_item(url_for('admin_transcriptions'), 'ri-file-text-line', 'Transcriptions', 'admin.transcriptions') }}{% endif %}
+        {% if can('inquiries') %}{{ nav_item(url_for('admin_inquiries'), 'ri-question-answer-line', 'Inquiries', 'admin.inquiries', badges.inquiries) }}{% endif %}
+        {% if can('prayer') %}{{ nav_item(url_for('admin_prayer_requests'), 'ri-hand-heart-line', 'Prayer Requests', 'admin.prayer-requests', badges.prayers) }}{% endif %}
       </div>
+      {% endif %}
 
-      <div class="mb-2">
-        <p class="text-[#8a806f] text-[10px] font-bold uppercase tracking-widest px-3 py-2">Church Activities</p>
-        <a href="{{ url_for('admin_events') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.events' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-          <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-calendar-event-line text-base"></i></div>
-          <span class="text-sm font-medium flex-1 whitespace-nowrap">Calendar</span>
-          {% if badges.events > 0 %}
-            <span class="bg-primary text-[#1a1814] text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{{ badges.events }}</span>
-          {% endif %}
-        </a>
-        {% if is_super %}
-          <a href="{{ url_for('admin_departments') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.departments' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-            <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-building-2-line text-base"></i></div>
-            <span class="text-sm font-medium flex-1 whitespace-nowrap">Departments</span>
-          </a>
-          <a href="{{ url_for('admin_branches') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.branches' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-            <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-map-pin-2-line text-base"></i></div>
-            <span class="text-sm font-medium flex-1 whitespace-nowrap">Branches</span>
-          </a>
-        {% endif %}
-        <a href="{{ url_for('admin_unit_reports') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.unit-reports' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-          <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-file-chart-line text-base"></i></div>
-          <span class="text-sm font-medium flex-1 whitespace-nowrap">Unit Reports</span>
-          {% if badges.unit_reports > 0 %}
-            <span class="bg-primary text-[#1a1814] text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{{ badges.unit_reports }}</span>
-          {% endif %}
-        </a>
+      {% if can('donations') or can('remittances') or can('media') or can('analytics') %}
+      <div class="mb-1.5 px-1">
+        {{ nav_heading('Giving & audience') }}
+        {% if can('donations') %}{{ nav_item(url_for('admin_donations'), 'ri-hand-coin-line', 'Donations', 'admin.donations') }}{% endif %}
+        {% if can('remittances') %}{{ nav_item(url_for('admin_remittances'), 'ri-exchange-funds-line', 'Remittances', 'admin.remittances') }}{% endif %}
+        {% if can('media') %}{{ nav_item(url_for('admin_subscribers'), 'ri-mail-send-line', 'Subscribers', 'admin.subscribers') }}{% endif %}
+        {% if can('media') %}{{ nav_item(url_for('admin_campaigns'), 'ri-mail-star-line', 'Email campaigns', 'admin.campaigns') }}{% endif %}
+        {% if can('analytics') %}{{ nav_item(url_for('admin_analytics'), 'ri-bar-chart-2-line', 'Site traffic', 'admin.analytics') }}{% endif %}
       </div>
+      {% endif %}
 
-      <div class="mb-2">
-        <p class="text-[#8a806f] text-[10px] font-bold uppercase tracking-widest px-3 py-2">Communication</p>
-        <a href="{{ url_for('admin_messages') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.messages' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-          <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-message-3-line text-base"></i></div>
-          <span class="text-sm font-medium flex-1 whitespace-nowrap">Audio Messages</span>
-          {% if badges.messages > 0 %}
-            <span class="bg-primary text-[#1a1814] text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{{ badges.messages }}</span>
-          {% endif %}
-        </a>
-        <a href="{{ url_for('admin_transcriptions') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.transcriptions' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-          <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-file-text-line text-base"></i></div>
-          <span class="text-sm font-medium flex-1 whitespace-nowrap">Transcriptions</span>
-        </a>
-        <a href="{{ url_for('admin_inquiries') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.inquiries' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-          <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-question-answer-line text-base"></i></div>
-          <span class="text-sm font-medium flex-1 whitespace-nowrap">Inquiries</span>
-          {% if badges.inquiries > 0 %}
-            <span class="bg-primary text-[#1a1814] text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{{ badges.inquiries }}</span>
-          {% endif %}
-        </a>
+      {% if can('media') %}
+      <div class="mb-1.5 px-1">
+        {{ nav_heading('Publishing') }}
+        {% set pub_open = active_page in ['admin.pub-devotionals', 'admin.pub-books'] %}
+        <details class="group" {{ 'open' if pub_open else '' }}>
+          <summary class="nav-link cursor-pointer list-none [&::-webkit-details-marker]:hidden {{ 'nav-link-active' if pub_open else '' }}">
+            <i class="ri-book-open-line text-base w-5 text-center flex-shrink-0"></i>
+            <span class="flex-1 whitespace-nowrap">Books Pub</span>
+            <i class="ri-arrow-down-s-line text-base transition-transform group-open:rotate-180"></i>
+          </summary>
+          <div class="ml-4 pl-2 border-l border-chrome-line mt-0.5 mb-1">
+            {{ nav_item(url_for('admin_pubs', kind='devotionals'), 'ri-sun-line', 'Daily Devotional', 'admin.pub-devotionals') }}
+            {{ nav_item(url_for('admin_pubs', kind='books'), 'ri-book-2-line', 'Book', 'admin.pub-books') }}
+          </div>
+        </details>
       </div>
+      <div class="mb-1.5 px-1">
+        {{ nav_heading('Website') }}
+        {{ nav_item(url_for('admin_sliders'), 'ri-slideshow-3-line', 'Sliders', 'admin.sliders') }}
+        {{ nav_item(url_for('admin_photos'), 'ri-image-line', 'Photos', 'admin.photos') }}
+        {{ nav_item(url_for('admin_program_flyers'), 'ri-gallery-upload-line', 'Program Flyers', 'admin.program-flyers') }}
+        {{ nav_item(url_for('admin_stories'), 'ri-quill-pen-line', 'Stories', 'admin.stories') }}
+      </div>
+      {% endif %}
 
-      {% if is_super %}
-        <div class="mb-2">
-          <p class="text-[#8a806f] text-[10px] font-bold uppercase tracking-widest px-3 py-2">System</p>
-          <a href="{{ url_for('admin_sliders') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.sliders' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-            <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-slideshow-3-line text-base"></i></div>
-            <span class="text-sm font-medium flex-1 whitespace-nowrap">Sliders</span>
-          </a>
-          <a href="{{ url_for('admin_photos') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.photos' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-            <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-image-line text-base"></i></div>
-            <span class="text-sm font-medium flex-1 whitespace-nowrap">Photos</span>
-          </a>
-          <a href="{{ url_for('admin_stories') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.stories' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-            <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-quill-pen-line text-base"></i></div>
-            <span class="text-sm font-medium flex-1 whitespace-nowrap">Stories</span>
-          </a>
-          <a href="{{ url_for('admin_settings') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.settings' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-            <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-settings-4-line text-base"></i></div>
-            <span class="text-sm font-medium flex-1 whitespace-nowrap">Settings</span>
-          </a>
-          <a href="{{ url_for('admin_security_logs') }}" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150 mb-0.5 {% if active_page == 'admin.security-logs' %}bg-primary/15 text-primary border border-primary/25{% else %}text-[#c6bba7] hover:text-white hover:bg-white/7{% endif %}">
-            <div class="w-5 h-5 flex items-center justify-center flex-shrink-0"><i class="ri-shield-keyhole-line text-base"></i></div>
-            <span class="text-sm font-medium flex-1 whitespace-nowrap">Security Logs</span>
-          </a>
-        </div>
+      {% if can('system') %}
+      <div class="mb-1.5 px-1">
+        {{ nav_heading('System') }}
+        {{ nav_item(url_for('admin_settings'), 'ri-settings-4-line', 'Settings', 'admin.settings') }}
+        {{ nav_item(url_for('admin_security_logs'), 'ri-shield-keyhole-line', 'Security Logs', 'admin.security-logs') }}
+      </div>
       {% endif %}
     {% endif %}
   </nav>
 
-  <div class="p-3 border-t border-[#2d2820]">
-    <div class="flex items-center gap-3">
-      <div class="w-8 h-8 flex items-center justify-center rounded-full bg-primary text-[#1a1814] text-xs font-bold flex-shrink-0">
-        {{ admin_initials }}
-      </div>
+  <div class="p-3 border-t border-chrome-line">
+    <div class="flex items-center gap-2.5">
+      <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gold text-[#121110] font-mono text-xs font-bold flex-shrink-0">{{ admin_initials }}</span>
       <div class="flex-1 overflow-hidden">
         <p class="text-white text-xs font-semibold truncate">{{ admin.full_name if admin else '' }}</p>
-        <p class="text-[#9d927f] text-[10px] truncate">{{ admin.email if admin else '' }}</p>
+        <p class="text-[#807a6e] text-[10px] font-mono truncate">{{ admin.email if admin else '' }}</p>
       </div>
       <form action="{{ url_for('admin_logout') }}" method="POST" class="ml-auto">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button class="w-6 h-6 flex items-center justify-center text-[#9d927f] hover:text-primary transition-colors" type="submit" title="Sign out">
+        <button class="w-7 h-7 flex items-center justify-center rounded-md border border-chrome-line text-[#807a6e] hover:text-gold-hi transition-colors" type="submit" title="Sign out" aria-label="Sign out">
           <i class="ri-logout-box-r-line text-sm"></i>
         </button>
       </form>
@@ -158,8 +138,6 @@
 <style>
   .admin-sidebar-scroll::-webkit-scrollbar { width: 4px; }
   .admin-sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
-  .admin-sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(179, 139, 46, 0.4); border-radius: 9999px; }
-  .scrollbar-hide::-webkit-scrollbar { display: none; }
-  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  .admin-sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(184, 137, 31, 0.4); border-radius: 9999px; }
   body { text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 </style>

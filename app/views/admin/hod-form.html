@@ -1,0 +1,69 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, checkbox with context %}
+{% block title %}{{ 'Edit HOD' if hod else 'Invite HOD' }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ 'Edit HOD' if hod else 'Invite HOD' }}{% endblock %}
+{% block topbar_subtitle %}Department HODs{% endblock %}
+{% block topbar_icon %}ri-user-star-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header('Edit department HOD' if hod else 'Invite a department HOD',
+      hod.email if hod else 'They will receive an invitation link valid for 7 days',
+      actions='<a href="' ~ url_for('admin_hods') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All HODs</a>') }}
+{% endblock %}
+
+{% block content %}
+<div class="panel max-w-3xl">
+  <form method="POST" action="{{ url_for('admin_hods_update', hod_id=hod.id) if hod else url_for('admin_hods_invite') }}" class="flex flex-col gap-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {{ field('Full name', 'name', value=hod.name if hod else '', required=not hod) }}
+      {% if hod %}
+        {{ field('Phone number', 'phone', value=hod.phone or '', mono=True) }}
+      {% else %}
+        {{ field('Email address', 'email', type='email', mono=True, required=True) }}
+      {% endif %}
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label for="department_id" class="field-label">Department<span class="text-bad ml-0.5">*</span></label>
+        <select id="department_id" name="department_id" class="field-select" required>
+          {% if not hod %}<option value="">Select department</option>{% endif %}
+          {% for d in departments %}
+            <option value="{{ d.id }}" {{ 'selected' if (hod and hod.department_id == d.id) or request.form.get('department_id', '')|string == d.id|string else '' }}>{{ d.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if not hod %}
+        <div>
+          <label for="branch_id" class="field-label">Branch<span class="text-bad ml-0.5">*</span></label>
+          <select id="branch_id" name="branch_id" class="field-select" required>
+            {% if is_super %}<option value="">Select branch</option>{% endif %}
+            {% for b in branches %}
+              {% if is_super or b.id == admin.branch_id %}
+                <option value="{{ b.id }}" {{ 'selected' if b.id == admin.branch_id or request.form.get('branch_id', '')|string == b.id|string else '' }}>{{ b.name }}</option>
+              {% endif %}
+            {% endfor %}
+          </select>
+        </div>
+      {% endif %}
+    </div>
+
+    {% if hod %}
+      {{ checkbox('Account is active', 'is_active', checked=hod.is_active) }}
+      <div class="pt-3 border-t border-line">
+        <p class="mono-label mb-3">Reset password (optional)</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {{ field('New password', 'password', type='password', mono=True, hint='At least 8 characters. Leave blank to keep the current password.', autocomplete='new-password') }}
+          {{ field('Confirm password', 'password_confirmation', type='password', mono=True, autocomplete='new-password') }}
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="flex items-center gap-2.5 pt-4 border-t border-line">
+      <button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>{{ 'Save changes' if hod else 'Send invitation' }}</button>
+      <a href="{{ url_for('admin_hods') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

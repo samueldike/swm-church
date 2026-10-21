@@ -1,0 +1,46 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field with context %}
+{% block title %}New Branch | {{ siteName }}{% endblock %}
+{% block topbar_title %}New Branch{% endblock %}
+{% block topbar_subtitle %}Branches{% endblock %}
+{% block topbar_icon %}ri-map-pin-2-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header('New branch', 'Register a new branch. You can edit details and assign administrators afterwards.',
+      actions='<a href="' ~ url_for('admin_branches') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All branches</a>') }}
+{% endblock %}
+
+{% block content %}
+<div class="panel max-w-3xl">
+  <form method="POST" action="{{ url_for('admin_branches_store') }}" class="flex flex-col gap-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {{ field('Branch name', 'name', required=True) }}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {{ field('Email address', 'email', type='email', mono=True) }}
+      {{ field('Phone number', 'phone', mono=True) }}
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {{ field('City', 'city') }}
+      {{ field('State', 'state') }}
+      <div>
+        <label for="country" class="field-label">Country</label>
+        <select id="country" name="country" class="field-select">
+          {% for c in countries %}<option value="{{ c }}" {{ 'selected' if request.form.get('country', 'Nigeria') == c else '' }}>{{ c }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    {{ field('Street address', 'address') }}
+    <div class="pt-3 border-t border-line">
+      <p class="mono-label mb-3">Branch administrator (optional)</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {{ field('Administrator name', 'super_admin_name') }}
+        {{ field('Administrator email', 'super_admin_email', type='email', mono=True, hint='An invite link is generated for you to share — no email is sent automatically.') }}
+      </div>
+    </div>
+    <div class="flex items-center gap-2.5 pt-4 border-t border-line">
+      <button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>Create branch</button>
+      <a href="{{ url_for('admin_branches') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

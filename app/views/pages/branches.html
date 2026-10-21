@@ -1,0 +1,97 @@
+{% set pageKey = 'branches' %}
+{% set pageEyebrow = 'Find a branch' %}
+{% set pageTitle = 'A church near you.' %}
+{% set pageLede = 'Scent of Water Ministry meets in more than one place. Find the gathering closest to you, see when it meets, and plan your visit.' %}
+{% set metaTitle = 'Find a branch' %}
+{% set metaDescription = 'Branches of Scent of Water Ministry — addresses, service times and contacts, with directions.' %}
+{% include "partials/theme-page-open.html" %}
+
+{% if hq %}
+<section class="band band-dark">
+    <div class="shell bx-hq">
+        <div>
+            <p class="mono eyebrow"><span class="rule"></span>Headquarters</p>
+            <h2 class="t-h2" style="margin-top:1rem;max-width:18ch;">{{ hq.name }}</h2>
+            {% if hq.address %}<p class="t-body" style="margin-top:1rem;max-width:44ch;">{{ hq.address }}</p>{% endif %}
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan your visit</a>
+            {% if hq.directions %}<a href="{{ hq.directions }}" class="btn btn-ghost" target="_blank" rel="noopener">Directions<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<section class="band band-light">
+    <div class="shell">
+        <div class="head">
+            <div>
+                <p class="mono eyebrow"><span class="rule"></span>Our branches</p>
+                <h2 class="t-h2" style="margin-top:1rem;">{% if q or state %}{{ shown|length }} found{% else %}{{ total }} branch{{ '' if total == 1 else 'es' }}{% endif %}</h2>
+            </div>
+            {% if total > 3 %}
+            <form method="GET" action="{{ url_for('branches') }}" class="bx-filter" role="search">
+                <label class="sr-only" for="bx-q">Search branches</label>
+                <input id="bx-q" type="search" name="q" value="{{ q }}" placeholder="Search by town or pastor"/>
+                {% if states|length > 1 %}
+                <label class="sr-only" for="bx-state">State</label>
+                <select id="bx-state" name="state" onchange="this.form.submit()">
+                    <option value="">All states</option>
+                    {% for s in states %}<option value="{{ s }}" {{ 'selected' if state == s else '' }}>{{ s }}</option>{% endfor %}
+                </select>
+                {% endif %}
+                <button class="btn btn-gold" type="submit">Search</button>
+            </form>
+            {% endif %}
+        </div>
+
+        {% if shown %}
+        <ul class="rows rows-play" style="margin-top:2rem;">
+            {% for b in shown %}
+            <li class="row row-link">
+                <a href="{{ url_for('branch_detail', slug=b.slug) }}">
+                    <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
+                    <span class="row-main">
+                        <span class="t-h3">{{ b.name }}</span>
+                        <span class="t-sm row-sub">{{ b.place or b.address }}{% if b.services %} · {{ b.services[0] }}{% endif %}</span>
+                    </span>
+                    <span class="row-meta mono faint">{{ b.pastor }}</span>
+                    <span class="row-go material-symbols-outlined" aria-hidden="true">arrow_outward</span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+        {% elif total %}
+        <div class="empty"><p class="t-body">No branch matched. <a class="lnk-inline" href="{{ url_for('branches') }}">Show all branches</a>.</p></div>
+        {% else %}
+        <div class="empty">
+            <p class="t-body">Our branch directory is being prepared. In the meantime you are welcome at headquarters, or send us a message and we will point you to the nearest gathering.</p>
+            <a href="{{ url_for('contact') }}" class="btn btn-ghost" style="margin-top:1.2rem;">Contact us</a>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<section class="band band-dark">
+    <div class="shell" style="text-align:center;">
+        <h2 class="t-h2" style="max-width:24ch;margin-inline:auto;">Do not see your town?</h2>
+        <p class="t-body" style="max-width:52ch;margin:1.2rem auto 0;">Tell us where you are and we will help you find a gathering, or pray with you from wherever you are.</p>
+        <div class="flex flex-wrap items-center justify-center gap-3" style="margin-top:1.8rem;">
+            <a href="{{ url_for('contact') }}" class="btn btn-gold">Contact us</a>
+            <a href="{{ url_for('prayer') }}" class="btn btn-ghost">Send a prayer request</a>
+        </div>
+    </div>
+</section>
+
+<style>
+    .bx-hq { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 1.6rem 2rem; }
+    .bx-filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.7rem; }
+    .bx-filter input, .bx-filter select {
+        background: transparent; border: 0; border-bottom: 1px solid var(--line-2); color: var(--fg);
+        font: inherit; font-size: 0.92rem; padding: 0.55rem 0; min-width: min(14rem, 52vw);
+    }
+    .bx-filter select option { background: #fff; color: #111; }
+    .bx-filter input:focus, .bx-filter select:focus { outline: none; border-bottom-color: var(--gold); }
+</style>
+
+{% include "partials/theme-page-close.html" %}

@@ -1,0 +1,248 @@
+/* Source file for app/static/css/admin.css. See README-admin-css.txt to rebuild. */
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Code", monospace;
+
+  /* Ground */
+  --color-paper: #fafaf9;
+  --color-surface: #ffffff;
+  --color-sunken: #f4f3f0;
+
+  /* Ink */
+  --color-ink: #0a0a0a;
+  --color-ink-2: #52504b;
+  --color-ink-3: #6b6862;
+
+  /* Hairlines */
+  --color-line: #e5e3de;
+  --color-line-2: #d1cec7;
+
+  /* Gold accent */
+  --color-gold: #b8891f;
+  --color-gold-text: #8a6414;
+  --color-gold-tint: #f7f1e3;
+  --color-gold-hi: #e8c870;
+
+  /* Chrome (sidebar / topbar ground) */
+  --color-chrome: #121110;
+  --color-chrome-2: #1c1a17;
+  --color-chrome-line: #2a2723;
+  --color-chrome-text: #b5b0a6;
+
+  /* Status */
+  --color-ok: #1e6b45;
+  --color-ok-bg: #e8f1ec;
+  --color-warn: #8a6414;
+  --color-warn-bg: #f7f1e3;
+  --color-bad: #a32a1e;
+  --color-bad-bg: #f8ebe9;
+  --color-neut: #52504b;
+  --color-neut-bg: #f0efec;
+
+  /* Back-compat with the pre-redesign token names (kept live, retinted) */
+  --color-primary: #b8891f;
+  --color-primary-dark: #8a6414;
+  --color-primary-light: #e8c870;
+  --color-secondary: #121110;
+  --color-secondary-light: #1c1a17;
+  --color-background-light: #fafaf9;
+  --color-sidebar-bg: #121110;
+}
+
+@layer components {
+  /* ── Buttons: base .btn plus ONE modifier class, combined in HTML
+     (class="btn btn-primary") — Tailwind v4 @apply cannot reference
+     another @layer components class, so each rule is self-contained. ── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border px-3.5 py-2 text-[13px] font-semibold whitespace-nowrap transition-colors;
+    min-height: 36px;
+  }
+  .btn-primary { @apply bg-gold border-gold text-[#121110]; }
+  .btn-primary:hover { @apply bg-gold-hi; }
+  .btn-secondary { @apply bg-surface border-line-2 text-ink; }
+  .btn-secondary:hover { @apply bg-sunken; }
+  .btn-dark { @apply bg-chrome border-chrome text-white; }
+  .btn-dark:hover { @apply bg-chrome-2; }
+  .btn-danger { @apply bg-surface border-[#e6c9c5] text-bad; }
+  .btn-danger:hover { @apply bg-bad-bg; }
+  .btn-ghost { @apply border-transparent bg-transparent text-ink-2; }
+  .btn-ghost:hover { @apply bg-sunken; }
+  .btn-sm { @apply px-2.5 py-1.5 text-xs; min-height: 30px; }
+  .btn-lg { @apply px-4.5 py-3 text-sm; min-height: 44px; }
+  .icon-btn {
+    @apply inline-flex h-8 w-8 items-center justify-center rounded-md border border-line bg-surface text-ink-2 transition-colors;
+  }
+  .icon-btn:hover { @apply bg-sunken; }
+
+  /* ── Cards / surfaces ────────────────────────────────────────── */
+  .panel { @apply rounded-md border border-line bg-surface p-4 sm:p-5; }
+  .panel-flush { @apply rounded-md border border-line bg-surface overflow-hidden; }
+
+  /* ── Form fields ─────────────────────────────────────────────── */
+  .field-label {
+    @apply mb-1.5 block font-mono text-[11px] font-semibold tracking-wider text-ink-3 uppercase;
+  }
+  .field-input {
+    @apply w-full block rounded-md border border-line-2 bg-surface px-3 py-2 text-[13px] text-ink outline-none transition-colors;
+    min-height: 38px;
+  }
+  .field-input:focus { @apply border-gold ring-2 ring-gold/20; }
+  .field-input::placeholder { @apply text-ink-3; }
+  .field-mono { @apply font-mono; }
+  .field-textarea {
+    @apply w-full block rounded-md border border-line-2 bg-surface px-3 py-2 text-[13px] text-ink outline-none transition-colors resize-none leading-relaxed;
+  }
+  .field-textarea:focus { @apply border-gold ring-2 ring-gold/20; }
+  .field-select {
+    @apply w-full block rounded-md border border-line-2 bg-surface px-3 py-2 pr-8 text-[13px] text-ink outline-none transition-colors appearance-none cursor-pointer;
+    min-height: 38px;
+  }
+  .field-select:focus { @apply border-gold ring-2 ring-gold/20; }
+  .field-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%236b6862' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 14px 14px;
+  }
+  .field-hint { @apply mt-1 font-sans text-[11px] text-ink-3; }
+  .field-checkbox { @apply h-4 w-4 rounded accent-gold; }
+
+  /* ── Badges ──────────────────────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 font-mono text-[11px] font-semibold tracking-wide whitespace-nowrap;
+  }
+  .badge::before { content: ""; width: 5px; height: 5px; border-radius: 999px; background: currentColor; flex-shrink: 0; }
+  .badge-ok { @apply bg-ok-bg text-ok; }
+  .badge-warn { @apply bg-warn-bg text-warn; }
+  .badge-bad { @apply bg-bad-bg text-bad; }
+  .badge-neut { @apply bg-neut-bg text-neut; }
+  .badge-gold { @apply bg-gold-tint text-gold-text; }
+
+  /* ── Table ───────────────────────────────────────────────────── */
+  .dtable { @apply w-full border-collapse text-left; }
+  .dtable th {
+    @apply border-b border-line-2 px-3.5 py-2.5 font-mono text-[10px] font-semibold tracking-wider text-ink-3 uppercase whitespace-nowrap;
+  }
+  .dtable td {
+    @apply border-b border-line px-3.5 py-2.5 align-middle text-[13px] text-ink;
+  }
+  .dtable tr:last-child td { @apply border-b-0; }
+
+  /* ── Mono / label utilities ──────────────────────────────────── */
+  .mono-label {
+    @apply font-mono text-[10px] font-semibold tracking-wider text-ink-3 uppercase;
+  }
+  .kpi-value { @apply font-mono text-[26px] sm:text-[28px] font-semibold text-ink tabular-nums leading-none; }
+
+  /* ── Sidebar nav link ────────────────────────────────────────── */
+  .nav-link {
+    @apply flex items-center gap-2.5 rounded-md border-l-2 border-transparent px-2.5 py-2 text-[12.5px] font-medium text-chrome-text transition-colors;
+    min-height: 38px;
+  }
+  .nav-link:hover { @apply bg-white/7 text-white; }
+  .nav-link-active { @apply bg-gold/15 border-gold text-gold-hi font-semibold; }
+}
+
+@layer utilities {
+  /* Responsive table -> stacked cards below sm */
+  @media (max-width: 767px) {
+    .dtable-responsive thead { display: none; }
+    .dtable-responsive tr {
+      display: block;
+      border-bottom: 1px solid var(--color-line);
+      padding: 10px 0;
+    }
+    .dtable-responsive td {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      border-bottom: none;
+      padding: 4px 0;
+      text-align: right;
+    }
+    .dtable-responsive td[data-label]::before {
+      content: attr(data-label);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--color-ink-3);
+      text-align: left;
+      margin-right: auto;
+    }
+  }
+
+  .admin-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+  .admin-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .admin-scrollbar::-webkit-scrollbar-thumb { background: rgba(184, 137, 31, 0.4); border-radius: 999px; }
+}
+
+/* ── Dark mode: the html.dark class (set by the top-bar toggle) re-points the
+   design tokens, so every utility and component follows without extra rules. ── */
+@layer base {
+  html.dark {
+    color-scheme: dark;
+    --color-paper: #0f1115;
+    --color-surface: #171a21;
+    --color-sunken: #1e222b;
+    --color-ink: #f3f4f6;
+    --color-ink-2: #c4c9d4;
+    --color-ink-3: #8f96a3;
+    --color-line: #2b303b;
+    --color-line-2: #363c49;
+    --color-gold-tint: #2a2417;
+    --color-gold-text: #e8c870;
+    --color-ok: #6fcf9a;
+    --color-ok-bg: #16281f;
+    --color-warn: #e8c870;
+    --color-warn-bg: #2a2417;
+    --color-bad: #f08a80;
+    --color-bad-bg: #2c1a18;
+    --color-neut: #c4c9d4;
+    --color-neut-bg: #232833;
+  }
+  html.dark select, html.dark input, html.dark textarea { color-scheme: dark; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { font-family: var(--font-sans); }
+}
+
+/* ── Rich-text editor (markup is generated at runtime by admin-richtext.js) ── */
+@layer components {
+  .admin-richtext { width: 100%; overflow: hidden; border-radius: 6px; border: 1px solid var(--color-line-2); background: var(--color-surface); transition: border-color 150ms; }
+  .admin-richtext:focus-within { border-color: var(--color-gold); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-gold) 20%, transparent); }
+  .admin-richtext-topbar, .admin-richtext-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--color-line); background: var(--color-sunken); }
+  .admin-richtext-topbar { justify-content: space-between; gap: 8px; }
+  .admin-richtext-btn { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 6px; color: var(--color-ink-2); }
+  .admin-richtext-btn:hover { background: var(--color-line); color: var(--color-ink); }
+  .admin-richtext-select { height: 32px; border-radius: 6px; border: 1px solid var(--color-line-2); background: var(--color-surface); padding: 0 8px; font-size: 12px; font-weight: 600; color: var(--color-ink-2); outline: none; }
+  .admin-richtext-select:focus { border-color: var(--color-gold); }
+  .admin-richtext-modes { margin-left: auto; display: inline-flex; border-radius: 6px; border: 1px solid var(--color-line-2); background: var(--color-surface); padding: 2px; }
+  .admin-richtext-mode { height: 26px; border-radius: 4px; padding: 0 8px; font-size: 11px; font-weight: 700; color: var(--color-ink-3); }
+  .admin-richtext-mode:hover { color: var(--color-ink); }
+  .admin-richtext-mode.active { background: var(--color-gold-tint); color: var(--color-gold-text); }
+  .admin-richtext-separator { margin: 0 4px; height: 20px; width: 1px; background: var(--color-line-2); }
+  .admin-richtext-colors { margin-left: 4px; display: flex; align-items: center; gap: 4px; border-radius: 6px; border: 1px solid var(--color-line-2); background: var(--color-surface); padding: 3px 8px; }
+  .admin-richtext-color { height: 20px; width: 20px; border-radius: 4px; border: 1px solid var(--color-line-2); background: transparent; padding: 0; }
+  .admin-richtext-color-label { display: none; font-size: 11px; font-weight: 700; color: var(--color-ink-3); }
+  @media (min-width: 640px) { .admin-richtext-color-label { display: inline; } }
+  .admin-richtext-editor { max-height: 288px; overflow-y: auto; padding: 12px 16px; font-size: 14px; line-height: 1.7; color: var(--color-ink-2); background: var(--color-surface); outline: none; }
+  .admin-richtext-source { display: block; min-height: 128px; width: 100%; border: 0; border-radius: 0; background: var(--color-sunken); padding: 12px 16px; font-family: var(--font-mono); font-size: 12px; line-height: 1.7; color: var(--color-ink-2); outline: none; }
+  .admin-richtext-source.hidden { display: none !important; }
+  .admin-richtext-editor h1, .admin-richtext-editor h2, .admin-richtext-editor h3, .admin-richtext-editor h4 { font-weight: 700; color: var(--color-ink); }
+  .admin-richtext-editor h1 { font-size: 24px; } .admin-richtext-editor h2 { font-size: 20px; } .admin-richtext-editor h3 { font-size: 18px; }
+  .admin-richtext-editor blockquote { border-left: 4px solid color-mix(in srgb, var(--color-gold) 40%, transparent); padding-left: 12px; color: var(--color-ink-3); font-style: italic; }
+  .admin-richtext-editor ul { list-style: disc; padding-left: 20px; } .admin-richtext-editor ol { list-style: decimal; padding-left: 20px; }
+  .admin-richtext-editor a { color: var(--color-gold-text); text-decoration: underline; }
+  .admin-richtext-editor hr { margin: 12px 0; border-color: var(--color-line); }
+  .admin-richtext-editor pre { overflow-x: auto; border-radius: 6px; background: #121110; padding: 8px 12px; font-family: var(--font-mono); font-size: 12px; color: #fff; }
+  .admin-richtext-editor img { margin: 8px 0; max-width: 100%; border-radius: 6px; }
+  .admin-richtext-editor table { margin: 12px 0; width: 100%; border-collapse: collapse; font-size: 14px; }
+  .admin-richtext-editor td, .admin-richtext-editor th { border: 1px solid var(--color-line); padding: 8px 12px; }
+  .admin-richtext-editor:empty::before { content: attr(data-placeholder); color: var(--color-ink-3); }
+  .modal-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .modal-scroll::-webkit-scrollbar { display: none; }
+}

@@ -1,0 +1,191 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, textarea, badge with context %}
+{% set editing = pub is not none %}
+{% block title %}{{ 'Edit' if editing else 'New' }} {{ kmeta.label }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ 'Edit project' if editing else 'New ' ~ kmeta.label }}{% endblock %}
+{% block topbar_subtitle %}Books Pub · {{ kmeta.plural }}{% endblock %}
+{% block topbar_icon %}{{ kmeta.icon }}{% endblock %}
+
+{% block page_header %}
+  {{ page_header(('Edit ' ~ pub.title) if editing else ('New ' ~ kmeta.label),
+      "Name the project" ~ (" and choose how long it runs" if kind == 'devotionals' else "") ~ ". You can add, upload and transcribe messages afterwards, or now.",
+      actions='<a href="' ~ (url_for('admin_pubs_show', kind=kind, pub_id=pub.id) if editing else url_for('admin_pubs', kind=kind)) ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>Cancel</a>') }}
+{% endblock %}
+
+{% block content %}
+{% set f = request.form %}
+<form id="pub-form" method="POST" action="{{ url_for('admin_pubs_update', kind=kind, pub_id=pub.id) if editing else url_for('admin_pubs_store', kind=kind) }}"
+      class="grid grid-cols-1 {{ 'xl:grid-cols-[1fr_400px]' if not editing else '' }} gap-4 items-start max-w-6xl">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+  <div class="flex flex-col gap-4">
+    {% if form_error %}
+      <div class="rounded-md border border-[#e6c9c5] bg-bad-bg text-bad px-3.5 py-2.5 text-[13px] font-medium flex gap-2" role="alert">
+        <i class="ri-error-warning-line text-base mt-0.5"></i><span>{{ form_error }}</span>
+      </div>
+    {% endif %}
+
+    <section class="panel flex flex-col gap-4">
+      <h2 class="text-[14px] font-semibold text-ink">Details</h2>
+      {{ field('Title', 'title', value=pub.title if editing else '', required=True,
+               placeholder=('e.g. Scent Daily Devotional 2027' if kind == 'devotionals' else 'e.g. Walking in the Spirit')) }}
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {{ field('Author', 'author_name', value=(pub.author_name or '') if editing else '', hint='Shown on the cover page.') }}
+      </div>
+      {{ textarea('Description', 'description', value=(pub.description or '') if editing else '', rows=3, hint='Internal note about this project.') }}
+    </section>
+
+    {% if kind == 'devotionals' %}
+      {% set dt = f.get('duration_type', (pub.duration_type if editing else 'year') or 'year') %}
+      {% set yr = f.get('year', (pub.year if editing and pub.year else this_year)) %}
+      <section class="panel flex flex-col gap-4">
+        <div>
+          <h2 class="text-[14px] font-semibold text-ink">Devotional duration</h2>
+          <p class="text-[12px] text-ink-3 mt-1">One devotional per day. The duration decides how many days the project should cover.</p>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label for="duration_type" class="field-label">Duration</label>
+            <select id="duration_type" name="duration_type" class="field-select">
+              <option value="year" {{ 'selected' if dt == 'year' else '' }}>Full year</option>
+              <option value="half" {{ 'selected' if dt == 'half' else '' }}>Half year</option>
+              <option value="quarter" {{ 'selected' if dt == 'quarter' else '' }}>Quarter</option>
+              <option value="month" {{ 'selected' if dt == 'month' else '' }}>Month</option>
+              <option value="custom" {{ 'selected' if dt == 'custom' else '' }}>Custom dates</option>
+            </select>
+          </div>
+          <div data-part="year">
+            <label for="year" class="field-label">Year</label>
+            <input id="year" name="year" type="number" min="1900" max="2200" value="{{ yr }}" class="field-input field-mono">
+          </div>
+          <div data-part="period">
+            <label for="period_index" class="field-label" id="period-label">Quarter</label>
+            <select id="period_index" name="period_index" class="field-select" data-selected="{{ f.get('period_index', (pub.period_index if editing and pub.period_index else 1)) }}"></select>
+          </div>
+        </div>
+        <div data-part="custom" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {{ field('Start date', 'start_date', value=(pub.start_date.isoformat() if editing and pub.start_date else ''), type='date', mono=True) }}
+          {{ field('End date', 'end_date', value=(pub.end_date.isoformat() if editing and pub.end_date else ''), type='date', mono=True) }}
+        </div>
+        <p class="flex items-center gap-2 text-[12.5px] text-ink-2 rounded-md bg-sunken px-3 py-2.5">
+          <i class="ri-calendar-event-line text-ink-3"></i><span id="pub-range" class="font-mono">—</span>
+        </p>
+      </section>
+    {% endif %}
+
+    <div class="flex items-center gap-2.5">
+      <button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>{{ 'Save changes' if editing else 'Create project' }}</button>
+      <a href="{{ url_for('admin_pubs_show', kind=kind, pub_id=pub.id) if editing else url_for('admin_pubs', kind=kind) }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </div>
+
+  {% if not editing %}
+    <section class="panel flex flex-col gap-3 xl:sticky xl:top-0">
+      <div>
+        <h2 class="text-[14px] font-semibold text-ink">Messages to include <span class="font-normal text-ink-3">(optional)</span></h2>
+        <p class="text-[12px] text-ink-3 mt-1">Pick existing messages now, or skip and add, upload or transcribe messages after creating the project. Messages without a transcript can still be added and completed later.</p>
+      </div>
+      <label class="sr-only" for="pub-msg-filter">Filter messages</label>
+      <input id="pub-msg-filter" type="search" placeholder="Filter messages…" class="field-input">
+      <div id="pub-msg-list" class="max-h-[420px] overflow-y-auto admin-scrollbar border border-line rounded-md divide-y divide-line">
+        {% for s in sermons %}
+          <label class="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-sunken" data-title="{{ s.title|lower }} {{ (s.preacher or '')|lower }}">
+            <input type="checkbox" name="sermon_ids" value="{{ s.id }}" class="field-checkbox mt-0.5" {{ 'checked' if s.id in selected_ids else '' }}>
+            <span class="min-w-0 flex-grow">
+              <span class="block text-[12.5px] font-medium text-ink truncate">{{ s.title }}</span>
+              <span class="block font-mono text-[10.5px] text-ink-3">{{ s.preacher or 'Unknown speaker' }}{% if s.published_at %} · {{ s.published_at.strftime('%d %b %Y') }}{% endif %}</span>
+            </span>
+            {% if s.transcript %}{{ badge('Transcript', 'ok') }}
+            {% elif s.transcription_status in ['queued', 'processing'] %}{{ badge('Transcribing', 'warn') }}
+            {% else %}{{ badge('No transcript', 'neut') }}{% endif %}
+          </label>
+        {% else %}
+          <p class="px-3 py-6 text-center text-[12.5px] text-ink-3">No messages yet. You can upload audio or a transcript after creating the project.</p>
+        {% endfor %}
+      </div>
+      <p class="font-mono text-[11px] text-ink-3"><span id="pub-msg-count">{{ selected_ids|length }}</span> selected</p>
+    </section>
+  {% endif %}
+</form>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+(() => {
+  window.__swmPubFormAbort?.abort();
+  const ctl = new AbortController();
+  window.__swmPubFormAbort = ctl;
+  const opt = { signal: ctl.signal };
+  const form = document.getElementById('pub-form');
+  if (!form) return;
+
+  const type = form.querySelector('#duration_type');
+  const year = form.querySelector('#year');
+  const period = form.querySelector('#period_index');
+  const label = form.querySelector('#period-label');
+  const range = form.querySelector('#pub-range');
+  const start = form.querySelector('[name=start_date]');
+  const end = form.querySelector('[name=end_date]');
+  if (!type) return;
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const SETS = {
+    half: ['First half (Jan – Jun)', 'Second half (Jul – Dec)'],
+    quarter: ['Quarter 1 (Jan – Mar)', 'Quarter 2 (Apr – Jun)', 'Quarter 3 (Jul – Sep)', 'Quarter 4 (Oct – Dec)'],
+    month: MONTHS,
+  };
+  let want = period.dataset.selected || '1';
+
+  const fmt = (d) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  const utc = (y, m, d) => new Date(Date.UTC(y, m, d));
+
+  function refresh() {
+    const t = type.value;
+    form.querySelector('[data-part=year]').classList.toggle('hidden', t === 'custom');
+    form.querySelector('[data-part=period]').classList.toggle('hidden', t === 'year' || t === 'custom');
+    form.querySelector('[data-part=custom]').classList.toggle('hidden', t !== 'custom');
+    if (SETS[t]) {
+      if (period.options.length !== SETS[t].length || period.dataset.for !== t) {
+        if (period.value) want = period.value;
+        period.innerHTML = SETS[t].map((l, i) => `<option value="${i + 1}">${l}</option>`).join('');
+        period.dataset.for = t;
+        period.value = Number(want) <= SETS[t].length ? want : '1';
+      }
+      label.textContent = t === 'month' ? 'Month' : (t === 'half' ? 'Half' : 'Quarter');
+    }
+    let s, e;
+    const y = parseInt(year.value, 10);
+    const p = parseInt(period.value, 10) || 1;
+    if (t === 'custom') {
+      if (start.value && end.value) { s = new Date(start.value + 'T00:00:00Z'); e = new Date(end.value + 'T00:00:00Z'); }
+    } else if (y) {
+      if (t === 'year') { s = utc(y, 0, 1); e = utc(y, 11, 31); }
+      if (t === 'half') { s = utc(y, p === 1 ? 0 : 6, 1); e = utc(y, p === 1 ? 6 : 12, 0); }
+      if (t === 'quarter') { s = utc(y, (p - 1) * 3, 1); e = utc(y, p * 3, 0); }
+      if (t === 'month') { s = utc(y, p - 1, 1); e = utc(y, p, 0); }
+    }
+    if (s && e && e >= s) {
+      const days = Math.round((e - s) / 86400000) + 1;
+      range.textContent = `${days} days · ${fmt(s)} – ${fmt(e)}`;
+    } else {
+      range.textContent = t === 'custom' ? 'Choose a start and end date.' : '—';
+    }
+  }
+  ['change', 'input'].forEach((ev) => form.addEventListener(ev, (e) => {
+    if (e.target === period) want = period.value;
+    if (e.target.matches('#duration_type, #year, #period_index, [name=start_date], [name=end_date]')) refresh();
+  }, opt));
+  refresh();
+
+  const filter = form.querySelector('#pub-msg-filter');
+  const count = form.querySelector('#pub-msg-count');
+  filter?.addEventListener('input', () => {
+    const q = filter.value.trim().toLowerCase();
+    form.querySelectorAll('#pub-msg-list [data-title]').forEach((row) => row.classList.toggle('hidden', q && !row.dataset.title.includes(q)));
+  }, opt);
+  form.addEventListener('change', (e) => {
+    if (e.target.name === 'sermon_ids' && count) count.textContent = form.querySelectorAll('input[name=sermon_ids]:checked').length;
+  }, opt);
+  filter?.addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); }, opt);
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field with context %}
+{% block title %}{{ 'Edit Team' if team else 'New Team' }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ 'Edit Team' if team else 'New Team' }}{% endblock %}
+{% block topbar_subtitle %}HarvestTrack{% endblock %}
+{% block topbar_icon %}ri-seedling-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header('Edit team' if team else 'New team', 'Group HarvestTrack field workers for team-level reporting',
+      actions='<a href="' ~ url_for('admin_harvesttrack') ~ '?tab=teams" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>Teams &amp; workers</a>') }}
+{% endblock %}
+
+{% block content %}
+<div class="panel max-w-2xl">
+  <form method="POST" action="{{ url_for('admin_harvesttrack_teams_update', team_id=team.id) if team else url_for('admin_harvesttrack_teams_store') }}" class="flex flex-col gap-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {{ field('Team name', 'name', value=team.name if team else '', required=True) }}
+    {% if is_super %}
+      <div>
+        <label for="branch_id" class="field-label">Branch</label>
+        <select id="branch_id" name="branch_id" class="field-select">
+          <option value="">No branch</option>
+          {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if team and team.branch_id == b.id else '' }}>{{ b.name }}</option>{% endfor %}
+        </select>
+      </div>
+    {% endif %}
+    <div class="flex items-center gap-2.5 pt-4 border-t border-line">
+      <button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>{{ 'Save changes' if team else 'Create team' }}</button>
+      <a href="{{ url_for('admin_harvesttrack') }}?tab=teams" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

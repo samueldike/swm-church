@@ -30,6 +30,6 @@ class HodInvitation(Base):
         onupdate=lambda: datetime.utcnow(),
     )
 
-    branch = relationship("Branch", back_populates="hod_invitations")
-    department = relationship("Department", back_populates="hod_invitations")
-    invited_by = relationship("Admin", back_populates="hod_invitations_sent")
+    branch = relationship("Branch", back_populates="hod_invitations", lazy="selectin")
+    department = relationship("Department", back_populates="hod_invitations", lazy="selectin")
+    invited_by = relationship("Admin", back_populates="hod_invitations_sent", lazy="selectin")

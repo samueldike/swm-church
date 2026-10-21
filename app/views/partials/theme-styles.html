@@ -99,6 +99,7 @@
     .sched td { padding-block: 0.9rem; vertical-align: baseline; }
     .sched .s-day { width: 8.5rem; color: var(--fg-faint); }
     .sched tr.lead .s-day { color: var(--gold); }
+    .band-light .sched tr.lead .s-day { color: var(--gold-deep); }
     .sched .s-name { transition: color 300ms var(--ease); }
     .sched .s-time { text-align: right; color: var(--fg-dim); letter-spacing: 0.08em; white-space: nowrap; }
     .sched tr:hover .s-name { color: var(--gold); }
@@ -438,7 +439,12 @@
         will-change: transform;
     }
     .belt-rev { animation-direction: reverse; }
-    .belt:hover .belt-track, .belt:focus-within .belt-track { animation-play-state: paused; }
+    .belt:hover .belt-track, .belt:focus-within .belt-track, .belts.is-paused .belt-track { animation-play-state: paused; }
+    /* Motion that runs for more than a few seconds must be pausable (WCAG 2.2.2) and must respect the OS setting. */
+    @media (prefers-reduced-motion: reduce) {
+        .belt { overflow-x: auto; }
+        .belt-track { animation: none; }
+    }
     @keyframes belt { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
     /* Every frame identical by construction — fixed box, image cropped to it. */
@@ -513,6 +519,83 @@
         .split-rev > *:last-child  { order: 1; }
     }
     .split-media { position: relative; overflow: hidden; background: var(--surface); }
+
+    .program-flyers-frame {
+        min-height: auto;
+        padding-block: clamp(2.4rem, 6vw, 5rem);
+        background: var(--ink);
+    }
+    .program-flyers {
+        display: flex;
+        flex-wrap: wrap;
+        gap: clamp(0.9rem, 2vw, 1.4rem);
+        align-items: stretch;
+    }
+    .program-flyer-card {
+        flex: 1 1 min(260px, 100%);
+        max-width: 360px;
+        aspect-ratio: 4 / 5;
+        border: 1px solid var(--line);
+        background: #111;
+        overflow: hidden;
+        padding: 0;
+        cursor: zoom-in;
+        transition: transform 260ms var(--ease), border-color 260ms var(--ease);
+    }
+    .program-flyer-card:hover {
+        transform: translateY(-4px);
+        border-color: var(--gold);
+    }
+    .program-flyer-card img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+    }
+    .flyer-lightbox {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: clamp(1rem, 3vw, 2rem);
+    }
+    .flyer-lightbox[hidden] { display: none; }
+    .flyer-lightbox__backdrop {
+        position: absolute;
+        inset: 0;
+        border: 0;
+        background: rgba(0,0,0,0.82);
+        cursor: zoom-out;
+    }
+    .flyer-lightbox__panel {
+        position: relative;
+        z-index: 1;
+        max-width: min(92vw, 980px);
+        max-height: 90svh;
+    }
+    .flyer-lightbox__panel img {
+        display: block;
+        max-width: 100%;
+        max-height: 90svh;
+        object-fit: contain;
+        box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+    }
+    .flyer-lightbox__close {
+        position: absolute;
+        top: -0.75rem;
+        right: -0.75rem;
+        width: 2.5rem;
+        height: 2.5rem;
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 999px;
+        background: var(--gold);
+        color: var(--ink);
+        font-size: 1.7rem;
+        line-height: 1;
+        cursor: pointer;
+    }
 
     /* Outreach slideshow: cross-fading stack + caption, admin-managed.
        The stack fills its panel absolutely and every frame is cropped to it,

@@ -1,0 +1,50 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, person with context %}
+{% block title %}Inquiry — {{ inquiry.subject }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}Inquiry{% endblock %}
+{% block topbar_subtitle %}{{ inquiry.name }}{% endblock %}
+{% block topbar_icon %}ri-question-answer-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header(inquiry.subject, 'From ' ~ inquiry.name,
+      actions='<a href="' ~ url_for('admin_inquiries') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All inquiries</a>',
+      audit=[('Reference', 'INQ-' ~ inquiry.id), ('Received', inquiry.created_at.strftime('%Y-%m-%d %H:%M') if inquiry.created_at else '—'), ('Branch', inquiry.branch.name if inquiry.branch else '—')]) }}
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start max-w-5xl">
+  <div class="panel">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4 pb-4 border-b border-line">
+      {{ person(inquiry.name, inquiry.email, inquiry.name[0] if inquiry.name else '?') }}
+      {{ badge(inquiry.status|replace('_', ' ')|capitalize, 'bad' if inquiry.status == 'new' else ('warn' if inquiry.status == 'in_progress' else 'ok')) }}
+    </div>
+    <p class="text-[13.5px] text-ink-2 leading-[1.8] whitespace-pre-line">{{ inquiry.message }}</p>
+    <div class="flex flex-wrap gap-2 mt-5 pt-4 border-t border-line">
+      <a href="mailto:{{ inquiry.email }}?subject=Re: {{ inquiry.subject|urlencode }}" class="btn btn-secondary btn-sm" data-turbo="false"><i class="ri-mail-line"></i>Reply by email</a>
+      {% if inquiry.phone %}<a href="tel:{{ inquiry.phone }}" class="btn btn-secondary btn-sm" data-turbo="false"><i class="ri-phone-line"></i>{{ inquiry.phone }}</a>{% endif %}
+    </div>
+  </div>
+
+  <div class="flex flex-col gap-4">
+    <div class="panel">
+      <h2 class="text-[14px] font-semibold text-ink mb-3">Update status</h2>
+      <form method="POST" action="{{ url_for('admin_inquiries_update', inquiry_id=inquiry.id) }}" class="flex flex-col gap-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <select name="status" aria-label="Status" class="field-select">
+          {% for v, l in [('new', 'New'), ('in_progress', 'In progress'), ('resolved', 'Resolved')] %}<option value="{{ v }}" {{ 'selected' if inquiry.status == v else '' }}>{{ l }}</option>{% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>Save status</button>
+      </form>
+      {% if inquiry.resolved_at %}<p class="mt-3 font-mono text-[11px] text-ink-3">Resolved {{ inquiry.resolved_at.strftime('%Y-%m-%d %H:%M') }}</p>{% endif %}
+    </div>
+    <div class="panel">
+      <h2 class="text-[14px] font-semibold text-ink mb-2">Danger zone</h2>
+      <form method="POST" action="{{ url_for('admin_inquiries_destroy', inquiry_id=inquiry.id) }}"
+            data-confirm="Delete this inquiry from {{ inquiry.name }}?" data-confirm-title="Delete Inquiry" data-confirm-accept="Delete">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-danger w-full"><i class="ri-delete-bin-line"></i>Delete inquiry</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

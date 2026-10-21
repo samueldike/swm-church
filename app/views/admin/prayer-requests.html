@@ -1,0 +1,72 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, empty_state, filter_pager with context %}
+{% block title %}Prayer Requests | {{ siteName }}{% endblock %}
+{% block topbar_title %}Prayer Requests{% endblock %}
+{% block topbar_subtitle %}Requests submitted on the Prayer page{% endblock %}
+{% block topbar_icon %}ri-hand-heart-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header("Prayer Requests", "Every request from the public prayer page lands here. Mark them as you pray and follow up.",
+      audit=[('New', counts.get('new', 0)), ('Praying', counts.get('praying', 0)), ('Answered', counts.get('answered', 0)), ('Archived', counts.get('archived', 0))]) }}
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col gap-3.5">
+  <form method="get" action="{{ url_for('admin_prayer_requests') }}" class="flex flex-wrap items-center gap-2.5" data-no-loading>
+    <div class="flex items-center gap-2 w-full sm:w-72 px-3 py-2 rounded-md border border-line-2 bg-surface">
+      <i class="ri-search-line text-ink-3 text-sm"></i>
+      <label for="pr-q" class="sr-only">Search prayer requests</label>
+      <input id="pr-q" type="search" name="q" value="{{ search }}" placeholder="Search name, email or request…" class="flex-grow border-none bg-transparent text-[12.5px] text-ink outline-none min-w-0">
+    </div>
+    <select name="status" onchange="this.form.submit()" aria-label="Filter by status" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
+      <option value="">All statuses</option>
+      {% for v, l in statuses %}<option value="{{ v }}" {{ 'selected' if filter_status == v else '' }}>{{ l }}</option>{% endfor %}
+    </select>
+    <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+    {% if search or filter_status %}<a href="{{ url_for('admin_prayer_requests') }}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
+  </form>
+
+  {% if items %}
+    <div class="flex flex-col gap-3">
+      {% for r in items %}
+        {% set st = 'new' if r.status in ['new', 'pending'] else r.status %}
+        <article class="panel flex flex-col gap-3">
+          <header class="flex flex-wrap items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="text-[14px] font-semibold text-ink">{{ r.full_name }}</p>
+              <p class="font-mono text-[11px] text-ink-3 flex flex-wrap gap-x-3">
+                <span>{{ r.created_at|timesince }}</span>
+                {% if r.email %}<a href="mailto:{{ r.email }}" class="text-gold-text hover:underline">{{ r.email }}</a>{% endif %}
+                {% if r.phone %}<a href="tel:{{ r.phone }}" class="text-gold-text hover:underline">{{ r.phone }}</a>{% endif %}
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              {% if r.is_public %}{{ badge('Public', 'neut') }}{% endif %}
+              {{ badge(st|capitalize, 'bad' if st == 'new' else ('warn' if st == 'praying' else ('ok' if st == 'answered' else 'neut'))) }}
+            </div>
+          </header>
+          <p class="text-[13px] text-ink-2 leading-relaxed whitespace-pre-line">{{ r.prayer_request }}</p>
+          <footer class="flex flex-wrap items-center gap-2 pt-3 border-t border-line">
+            {% for v, l in statuses %}{% if v != st %}
+              <form method="POST" action="{{ url_for('admin_prayer_requests_status', request_id=r.id) }}" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="status" value="{{ v }}">
+                <button type="submit" class="btn btn-secondary btn-sm">{{ 'Mark ' ~ (l|lower) if v != 'archived' else 'Archive' }}</button>
+              </form>
+            {% endif %}{% endfor %}
+            {% if is_super %}
+              <form method="POST" action="{{ url_for('admin_prayer_requests_destroy', request_id=r.id) }}" class="inline ml-auto"
+                    data-confirm="Delete this prayer request permanently?" data-confirm-title="Delete request" data-confirm-accept="Delete">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit" class="icon-btn text-bad" aria-label="Delete request"><i class="ri-delete-bin-line"></i></button>
+              </form>
+            {% endif %}
+          </footer>
+        </article>
+      {% endfor %}
+    </div>
+    {{ filter_pager(pagination) }}
+  {% else %}
+    <div class="panel-flush">{{ empty_state("ri-hand-heart-line", "No prayer requests", "Requests submitted on the public Prayer page will appear here.") }}</div>
+  {% endif %}
+</div>
+{% endblock %}

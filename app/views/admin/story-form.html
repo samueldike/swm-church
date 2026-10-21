@@ -1,0 +1,58 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, textarea, checkbox, file_field with context %}
+{% block title %}{{ 'Edit Story' if story else 'New Story' }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}{{ 'Edit Story' if story else 'New Story' }}{% endblock %}
+{% block topbar_subtitle %}Stories{% endblock %}
+{% block topbar_icon %}ri-quill-pen-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header('Edit story' if story else 'Write a story', story.title if story else 'Testimony or impact story for the public site',
+      actions='<a href="' ~ url_for('admin_stories') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All stories</a>') }}
+{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('admin_stories_update', story_id=story.id) if story else url_for('admin_stories_store') }}"
+      enctype="multipart/form-data" data-turbo="false" class="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 items-start max-w-6xl">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+  <div class="panel flex flex-col gap-4 min-w-0">
+    {{ field('Title', 'title', value=story.title if story else '', required=True) }}
+    {{ textarea('Excerpt', 'excerpt', value=story.excerpt or '' if story else '', rows=2, placeholder='Short summary shown on story cards') }}
+    {{ textarea('Content', 'content', value=story.content or '' if story else '', rows=12, rich=True) }}
+  </div>
+
+  <div class="flex flex-col gap-4">
+    <div class="panel flex flex-col gap-4">
+      <h2 class="text-[14px] font-semibold text-ink">Publishing</h2>
+      <div>
+        <label for="status" class="field-label">Status</label>
+        <select id="status" name="status" class="field-select">
+          <option value="draft" {{ 'selected' if not story or story.status != 'published' else '' }}>Draft</option>
+          <option value="published" {{ 'selected' if story and story.status == 'published' else '' }}>Published</option>
+        </select>
+      </div>
+      <div>
+        <label class="flex items-center gap-2.5 cursor-pointer">
+          <input type="checkbox" name="is_featured" value="1" class="field-checkbox" {{ 'checked' if story and story.is_featured else '' }}>
+          <span class="text-[12.5px] font-medium text-ink">Featured on homepage</span>
+        </label>
+      </div>
+      {{ field('Category', 'category', value=story.category or '' if story else '', placeholder='Testimony, News…') }}
+      {{ field('Author', 'author_name', value=story.author_name or '' if story else '') }}
+    </div>
+
+    <div class="panel flex flex-col gap-3">
+      <h2 class="text-[14px] font-semibold text-ink">Featured image</h2>
+      {% if story and story.featured_image %}
+        <img src="{{ url_for('static', path=story.featured_image) }}" alt="Current featured image" class="w-full rounded-md border border-line object-cover aspect-video bg-sunken">
+      {% endif %}
+      {{ file_field('Replace image' if story and story.featured_image else 'Image', 'image', hint='JPG, PNG, WebP or GIF · up to 5 MB', accept='image/*') }}
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <button type="submit" class="btn btn-primary btn-lg w-full"><i class="ri-check-line"></i>{{ 'Save changes' if story else 'Create story' }}</button>
+      <a href="{{ url_for('admin_stories') }}" class="btn btn-secondary w-full">Cancel</a>
+    </div>
+  </div>
+</form>
+{% endblock %}

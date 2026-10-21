@@ -43,4 +43,10 @@
 {%- endif %}
 
 <meta name="theme-color" content="#0A0A0B"/>
-<meta name="robots" content="index, follow, max-image-preview:large"/>
+<meta name="robots" content="{{ robots or 'index, follow, max-image-preview:large' }}"/>
+{%- if jsonld %}
+<script type="application/ld+json">{{ jsonld|safe }}</script>
+{%- endif %}
+{%- if plausibleDomain %}
+<script defer data-domain="{{ plausibleDomain }}" src="{{ plausibleSrc }}"></script>
+{%- endif %}

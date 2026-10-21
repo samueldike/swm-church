@@ -8,6 +8,10 @@ ENCRYPTED_SETTING_KEYS = {
     "paystack_secret_key",
     "flutterwave_secret_key",
     "flutterwave_encryption_key",
+    "anthropic_api_key",
+    "openrouter_api_key",
+    "groq_api_key",
+    "gemini_api_key",
 }
 _ENC_PREFIX = "enc:v1:"
 
@@ -51,6 +55,56 @@ def _decrypt(value: str) -> str:
         return _fernet().decrypt(value[len(_ENC_PREFIX):].encode("utf-8")).decode("utf-8")
     except Exception:
         return ""
+
+
+def _decrypt_strict(value: str) -> str | None:
+    """Plaintext of a stored secret, or ``None`` when it is encrypted but unreadable
+    (e.g. SECRET_KEY was rotated). Non-encrypted legacy values pass through."""
+    if not value:
+        return ""
+    if not value.startswith(_ENC_PREFIX):
+        return value
+    try:
+        return _fernet().decrypt(value[len(_ENC_PREFIX):].encode("utf-8")).decode("utf-8")
+    except Exception:
+        return None
+
+
+async def get_secret_status(db: AsyncSession) -> dict[str, dict]:
+    """Per secret key: ``{"state": "unset"|"set"|"unreadable", "hint": "abcd"}``.
+
+    Only the last four characters are ever exposed, so the settings page can show
+    that a key is saved without putting it (even encrypted) into the HTML.
+    """
+    from app.models.site_settings import SiteSetting
+
+    rows = {r.key: r.value or "" for r in (await db.execute(select(SiteSetting))).scalars().all()}
+    out: dict[str, dict] = {}
+    for key in ENCRYPTED_SETTING_KEYS:
+        raw = rows.get(key, "")
+        plain = _decrypt_strict(raw)
+        if not raw:
+            out[key] = {"state": "unset", "hint": ""}
+        elif plain is None:
+            out[key] = {"state": "unreadable", "hint": ""}
+        else:
+            out[key] = {"state": "set" if plain else "unset", "hint": plain[-4:] if len(plain) >= 8 else ""}
+    return out
+
+
+async def encrypt_plaintext_secrets(db: AsyncSession) -> int:
+    """Encrypt any secret still stored in plaintext (saved before encryption existed)."""
+    from app.models.site_settings import SiteSetting
+
+    rows = (await db.execute(select(SiteSetting).where(SiteSetting.key.in_(ENCRYPTED_SETTING_KEYS)))).scalars().all()
+    n = 0
+    for row in rows:
+        if row.value and not row.value.startswith(_ENC_PREFIX):
+            row.value = _encrypt(row.value)
+            n += 1
+    if n:
+        await db.flush()
+    return n
 
 
 async def get_settings(db: AsyncSession) -> dict[str, str]:

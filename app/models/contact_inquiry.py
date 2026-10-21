@@ -19,6 +19,7 @@ class ContactInquiry(Base):
     subject: Mapped[str] = mapped_column(String(255))
     message: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="new")
+    kind: Mapped[str] = mapped_column(String(10), default="contact", server_default="contact")   # contact | visit
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.utcnow()
@@ -28,4 +29,4 @@ class ContactInquiry(Base):
         onupdate=lambda: datetime.utcnow(),
     )
 
-    branch = relationship("Branch", back_populates="contact_inquiries")
+    branch = relationship("Branch", back_populates="contact_inquiries", lazy="selectin")

@@ -1,101 +1,46 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Transcriptions - {{ siteName }}</title>
-{% include "partials/admin-head-assets.html" %}
-</head>
-<body class="bg-background-light text-secondary font-sans antialiased overflow-hidden">
-<div class="flex h-screen overflow-hidden">
-{% include "partials/admin-sidebar.html" %}
-<main class="flex-1 flex flex-col overflow-hidden">
-{% with title="Transcriptions", subtitle="Audio message transcriptions powered by Whisper AI" %}{% include "partials/admin-topbar.html" %}{% endwith %}
-<div class="flex-1 overflow-y-auto p-5 lg:p-8 space-y-4">
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, empty_state with context %}
+{% block title %}Transcriptions | {{ siteName }}{% endblock %}
+{% block topbar_title %}Transcriptions{% endblock %}
+{% block topbar_subtitle %}Speech-to-text for sermon audio{% endblock %}
+{% block topbar_icon %}ri-file-text-line{% endblock %}
 
-<div class="content-card p-4 lg:p-5">
-  <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-    <div>
-      <h2 class="text-base font-bold text-gray-900">Transcriptions</h2>
-      <p class="text-xs text-gray-500 mt-0.5">{{ "{:,}".format(sermons|length) }} audio messages. Transcriptions are generated automatically after upload.</p>
+{% block page_header %}
+  {{ page_header("Transcriptions", "Automatic transcripts for every audio message",
+      audit=[('Completed', sermons|selectattr('transcription_status', 'equalto', 'completed')|list|length),
+             ('In progress', (sermons|selectattr('transcription_status', 'in', ['queued', 'processing'])|list|length)),
+             ('Failed', sermons|selectattr('transcription_status', 'equalto', 'failed')|list|length)]) }}
+{% endblock %}
+
+{% block content %}
+<div class="panel-flush">
+  {% if sermons %}
+    <div class="overflow-x-auto">
+      <table class="dtable dtable-responsive">
+        <thead><tr><th>Message</th><th>Status</th><th>Length</th><th class="text-right">Actions</th></tr></thead>
+        <tbody>
+          {% for sm in sermons %}
+            {% set ts = sm.transcription_status or 'none' %}
+            <tr>
+              <td data-label="Message">
+                <a href="{{ url_for('admin_transcriptions_show', sermon_id=sm.id) }}" class="font-semibold text-ink">{{ sm.title }}</a>
+                <p class="text-[11px] text-ink-3">{{ sm.preacher or '' }}</p>
+              </td>
+              <td data-label="Status">
+                {{ badge({'completed': 'Completed', 'processing': 'Processing', 'queued': 'Queued', 'failed': 'Failed', 'none': 'Not started'}.get(ts, ts|capitalize),
+                         'ok' if ts == 'completed' else ('bad' if ts == 'failed' else ('warn' if ts in ['processing', 'queued'] else 'neut'))) }}
+              </td>
+              <td data-label="Length" class="font-mono text-xs text-ink-2">{{ (sm.transcript.split()|length) ~ ' words' if sm.transcript else '—' }}</td>
+              <td data-label="Actions" class="text-right">
+                <a href="{{ url_for('admin_transcriptions_show', sermon_id=sm.id) }}" class="icon-btn" aria-label="Open transcript"><i class="ri-arrow-right-line"></i></a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-  </div>
-
-  <div class="mt-4 overflow-x-auto">
-    <table class="w-full min-w-[900px] text-sm">
-      <thead><tr class="border-b border-gray-100">
-        <th class="table-header py-3 pr-4">Audio Message</th>
-        <th class="table-header py-3 pr-4">Speaker</th>
-        <th class="table-header py-3 pr-4">Status</th>
-        <th class="table-header py-3 pr-4">Words</th>
-        <th class="table-header py-3 text-right">Actions</th>
-      </tr></thead>
-      <tbody class="divide-y divide-gray-100">
-      {% for sermon in sermons %}
-        <tr class="hover:bg-gray-50/50 transition-colors">
-          <td class="py-3 pr-4">
-            <p class="font-semibold text-gray-900">{{ sermon.title }}</p>
-            <p class="text-xs text-gray-500">{{ sermon.preacher or 'Speaker not specified' }}{% if sermon.published_at %} <span class="text-gray-300">&middot;</span> {{ sermon.published_at.strftime('%b %d, %Y') if sermon.published_at else '' }}{% endif %}</p>
-          </td>
-          <td class="py-3 pr-4 text-gray-500 text-sm">{{ sermon.preacher or 'N/A' }}</td>
-          <td class="py-3 pr-4">
-            {% set ts = sermon.transcription_status or 'none' %}
-            {% if ts == 'completed' %}
-              <span class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide bg-emerald-50 text-emerald-600">Completed</span>
-            {% elif ts == 'processing' %}
-              <span class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide bg-blue-50 text-blue-600"><i class="ri-loader-4-line animate-spin mr-1"></i>Processing</span>
-            {% elif ts == 'queued' %}
-              <span class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide bg-amber-50 text-amber-600">Queued</span>
-            {% elif ts == 'failed' %}
-              <span class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide bg-red-50 text-red-600">Failed</span>
-            {% else %}
-              <span class="inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide bg-gray-100 text-gray-500">None</span>
-            {% endif %}
-          </td>
-          <td class="py-3 pr-4 text-gray-500 text-sm">
-            {% if sermon.transcript %}
-              {{ sermon.transcript.split()|length }}
-            {% else %}
-              &mdash;
-            {% endif %}
-          </td>
-          <td class="py-3">
-            <div class="flex items-center justify-end gap-2">
-              {% if sermon.transcript %}
-                <a href="{{ url_for('admin.transcriptions_show', sermon.id) }}" class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50" title="View Transcript"><i class="ri-eye-line text-base"></i></a>
-                <button type="button" onclick="downloadTranscript({{ sermon.id }}, '{{ sermon.title|e }}')" class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-primary hover:bg-gray-50" title="Download .txt"><i class="ri-download-line text-base"></i></button>
-              {% endif %}
-              {% if sermon.telegram_file_id and sermon.transcription_status != 'processing' %}
-                <form method="POST" action="{{ url_for('admin.transcriptions_retranscribe', sermon.id) }}" class="inline">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                  <button type="submit" class="w-8 h-8 inline-flex items-center justify-center rounded-lg text-gray-500 hover:text-amber-600 hover:bg-amber-50" title="Retranscribe"><i class="ri-refresh-line text-base"></i></button>
-                </form>
-              {% endif %}
-            </div>
-          </td>
-        </tr>
-      {% else %}
-        <tr><td colspan="5" class="py-10 text-center text-sm text-gray-500">No audio messages found.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  {% else %}
+    {{ empty_state("ri-file-text-line", "No transcripts yet", "Transcripts appear here once audio messages have been uploaded and processed.") }}
+  {% endif %}
 </div>
-
-</div></main></div>
-
-<script>
-function downloadTranscript(id, title) {
-  fetch('/admin/transcriptions/' + id + '?format=txt')
-    .then(r => r.text())
-    .then(text => {
-      const blob = new Blob([text], {type: 'text/plain'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = (title || 'transcript').replace(/[^a-zA-Z0-9 ]/g, '') + '.txt';
-      a.click();
-      URL.revokeObjectURL(a.href);
-    });
-}
-</script>
-</body></html>
+{% endblock %}
