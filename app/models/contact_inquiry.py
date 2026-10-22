@@ -17,6 +17,7 @@ class ContactInquiry(Base):
     email: Mapped[str] = mapped_column(String(255))
     phone: Mapped[str | None] = mapped_column(String(50))
     subject: Mapped[str] = mapped_column(String(255))
+    topic: Mapped[str | None] = mapped_column(String(40))   # from the "Inquiry topics" list: what it is about
     message: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="new")
     kind: Mapped[str] = mapped_column(String(10), default="contact", server_default="contact")   # contact | visit

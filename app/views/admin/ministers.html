@@ -20,6 +20,12 @@
       <input id="min-q" type="search" name="q" value="{{ filters.q }}" placeholder="Name, email, phone or rank…" class="flex-grow border-none bg-transparent text-[12.5px] text-ink outline-none min-w-0">
     </div>
     {% if branches %}
+      {% if country_options|length > 1 or filters.country %}
+      <select name="country" onchange="this.form.submit()" aria-label="Filter by country" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
+        <option value="">All countries</option>
+        {% for code, name in country_options %}<option value="{{ code }}" {{ 'selected' if filters.country == code else '' }}>{{ name }}</option>{% endfor %}
+      </select>
+      {% endif %}
       <select name="branch_id" onchange="this.form.submit()" aria-label="Filter by church" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
         <option value="">HQ + all branches</option>
         {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if filters.branch_id == b.id|string else '' }}>{{ b.name }}{{ ' (HQ)' if b.is_hq else '' }}</option>{% endfor %}

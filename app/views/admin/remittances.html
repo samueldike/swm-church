@@ -27,16 +27,16 @@
           <tbody>
             {% for r in positions %}
               <tr>
-                <td data-label="Branch" class="font-medium text-ink">{{ r.branch.name }}</td>
-                <td data-label="Gifts recorded" class="text-right font-mono text-xs">₦{{ '{:,.2f}'.format(r.total) }}</td>
-                <td data-label="Taken by branch" class="text-right font-mono text-xs">₦{{ '{:,.2f}'.format(r.at_branch) }}</td>
-                <td data-label="Held by HQ" class="text-right font-mono text-xs">₦{{ '{:,.2f}'.format(r.held_by_hq) }}</td>
-                <td data-label="HQ share" class="text-right font-mono text-xs">{{ r.pct|round(1) }}% · ₦{{ '{:,.2f}'.format(r.entitlement) }}</td>
-                <td data-label="Remitted to HQ" class="text-right font-mono text-xs">₦{{ '{:,.2f}'.format(r.to_hq) }}</td>
-                <td data-label="Sent to branch" class="text-right font-mono text-xs">₦{{ '{:,.2f}'.format(r.to_branch) }}</td>
+                <td data-label="Branch" class="font-medium text-ink">{{ r.branch.name }} <span class="font-mono text-[10.5px] text-ink-3">{{ r.currency }}</span></td>
+                <td data-label="Gifts recorded" class="text-right font-mono text-xs">{{ r.total|money(r.currency) }}</td>
+                <td data-label="Taken by branch" class="text-right font-mono text-xs">{{ r.at_branch|money(r.currency) }}</td>
+                <td data-label="Held by HQ" class="text-right font-mono text-xs">{{ r.held_by_hq|money(r.currency) }}</td>
+                <td data-label="HQ share" class="text-right font-mono text-xs">{{ r.pct|round(1) }}% · {{ r.entitlement|money(r.currency) }}</td>
+                <td data-label="Remitted to HQ" class="text-right font-mono text-xs">{{ r.to_hq|money(r.currency) }}</td>
+                <td data-label="Sent to branch" class="text-right font-mono text-xs">{{ r.to_branch|money(r.currency) }}</td>
                 <td data-label="Balance" class="text-right font-mono text-[13px] font-semibold whitespace-nowrap">
-                  {% if r.balance > 0.005 %}<span class="text-bad">Branch owes HQ ₦{{ '{:,.2f}'.format(r.balance) }}</span>
-                  {% elif r.balance < -0.005 %}<span class="text-warn">HQ owes branch ₦{{ '{:,.2f}'.format(-r.balance) }}</span>
+                  {% if r.balance > 0.005 %}<span class="text-bad">Branch owes HQ {{ r.balance|money(r.currency) }}</span>
+                  {% elif r.balance < -0.005 %}<span class="text-warn">HQ owes branch {{ (-r.balance)|money(r.currency) }}</span>
                   {% else %}<span class="text-ok">Settled</span>{% endif %}
                 </td>
               </tr>
@@ -65,7 +65,7 @@
             <option value="to_branch">HQ paid the branch</option>
           </select>
         </div>
-        {{ field('Amount (₦)', 'amount', type='number', mono=True, required=True, id='rm-amount') }}
+        {{ field('Amount', 'amount', type='number', mono=True, required=True, id='rm-amount', hint='In the platform currency (HQ’s).') }}
         {{ field('Date paid', 'paid_on', type='date', mono=True, id='rm-date') }}
         {{ field('Reference', 'reference', mono=True, id='rm-ref', hint='Bank reference or receipt number.') }}
         <div class="sm:col-span-3">{{ field('Note (optional)', 'note', id='rm-note') }}</div>
@@ -86,7 +86,7 @@
                 <td data-label="Date" class="font-mono text-xs text-ink-3">{{ m.paid_on.strftime('%d %b %Y') }}</td>
                 <td data-label="Branch">{{ m.branch.name if m.branch else '—' }}</td>
                 <td data-label="Direction">{{ badge('Branch → HQ' if m.direction == 'to_hq' else 'HQ → Branch', 'ok' if m.direction == 'to_hq' else 'warn') }}</td>
-                <td data-label="Amount" class="text-right font-mono text-[13px] font-semibold">₦{{ '{:,.2f}'.format(m.amount|float) }}</td>
+                <td data-label="Amount" class="text-right font-mono text-[13px] font-semibold">{{ m.amount|money(m.currency) }}</td>
                 <td data-label="Reference" class="font-mono text-[11px] text-ink-3">{{ m.reference or '—' }}{% if m.note %}<p class="font-sans text-[11px]">{{ m.note }}</p>{% endif %}</td>
                 {% if can_record %}
                   <td data-label="Actions" class="text-right">

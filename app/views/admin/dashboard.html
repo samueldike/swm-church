@@ -68,17 +68,27 @@
     <div class="panel lg:col-span-2">
       <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
-          <h2 class="text-[14px] font-semibold text-ink">Giving trend</h2>
-          <p class="text-[11.5px] text-ink-3 mt-0.5">Six-month rolling total, by purpose</p>
+          <h2 class="text-[14px] font-semibold text-ink">Giving trend <span class="font-normal text-ink-3">· {{ givingMoney.currency }}</span></h2>
+          <p class="text-[11.5px] text-ink-3 mt-0.5">Six-month rolling total, by purpose. Each currency is shown on its own.</p>
         </div>
-        {{ badge("₦" ~ "{:,.0f}".format(totalThisMonth), "gold") }}
+        <div class="flex items-center gap-1.5 flex-wrap justify-end">
+          {% for cur, amt in givingMoney.this_month %}{{ badge(amt|money(cur, False), "gold" if cur == givingMoney.currency else "neut") }}{% endfor %}
+          {% if givingMoney.currencies|length > 1 %}
+            <form method="get" data-no-loading>
+              <label for="giving-cur" class="sr-only">Currency</label>
+              <select id="giving-cur" name="currency" onchange="this.form.submit()" class="rounded-md border border-line-2 bg-surface px-2 py-1 text-xs text-ink-2">
+                {% for c in givingMoney.currencies %}<option value="{{ c }}" {{ 'selected' if c == givingMoney.currency else '' }}>{{ c }}</option>{% endfor %}
+              </select>
+            </form>
+          {% endif %}
+        </div>
       </div>
       {% if givingTrend and maxGiving > 0 %}
         <div class="flex items-end gap-2 sm:gap-3" style="height:140px;">
           {% for period in givingTrend %}
             {% set total = period.tithe + period.offering + period.special %}
             <div class="flex-1 flex flex-col items-center gap-1.5 min-w-0">
-              <div class="w-full flex flex-col justify-end rounded-t-sm overflow-hidden" style="height:110px;" title="₦{{ '{:,.0f}'.format(total) }}">
+              <div class="w-full flex flex-col justify-end rounded-t-sm overflow-hidden" style="height:110px;" title="{{ total|money(givingMoney.currency, False) }}">
                 <div class="w-full bg-line-2" style="height:{{ (period.special / maxGiving * 110)|round|int }}px;"></div>
                 <div class="w-full bg-gold-hi" style="height:{{ (period.offering / maxGiving * 110)|round|int }}px;"></div>
                 <div class="w-full bg-gold" style="height:{{ (period.tithe / maxGiving * 110)|round|int }}px;"></div>
@@ -98,8 +108,8 @@
     </div>
 
     <div class="panel">
-      <h2 class="text-[14px] font-semibold text-ink mb-1">Department distribution</h2>
-      <p class="text-[11.5px] text-ink-3 mb-4">Members by department</p>
+      <h2 class="text-[14px] font-semibold text-ink mb-1">{{ distributionTitle }}</h2>
+      <p class="text-[11.5px] text-ink-3 mb-4">{{ distributionSubtitle }}</p>
       {% if departmentDistribution %}
         <div class="flex flex-col gap-2.5">
           {% for i, d in departmentDistribution.items() %}
@@ -189,6 +199,29 @@
     </div>
   </div>
 
+  {% if countrySummary and is_super %}
+    <div class="panel">
+      <h2 class="text-[14px] font-semibold text-ink mb-1">Churches by country</h2>
+      <p class="text-[11.5px] text-ink-3 mb-4">Branches, members and this month's confirmed giving ({{ givingMoney.currency }}), per country</p>
+      <div class="overflow-x-auto">
+        <table class="dtable dtable-responsive">
+          <thead><tr><th>Country</th><th class="text-right">Branches</th><th class="text-right">Members</th><th class="text-right">Giving this month</th><th class="text-right"></th></tr></thead>
+          <tbody>
+            {% for c in countrySummary %}
+              <tr>
+                <td data-label="Country" class="font-medium">{{ c.name }}</td>
+                <td data-label="Branches" class="text-right font-mono">{{ c.branches }}</td>
+                <td data-label="Members" class="text-right font-mono">{{ c.members }}</td>
+                <td data-label="Giving this month" class="text-right font-mono">{{ c.giving|money(givingMoney.currency, False) }}</td>
+                <td data-label="" class="text-right">{% if c.code %}<a href="{{ url_for('admin_branches') }}?country={{ c.code }}" class="icon-btn" aria-label="Branches in {{ c.name }}"><i class="ri-arrow-right-line"></i></a>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
   {% if branchPerformance and is_super %}
     <div class="panel">
       <h2 class="text-[14px] font-semibold text-ink mb-1">Branch performance</h2>
@@ -199,7 +232,7 @@
           <tbody>
             {% for b in branchPerformance %}
               <tr>
-                <td data-label="Branch" class="font-medium">{{ b.name }}</td>
+                <td data-label="Branch" class="font-medium">{{ b.name }}{% if b.country %} <span class="font-mono text-[10.5px] text-ink-3">{{ b.country }}</span>{% endif %}</td>
                 <td data-label="Members" class="text-right font-mono">{{ b.members_count }}</td>
                 <td data-label="Share">
                   <div class="w-full sm:w-40 h-1.5 bg-sunken rounded-full overflow-hidden ml-auto sm:ml-0">

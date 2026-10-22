@@ -32,6 +32,7 @@ class Remittance(Base):
     branch_id: Mapped[int] = mapped_column(ForeignKey("branches.id", ondelete="CASCADE"), index=True)
     direction: Mapped[str] = mapped_column(String(20))  # "to_hq" (branch paid HQ) | "to_branch" (HQ paid branch)
     amount: Mapped[float] = mapped_column(Numeric(14, 2))
+    currency: Mapped[str] = mapped_column(String(3), default="NGN", server_default="NGN")   # the platform (HQ) currency
     paid_on: Mapped[date] = mapped_column(Date)
     reference: Mapped[str | None] = mapped_column(String(255))
     note: Mapped[str | None] = mapped_column(Text)

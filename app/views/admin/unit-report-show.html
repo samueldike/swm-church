@@ -60,7 +60,7 @@
           </tbody>
         </table>
       </div>
-      <p class="mt-3 font-mono text-[13px] text-ink"><span class="mono-label mr-2">Total</span>₦{{ col.get('total') or '—' }}</p>
+      <p class="mt-3 font-mono text-[13px] text-ink"><span class="mono-label mr-2">Total</span>{{ (col.get('total')|money(report_currency)) if col.get('total') not in (none, '') else '—' }}</p>
     </div>
 
     {% for label, value in [('Comments / observations', unitReport.observations), ('Challenges', unitReport.challenges), ('Recommendations', unitReport.recommendations), ('Projections', unitReport.projections)] %}

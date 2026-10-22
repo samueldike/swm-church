@@ -101,7 +101,7 @@
                     <input type="email" name="email" required autocomplete="email" value="{{ request.form.get('email', '') }}" placeholder="you@example.com"/>
                 </label>
                 <label class="field"><span>Phone <span style="text-transform:none;letter-spacing:0">(optional)</span></span>
-                    <input type="tel" name="phone" autocomplete="tel" value="{{ request.form.get('phone', '') }}" placeholder="+234…"/>
+                    <input type="tel" name="phone" autocomplete="tel" value="{{ request.form.get('phone', '') }}" placeholder="{{ phone_code(platformCountry) }}…"/>
                 </label>
                 <label class="field"><span>Which day do you plan to come? <span style="text-transform:none;letter-spacing:0">(optional)</span></span>
                     <input type="date" name="visit_date" min="{{ today }}" value="{{ request.form.get('visit_date', '') }}"/>

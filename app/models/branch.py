@@ -15,7 +15,12 @@ class Branch(Base):
     address: Mapped[str | None] = mapped_column(String(500))
     city: Mapped[str | None] = mapped_column(String(255))
     state: Mapped[str | None] = mapped_column(String(255))
-    country: Mapped[str | None] = mapped_column(String(100))
+    country: Mapped[str | None] = mapped_column(String(100))                  # display name, kept in sync with country_code
+    # Source of truth (app/core/geo.py): ISO codes, never free text.
+    country_code: Mapped[str | None] = mapped_column(String(2), index=True)    # NG
+    region_code: Mapped[str | None] = mapped_column(String(10), index=True)    # NG-EB (ISO 3166-2)
+    currency: Mapped[str | None] = mapped_column(String(3))                    # NGN: what this church's gifts are in
+    timezone: Mapped[str | None] = mapped_column(String(64))                   # Africa/Lagos: its events' wall clock
     phone: Mapped[str | None] = mapped_column(String(50))
     email: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(default=True)

@@ -37,7 +37,16 @@
           <span class="text-[12.5px] font-medium text-ink">Featured on homepage</span>
         </label>
       </div>
-      {{ field('Category', 'category', value=story.category or '' if story else '', placeholder='Testimony, News…') }}
+      {% set cur_cat = request.form.get('category', (story.category or '') if story else '') %}
+      <div>
+        <label for="category" class="field-label">Category</label>
+        <select id="category" name="category" class="field-select">
+          <option value="">—</option>
+          {% for c in categories %}<option value="{{ c }}" {{ 'selected' if cur_cat == c else '' }}>{{ c }}</option>{% endfor %}
+          {% if cur_cat and cur_cat not in categories %}<option value="{{ cur_cat }}" selected>{{ cur_cat }} (not in list)</option>{% endif %}
+        </select>
+        <p class="field-hint">Edit the list in Settings → Lists.</p>
+      </div>
       {{ field('Author', 'author_name', value=story.author_name or '' if story else '') }}
     </div>
 

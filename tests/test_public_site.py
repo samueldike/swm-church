@@ -83,7 +83,7 @@ def _event(**kw):
 def test_ics_event_is_valid_and_escaped():
     text = ics.calendar("SWM", ics.vevent(_event(), "swm.org", "https://swm.org/events/7"))
     assert text.startswith("BEGIN:VCALENDAR\r\n") and text.endswith("END:VCALENDAR\r\n")
-    assert "DTSTART;TZID=Africa/Lagos:20261205T173000" in text and "DTEND;TZID=Africa/Lagos:20261205T193000" in text     # default 2 h
+    assert "DTSTART:20261205T163000Z" in text and "DTEND:20261205T183000Z" in text     # 17:30 Lagos (UTC+1) in UTC; default 2 h
     assert "SUMMARY:Youth\\, Night\\; Live" in text and "DESCRIPTION:Line1\\nLine2" in text
     assert all(len(line.encode()) <= 75 for line in text.split("\r\n"))
     assert "\n" not in text.replace("\r\n", "")                                         # only CRLF line endings
@@ -99,10 +99,10 @@ def test_ics_long_lines_fold_at_75_octets():
 
 def test_google_calendar_link_and_recurring_services():
     url = ics.google_calendar_url(_event())
-    assert url.startswith("https://calendar.google.com/calendar/render?action=TEMPLATE") and "20261205T173000%2F20261205T193000" in url and "ctz=Africa%2FLagos" in url
+    assert url.startswith("https://calendar.google.com/calendar/render?action=TEMPLATE") and "20261205T163000Z%2F20261205T183000Z" in url
     text = ics.services_ics([{"day": "Sunday", "name": "First Service", "time": "7:00 — 9:30 am", "lead": True}, {"day": "Last Friday", "name": "Vigil", "time": "from 9 pm"}],
                             "SWM", "h", datetime(2026, 9, 24))
-    assert text.count("BEGIN:VEVENT") == 1 and "RRULE:FREQ=WEEKLY;BYDAY=SU" in text and "DTSTART;TZID=Africa/Lagos:20260927T070000" in text
+    assert text.count("BEGIN:VEVENT") == 1 and "RRULE:FREQ=WEEKLY;BYDAY=SU" in text and "DTSTART:20260927T060000Z" in text
 
 
 # ─── analytics rules ──────────────────────────────────────────────────

@@ -8,24 +8,41 @@
 {% block page_header %}
   {{ page_header("Branches", "All registered branches and their activity",
       actions='<a href="' ~ url_for('admin_branches_create_page') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add branch</a>',
-      audit=[('Branches', branches|length), ('Active', branches|selectattr('is_active')|list|length)]) }}
+      audit=[('Branches', branches|length), ('Active', branches|selectattr('is_active')|list|length),
+             ('Countries', branches|map(attribute='country_code')|select|unique|list|length)]) }}
 {% endblock %}
 
 {% block content %}
+{% if country_options|length > 1 or country_filter %}
+<form method="get" class="flex flex-wrap items-center gap-2.5 mb-4" data-no-loading>
+  <label for="country" class="sr-only">Country</label>
+  <select id="country" name="country" class="field-select w-auto min-w-48" onchange="this.form.submit()">
+    <option value="">All countries</option>
+    {% for code, name in country_options %}<option value="{{ code }}" {{ 'selected' if country_filter == code else '' }}>{{ name }}</option>{% endfor %}
+  </select>
+</form>
+{% endif %}
 <div class="panel-flush">
   {% if branches %}
     <div class="overflow-x-auto">
       <table class="dtable dtable-responsive">
-        <thead><tr><th>Branch</th><th>Location</th><th class="text-right">Members</th><th class="text-right">Events</th><th class="text-right">Messages</th><th>Status</th><th class="text-right">Actions</th></tr></thead>
+        <thead><tr><th>Branch</th><th>Location</th><th>Time zone</th><th class="text-right">Members</th><th class="text-right">Events</th><th class="text-right">Messages</th><th>Status</th><th class="text-right">Actions</th></tr></thead>
         <tbody>
+          {% set ns = namespace(cc='-') %}
           {% for b in branches %}
             {% set c = branch_counts.get(b.id, {}) %}
+            {% if b.country_code != ns.cc %}{% set ns.cc = b.country_code %}
+            <tr class="bg-sunken"><td colspan="8" class="!py-2"><span class="mono-label">{{ country_name(b.country_code) or 'Country not set' }}</span>
+              <span class="text-[11px] text-ink-3 ml-1.5">{{ branches|selectattr('country_code', 'equalto', b.country_code)|list|length }} branch{{ '' if (branches|selectattr('country_code', 'equalto', b.country_code)|list|length) == 1 else 'es' }}</span></td></tr>
+            {% endif %}
             <tr>
               <td data-label="Branch">
                 <a href="{{ url_for('admin_branch', branch_id=b.id) }}" class="font-semibold text-ink">{{ b.name }}</a>
                 <p class="font-mono text-[10.5px] text-ink-3">{{ b.slug }}</p>
               </td>
-              <td data-label="Location" class="text-ink-2">{{ [b.city, b.state, b.country]|select|join(', ') or '—' }}</td>
+              <td data-label="Location" class="text-ink-2">{{ [b.city, region_name(b.region_code) or b.state]|select|join(', ') or '—' }}
+                {% if not b.region_code %}<span class="block text-[11px] text-warn">Region not set: edit the branch</span>{% endif %}</td>
+              <td data-label="Time zone" class="font-mono text-xs text-ink-2">{{ (b.timezone or '—')|replace('_', ' ') }}{% if b.is_hq and b.currency %} <span class="text-ink-3">· platform {{ b.currency }}</span>{% endif %}</td>
               <td data-label="Members" class="text-right font-mono">{{ c.get('members', 0) }}</td>
               <td data-label="Events" class="text-right font-mono">{{ c.get('events', 0) }}</td>
               <td data-label="Messages" class="text-right font-mono">{{ c.get('sermons', 0) }}</td>

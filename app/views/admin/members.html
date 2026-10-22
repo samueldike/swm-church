@@ -20,11 +20,23 @@
   <div class="flex items-center gap-2 w-full sm:w-80 px-3 py-2 rounded-md border border-line-2 bg-surface">
     <i class="ri-search-line text-ink-3 text-sm"></i>
     <label for="members-q" class="sr-only">Search members</label>
-    <input id="members-q" type="search" name="q" value="{{ search }}" placeholder="Search by name or email…"
+    <input id="members-q" type="search" name="q" value="{{ search }}" placeholder="Search by name, email, phone or city…"
            class="flex-grow border-none bg-transparent text-[12.5px] text-ink outline-none min-w-0">
   </div>
+  {% if branches %}
+    {% if country_options|length > 1 or filter_country %}
+    <select name="country" onchange="this.form.submit()" aria-label="Filter by country" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
+      <option value="">All countries</option>
+      {% for code, name in country_options %}<option value="{{ code }}" {{ 'selected' if filter_country == code else '' }}>{{ name }}</option>{% endfor %}
+    </select>
+    {% endif %}
+    <select name="branch_id" onchange="this.form.submit()" aria-label="Filter by branch" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
+      <option value="">All branches</option>
+      {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if filter_branch_id == b.id|string else '' }}>{{ b.name }}{{ ' (HQ)' if b.is_hq else '' }}</option>{% endfor %}
+    </select>
+  {% endif %}
   <button type="submit" class="btn btn-secondary btn-sm">Search</button>
-  {% if search %}<a href="{{ url_for('admin_members') }}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
+  {% if search or filter_branch_id or filter_country %}<a href="{{ url_for('admin_members') }}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
 </form>
 
 <div class="panel-flush">
@@ -43,8 +55,8 @@
                 </a>
               </td>
               <td data-label="Reference" class="font-mono text-xs text-ink-2">ID-{{ m.id }}</td>
-              <td data-label="Branch">{{ m.branch.name if m.branch else '—' }}</td>
-              <td data-label="Phone" class="font-mono text-xs">{{ m.phone or '—' }}</td>
+              <td data-label="Branch">{{ m.branch.name if m.branch else '—' }}{% if m.country_code %}<span class="block text-[11px] text-ink-3">Lives in {{ [m.city, region_name(m.region_code), country_name(m.country_code)]|select|join(', ') }}</span>{% endif %}</td>
+              <td data-label="Phone" class="font-mono text-xs">{{ (m.phone|phone) or '—' }}</td>
               <td data-label="Status">{{ badge((m.membership_status or 'active')|capitalize, 'ok' if (m.membership_status or 'active') == 'active' else 'neut') }}</td>
               <td data-label="Actions" class="text-right whitespace-nowrap">
                 <a href="{{ url_for('admin_members_show', member_id=m.id) }}" class="icon-btn" aria-label="View {{ m.first_name }}"><i class="ri-eye-line"></i></a>

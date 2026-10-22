@@ -36,7 +36,15 @@
         </select>
       </div>
     {% endif %}
-    {{ field('Subject', 'subject', required=True) }}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div>
+        <label for="topic" class="field-label">What is it about?<span class="text-bad ml-0.5">*</span></label>
+        <select id="topic" name="topic" class="field-select" required>
+          {% for t in topics %}<option value="{{ t }}" {{ 'selected' if request.form.get('topic') == t else '' }}>{{ t }}</option>{% endfor %}
+        </select>
+      </div>
+      {{ field('Subject (optional)', 'subject') }}
+    </div>
     {{ textarea('Message', 'message', rows=5, required=True) }}
     <div class="flex items-center gap-2.5 pt-4 border-t border-line">
       <button type="submit" class="btn btn-primary"><i class="ri-check-line"></i>Save inquiry</button>

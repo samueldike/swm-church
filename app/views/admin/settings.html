@@ -3,7 +3,7 @@
 {% set S = settings %}
 {% set sections = [('general', 'General site', 'ri-global-line'), ('website', 'Website content', 'ri-layout-4-line'), ('appearance', 'Admin appearance', 'ri-palette-line'), ('giving', 'Giving gateway', 'ri-hand-coin-line'),
                    ('accounts', 'Church accounts', 'ri-bank-line'), ('security', 'Admin security', 'ri-shield-keyhole-line'), ('email', 'Email delivery', 'ri-mail-line'), ('ai', 'AI drafting', 'ri-magic-line'),
-                   ('distribution', 'Audio distribution', 'ri-broadcast-line'), ('legal', 'Legal pages', 'ri-file-list-3-line'), ('media', 'Photos & page headers', 'ri-image-line')] %}
+                   ('distribution', 'Audio distribution', 'ri-broadcast-line'), ('lists', 'Lists', 'ri-list-check-2'), ('legal', 'Legal pages', 'ri-file-list-3-line'), ('media', 'Photos & page headers', 'ri-image-line')] %}
 {% set accounts = S.get('church_accounts') if S.get('church_accounts') is iterable and S.get('church_accounts') is not string else [] %}
 {% set hero_pages = [('default', 'Default (all pages)'), ('visit', 'Plan your visit'), ('branches', 'Find a branch'), ('about', 'About'), ('departments', 'Departments'), ('messages', 'Audio messages'), ('events', 'Events'),
                      ('calendar', 'Calendar'), ('contact', 'Contact'), ('casom', 'CASOM'), ('give', 'Give'), ('stories', 'Stories'), ('get-involved', 'Get involved'),
@@ -56,10 +56,8 @@
         {{ field('Headquarters address', 'headquarters_address', value=S.get('headquarters_address') or '') }}
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label for="timezone" class="field-label">Timezone</label>
-            <select id="timezone" name="timezone" class="field-select">
-              {% for tz in timezones %}<option value="{{ tz }}" {{ 'selected' if (S.get('timezone') or 'Africa/Lagos') == tz else '' }}>{{ tz }}</option>{% endfor %}
-            </select>
+            <p class="field-label">Country, currency &amp; time zone</p>
+            <p class="text-[12.5px] text-ink-2 leading-relaxed">Set on <a href="{{ url_for('admin_branches') }}" class="text-gold-text underline">HQ's branch page</a>. HQ's currency is the platform currency for all giving; its country and time zone are the platform defaults.</p>
           </div>
           {{ field('Map embed URL', 'mapEmbedUrl', value=S.get('mapEmbedUrl') or '', mono=True, hint='Optional. Defaults to a Google Maps search for the headquarters address.') }}
         </div>
@@ -575,6 +573,23 @@
             {{ field('Spotify show URL', 'spotify_rss_url', value=S.get('spotify_rss_url') or '', type='url', mono=True) }}
             {{ field('Apple Podcasts URL', 'apple_podcasts_url', value=S.get('apple_podcasts_url') or '', type='url', mono=True) }}
           </div>
+        </div>
+      </section>
+
+      {# ───── Lists ───── #}
+      <section id="lists" class="panel scroll-mt-4 flex flex-col gap-5">
+        <div>
+          <h2 class="text-[15px] font-semibold text-ink">Lists</h2>
+          <p class="text-[12px] text-ink-3 mt-1">The choices people pick from instead of typing, so the same thing is always recorded the same way and reports group correctly. One item per line. Removing an item does not change records that already use it; they keep their value. Countries, states / regions, currencies and time zones come from the official international lists and are not edited here. Giving purposes are under <a href="#giving" class="text-gold-text underline">Giving gateway</a>.</p>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {% for name, label, help, value in managed_lists %}
+            <div>
+              <label for="list_{{ name }}" class="field-label">{{ label }}</label>
+              <textarea id="list_{{ name }}" name="list_{{ name }}" rows="7" data-richtext="off" class="field-input font-sans leading-relaxed">{{ value }}</textarea>
+              <p class="field-hint">{{ help }}</p>
+            </div>
+          {% endfor %}
         </div>
       </section>
 

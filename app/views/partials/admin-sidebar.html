@@ -114,6 +114,7 @@
       <div class="mb-1.5 px-1">
         {{ nav_heading('System') }}
         {{ nav_item(url_for('admin_settings'), 'ri-settings-4-line', 'Settings', 'admin.settings') }}
+        {% if can('system') %}{{ nav_item(url_for('admin_data_check'), 'ri-shield-check-line', 'Data check', 'admin.data-check', badges.data_check, '{n} records need a value from the official lists') }}{% endif %}
         {{ nav_item(url_for('admin_security_logs'), 'ri-shield-keyhole-line', 'Security Logs', 'admin.security-logs') }}
       </div>
       {% endif %}

@@ -30,3 +30,8 @@ Pillow==10.4.0
 python-docx
 reportlab
 telethon==1.44.0
+pycountry==26.2.16
+babel==2.18.0
+pytz==2026.5
+phonenumbers==9.0.41
+tzdata==2026.5

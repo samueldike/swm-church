@@ -154,16 +154,16 @@ def tel_href(value: str) -> str:
     return "tel:" + re.sub(r"[^\d+]", "", value or "")
 
 
-def whatsapp_chat_url(number: str | None, message: str = "") -> str:
-    """wa.me link from a phone number in any common Nigerian format (0803…, +234803…, 234803…)."""
-    digits = re.sub(r"\D", "", number or "")
+def whatsapp_chat_url(number: str | None, message: str = "", country: str | None = None) -> str:
+    """wa.me link from a phone number. A local number (0803…, 07911…) is read in ``country`` (the
+    church's own; HQ's by default); "+44…"/"00 44…" work anywhere. No link for a non-number."""
+    from app.core import geo
+
+    raw = (number or "").strip()
+    if raw.startswith("00"):
+        raw = "+" + raw[2:]
+    digits = geo.whatsapp_digits(raw, country or geo.DEFAULT_COUNTRY)
     if not digits:
-        return ""
-    if digits.startswith("00"):
-        digits = digits[2:]
-    elif digits.startswith("0"):
-        digits = "234" + digits[1:]
-    if len(digits) < 10:
         return ""
     return f"https://wa.me/{digits}" + (f"?text={quote(message)}" if message else "")
 
@@ -173,9 +173,9 @@ def safe_https(url: str | None) -> str:
     return u if re.match(r"^https?://[^\s<>\"']+$", u, re.I) else ""
 
 
-def channels(site: dict[str, str], greeting: str = "") -> dict[str, str]:
+def channels(site: dict[str, str], greeting: str = "", country: str | None = None) -> dict[str, str]:
     return {
-        "whatsappChat": whatsapp_chat_url(site.get("whatsappNumber"), greeting or "Hello, I found you on your website."),
+        "whatsappChat": whatsapp_chat_url(site.get("whatsappNumber"), greeting or "Hello, I found you on your website.", country),
         "whatsappChannel": safe_https(site.get("whatsappChannelUrl")),
         "telegramJoin": safe_https(site.get("telegramJoinUrl")) or safe_https(site.get("socialTelegram")),
     }

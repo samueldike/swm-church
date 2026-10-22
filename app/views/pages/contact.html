@@ -25,10 +25,15 @@
                     <input type="email" name="email" required value="{{ request.form.get('email', '') if request.form else '' }}" placeholder="you@example.com"/>
                 </label>
                 <label class="field"><span>Phone <span style="text-transform:none;letter-spacing:0">(optional)</span></span>
-                    <input type="tel" name="phone" value="{{ request.form.get('phone', '') if request.form else '' }}" placeholder="+234…"/>
+                    <input type="tel" name="phone" value="{{ request.form.get('phone', '') if request.form else '' }}" placeholder="Include your country code if outside {{ country_name(platformCountry) }}"/>
                 </label>
-                <label class="field"><span>Subject</span>
-                    <input type="text" name="subject" required value="{{ request.form.get('subject', '') if request.form else '' }}" placeholder="What is this about?"/>
+                <label class="field"><span>What is it about?</span>
+                    <select name="topic" required>
+                        {% for t in inquiry_topics %}<option value="{{ t }}" {{ 'selected' if (request.form.get('topic', '') if request.form else '') == t else '' }}>{{ t }}</option>{% endfor %}
+                    </select>
+                </label>
+                <label class="field span-2"><span>Subject <span style="text-transform:none;letter-spacing:0">(optional)</span></span>
+                    <input type="text" name="subject" maxlength="255" value="{{ request.form.get('subject', '') if request.form else '' }}" placeholder="A few words, if you like"/>
                 </label>
                 {% if branches and branches|length > 1 %}
                 <label class="field span-2"><span>Which branch is this for?</span>

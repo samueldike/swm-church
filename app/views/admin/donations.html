@@ -6,9 +6,10 @@
 {% block topbar_icon %}ri-hand-coin-line{% endblock %}
 
 {% block page_header %}
-  {{ page_header("Donations", ("Every gift — online and recorded by hand — for all branches. Amounts are in Naira." if sees_all else "Gifts recorded for your branch. Amounts are in Naira."),
+  {% set totals = [] %}{% for cur, amt in paid_totals %}{% set _ = totals.append(amt|money(cur)) %}{% endfor %}
+  {{ page_header("Donations", ("Every gift — online and recorded by hand — for all branches. All giving is in the platform currency (HQ's)." if sees_all else "Gifts recorded for your branch, in the platform currency (HQ's)."),
       actions='<a href="' ~ export_url ~ '" class="btn btn-secondary" data-turbo="false"><i class="ri-download-2-line"></i>Export (CSV)</a>',
-      audit=[('Confirmed', '₦{:,.2f}'.format(paid_total)), ('Confirmed gifts', paid_count), ('Records', pagination.total)]) }}
+      audit=[('Confirmed', (totals|join(' · ')) or '0'), ('Confirmed gifts', paid_count), ('Records', pagination.total)]) }}
 {% endblock %}
 
 {% block content %}
@@ -17,8 +18,12 @@
     <summary class="cursor-pointer text-[13px] font-semibold text-ink flex items-center gap-2"><i class="ri-add-circle-line text-gold"></i>Record a gift (cash, transfer, cheque, POS)</summary>
     <form method="POST" action="{{ url_for('admin_donations_record') }}" class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      {{ field('Amount (₦)', 'amount', type='number', mono=True, required=True, id='rec-amount') }}
-      {{ field('Purpose', 'purpose', value='Offering', id='rec-purpose', hint='e.g. Tithe, Offering, Building Fund') }}
+      {{ field('Amount (' ~ currency_symbol(platform_currency) ~ ' · ' ~ platform_currency ~ ')', 'amount', type='number', mono=True, required=True, id='rec-amount') }}
+      <div>
+        <label for="rec-purpose" class="field-label">Purpose</label>
+        <select id="rec-purpose" name="purpose" class="field-select">{% for p in purposes %}<option value="{{ p }}" {{ 'selected' if p == 'Offering' else '' }}>{{ p }}</option>{% endfor %}</select>
+        <p class="field-hint">For “Others”, say what it is for in the note. Edit the list in Settings → Giving gateway.</p>
+      </div>
       <div>
         <label for="rec-method" class="field-label">How it was received</label>
         <select id="rec-method" name="method" class="field-select">{% for v, l in gift_methods %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select>
@@ -28,7 +33,7 @@
       {% if sees_all %}
         <div>
           <label for="rec-branch" class="field-label">Branch</label>
-          <select id="rec-branch" name="branch_id" class="field-select">{% for b in branches %}<option value="{{ b.id }}">{{ b.name }}{{ ' (HQ)' if b.is_hq else '' }}</option>{% endfor %}</select>
+          <select id="rec-branch" name="branch_id" class="field-select">{% for b in branches %}<option value="{{ b.id }}" data-currency="{{ b.currency or 'NGN' }}">{{ b.name }}{{ ' (HQ)' if b.is_hq else '' }}</option>{% endfor %}</select>
         </div>
       {% endif %}
       <div class="sm:col-span-3">{{ field('Note (optional)', 'note', id='rec-note') }}</div>
@@ -47,6 +52,18 @@
         <option value="">All branches</option>
         {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if filters.branch_id == b.id|string else '' }}>{{ b.name }}</option>{% endfor %}
       </select>
+      {% if country_options|length > 1 or filters.country %}
+      <select name="country" onchange="this.form.submit()" aria-label="Filter by country" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
+        <option value="">All countries</option>
+        {% for code, name in country_options %}<option value="{{ code }}" {{ 'selected' if filters.country == code else '' }}>{{ name }}</option>{% endfor %}
+      </select>
+      {% endif %}
+    {% endif %}
+    {% if currency_options|length > 1 or filters.currency %}
+    <select name="currency" onchange="this.form.submit()" aria-label="Filter by currency" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
+      <option value="">All currencies</option>
+      {% for c in currency_options %}<option value="{{ c }}" {{ 'selected' if filters.currency == c else '' }}>{{ c }}</option>{% endfor %}
+    </select>
     {% endif %}
     <select name="status" onchange="this.form.submit()" aria-label="Filter by status" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
       <option value="">All statuses</option>
@@ -86,7 +103,7 @@
                 </td>
                 <td data-label="Purpose">{{ g.giving_type }}{% if g.dedication %}<p class="text-[11px] text-ink-3">“{{ g.dedication }}”</p>{% endif %}{% if g.note %}<p class="text-[11px] text-ink-3">{{ g.note }}</p>{% endif %}</td>
                 {% if sees_all %}<td data-label="Branch" class="text-xs">{{ branch_names.get(g.branch_id, 'HQ') }}{% if g.gateway_owner == 'hq' and g.branch_id and not branch_names.get(g.branch_id, '') == 'HQ' %}<p class="text-[10.5px] text-ink-3">held by HQ</p>{% endif %}</td>{% endif %}
-                <td data-label="Amount" class="text-right font-mono text-[13px] font-semibold text-ink whitespace-nowrap">₦{{ '{:,.2f}'.format(g.amount|float) }}</td>
+                <td data-label="Amount" class="text-right font-mono text-[13px] font-semibold text-ink whitespace-nowrap">{{ g.amount|money(g.currency) }}</td>
                 <td data-label="Received via" class="text-xs">{{ (g.payment_gateway|capitalize) if g.method == 'online' else (g.method|capitalize) }}</td>
                 <td data-label="Status">{{ badge('Confirmed' if paid else (g.status|capitalize), 'ok' if paid else ('warn' if g.status == 'pending' else 'bad')) }}</td>
                 <td data-label="Reference" class="font-mono text-[10.5px] text-ink-3 break-all max-w-[190px]">{{ g.reference }}</td>

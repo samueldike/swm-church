@@ -25,7 +25,7 @@
                 {% if giving_model == 'branch' and give_branches %}
                 <label class="field give-field span-2"><span>Give to</span>
                     <select name="branch_id" id="give-branch">
-                        {% for b in give_branches %}<option value="{{ b.id }}" {{ 'selected' if request.form.get('branch_id', '') == b.id|string else '' }}>{{ b.name }}{{ ' (Headquarters)' if b.is_hq else '' }}</option>{% endfor %}
+                        {% for b in give_branches %}<option value="{{ b.id }}" data-symbol="{{ b.symbol }}" data-currency="{{ b.currency }}" data-min="{{ b.min }}" data-quick="{{ b.quick|join(',') }}" {{ 'selected' if request.form.get('branch_id', '') == b.id|string else '' }}>{{ b.name }}{{ ' (Headquarters)' if b.is_hq else '' }}{{ ' · ' ~ b.country if b.country and not b.is_hq else '' }}</option>{% endfor %}
                     </select>
                 </label>
                 {% endif %}
@@ -36,22 +36,22 @@
                     <input type="email" name="email" required value="{{ request.form.get('email', '') if request.form else '' }}" placeholder="you@example.com"/>
                 </label>
                 <label class="field give-field"><span>Phone <span style="text-transform:none;letter-spacing:0">(optional)</span></span>
-                    <input type="tel" name="phone" value="{{ request.form.get('phone', '') if request.form else '' }}" placeholder="+234…"/>
+                    <input type="tel" name="phone" value="{{ request.form.get('phone', '') if request.form else '' }}" placeholder="Include your country code, e.g. +44…"/>
                 </label>
-                <label class="field give-field"><span>Amount (₦)</span>
-                    <input type="number" name="amount" required min="100" step="50"
-                           value="{{ request.form.get('amount', '') if request.form else '' }}" placeholder="5000"/>
+                {% set dm = (give_branches|first) if (giving_model == 'branch' and give_branches) else default_money %}
+                <label class="field give-field"><span>Amount (<span data-give-symbol>{{ dm.symbol }}</span> · <span data-give-currency>{{ dm.currency }}</span>)</span>
+                    <input type="number" name="amount" required min="{{ dm.min }}" step="any" data-give-amount
+                           value="{{ request.form.get('amount', '') if request.form else '' }}" placeholder="{{ dm.quick[1] }}"/>
                 </label>
 
                 <div class="field give-field span-2"><span>Quick amounts</span>
-                    <div class="chips">
-                        {% for amt in [2000, 5000, 10000, 20000, 50000] %}
-                        <button type="button" class="chip-amt give-chip" data-amount="{{ amt }}">₦{{ '{:,}'.format(amt) }}</button>
+                    <div class="chips" data-give-chips>
+                        {% for amt in dm.quick %}
+                        <button type="button" class="chip-amt give-chip" data-amount="{{ amt }}">{{ dm.symbol }}{{ '{:,}'.format(amt) }}</button>
                         {% endfor %}
                     </div>
                 </div>
 
-                {% set giving_purposes = giving_purposes or ['Tithe', 'Offering', 'Missions', 'Building Fund', 'Welfare', 'Others'] %}
                 <label class="field give-field"><span>Purpose</span>
                     <select name="purpose" id="give-purpose">
                         {% for p in giving_purposes %}
@@ -95,7 +95,7 @@
                         {% endif %}
                         <label class="field"><span>Your name</span><input type="text" name="name" required autocomplete="name"/></label>
                         <label class="field"><span>Email (for your receipt)</span><input type="email" name="email" required autocomplete="email"/></label>
-                        <label class="field"><span>Amount sent (₦)</span><input type="text" name="amount" required inputmode="decimal" placeholder="10000"/></label>
+                        <label class="field"><span>Amount sent (<span data-give-symbol>{{ dm.symbol }}</span>)</span><input type="text" name="amount" required inputmode="decimal" placeholder="{{ dm.quick[2] }}"/></label>
                         <label class="field"><span>Purpose</span>
                             <select name="purpose">{% for p in giving_purposes %}<option value="{{ p }}">{{ p }}</option>{% endfor %}</select>
                         </label>
@@ -359,14 +359,35 @@
     if (sel) { sel.addEventListener('change', sync); sync(); }
 
     var amount = document.querySelector('input[name="amount"]');
-    document.querySelectorAll('.give-chip').forEach(function (b) {
-        b.addEventListener('click', function () {
-            if (!amount) return;
-            amount.value = b.dataset.amount;
-            document.querySelectorAll('.give-chip').forEach(function (x) { x.classList.remove('on'); });
-            b.classList.add('on');
-        });
+    var chips = document.querySelector('[data-give-chips]');
+    if (chips) chips.addEventListener('click', function (e) {          // delegated: chips are redrawn per currency
+        var b = e.target.closest('.give-chip');
+        if (!b || !amount) return;
+        amount.value = b.dataset.amount;
+        chips.querySelectorAll('.give-chip').forEach(function (x) { x.classList.remove('on'); });
+        b.classList.add('on');
     });
+    // The amount is in the currency of the church's collecting account: follow the chosen branch.
+    var giveBranch = document.getElementById('give-branch');
+    if (giveBranch && chips) {
+        var fmt = function (n) { return Number(n).toLocaleString('en'); };
+        var applyCurrency = function () {
+            var o = giveBranch.selectedOptions[0];
+            if (!o || !o.dataset.currency) return;
+            document.querySelectorAll('[data-give-symbol]').forEach(function (n) { n.textContent = o.dataset.symbol; });
+            document.querySelectorAll('[data-give-currency]').forEach(function (n) { n.textContent = o.dataset.currency; });
+            var amt = document.querySelector('[data-give-amount]');
+            if (amt) amt.min = o.dataset.min;
+            chips.innerHTML = '';
+            o.dataset.quick.split(',').forEach(function (v) {
+                var b = document.createElement('button');
+                b.type = 'button'; b.className = 'chip-amt give-chip'; b.dataset.amount = v; b.textContent = o.dataset.symbol + fmt(v);
+                chips.appendChild(b);
+            });
+        };
+        giveBranch.addEventListener('change', applyCurrency);
+        applyCurrency();
+    }
 })();
 </script>
 

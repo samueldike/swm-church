@@ -251,7 +251,7 @@ with TestClient(app, raise_server_exceptions=False, base_url="https://testserver
     throttle.reset_all()
     cap = {}
     async def fake_init(**kw): cap["init"] = kw; return "https://checkout.test/x"
-    async def fake_verify(reference, secret_key=""): cap["verify_secret"] = secret_key; return {"success": True, "state": "paid", "amount_kobo": int(cap["amount"] * 100)}
+    async def fake_verify(reference, secret_key=""): cap["verify_secret"] = secret_key; return {"success": True, "state": "paid", "amount_minor": int(cap["amount"] * 100), "currency": "NGN"}
     payment.initialize_paystack = fake_init; payment.verify_paystack = fake_verify
     async def set_site(vals):
         from app.database import async_session
@@ -315,7 +315,9 @@ with TestClient(app, raise_server_exceptions=False, base_url="https://testserver
     class _F: role = "hq_finance"; branch_id = hq_id
     async def trend(who):
         from app.database import async_session
-        async with async_session() as db: return (await _giving_trend_data(db, who))[2]
+        async with async_session() as db:
+            money = (await _giving_trend_data(db, who))[2]          # {"this_month": [(currency, total)], ...}
+            return sum(total for _, total in money["this_month"])
     tm, tb, tf = asyncio.run(trend(_M)), asyncio.run(trend(_Br)), asyncio.run(trend(_F))
     rec("dashboard giving: media sees ₦0, branch A sees only its own, finance sees all", tm == 0 and tb == 30000.0 + 40000.0 and tf > tb, f"{tm} {tb} {tf}")
 

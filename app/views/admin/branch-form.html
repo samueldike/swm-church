@@ -1,5 +1,5 @@
 {% extends "layouts/admin_base.html" %}
-{% from "macros/admin.html" import page_header, field with context %}
+{% from "macros/admin.html" import page_header, field, location_fields, branch_locale_fields with context %}
 {% block title %}New Branch | {{ siteName }}{% endblock %}
 {% block topbar_title %}New Branch{% endblock %}
 {% block topbar_subtitle %}Branches{% endblock %}
@@ -17,17 +17,15 @@
     {{ field('Branch name', 'name', required=True) }}
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {{ field('Email address', 'email', type='email', mono=True) }}
-      {{ field('Phone number', 'phone', mono=True) }}
+      <div>
+        <label for="phone" class="field-label">Phone number</label>
+        <input id="phone" name="phone" type="tel" value="{{ request.form.get('phone', '') }}" class="field-input field-mono" placeholder="{{ phone_code(default_country) }} …" data-geo-phone>
+        <p class="field-hint">Local numbers are saved in international format for this country.</p>
+      </div>
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-      {{ field('City', 'city') }}
-      {{ field('State', 'state') }}
-      <div>
-        <label for="country" class="field-label">Country</label>
-        <select id="country" name="country" class="field-select">
-          {% for c in countries %}<option value="{{ c }}" {{ 'selected' if request.form.get('country', 'Nigeria') == c else '' }}>{{ c }}</option>{% endfor %}
-        </select>
-      </div>
+      {{ location_fields({'country': 'country_code', 'region': 'region_code', 'city': 'city'}, country=default_country, required=True, cities=cities) }}
+      {{ branch_locale_fields(default_country, '', '') }}
     </div>
     {{ field('Street address', 'address') }}
     <div class="pt-3 border-t border-line">

@@ -76,6 +76,66 @@
   </div>
 {%- endmacro %}
 
+{#- Country → official region list → city, as ONE picker everywhere a place is recorded (codes from
+   app/core/geo.py, never free text). n = field names, e.g. {'country': 'country_code', 'region': 'region_code',
+   'city': 'city'}; leave a key out to omit that field. The region list follows the country (data-geo JS in
+   admin_base.html), and so do currency/timezone selects inside the same [data-geo] wrapper. -#}
+{% macro location_fields(n, country='', region='', city='', labels=None, required=False, cities=None, hint=None) -%}
+  {% set L = labels or {} %}
+  {% set cc = request.form.get(n.country, country) or '' %}
+  {% set rc = request.form.get(n.region, region) or '' %}
+  <div class="contents" data-geo>
+    <div>
+      <label for="{{ n.country }}" class="field-label">{{ L.country or 'Country' }}{% if required %}<span class="text-bad ml-0.5">*</span>{% endif %}</label>
+      <select id="{{ n.country }}" name="{{ n.country }}" class="field-select" data-geo-country {% if required %}required{% endif %}>
+        <option value="">Choose a country…</option>
+        {% for code, name in geo_countries() %}<option value="{{ code }}" {{ 'selected' if cc == code else '' }}>{{ name }}</option>{% endfor %}
+      </select>
+    </div>
+    {% if n.region %}
+    <div>
+      <label for="{{ n.region }}" class="field-label">{{ L.region or 'State / region' }}{% if required %}<span class="text-bad ml-0.5">*</span>{% endif %}</label>
+      <select id="{{ n.region }}" name="{{ n.region }}" class="field-select" data-geo-region {% if required %}required{% endif %} {{ '' if cc else 'disabled' }}>
+        <option value="">{{ 'Choose…' if cc else 'Choose the country first' }}</option>
+        {% for code, name in geo_regions(cc) %}<option value="{{ code }}" {{ 'selected' if rc == code else '' }}>{{ name }}</option>{% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    {% if n.city %}
+    <div>
+      <label for="{{ n.city }}" class="field-label">{{ L.city or 'City / town' }}</label>
+      <input id="{{ n.city }}" name="{{ n.city }}" value="{{ request.form.get(n.city, city) or '' }}" class="field-input" autocomplete="off"
+             {% if cities %}list="{{ n.city }}-list"{% endif %} maxlength="120">
+      {% if cities %}<datalist id="{{ n.city }}-list">{% for c in cities %}<option value="{{ c }}">{% endfor %}</datalist>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% if hint %}<p class="field-hint col-span-full">{{ hint }}</p>{% endif %}
+{%- endmacro %}
+
+{#- A church's currency and time zone (inside a [data-geo] form: they re-default when the country changes). -#}
+{% macro branch_locale_fields(country='', currency='', timezone='', is_hq=False) -%}
+  {% set cc = request.form.get('country_code', country) or '' %}
+  {% set cur = request.form.get('currency', currency) or '' %}
+  {% set tz = request.form.get('timezone', timezone) or '' %}
+  {% if is_hq %}
+  <div>
+    <label for="currency" class="field-label">Platform currency</label>
+    <select id="currency" name="currency" class="field-select" data-geo-currency>
+      {% for code, label in geo_currencies() %}<option value="{{ code }}" {{ 'selected' if cur == code else '' }}>{{ label }}</option>{% endfor %}
+    </select>
+    <p class="field-hint">HQ's currency is the platform currency: all giving, totals and amounts on the website use it.</p>
+  </div>
+  {% endif %}
+  <div>
+    <label for="timezone" class="field-label">Time zone</label>
+    <select id="timezone" name="timezone" class="field-select" data-geo-timezone>
+      {% for z in geo_timezones(cc or 'NG') %}<option value="{{ z }}" {{ 'selected' if tz == z else '' }}>{{ z|replace('_', ' ') }}</option>{% endfor %}
+    </select>
+    <p class="field-hint">Event times, reminders and calendars use this church's local time.</p>
+  </div>
+{%- endmacro %}
+
 {#- Plain text by default: admin-richtext.js upgrades every <textarea> unless data-richtext="off". Pass rich=True only where stored HTML is intended (e.g. story content). -#}
 {% macro textarea(label, name, value='', rows=4, placeholder='', hint=None, id=None, required=False, rich=False) -%}
   <div>

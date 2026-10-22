@@ -19,6 +19,10 @@
       <label for="inq-q" class="sr-only">Search inquiries</label>
       <input id="inq-q" type="search" name="q" value="{{ search }}" placeholder="Search name, email or subject…" class="flex-grow border-none bg-transparent text-[12.5px] text-ink outline-none min-w-0">
     </div>
+    <select name="topic" onchange="this.form.submit()" aria-label="Filter by topic" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
+      <option value="">All topics</option>
+      {% for t in topics %}<option value="{{ t }}" {{ 'selected' if filter_topic == t else '' }}>{{ t }}</option>{% endfor %}
+    </select>
     <select name="status" onchange="this.form.submit()" aria-label="Filter by status" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
       <option value="">All statuses</option>
       {% for v, l in [('new', 'New'), ('in_progress', 'In progress'), ('resolved', 'Resolved')] %}<option value="{{ v }}" {{ 'selected' if filter_status == v else '' }}>{{ l }}</option>{% endfor %}
@@ -42,7 +46,7 @@
             {% for inquiry in inquiries %}
               <tr>
                 <td data-label="From"><a href="{{ url_for('admin_inquiries_show', inquiry_id=inquiry.id) }}" class="block no-underline">{{ person(inquiry.name, inquiry.email, (inquiry.name[0] if inquiry.name else '?')) }}</a></td>
-                <td data-label="Subject" class="max-w-[260px] truncate">{{ inquiry.subject }}</td>
+                <td data-label="Subject" class="max-w-[260px]">{% if inquiry.topic %}<span class="mono-label block">{{ inquiry.topic }}</span>{% endif %}<span class="block truncate">{{ inquiry.subject }}</span></td>
                 {% if is_super %}<td data-label="Branch">{{ inquiry.branch.name if inquiry.branch else '—' }}</td>{% endif %}
                 <td data-label="Received" class="font-mono text-xs text-ink-3">{{ inquiry.created_at|timesince }}</td>
                 <td data-label="Status">{{ badge(inquiry.status|replace('_', ' ')|capitalize, 'bad' if inquiry.status == 'new' else ('warn' if inquiry.status == 'in_progress' else 'ok')) }}</td>

@@ -79,6 +79,15 @@ _env.filters["nl2br"] = _nl2br
 _env.filters["timesince"] = _timesince
 _env.filters["month_label"] = _month_label
 
+# Global churches (app/core/geo.py): lists for pickers, and money/phone display.
+from app.core import geo as _geo  # noqa: E402
+
+_env.globals.update(geo_countries=_geo.countries, geo_regions=_geo.regions, geo_timezones=_geo.timezones_for,
+                    geo_currencies=_geo.currencies, country_name=_geo.country_name, region_name=_geo.region_name,
+                    currency_symbol=_geo.currency_symbol, phone_code=_geo.phone_country)
+_env.filters["money"] = lambda amount, currency=None, decimals=True: _geo.format_money(amount, currency, decimals)
+_env.filters["phone"] = _geo.display_phone
+
 
 class TemplateRequest:
     def __init__(self, request: Request, form_data: dict | None = None):
@@ -180,7 +189,24 @@ async def render_template(
     # Editable public content (Admin → Settings → Website content) with the published defaults.
     ctx.setdefault("services", _sc.get_services(site))
     ctx.setdefault("prayerResponse", (site.get("prayerResponseTime") or "").strip() or _sc.DEFAULT_PRAYER_RESPONSE)
-    ctx.update({k: v for k, v in _sc.channels(site).items() if k not in ctx})
+    platform_country = None
+    if db is not None:
+        try:
+            from app.core.platform import platform_country as _pc
+
+            platform_country = await _pc(db)       # local numbers in site-wide settings are read as HQ's country
+        except Exception:
+            platform_country = None
+    ctx.setdefault("platformCountry", platform_country or "NG")
+    if db is not None and "platformTzLabel" not in ctx:
+        try:
+            from app.core.platform import platform_timezone as _ptz
+
+            _tz = await _ptz(db)
+            ctx["platformTzLabel"] = f"{_tz.split('/')[-1].replace('_', ' ')} time ({_geo.tz_abbrev(_tz)})"
+        except Exception:
+            ctx["platformTzLabel"] = "local time"
+    ctx.update({k: v for k, v in _sc.channels(site, country=platform_country).items() if k not in ctx})
     ctx.setdefault("plausibleDomain", (site.get("plausibleDomain") or "").strip())
     ctx.setdefault("plausibleSrc", _sc.safe_https(site.get("plausibleSrc")) or "https://plausible.io/js/script.js")
     ctx.setdefault("jsonld", "")

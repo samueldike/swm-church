@@ -27,7 +27,7 @@
                     <input type="email" name="email" placeholder="you@example.com"/>
                 </label>
                 <label class="field span-2"><span>Phone <span style="text-transform:none;letter-spacing:0">(optional)</span></span>
-                    <input type="tel" name="phone" placeholder="+234…"/>
+                    <input type="tel" name="phone" placeholder="{{ phone_code(platformCountry) }}…"/>
                 </label>
                 {% if branches and branches|length > 1 %}
                 <label class="field span-2"><span>Which branch should pray with you?</span>

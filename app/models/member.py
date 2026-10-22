@@ -15,6 +15,10 @@ class Member(Base):
     last_name: Mapped[str] = mapped_column(String(255))
     email: Mapped[str | None] = mapped_column(String(255))
     phone: Mapped[str | None] = mapped_column(String(50))
+    # Optional place of residence (ISO codes, app/core/geo.py) — e.g. diaspora members.
+    country_code: Mapped[str | None] = mapped_column(String(2), index=True)
+    region_code: Mapped[str | None] = mapped_column(String(10))
+    city: Mapped[str | None] = mapped_column(String(120))
     gender: Mapped[str | None] = mapped_column(String(10))
     date_of_birth: Mapped[date | None] = mapped_column(Date)
     joined_at: Mapped[date | None] = mapped_column(Date)

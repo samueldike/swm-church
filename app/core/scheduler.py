@@ -51,7 +51,7 @@ async def process_reminders(now: datetime | None = None) -> int:
             r = (await db.execute(select(EventReminder).where(EventReminder.id == rid))).scalar_one()
             ev = r.event
             email, name, token = r.email, r.name, r.token
-        if ev is None or not ev.starts_at or ev.starts_at < _local_now() - timedelta(hours=1):
+        if ev is None or not ev.starts_at or ev.starts_at < _local_now(_event_tz(ev)) - timedelta(hours=1):
             outcome = "failed"          # the event moved into the past or was removed: nothing useful to say
         else:
             base = await _base_url()
@@ -72,9 +72,17 @@ async def process_reminders(now: datetime | None = None) -> int:
     return sent
 
 
-def _local_now() -> datetime:
-    """Naive 'church time' (event times are stored as local wall-clock time; Nigeria is UTC+1 all year)."""
-    return datetime.utcnow() + timedelta(hours=1)
+def _local_now(tz: str | None = None) -> datetime:
+    """Naive wall-clock now in a church's time zone (event times are stored that way); HQ's zone by default."""
+    from app.core import geo
+
+    return geo.local_now(tz or geo.DEFAULT_TIMEZONE)
+
+
+def _event_tz(ev) -> str | None:
+    from app.core import ics
+
+    return ics.event_tz(ev)
 
 
 async def process_campaigns() -> int:

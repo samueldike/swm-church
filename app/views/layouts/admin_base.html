@@ -84,6 +84,43 @@
   });
 })();
 
+/* Location pickers ([data-geo], macro location_fields): when the country changes, load its official
+   regions and, inside the same wrapper, re-default currency / time zone / phone placeholders. */
+(() => {
+  if (window.__swmGeoBound) return;
+  window.__swmGeoBound = true;
+  document.addEventListener('change', async (event) => {
+    const sel = event.target.closest('[data-geo-country]');
+    if (!sel) return;
+    const box = sel.closest('[data-geo]') || sel.form || document;
+    const scope = sel.closest('form') || document;
+    const region = box.querySelector('[data-geo-region]');
+    const cc = sel.value;
+    if (region) { region.innerHTML = '<option value="">' + (cc ? 'Loading…' : 'Choose the country first') + '</option>'; region.disabled = !cc; }
+    if (!cc) return;
+    try {
+      const res = await fetch('/geo/' + encodeURIComponent(cc) + '.json');
+      if (!res.ok) return;
+      const g = await res.json();
+      const opt = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; return o; };
+      if (region) {
+        region.innerHTML = '';
+        region.append(opt('', g.regions.length ? 'Choose…' : 'No regions listed'));
+        g.regions.forEach(([code, name]) => region.append(opt(code, name)));
+        region.disabled = !g.regions.length;
+      }
+      scope.querySelectorAll('[data-geo-currency]').forEach((c) => { if (!c.dataset.touched) c.value = g.currency; });
+      scope.querySelectorAll('[data-geo-timezone]').forEach((t) => {
+        t.innerHTML = ''; g.timezones.forEach((z) => t.append(opt(z, z.replace(/_/g, ' '))));
+      });
+      scope.querySelectorAll('[data-geo-phone]').forEach((p) => { p.placeholder = g.phone_code + ' …'; });
+    } catch (_) { /* offline: the server still validates on save */ }
+  });
+  document.addEventListener('change', (event) => {          // a currency chosen by hand is not overwritten
+    const c = event.target.closest('[data-geo-currency]'); if (c) c.dataset.touched = '1';
+  });
+})();
+
 /* Live regions: an element with data-live-refresh="<status url>" and data-live-targets="#a,#b".
    While the status says busy, poll it; when its signature changes, re-fetch this page and swap
    the target elements in place (rendered by the same templates as a full load). This script

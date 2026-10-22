@@ -15,6 +15,7 @@ class Giving(Base):
     full_name: Mapped[str | None] = mapped_column(String(255))
     phone: Mapped[str | None] = mapped_column(String(50))
     amount: Mapped[float] = mapped_column(Numeric(12, 2))
+    currency: Mapped[str] = mapped_column(String(3), default="NGN", server_default="NGN")   # ISO 4217: the platform (HQ) currency
     giving_type: Mapped[str] = mapped_column(String(50), default="tithe")
     is_anonymous: Mapped[bool] = mapped_column(Boolean, default=False)
     dedication: Mapped[str | None] = mapped_column(Text)

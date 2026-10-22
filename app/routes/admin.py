@@ -46,6 +46,16 @@ def _admin_role_ctx(target) -> dict:
     }
 
 
+async def _known_spelling(db: AsyncSession, column, value: str | None, limit: int = 255) -> str | None:
+    """Reuse the spelling already recorded for this value (case and spaces ignored), so one speaker or
+    series never appears as two in filters and reports."""
+    v = " ".join((value or "").split())[:limit]
+    if not v:
+        return None
+    known = (await db.execute(select(column).where(func.lower(func.trim(column)) == v.lower()).limit(1))).scalar_one_or_none()
+    return " ".join(known.split()) if known else v
+
+
 async def _message_form_ctx(db, admin) -> dict:
     """Distribution facts the audio form must state truthfully for this admin."""
     from app.core.access import BRANCH_ADMIN, normalize_role
@@ -202,7 +212,7 @@ async def _admin_context(request: Request, db: AsyncSession, active_page: str = 
     branch_id = admin.branch_id if hasattr(admin, "branch_id") else None
 
     seven_days_ago = datetime.utcnow() - timedelta(days=7)
-    badges = {"members": 0, "events": 0, "inquiries": 0, "messages": 0, "unit_reports": 0, "prayers": 0, "branch_reports": 0}
+    badges = {"members": 0, "events": 0, "inquiries": 0, "messages": 0, "unit_reports": 0, "prayers": 0, "branch_reports": 0, "data_check": 0}
 
     try:
         q = select(func.count()).select_from(Member)
@@ -216,7 +226,10 @@ async def _admin_context(request: Request, db: AsyncSession, active_page: str = 
     try:
         # Calendar: published events happening in the next 7 days (event times are naive church time,
         # UTC+1). Rises when one is added for this week, falls as each one ends.
-        church_now = datetime.utcnow() + timedelta(hours=1)
+        from app.core import geo as _geo
+        from app.core.platform import platform_timezone
+
+        church_now = _geo.local_now(await platform_timezone(db))
         q = select(func.count()).select_from(Event).where(
             Event.is_published == True,  # noqa: E712
             Event.starts_at <= church_now + timedelta(days=7),
@@ -274,6 +287,14 @@ async def _admin_context(request: Request, db: AsyncSession, active_page: str = 
         badges["unit_reports"] = (await db.execute(q)).scalar_one() or 0
     except Exception:
         logging.exception("Unhandled error")
+
+    if is_super:
+        try:
+            from app.core import geo_migration
+
+            badges["data_check"] = len(await geo_migration.review_items(db))
+        except Exception:
+            logging.exception("Failed to count data-check items")
 
     from app.core.access import ROLE_LABELS, has_perm, normalize_role
 
@@ -498,53 +519,69 @@ async def admin_invitation_accept(
     return RedirectResponse(url="/admin/dashboard", status_code=303)
 
 
-async def _giving_trend_data(db: AsyncSession, admin=None):
-    """Real 6-period giving trend from the `givings` table (tithe/offering/special buckets)."""
+async def _giving_trend_data(db: AsyncSession, admin=None, currency: str | None = None):
+    """Six-period giving trend (tithe/offering/special) IN ONE CURRENCY, plus this period's total per currency.
+
+    Amounts in different currencies are never added together: the chart shows ``currency`` (default: the
+    viewer's own church's currency), and ``money`` lists every currency's total for the latest period.
+    Returns (trend, max, money) where money = {"currency", "currencies", "this_month": [(cur, total)]}.
+    """
+    from app.core import geo, lists
+    from app.models.branch import Branch
     from app.models.giving import Giving
 
     now_naive = datetime.utcnow()
     givingTrend: list[dict] = []
     maxGiving = 0.0
+    money = {"currency": currency or geo.DEFAULT_CURRENCY, "currencies": [], "this_month": []}
+    empty = [{"label": (now_naive - timedelta(days=30 * (5 - i))).strftime("%b"), "tithe": 0.0, "offering": 0.0, "special": 0.0} for i in range(6)]
     # Money is need-to-know: only roles with the donations permission see giving, and a branch sees only its own.
     scope_branch = None
     if admin is not None:
         if not has_perm(admin.role, "donations"):
-            return [{"label": (now_naive - timedelta(days=30 * (5 - i))).strftime("%b"), "tithe": 0.0, "offering": 0.0, "special": 0.0} for i in range(6)], 0.0, 0.0
+            return empty, 0.0, money
         if not _sees_all_gifts(admin):
             scope_branch = admin.branch_id
+    paid = Giving.status.in_(PAID_STATUSES)
+    scoped = (lambda q: q.where(Giving.branch_id == scope_branch)) if scope_branch is not None else (lambda q: q)
     try:
+        money["currencies"] = sorted(c for (c,) in (await db.execute(scoped(select(Giving.currency).where(paid, Giving.currency.isnot(None))).distinct())).all())
+        if not currency:
+            from app.core.platform import platform_currency
+
+            currency = await platform_currency(db)          # the platform currency is HQ's
+        money["currency"] = currency.upper()
+        site = await get_settings(db)
+        tithe_key = (lists.canonical("Tithe", lists.items(site, "giving_purposes")) or "Tithe").lower()
+        offering_key = (lists.canonical("Offering", lists.items(site, "giving_purposes")) or "Offering").lower()
         for i in range(6):
             window_end = now_naive - timedelta(days=30 * (5 - i))
             window_start = window_end - timedelta(days=30)
-            label = window_end.strftime("%b")
-            q = (
-                select(Giving.giving_type, func.sum(Giving.amount))
-                .where(
-                    Giving.status.in_(("completed", "success")),
-                    Giving.paid_at >= window_start,
-                    Giving.paid_at < window_end,
-                )
-                .group_by(Giving.giving_type)
-            )
-            if scope_branch is not None:
-                q = q.where(Giving.branch_id == scope_branch)
-            rows = (await db.execute(q)).all()
+            base = scoped(select(Giving.currency, Giving.giving_type, func.sum(Giving.amount)).where(
+                paid, Giving.paid_at >= window_start, Giving.paid_at < window_end).group_by(Giving.currency, Giving.giving_type))
+            rows = (await db.execute(base)).all()
             tithe = offering = special = 0.0
-            for giving_type, total in rows:
-                gt = (giving_type or "").strip().lower()
+            per_currency: dict[str, float] = {}
+            for cur, giving_type, total in rows:
                 total = float(total or 0)
-                if gt == "tithe":
+                per_currency[cur or geo.DEFAULT_CURRENCY] = per_currency.get(cur or geo.DEFAULT_CURRENCY, 0.0) + total
+                if (cur or geo.DEFAULT_CURRENCY) != money["currency"]:
+                    continue
+                gt = (giving_type or "").strip().lower()
+                if gt == tithe_key:
                     tithe += total
-                elif gt == "offering":
+                elif gt == offering_key:
                     offering += total
                 else:
                     special += total
-            givingTrend.append({"label": label, "tithe": tithe, "offering": offering, "special": special})
+            givingTrend.append({"label": window_end.strftime("%b"), "tithe": tithe, "offering": offering, "special": special})
             maxGiving = max(maxGiving, tithe, offering, special)
+            if i == 5:
+                money["this_month"] = sorted(per_currency.items(), key=lambda kv: (kv[0] != money["currency"], -kv[1]))
     except Exception:
         logging.exception("Failed to compute giving trend")
-    totalThisMonth = sum(g["tithe"] + g["offering"] + g["special"] for g in givingTrend[-1:])
-    return givingTrend, maxGiving, totalThisMonth
+        return empty, 0.0, money
+    return givingTrend, maxGiving, money
 
 
 # ─── Dashboard ─────────────────────────────────────────────────────
@@ -645,27 +682,61 @@ async def admin_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     except Exception:
         logging.exception("Failed to load recent members for dashboard")
 
-    # Department distribution
+    # Member distribution. (It used to be "members by department", but members are not assigned to
+    # departments, and the old query matched branch ids against department ids: invented numbers.)
+    distributionTitle, distributionSubtitle = "Members by gender", "Across your church"
+    countrySummary: list[dict] = []
     try:
-        q = select(Department.name, func.count(Member.id).label("cnt")).join(Member, Member.branch_id == Department.id, isouter=True).group_by(Department.name).order_by(func.count(Member.id).desc())
-        result = await db.execute(q)
-        rows = result.all()
-        total_dept_members = sum(r.cnt for r in rows) if rows else 1
-        for i, row in enumerate(rows):
-            pct = round(row.cnt / total_dept_members * 100) if total_dept_members else 0
-            departmentDistribution[i] = {"name": row.name, "members_count": row.cnt, "pct": pct}
-    except Exception:
-        logging.exception("Unhandled error")
+        from app.core import geo
+        from app.models.giving import Giving
 
-    # Branch performance
+        if ctx["is_super"]:
+            per_branch = dict((await db.execute(select(Member.branch_id, func.count(Member.id)).group_by(Member.branch_id))).all())
+            all_branches = list((await db.execute(select(Branch))).scalars().all())
+            countries = {b.country_code for b in all_branches if b.country_code}
+            by_country = len(countries) > 1
+            groups: dict[str, int] = {}
+            for b in all_branches:
+                key = geo.country_name(b.country_code) if by_country else (geo.region_name(b.region_code) or b.state or "Region not set")
+                groups[key or "Country not set"] = groups.get(key or "Country not set", 0) + per_branch.get(b.id, 0)
+            rows = sorted(groups.items(), key=lambda kv: -kv[1])
+            distributionTitle = "Members by country" if by_country else "Members by state / region"
+            distributionSubtitle = "Where each member's church is" if by_country else f"All churches are in {geo.country_name(next(iter(countries), ''))}"
+            # Churches by country: branches, members and this month's confirmed giving (platform currency).
+            month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            gifts = dict((await db.execute(select(Giving.branch_id, func.coalesce(func.sum(Giving.amount), 0)).where(
+                Giving.status.in_(PAID_STATUSES), Giving.paid_at >= month_start).group_by(Giving.branch_id))).all())
+            hq_id = next((b.id for b in all_branches if b.is_hq), None)
+            summary: dict[str, dict] = {}
+            for b in all_branches:
+                row = summary.setdefault(b.country_code or "", {"code": b.country_code, "name": geo.country_name(b.country_code) or "Country not set",
+                                                                  "branches": 0, "members": 0, "giving": 0.0})
+                row["branches"] += 1
+                row["members"] += per_branch.get(b.id, 0)
+                row["giving"] += float(gifts.get(b.id, 0) or 0) + (float(gifts.get(None, 0) or 0) if b.id == hq_id else 0.0)
+            countrySummary = sorted(summary.values(), key=lambda r: (-r["members"], r["name"]))
+        else:
+            q = select(Member.gender, func.count(Member.id)).group_by(Member.gender)
+            if admin.branch_id:
+                q = q.where(Member.branch_id == admin.branch_id)
+            labels = {"male": "Male", "female": "Female"}
+            rows = sorted(((labels.get(g or "", "Not recorded"), n) for g, n in (await db.execute(q)).all()), key=lambda kv: -kv[1])
+        total = sum(n for _, n in rows) or 1
+        for i, (name, n) in enumerate(rows):
+            departmentDistribution[i] = {"name": name, "members_count": n, "pct": round(n / total * 100)}
+    except Exception:
+        logging.exception("Failed to compute the member distribution")
+
+    # Branch performance (grouped by branch id: two branches with the same name are two branches)
     try:
-        q = select(Branch.name, func.count(Member.id).label("cnt")).join(Member, Member.branch_id == Branch.id, isouter=True).group_by(Branch.name).order_by(func.count(Member.id).desc())
-        result = await db.execute(q)
-        rows = result.all()
+        q = (select(Branch.id, Branch.name, Branch.country_code, func.count(Member.id).label("cnt"))
+             .join(Member, Member.branch_id == Branch.id, isouter=True).group_by(Branch.id, Branch.name, Branch.country_code)
+             .order_by(func.count(Member.id).desc()))
+        rows = (await db.execute(q)).all()
         max_branch = max((r.cnt for r in rows), default=1) if rows else 1
         for row in rows:
             bar_pct = round(row.cnt / max_branch * 100) if max_branch else 0
-            branchPerformance.append({"name": row.name, "members_count": row.cnt, "growth": 0, "bar_pct": bar_pct})
+            branchPerformance.append({"name": row.name, "country": row.country_code, "members_count": row.cnt, "growth": 0, "bar_pct": bar_pct})
     except Exception:
         logging.exception("Unhandled error")
 
@@ -683,7 +754,7 @@ async def admin_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     else:
         dashboardScopeLabel = f"at {(await get_settings(db)).get('siteName', 'SWM')} HQ"
 
-    givingTrend, maxGiving, totalThisMonth = await _giving_trend_data(db, admin)
+    givingTrend, maxGiving, givingMoney = await _giving_trend_data(db, admin, (request.query_params.get("currency") or "").upper() or None)
 
     try:
         dash_announcements = (await _announcements_for(db, admin, 3)) if has_perm(admin.role, "announcements.view") else []
@@ -726,9 +797,10 @@ async def admin_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
         "weeklyAttendance": [],
         "givingTrend": givingTrend,
         "maxGiving": maxGiving,
-        "totalThisMonth": totalThisMonth,
+        "givingMoney": givingMoney,
         "recentMembers": recentMembers,
         "departmentDistribution": departmentDistribution,
+        "distributionTitle": distributionTitle, "distributionSubtitle": distributionSubtitle, "countrySummary": countrySummary,
         "branchPerformance": branchPerformance,
         "activityFeed": activityFeed,
         "upcomingEvents": upcoming_events,
@@ -844,37 +916,54 @@ async def admin_dashboard_metrics(request: Request, db: AsyncSession = Depends(g
             attendanceTrend.append({"label": datetime.strptime(mk, "%Y-%m").strftime("%b"), "branches": br_vals})
     except: pass
     weeklyAttendance = []      # no per-service attendance is recorded yet, so nothing is invented
-    givingTrend, maxGiving, totalThisMonth = await _giving_trend_data(db, admin)
-    return JSONResponse({"stats": {"members": {"value": membersCount, "delta": membersDelta, "suffix": ""}, "events": {"value": eventsCount, "delta": eventsDelta, "suffix": ""}, "inquiries": {"value": inquiriesCount, "delta": inquiriesDelta, "suffix": ""}, "departments": {"value": departmentsCount, "delta": 0, "suffix": ""}, "branches": {"value": branchesCount, "delta": 0, "suffix": ""}, "messages": {"value": sermonsCount, "delta": messagesDelta, "suffix": ""}}, "attendanceTrend": attendanceTrend, "branches": [b.name for b in branches_list], "palette": palette, "maxAttendance": maxAttendance, "weeklyAttendance": weeklyAttendance, "givingTrend": givingTrend, "maxGiving": maxGiving, "totalThisMonth": totalThisMonth, "range": {"mode": mode}})
+    givingTrend, maxGiving, givingMoney = await _giving_trend_data(db, admin, (request.query_params.get("currency") or "").upper() or None)
+    return JSONResponse({"stats": {"members": {"value": membersCount, "delta": membersDelta, "suffix": ""}, "events": {"value": eventsCount, "delta": eventsDelta, "suffix": ""}, "inquiries": {"value": inquiriesCount, "delta": inquiriesDelta, "suffix": ""}, "departments": {"value": departmentsCount, "delta": 0, "suffix": ""}, "branches": {"value": branchesCount, "delta": 0, "suffix": ""}, "messages": {"value": sermonsCount, "delta": messagesDelta, "suffix": ""}}, "attendanceTrend": attendanceTrend, "branches": [b.name for b in branches_list], "palette": palette, "maxAttendance": maxAttendance, "weeklyAttendance": weeklyAttendance, "givingTrend": givingTrend, "maxGiving": maxGiving, "givingMoney": givingMoney, "range": {"mode": mode}})
 
 
 # ─── Members ───────────────────────────────────────────────────────
 
 @router.get("/members", name="admin_members")
-async def admin_members(request: Request, db: AsyncSession = Depends(get_db), q: str = Query(""), page: int = Query(1, ge=1)):
+async def admin_members(request: Request, db: AsyncSession = Depends(get_db), q: str = Query(""), page: int = Query(1, ge=1),
+                        branch_id: str = Query(""), country: str = Query("")):
     admin = await _get_admin(request)
     if not admin:
         return RedirectResponse(url="/admin", status_code=303)
 
+    from app.models.branch import Branch
     from app.models.member import Member
     from sqlalchemy.orm import selectinload
     query = select(Member).options(selectinload(Member.branch))
 
-    if not admin.role == "super_admin" and admin.branch_id:
+    sees_all = admin.role == "super_admin" or not admin.branch_id
+    if not sees_all:
         query = query.where(Member.branch_id == admin.branch_id)
+    else:
+        if _to_int(branch_id):
+            query = query.where(Member.branch_id == _to_int(branch_id))
+        if country:
+            query = query.where(Member.branch_id.in_(select(Branch.id).where(Branch.country_code == country.upper())))
 
     if q:
         pattern = f"%{q}%"
-        query = query.where(or_(Member.first_name.ilike(pattern), Member.last_name.ilike(pattern), Member.email.ilike(pattern)))
+        query = query.where(or_(Member.first_name.ilike(pattern), Member.last_name.ilike(pattern), Member.email.ilike(pattern),
+                                Member.phone.ilike(pattern), Member.city.ilike(pattern)))
 
     query = query.order_by(Member.created_at.desc())
     pagination = await paginate(db, query, page=page, per_page=20)
-    pagination["prev_url"] = f"/admin/members?q={q}&page={page - 1}" if pagination["has_prev"] else None
-    pagination["next_url"] = f"/admin/members?q={q}&page={page + 1}" if pagination["has_next"] else None
+    kw = dict(q=q, branch_id=branch_id, country=country)
+    pagination["prev_url"] = _qs("/admin/members", page=page - 1, **kw) if pagination["has_prev"] else None
+    pagination["next_url"] = _qs("/admin/members", page=page + 1, **kw) if pagination["has_next"] else None
+    branches, country_options = [], []
+    if sees_all:
+        from app.core import geo
+
+        branches = list((await db.execute(select(Branch).order_by(Branch.is_hq.desc(), Branch.name))).scalars().all())
+        country_options = sorted({(b.country_code, geo.country_name(b.country_code)) for b in branches if b.country_code}, key=lambda x: x[1])
 
     ctx = await _admin_context(request, db, "admin.members")
     return await render_template(request, "admin/members.html", {
         "_db": db, "members": pagination["items"], "pagination": pagination, "search": q,
+        "filter_branch_id": branch_id, "filter_country": country.upper(), "branches": branches, "country_options": country_options,
         "title": "Members", "headerIcon": "ri-team-line", **ctx,
     })
 
@@ -933,23 +1022,69 @@ async def admin_members_import_page(request: Request, db: AsyncSession = Depends
     })
 
 
+async def _branch_currency(db: AsyncSession, branch_id: int | None) -> str:
+    """Currency for amounts recorded by any church: always the platform currency (HQ's)."""
+    from app.core.platform import platform_currency
+
+    return await platform_currency(db)
+
+
+async def _branch_country(db: AsyncSession, branch_id: int | None) -> str:
+    """The church's country: the default for local phone numbers and residence."""
+    from app.core import geo
+    from app.models.branch import Branch
+
+    if branch_id:
+        cc = (await db.execute(select(Branch.country_code).where(Branch.id == branch_id))).scalar_one_or_none()
+        if cc:
+            return cc
+    hq = (await db.execute(select(Branch.country_code).where(Branch.is_hq == True))).scalar_one_or_none()  # noqa: E712
+    return hq or geo.DEFAULT_COUNTRY
+
+
+async def _apply_member_location(db: AsyncSession, member, country: str, region: str, city: str) -> str | None:
+    """Optional residence. A country given must be real; a region must belong to it. Error or None."""
+    from app.core import geo
+
+    cc, rc = (country or "").strip().upper(), (region or "").strip().upper()
+    if not cc:
+        member.country_code = member.region_code = None
+        member.city = _tidy_city(city)
+        return None
+    if not geo.is_country(cc):
+        return "Choose the member's country from the list."
+    if rc and not geo.is_region(cc, rc):
+        return f"Choose a state / region from {geo.country_name(cc)}'s list."
+    member.country_code, member.region_code = cc, rc or None
+    member.city = await _canonical_city(db, rc, city)
+    return None
+
+
 @router.post("/members", name="admin_members_store")
 async def admin_members_store(
     request: Request, db: AsyncSession = Depends(get_db),
     first_name: str = Form(...), last_name: str = Form(...),
     email: str = Form(""), phone: str = Form(""), gender: str = Form(""),
+    country_code: str = Form(""), region_code: str = Form(""), city: str = Form(""),
 ):
     admin = await _get_admin(request)
     if not admin:
         return RedirectResponse(url="/admin", status_code=303)
 
+    from app.core import geo, lists
     from app.models.member import Member
+
+    if gender.strip() and not lists.gender(gender):
+        return _redirect(request, "/admin/members/create", "Choose the member's gender from the list.", "error")
     member = Member(
         first_name=first_name.strip(), last_name=last_name.strip(),
-        email=email.strip() if email else None, phone=phone.strip() if phone else None,
-        gender=gender.strip() if gender else None,
+        email=email.strip() if email else None,
+        phone=geo.normalize_phone(phone, await _branch_country(db, admin.branch_id)) or None,
+        gender=lists.gender(gender),
         branch_id=admin.branch_id,
     )
+    if err := await _apply_member_location(db, member, country_code, region_code, city):
+        return _redirect(request, "/admin/members/create", err, "error")
     db.add(member)
     await db.flush()
     return _redirect(request, "/admin/members", "Member added successfully.")
@@ -963,8 +1098,8 @@ async def admin_members_import_template(request: Request):
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["first_name", "last_name", "email", "phone", "gender", "date_of_birth", "address"])
-    writer.writerow(["John", "Doe", "john@example.com", "08012345678", "male", "1990-01-15", "123 Main St"])
+    writer.writerow(["first_name", "last_name", "email", "phone", "gender", "date_of_birth", "country", "state_region", "city"])
+    writer.writerow(["John", "Doe", "john@example.com", "08012345678", "male", "1990-01-15", "Nigeria", "Ebonyi", "Abakaliki"])
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),
@@ -1007,23 +1142,53 @@ async def admin_members_import(
     if not admin:
         return RedirectResponse(url="/admin", status_code=303)
 
+    from app.core import geo, lists
     from app.models.member import Member
-    content = (await file.read()).decode("utf-8")
+
+    content = (await file.read()).decode("utf-8-sig", errors="replace")    # -sig: Excel's byte-order mark
     reader = csv.DictReader(io.StringIO(content))
-    count = 0
-    for row in reader:
-        member = Member(
-            first_name=row.get("first_name", "").strip(),
-            last_name=row.get("last_name", "").strip(),
-            email=row.get("email", "").strip() or None,
-            phone=row.get("phone", "").strip() or None,
-            gender=row.get("gender", "").strip() or None,
-            branch_id=admin.branch_id,
-        )
-        db.add(member)
+    home = await _branch_country(db, admin.branch_id)
+    count, skipped, unknown = 0, 0, {}
+
+    def note(field: str, value: str) -> None:
+        unknown.setdefault(field, set()).add(value[:30])
+
+    for raw in reader:
+        row = {str(k or "").strip().lower(): str(v or "").strip() for k, v in raw.items()}
+        if not row.get("first_name") or not row.get("last_name"):
+            skipped += 1
+            continue
+        gnd = lists.gender(row.get("gender"))
+        if row.get("gender") and not gnd:
+            note("gender", row["gender"])
+        cc = geo.match_country(row.get("country")) if row.get("country") else None
+        if row.get("country") and not cc:
+            note("country", row["country"])
+        region_text = row.get("state_region") or row.get("state") or ""
+        rc = geo.match_region(cc, region_text) if cc and region_text else None
+        if cc and region_text and not rc:
+            note("state/region", region_text)
+        dob = None
+        if row.get("date_of_birth"):
+            try:
+                dob = datetime.fromisoformat(row["date_of_birth"]).date()
+            except ValueError:
+                note("date_of_birth (use YYYY-MM-DD)", row["date_of_birth"])
+        db.add(Member(
+            first_name=row["first_name"][:255], last_name=row["last_name"][:255],
+            email=row.get("email") or None, phone=geo.normalize_phone(row.get("phone"), cc or home) or None,
+            gender=gnd, date_of_birth=dob, country_code=cc, region_code=rc,
+            city=await _canonical_city(db, rc, row.get("city")), branch_id=admin.branch_id,
+        ))
         count += 1
     await db.flush()
-    return _redirect(request, "/admin/members", f"{count} members imported successfully.")
+    msg = f"{count} member{'s' if count != 1 else ''} imported."
+    if skipped:
+        msg += f" {skipped} row{'s' if skipped != 1 else ''} without a first and last name skipped."
+    if unknown:
+        parts = [f"{field} ({', '.join(sorted(vals)[:5])})" for field, vals in unknown.items()]
+        msg += " Left blank because they are not in the lists: " + "; ".join(parts) + "."
+    return _redirect(request, "/admin/members", msg, "info" if (skipped or unknown) else "success")
 
 
 # ─── HODs ──────────────────────────────────────────────────────────
@@ -2100,6 +2265,93 @@ async def admin_departments_store(
 
 # ─── Branches ──────────────────────────────────────────────────────
 
+# ─── Places (country / region / city) and money: codes from app/core/geo.py, never free text ───
+
+def _tidy_city(text: str | None) -> str | None:
+    city = " ".join((text or "").split())[:120]
+    if city and (city.islower() or city.isupper()):
+        city = city.title()            # "port harcourt" / "PORT HARCOURT" → "Port Harcourt"
+    return city or None
+
+
+async def _canonical_city(db: AsyncSession, region_code: str | None, city: str | None) -> str | None:
+    """Reuse the spelling already recorded for this city in this region, so it is one place in reports."""
+    city = _tidy_city(city)
+    if not city or not region_code:
+        return city
+    from app.models.branch import Branch
+    from app.models.member import Member
+
+    for model in (Branch, Member):
+        known = (await db.execute(select(model.city).where(model.region_code == region_code,
+                                                           func.lower(model.city) == city.lower()).limit(1))).scalar_one_or_none()
+        if known:
+            return known
+    return city
+
+
+async def _city_suggestions(db: AsyncSession, region_code: str | None = None) -> list[str]:
+    from app.models.branch import Branch
+
+    q = select(Branch.city).where(Branch.city.isnot(None), Branch.city != "")
+    if region_code:
+        q = q.where(Branch.region_code == region_code)
+    return sorted({c for (c,) in (await db.execute(q.distinct())).all()})
+
+
+async def _apply_branch_location(db: AsyncSession, branch, form, *, with_country: bool = True) -> str | None:
+    """Validate and set a branch's country/region/city/currency/timezone from a form. Returns an error or None.
+
+    ``with_country=False`` (a branch admin): the country, currency and time zone stay as HQ set them.
+    """
+    from app.core import geo
+
+    cc = str(form.get("country_code") or "").upper() if with_country else (branch.country_code or "")
+    if not geo.is_country(cc):
+        return "Choose the branch's country from the list."
+    rc = str(form.get("region_code") or "").upper()
+    if rc and not geo.is_region(cc, rc):
+        return f"Choose a state / region from {geo.country_name(cc)}'s list."
+    if not rc and geo.regions(cc):
+        return "Choose the branch's state / region."
+    changes = {"country_code": cc, "country": geo.country_name(cc), "region_code": rc or None,
+               "state": geo.region_name(rc) or None, "city": await _canonical_city(db, rc, form.get("city"))}
+    if with_country:
+        tz = str(form.get("timezone") or "") or geo.timezone_for(cc)
+        if not geo.is_timezone(tz):
+            return "Choose the branch's time zone from the list."
+        changes["timezone"] = tz
+        if getattr(branch, "is_hq", False):
+            # HQ's currency IS the platform currency: every gift, total and amount on the site uses it.
+            cur = str(form.get("currency") or "").upper() or branch.currency or geo.currency_for(cc)
+            if not geo.is_currency(cur):
+                return "Choose the platform currency from the list."
+            changes["currency"] = cur
+        else:
+            changes["currency"] = None      # branches have no currency of their own
+    for k, v in changes.items():
+        setattr(branch, k, v)
+    return None
+
+
+@router.get("/data-check", name="admin_data_check")
+async def admin_data_check(request: Request, db: AsyncSession = Depends(get_db)):
+    """Records the global migration could not match to the official lists exactly: fix them by hand."""
+    admin = await _get_admin(request)
+    if not admin or admin.role != "super_admin":
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from app.core import geo_migration
+
+    items = await geo_migration.review_items(db)
+    links = {"Branch": lambda i: f"/admin/branches/{i['id']}", "Minister": lambda i: f"/admin/ministers/{i['id']}/edit",
+             "Giving purpose": lambda i: f"/admin/donations?q={i['name']}", "Member gender": lambda i: "/admin/members"}
+    for i in items:
+        i["href"] = links.get(i["kind"], lambda _: "")(i)
+    ctx = await _admin_context(request, db, "admin.data-check")
+    return await render_template(request, "admin/data-check.html", {
+        "_db": db, "items": items, "title": "Data check", "headerIcon": "ri-shield-check-line", **ctx})
+
+
 @router.get("/branches", name="admin_branches")
 async def admin_branches(request: Request, db: AsyncSession = Depends(get_db)):
     admin = await _get_admin(request)
@@ -2110,8 +2362,17 @@ async def admin_branches(request: Request, db: AsyncSession = Depends(get_db)):
     from app.models.member import Member
     from app.models.event import Event
     from app.models.sermon import Sermon
-    result = await db.execute(select(Branch).order_by(Branch.name))
-    branches = list(result.scalars().all())
+    from app.core import geo
+
+    country_filter = (request.query_params.get("country") or "").upper()
+    q = select(Branch)
+    if country_filter:
+        q = q.where(Branch.country_code == country_filter)
+    branches = list((await db.execute(q)).scalars().all())
+    # Grouped by country (HQ's first), then region, then name: how a global HQ reads its churches.
+    hq_cc = next((b.country_code for b in branches if b.is_hq), None)
+    branches.sort(key=lambda b: (b.country_code != hq_cc, geo.country_name(b.country_code) or "~", not b.is_hq,
+                                 geo.region_name(b.region_code) or "~", b.name.lower()))
 
     branch_counts = {}
     for b in branches:
@@ -2129,17 +2390,13 @@ async def admin_branches(request: Request, db: AsyncSession = Depends(get_db)):
             sc = 0
         branch_counts[b.id] = {"members": mc, "events": ec, "sermons": sc}
 
-    countries = {
-        'Nigeria': 'NG', 'United States': 'US', 'United Kingdom': 'GB',
-        'Ghana': 'GH', 'South Africa': 'ZA', 'Kenya': 'KE',
-        'Canada': 'CA', 'Germany': 'DE', 'France': 'FR',
-        'China': 'CN', 'Japan': 'JP', 'Australia': 'AU',
-        'Brazil': 'BR', 'India': 'IN', 'Mexico': 'MX',
-    }
+    all_codes = (await db.execute(select(Branch.country_code).where(Branch.country_code.isnot(None)).distinct())).scalars().all()
+    country_options = sorted(((c, geo.country_name(c)) for c in all_codes), key=lambda x: x[1])
 
     ctx = await _admin_context(request, db, "admin.branches")
     return await render_template(request, "admin/branches.html", {
-        "_db": db, "branches": branches, "branch_counts": branch_counts, "countries": countries,
+        "_db": db, "branches": branches, "branch_counts": branch_counts,
+        "country_options": country_options, "country_filter": country_filter,
         "title": "Branches", "headerIcon": "ri-map-pin-2-line", **ctx,
     })
 
@@ -2151,8 +2408,12 @@ async def admin_branches_create_page(request: Request, db: AsyncSession = Depend
         return RedirectResponse(url="/admin/dashboard", status_code=303)
 
     ctx = await _admin_context(request, db, "admin.branches")
+    from app.models.branch import Branch
+
+    hq = (await db.execute(select(Branch).where(Branch.is_hq == True))).scalar_one_or_none()  # noqa: E712
     return await render_template(request, "admin/branch-form.html", {
-        "_db": db, "countries": ["Nigeria", "Ghana", "South Africa", "Kenya", "United Kingdom", "United States", "Canada"],
+        "_db": db, "default_country": (hq.country_code if hq and hq.country_code else "NG"), "cities": await _city_suggestions(db),
+
         "title": "New Branch", "headerIcon": "ri-map-pin-2-line", **ctx,
     })
 
@@ -2162,7 +2423,6 @@ async def admin_branches_store(
     request: Request, db: AsyncSession = Depends(get_db),
     name: str = Form(...), address: str = Form(""),
     phone: str = Form(""), email: str = Form(""),
-    city: str = Form(""), state: str = Form(""), country: str = Form(""),
     super_admin_name: str = Form(""), super_admin_email: str = Form(""),
 ):
     admin = await _get_admin(request)
@@ -2177,13 +2437,17 @@ async def admin_branches_store(
     while (await db.execute(select(Branch.id).where(Branch.slug == slug))).scalar_one_or_none():
         slug = f"{base_slug}-{suffix}"
         suffix += 1
+    from app.core import geo
+
+    form = await request.form()
     branch = Branch(
         name=name.strip(), slug=slug,
         address=address.strip() if address else None,
-        phone=phone.strip() if phone else None,
         email=email.strip() if email else None,
-        city=city.strip() or None, state=state.strip() or None, country=country.strip() or None,
     )
+    if err := await _apply_branch_location(db, branch, form):
+        return _redirect(request, "/admin/branches/create", err, "error")
+    branch.phone = geo.normalize_phone(phone, branch.country_code) or None
     db.add(branch)
     await db.flush()
 
@@ -2330,10 +2594,10 @@ async def admin_messages_store(
         slug = f"{base_slug}-{n}"
     sermon = Sermon(
         title=title.strip(), slug=slug,
-        preacher=speaker_val,
+        preacher=await _known_spelling(db, Sermon.preacher, speaker_val),
         description=description.strip() if description else None,
         caption=caption.strip() if caption else None,
-        series=series.strip()[:150] or None, scripture=scripture.strip()[:150] or None, transcript_public=transcript_public == "1",
+        series=await _known_spelling(db, Sermon.series, series, 150), scripture=scripture.strip()[:150] or None, transcript_public=transcript_public == "1",
         status=status.strip().lower() or "draft",
         # HQ Administrator: the chosen church, HQ when none is chosen; everyone else: their own church
         branch_id=(branch_id or await get_hq_branch_id(db)) if admin.role == "super_admin" else admin.branch_id,
@@ -2440,12 +2704,13 @@ async def admin_messages_store(
 @router.get("/inquiries", name="admin_inquiries")
 async def admin_inquiries(
     request: Request, db: AsyncSession = Depends(get_db),
-    q: str = Query(""), status: str = Query(""), branch_id: str = Query(""),
+    q: str = Query(""), status: str = Query(""), branch_id: str = Query(""), topic: str = Query(""),
 ):
     admin = await _get_admin(request)
     if not admin:
         return RedirectResponse(url="/admin", status_code=303)
 
+    from app.core import lists
     from app.models.contact_inquiry import ContactInquiry
     from app.models.branch import Branch
     from sqlalchemy.orm import selectinload
@@ -2456,6 +2721,8 @@ async def admin_inquiries(
         query = query.where(ContactInquiry.branch_id == int(branch_id))
     if status.strip():
         query = query.where(ContactInquiry.status == status.strip())
+    if topic.strip():
+        query = query.where(ContactInquiry.topic == topic.strip())
     if q.strip():
         pat = f"%{q.strip()}%"
         query = query.where(or_(
@@ -2472,7 +2739,8 @@ async def admin_inquiries(
     ctx = await _admin_context(request, db, "admin.inquiries")
     return await render_template(request, "admin/inquiries.html", {
         "_db": db, "inquiries": inquiries, "branches": branches,
-        "search": q, "filter_status": status, "filter_branch_id": branch_id,
+        "search": q, "filter_status": status, "filter_branch_id": branch_id, "filter_topic": topic,
+        "topics": lists.items(await get_settings(db), "inquiry_topics") + ["Plan a visit"],
         "title": "Inquiries", "headerIcon": "ri-question-answer-line", **ctx,
     })
 
@@ -2487,7 +2755,7 @@ async def admin_inquiries_create_page(request: Request, db: AsyncSession = Depen
     branches = list((await db.execute(select(Branch).order_by(Branch.name))).scalars().all())
     ctx = await _admin_context(request, db, "admin.inquiries")
     return await render_template(request, "admin/inquiry-form.html", {
-        "_db": db, "branches": branches,
+        "_db": db, "branches": branches, "topics": _lists_items(await get_settings(db), "inquiry_topics"),
         "title": "Add Inquiry", "headerIcon": "ri-question-answer-line", **ctx,
     })
 
@@ -2518,16 +2786,24 @@ async def admin_inquiries_show(inquiry_id: int, request: Request, db: AsyncSessi
 async def admin_inquiries_store(
     request: Request, db: AsyncSession = Depends(get_db),
     name: str = Form(...), email: str = Form(...), phone: str = Form(""), branch_id: int | None = Form(None),
-    subject: str = Form(...), message: str = Form(...), status: str = Form("new"),
+    subject: str = Form(""), message: str = Form(...), status: str = Form("new"), topic: str = Form(""),
 ):
     admin = await _get_admin(request)
     if not admin:
         return RedirectResponse(url="/admin", status_code=303)
+    from app.core import geo, lists
     from app.models.contact_inquiry import ContactInquiry
+
+    topic_value = lists.canonical(topic, lists.items(await get_settings(db), "inquiry_topics"))
+    if not topic_value:
+        return _redirect(request, "/admin/inquiries/create", "Choose what the inquiry is about from the list.", "error")
+    if status.strip().lower() not in ("new", "in_progress", "resolved"):
+        return _redirect(request, "/admin/inquiries/create", "Choose a status from the list.", "error")
+    church = branch_id if admin.role == "super_admin" and branch_id else admin.branch_id
     inquiry = ContactInquiry(
-        name=name.strip(), email=email.strip(), phone=phone.strip() if phone else None,
-        branch_id=branch_id if admin.role == "super_admin" and branch_id else admin.branch_id,
-        subject=subject.strip(), message=message.strip(), status=status.strip().lower() or "new",
+        name=name.strip(), email=email.strip(), phone=geo.normalize_phone(phone, await _branch_country(db, church)) or None,
+        branch_id=church, topic=topic_value,
+        subject=subject.strip()[:255] or topic_value, message=message.strip(), status=status.strip().lower(),
     )
     db.add(inquiry)
     await db.flush()
@@ -3199,6 +3475,7 @@ async def admin_settings(request: Request, db: AsyncSession = Depends(get_db)):
 
     email_log = list((await db.execute(select(EmailLog).order_by(EmailLog.created_at.desc()).limit(12))).scalars().all())
     _raw_site = await get_settings(db)
+    from app.core import lists as _lists_mod
     from app.core import telegram_local as _tgl
     tg_large = {"on": _tgl.enabled(_raw_site), "keys_saved": _tgl.credentials_saved(_raw_site),
                 "bot_saved": bool(_raw_site.get("telegram_bot_token")),
@@ -3209,6 +3486,8 @@ async def admin_settings(request: Request, db: AsyncSession = Depends(get_db)):
         "readiness": await site_readiness(db, _raw_site, _cfg.APP_URL), "email_log": email_log,
         "_db": db, "settings": settings, "timezones": timezones,
         "secret_status": secret_status, "env_fallback": env_fallback, "tg_large": tg_large,
+        "managed_lists": [(name, meta[0], meta[1], chr(10).join(_lists_mod.items(_raw_site, name)))
+                          for name, meta in _lists_mod.LISTS.items() if name != "giving_purposes"],
         "ai_providers": ai_mod.PROVIDERS,
         "ai_model_opts": {k: ai_mod.model_options(k, settings) for k in ai_mod.PROVIDERS},
         "ai_default": (settings.get(ai_mod.DEFAULT_PROVIDER_SETTING) or ai_mod.DEFAULT_PROVIDER),
@@ -3271,6 +3550,14 @@ async def admin_settings_update(request: Request, db: AsyncSession = Depends(get
     for secret_key in ENCRYPTED_SETTING_KEYS:
         if form.get(f"clear_{secret_key}") == "1" and secret_key not in settings_dict:
             settings_dict[secret_key] = ""
+
+    # Managed lists (Settings → Lists): one item per line → a clean JSON array.
+    from app.core import lists as _lists_mod
+    for name in _lists_mod.LISTS:
+        key = _lists_mod.setting_key(name)
+        if name != "giving_purposes" and key in form:
+            items = _lists_mod.parse_textarea(str(form[key]))
+            settings_dict[key] = json.dumps(items or _lists_mod.LISTS[name][2])
 
     # Telegram api_id / api_hash: catch a paste of the wrong value before it is encrypted.
     from app.core import telegram_local as _tgl
@@ -3768,7 +4055,7 @@ async def hod_reports_create(request: Request, db: AsyncSession = Depends(get_db
 
     ctx = await _admin_context(request, db, "hod.reports")
     return await render_template(request, "hod/reports/create.html", {
-        "_db": db, "report": None, "hod": admin,
+        "_db": db, "report": None, "hod": admin, "report_currency": await _branch_currency(db, admin.branch_id),
         "department_name": await _admin_department_name(db, admin),
         "title": "Create Report", "headerIcon": "ri-file-chart-line", **ctx,
     })
@@ -3928,6 +4215,7 @@ async def admin_members_update(
     gender: str = Form(""), membership_status: str = Form("active"),
     date_of_birth: str = Form(""), joined_at: str = Form(""),
     notes: str = Form(""), branch_id: int = Form(None),
+    country_code: str = Form(""), region_code: str = Form(""), city: str = Form(""),
 ):
     admin = await _get_admin(request)
     if not admin:
@@ -3943,10 +4231,18 @@ async def admin_members_update(
 
     member.first_name = first_name.strip() or member.first_name
     member.last_name = last_name.strip() or member.last_name
+    from app.core import geo, lists
+
+    if gender.strip() and not lists.gender(gender):
+        return _redirect(request, f"/admin/members/{member_id}/edit", "Choose the member's gender from the list.", "error")
+    if membership_status not in ("active", "inactive"):
+        return _redirect(request, f"/admin/members/{member_id}/edit", "Choose a membership status from the list.", "error")
+    if err := await _apply_member_location(db, member, country_code, region_code, city):
+        return _redirect(request, f"/admin/members/{member_id}/edit", err, "error")
     member.email = email.strip() if email else None
-    member.phone = phone.strip() if phone else None
-    member.gender = gender.strip() if gender else None
-    member.membership_status = membership_status.strip() or "active"
+    member.phone = geo.normalize_phone(phone, await _branch_country(db, member.branch_id)) or None
+    member.gender = lists.gender(gender)
+    member.membership_status = membership_status
     member.notes = notes.strip() if notes else None
 
     if date_of_birth:
@@ -4149,12 +4445,12 @@ async def admin_messages_update(
         return _redirect(request, "/admin/messages", "You can only manage records of your own branch.", "error")
 
     sermon.title = title.strip() or sermon.title
-    sermon.preacher = speaker.strip() if speaker else sermon.preacher
+    sermon.preacher = await _known_spelling(db, Sermon.preacher, speaker) if speaker else sermon.preacher
     sermon.caption = caption.strip() if caption else sermon.caption
     sermon.description = summary.strip() if summary else sermon.description
     sermon.status = status.strip() or sermon.status
     sermon.platform_targets = [p for p in platform_targets if p] or None
-    sermon.series, sermon.scripture = series.strip()[:150] or None, scripture.strip()[:150] or None
+    sermon.series, sermon.scripture = await _known_spelling(db, Sermon.series, series, 150), scripture.strip()[:150] or None
     sermon.transcript_public = transcript_public == "1"
 
     if published_on:
@@ -4259,8 +4555,12 @@ async def admin_telegram_archive(request: Request, db: AsyncSession = Depends(ge
     except OSError:
         disk_free = None
     job = await ta.get_job(db)
-    # When the shown result happened (church time, UTC+1), so an old result never looks current.
-    job_when = (datetime.utcfromtimestamp(float(job["heartbeat"])) + timedelta(hours=1)).strftime("%d %b %Y, %H:%M") if job.get("heartbeat") else ""
+    # When the shown result happened (HQ's local time), so an old result never looks current.
+    from app.core import geo as _geo
+    from app.core.platform import platform_timezone
+
+    job_when = (datetime.fromtimestamp(float(job["heartbeat"]), timezone.utc).astimezone(_geo.zone(await platform_timezone(db)))
+                .strftime("%d %b %Y, %H:%M %Z")) if job.get("heartbeat") else ""
     ctx = await _admin_context(request, db, "admin.telegram-archive")
     return await render_template(request, "admin/telegram-archive.html", {
         "_db": db, "login": await ta.login_state(), "job": job, "job_running": ta.job_running(job), "job_when": job_when,
@@ -4912,12 +5212,6 @@ async def admin_branch_view(branch_id: int, request: Request, db: AsyncSession =
     departmentOverview = []
     recentMembers = []
 
-    countries = {
-        'Nigeria': 'NG', 'United States': 'US', 'United Kingdom': 'GB',
-        'Ghana': 'GH', 'South Africa': 'ZA', 'Kenya': 'KE',
-        'Canada': 'CA', 'Germany': 'DE', 'France': 'FR',
-    }
-
     ctx = await _admin_context(request, db, "admin.branches")
     return await render_template(request, "admin/branch.html", {
         "_db": db, "branch": branch, "invitations": invitations,
@@ -4935,7 +5229,7 @@ async def admin_branch_view(branch_id: int, request: Request, db: AsyncSession =
         "sermonStatusCounts": sermonStatusCounts,
         "trend": trend, "maxTrendAttendance": maxTrendAttendance, "maxTrendGiving": maxTrendGiving,
         "departmentOverview": departmentOverview, "recentMembers": recentMembers,
-        "countries": countries,
+        "cities": await _city_suggestions(db, branch.region_code),
         "title": branch.name, "headerIcon": "ri-map-pin-2-line", **ctx,
     })
 
@@ -4945,8 +5239,7 @@ async def admin_branch_update(
     branch_id: int, request: Request, db: AsyncSession = Depends(get_db),
     name: str = Form(""), address: str = Form(""),
     phone: str = Form(""), email: str = Form(""),
-    city: str = Form(""), state: str = Form(""),
-    country: str = Form(""), is_active: bool = Form(True),
+    is_active: bool = Form(True),
 ):
     admin = await _get_admin(request)
     if not admin or admin.role != "super_admin":
@@ -4958,13 +5251,14 @@ async def admin_branch_update(
     if not branch:
         return _redirect(request, "/admin/branches", "Branch not found.", "error")
 
+    from app.core import geo
+
+    if err := await _apply_branch_location(db, branch, await request.form()):
+        return _redirect(request, f"/admin/branches/{branch_id}#edit", err, "error")
     branch.name = name.strip() or branch.name
     branch.address = address.strip() if address else branch.address
-    branch.phone = phone.strip() if phone else branch.phone
+    branch.phone = (geo.normalize_phone(phone, branch.country_code) or None) if phone else branch.phone
     branch.email = email.strip() if email else branch.email
-    branch.city = city.strip() if city else branch.city
-    branch.state = state.strip() if state else branch.state
-    branch.country = country.strip() if country else branch.country
     branch.is_active = is_active
     await db.flush()
     return _redirect(request, f"/admin/branches/{branch_id}", "Branch updated successfully.")
@@ -5036,7 +5330,7 @@ async def admin_unit_reports_show(report_id: int, request: Request, db: AsyncSes
 
     ctx = await _admin_context(request, db, "admin.unit-reports")
     return await render_template(request, "admin/unit-report-show.html", {
-        "_db": db, "unitReport": unit_report,
+        "_db": db, "unitReport": unit_report, "report_currency": await _branch_currency(db, unit_report.branch_id),
         "canReviewHodReport": can_review, "canRpComment": can_rp_comment, "canOfficeComment": can_office_comment,
         "isResidentPastor": is_rp, "residentPastor": rp,
         "reviewHelpText": review_help,
@@ -5150,7 +5444,7 @@ async def admin_hod_reports_edit(report_id: int, request: Request, db: AsyncSess
 
     ctx = await _admin_context(request, db, "hod.reports")
     return await render_template(request, "hod/reports/create.html", {
-        "_db": db, "report": report, "hod": admin,
+        "_db": db, "report": report, "hod": admin, "report_currency": await _branch_currency(db, report.branch_id if report else admin.branch_id),
         "department_name": await _admin_department_name(db, admin),
         "title": "Edit Report", "headerIcon": "ri-file-chart-line", **ctx,
     })
@@ -5205,7 +5499,7 @@ async def admin_stories_create_page(request: Request, db: AsyncSession = Depends
     if not admin or not has_perm(admin.role, "media"):
         return RedirectResponse(url="/admin/dashboard", status_code=303)
     ctx = await _admin_context(request, db, "admin.stories")
-    return await render_template(request, "admin/story-form.html", {"_db": db, "story": None, "title": "New Story", "headerIcon": "ri-quill-pen-line", **ctx})
+    return await render_template(request, "admin/story-form.html", {"_db": db, "story": None, "categories": await _story_categories(db), "title": "New Story", "headerIcon": "ri-quill-pen-line", **ctx})
 @router.get("/stories/{story_id}/edit", name="admin_stories_edit_page")
 async def admin_stories_edit_page(story_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     admin = await _get_admin(request)
@@ -5216,7 +5510,31 @@ async def admin_stories_edit_page(story_id: int, request: Request, db: AsyncSess
     if not story:
         return _redirect(request, "/admin/stories", "Story not found.", "error")
     ctx = await _admin_context(request, db, "admin.stories")
-    return await render_template(request, "admin/story-form.html", {"_db": db, "story": story, "title": "Edit Story", "headerIcon": "ri-quill-pen-line", **ctx})
+    return await render_template(request, "admin/story-form.html", {"_db": db, "story": story, "categories": await _story_categories(db), "title": "Edit Story", "headerIcon": "ri-quill-pen-line", **ctx})
+async def _story_categories(db: AsyncSession) -> list[str]:
+    from app.core import lists
+
+    return lists.items(await get_settings(db), "story_categories")
+
+
+def _country_name(code: str | None) -> str:
+    from app.core import geo
+
+    return geo.country_name(code)
+
+
+def _lists_items(site: dict, name: str) -> list[str]:
+    from app.core import lists
+
+    return lists.items(site, name)
+
+
+def _lists_canonical(value: str, choices: list[str]) -> str | None:
+    from app.core import lists
+
+    return lists.canonical(value, choices)
+
+
 @router.post("/stories", name="admin_stories_store")
 async def admin_stories_store(request: Request, db: AsyncSession = Depends(get_db), title: str = Form(...), excerpt: str = Form(""), content: str = Form(""), category: str = Form(""), author_name: str = Form(""), status: str = Form("draft"), is_featured: str | None = Form(None), image: UploadFile | None = File(None)):
     admin = await _get_admin(request)
@@ -5227,7 +5545,10 @@ async def admin_stories_store(request: Request, db: AsyncSession = Depends(get_d
     slug = await _unique_story_slug(db, slugify(title.strip()))
     feat = is_featured in ("1","true","on","True")
     st = status.strip().lower() or "draft"
-    story = Story(title=title.strip(), slug=slug, excerpt=excerpt.strip() if excerpt else None, content=content.strip() if content else None, category=category.strip() if category else None, author_name=author_name.strip() if author_name else None, status=st, is_featured=feat, created_by=admin.id)
+    cat = _lists_canonical(category, await _story_categories(db))
+    if category.strip() and not cat:
+        return _redirect(request, "/admin/stories/create", "Choose the category from the list (Settings → Lists).", "error")
+    story = Story(title=title.strip(), slug=slug, excerpt=excerpt.strip() if excerpt else None, content=content.strip() if content else None, category=cat, author_name=author_name.strip() if author_name else None, status=st, is_featured=feat, created_by=admin.id)
     if st == "published":
         story.published_at = datetime.utcnow()
     if image and image.filename:
@@ -5255,7 +5576,10 @@ async def admin_stories_update(story_id: int, request: Request, db: AsyncSession
         story.slug = await _unique_story_slug(db, slugify(story.title), exclude_id=story.id)
     story.excerpt = excerpt.strip() if excerpt else None
     story.content = content.strip() if content else None
-    story.category = category.strip() if category else None
+    cat = _lists_canonical(category, await _story_categories(db))
+    if category.strip() and not cat and category.strip() != (story.category or ""):
+        return _redirect(request, f"/admin/stories/{story_id}/edit", "Choose the category from the list (Settings → Lists).", "error")
+    story.category = cat or (story.category if category.strip() == (story.category or "") else None)
     story.author_name = author_name.strip() if author_name else None
     story.status = status.strip().lower() or "draft"
     story.is_featured = is_featured in ("1","true","on","True")
@@ -5560,7 +5884,7 @@ async def _pub_new_sermon(db: AsyncSession, admin, title: str, preacher: str):
     while (await db.execute(select(Sermon.id).where(Sermon.slug == slug))).first():
         n += 1
         slug = f"{base}-{n}"
-    sermon = Sermon(title=title[:255], slug=slug, preacher=preacher.strip() or None, status="draft", type="audio",
+    sermon = Sermon(title=title[:255], slug=slug, preacher=await _known_spelling(db, Sermon.preacher, preacher), status="draft", type="audio",
                     branch_id=admin.branch_id, created_by=admin.id)
     db.add(sermon)
     return sermon
@@ -6235,7 +6559,9 @@ def _gift_scope(admin, query, model):
     return query.where(model.branch_id == admin.branch_id)
 
 
-def _donation_query(admin, status: str, gateway: str, q: str, start: str, end: str, branch_id: str = "", method: str = ""):
+def _donation_query(admin, status: str, gateway: str, q: str, start: str, end: str, branch_id: str = "", method: str = "",
+                    country: str = "", currency: str = ""):
+    from app.models.branch import Branch
     from app.models.giving import Giving
 
     query = _gift_scope(admin, select(Giving).order_by(Giving.created_at.desc()), Giving)
@@ -6250,6 +6576,10 @@ def _donation_query(admin, status: str, gateway: str, q: str, start: str, end: s
     bid = _to_int(branch_id)
     if bid and _sees_all_gifts(admin):
         query = query.where(Giving.branch_id == bid)
+    if country and _sees_all_gifts(admin):
+        query = query.where(Giving.branch_id.in_(select(Branch.id).where(Branch.country_code == country.upper())))
+    if currency:
+        query = query.where(Giving.currency == currency.upper())
     if q.strip():
         like = f"%{q.strip()}%"
         query = query.where(or_(Giving.email.ilike(like), Giving.full_name.ilike(like), Giving.reference.ilike(like), Giving.giving_type.ilike(like)))
@@ -6264,27 +6594,39 @@ def _donation_query(admin, status: str, gateway: str, q: str, start: str, end: s
 @router.get("/donations", name="admin_donations")
 async def admin_donations(request: Request, db: AsyncSession = Depends(get_db), q: str = Query(""), status: str = Query(""),
                           gateway: str = Query(""), start: str = Query(""), end: str = Query(""), page: int = Query(1, ge=1),
-                          branch_id: str = Query(""), method: str = Query("")):
+                          branch_id: str = Query(""), method: str = Query(""), country: str = Query(""), currency: str = Query("")):
     admin = await _get_admin(request)
     if not admin or not has_perm(admin.role, "donations"):
         return RedirectResponse(url="/admin/dashboard", status_code=303)
     from app.models.branch import Branch
     from app.models.giving import Giving
 
-    query = _donation_query(admin, status, gateway, q, start, end, branch_id, method)
+    query = _donation_query(admin, status, gateway, q, start, end, branch_id, method, country, currency)
     pagination = await paginate(db, query, page=page, per_page=20)
-    kw = dict(q=q, status=status, gateway=gateway, start=start, end=end, branch_id=branch_id, method=method)
+    kw = dict(q=q, status=status, gateway=gateway, start=start, end=end, branch_id=branch_id, method=method, country=country, currency=currency)
     pagination["prev_url"] = _qs("/admin/donations", page=page - 1, **kw) if pagination["has_prev"] else None
     pagination["next_url"] = _qs("/admin/donations", page=page + 1, **kw) if pagination["has_next"] else None
     ids_q = query.with_only_columns(Giving.id).order_by(None)
-    paid = (await db.execute(select(func.coalesce(func.sum(Giving.amount), 0), func.count()).where(
-        Giving.id.in_(ids_q), Giving.status.in_(PAID_STATUSES)))).one()
+    # One total per currency: amounts in different currencies are never added together.
+    paid_rows = (await db.execute(select(Giving.currency, func.coalesce(func.sum(Giving.amount), 0), func.count()).where(
+        Giving.id.in_(ids_q), Giving.status.in_(PAID_STATUSES)).group_by(Giving.currency).order_by(func.sum(Giving.amount).desc()))).all()
+    paid_totals = [(cur or "NGN", float(total or 0)) for cur, total, _ in paid_rows]
+    paid_count = sum(n for _, _, n in paid_rows)
     branches = list((await db.execute(select(Branch).order_by(Branch.is_hq.desc(), Branch.name))).scalars().all())
     branch_names = {b.id: b.name for b in branches}
+    from app.core import geo
+
+    from app.core import lists as _lists_mod
+
+    country_options = sorted({(b.country_code, geo.country_name(b.country_code)) for b in branches if b.country_code}, key=lambda x: x[1])
+    currency_options = sorted({c for (c,) in (await db.execute(select(Giving.currency).where(Giving.currency.isnot(None)).distinct())).all()})
     ctx = await _admin_context(request, db, "admin.donations")
     return await render_template(request, "admin/donations.html", {
         "_db": db, "items": pagination["items"], "pagination": pagination, "filters": kw,
-        "paid_total": float(paid[0] or 0), "paid_count": paid[1], "export_url": _qs("/admin/donations/export.csv", **kw),
+        "paid_totals": paid_totals, "paid_count": paid_count, "export_url": _qs("/admin/donations/export.csv", **kw),
+        "country_options": country_options, "currency_options": currency_options,
+        "platform_currency": await _branch_currency(db, None),
+        "purposes": _lists_mod.items(await get_settings(db), "giving_purposes") + [_lists_mod.OTHERS],
         "branches": branches, "branch_names": branch_names, "sees_all": _sees_all_gifts(admin), "gift_methods": GIFT_METHODS,
         "title": "Donations", "headerIcon": "ri-hand-coin-line", **ctx})
 
@@ -6292,19 +6634,21 @@ async def admin_donations(request: Request, db: AsyncSession = Depends(get_db), 
 @router.get("/donations/export.csv", name="admin_donations_export")
 async def admin_donations_export(request: Request, db: AsyncSession = Depends(get_db), q: str = Query(""), status: str = Query(""),
                                  gateway: str = Query(""), start: str = Query(""), end: str = Query(""), branch_id: str = Query(""),
-                                 method: str = Query("")):
+                                 method: str = Query(""), country: str = Query(""), currency: str = Query("")):
     admin = await _get_admin(request)
     if not admin or not has_perm(admin.role, "donations"):
         return RedirectResponse(url="/admin/dashboard", status_code=303)
     from app.models.branch import Branch
 
-    names = {b.id: b.name for b in (await db.execute(select(Branch))).scalars().all()}
-    rows = (await db.execute(_donation_query(admin, status, gateway, q, start, end, branch_id, method).limit(50000))).scalars().all()
+    all_branches = (await db.execute(select(Branch))).scalars().all()
+    names = {b.id: b.name for b in all_branches}
+    countries = {b.id: (b.country_code or "") for b in all_branches}
+    rows = (await db.execute(_donation_query(admin, status, gateway, q, start, end, branch_id, method, country, currency).limit(50000))).scalars().all()
     await log_admin_action(db, admin.id, "donations.export", "giving", None, {"count": len(rows)}, request)
     return _csv_response("donations.csv",
-                         ["date", "reference", "status", "branch", "collected_by", "method", "gateway", "amount_ngn", "purpose", "name", "email", "phone", "anonymous", "dedication", "note"],
-                         [[r.created_at.strftime("%Y-%m-%d %H:%M"), r.reference, r.status, names.get(r.branch_id, "HQ"), r.gateway_owner, r.method, r.payment_gateway,
-                           f"{float(r.amount):.2f}", r.giving_type, r.full_name, r.email, r.phone, "yes" if r.is_anonymous else "no", r.dedication, r.note] for r in rows])
+                         ["date", "reference", "status", "branch", "country", "collected_by", "method", "gateway", "amount", "currency", "purpose", "name", "email", "phone", "anonymous", "dedication", "note"],
+                         [[r.created_at.strftime("%Y-%m-%d %H:%M"), r.reference, r.status, names.get(r.branch_id, "HQ"), countries.get(r.branch_id, ""), r.gateway_owner, r.method, r.payment_gateway,
+                           f"{float(r.amount):.2f}", r.currency or "NGN", r.giving_type, r.full_name, r.email, r.phone, "yes" if r.is_anonymous else "no", r.dedication, r.note] for r in rows])
 
 
 @router.post("/donations/record", name="admin_donations_record")
@@ -6312,6 +6656,7 @@ async def admin_donations_record(
     request: Request, db: AsyncSession = Depends(get_db),
     amount: str = Form(""), purpose: str = Form("Offering"), method: str = Form("cash"),
     full_name: str = Form(""), given_on: str = Form(""), note: str = Form(""), branch_id: str = Form(""),
+    currency: str = Form(""),
 ):
     """Record a gift that did not come through a payment gateway (cash, transfer, cheque, POS)."""
     admin = await _get_admin(request)
@@ -6329,20 +6674,30 @@ async def admin_donations_record(
         return _redirect(request, "/admin/donations", "Enter a valid amount.", "error")
     if method not in dict(GIFT_METHODS):
         method = "other"
+    from app.core import geo, lists
+    from app.models.branch import Branch
+
+    purposes = lists.items(await get_settings(db), "giving_purposes") + [lists.OTHERS]
+    purpose_value = lists.canonical(purpose, purposes)
+    if not purpose_value:
+        return _redirect(request, "/admin/donations", "Choose the purpose from the list (Settings → Giving gateway → Giving purposes).", "error")
+    if purpose_value == lists.OTHERS and not note.strip():
+        return _redirect(request, "/admin/donations", "For \"Others\", add a note saying what the gift is for.", "error")
     if _sees_all_gifts(admin):
         target = _to_int(branch_id) or await get_hq_branch_id(db)
     else:
         target = admin.branch_id
     hq_id = await get_hq_branch_id(db)
+    cur = await _branch_currency(db, target)      # every gift is recorded in the platform currency (HQ's)
     day = _parse_date(given_on) or datetime.utcnow().date()
     stamp = datetime.combine(day, datetime.min.time())
     db.add(Giving(
         reference=f"manual_{secrets.token_urlsafe(10)}", email=(admin.email or "recorded@local")[:255], full_name=full_name.strip()[:255] or None,
-        amount=value, giving_type=(purpose.strip() or "Offering")[:50], payment_gateway="manual", method=method,
+        amount=value, currency=cur, giving_type=purpose_value, payment_gateway="manual", method=method,
         branch_id=target, gateway_owner="hq" if target == hq_id else "branch", status="completed", paid_at=stamp,
         created_at=stamp, note=note.strip()[:1000] or None,
     ))
-    await log_admin_action(db, admin.id, "donations.recorded", "giving", None, {"amount": value, "branch": target, "method": method}, request)
+    await log_admin_action(db, admin.id, "donations.recorded", "giving", None, {"amount": value, "currency": cur, "branch": target, "method": method}, request)
     return _redirect(request, "/admin/donations", "Gift recorded.")
 
 
@@ -6363,21 +6718,31 @@ async def _branch_positions(db: AsyncSession, only_branch_id: int | None = None)
     branches = list((await db.execute(select(Branch).where(Branch.is_hq == False).order_by(Branch.name))).scalars().all())  # noqa: E712
     if only_branch_id is not None:
         branches = [b for b in branches if b.id == only_branch_id]
+    from app.core.finance import branch_position
+
+    platform = await _branch_currency(db, None)
     rows = []
     for b in branches:
-        sums = dict((await db.execute(
-            select(Giving.gateway_owner, func.coalesce(func.sum(Giving.amount), 0))
-            .where(Giving.branch_id == b.id, Giving.status.in_(PAID_STATUSES)).group_by(Giving.gateway_owner))).all())
-        rem = dict((await db.execute(
-            select(Remittance.direction, func.coalesce(func.sum(Remittance.amount), 0)).where(Remittance.branch_id == b.id).group_by(Remittance.direction))).all())
+        # One position PER CURRENCY: gifts HQ took in its currency and gifts the branch took locally
+        # are separate debts, never netted against each other.
+        gifts: dict[tuple[str, str], float] = {}
+        for cur, owner, total in (await db.execute(
+                select(Giving.currency, Giving.gateway_owner, func.coalesce(func.sum(Giving.amount), 0))
+                .where(Giving.branch_id == b.id, Giving.status.in_(PAID_STATUSES)).group_by(Giving.currency, Giving.gateway_owner))).all():
+            gifts[(cur or "NGN", owner)] = float(total or 0)
+        rem: dict[tuple[str, str], float] = {}
+        for cur, direction, total in (await db.execute(
+                select(Remittance.currency, Remittance.direction, func.coalesce(func.sum(Remittance.amount), 0))
+                .where(Remittance.branch_id == b.id).group_by(Remittance.currency, Remittance.direction))).all():
+            rem[(cur or "NGN", direction)] = float(total or 0)
         pct = share_percent((await get_branch_settings(db, b.id)).get("hq_share_percent"))
-        held_by_hq, at_branch = float(sums.get("hq", 0) or 0), float(sums.get("branch", 0) or 0)
-        from app.core.finance import branch_position
-
-        to_hq, to_branch = float(rem.get("to_hq", 0) or 0), float(rem.get("to_branch", 0) or 0)
-        pos = branch_position(pct, held_by_hq, at_branch, to_hq, to_branch)
-        rows.append({"branch": b, "pct": pct, "held_by_hq": held_by_hq, "at_branch": at_branch,
-                     "to_hq": to_hq, "to_branch": to_branch, **pos})
+        currencies = sorted({c for c, _ in gifts} | {c for c, _ in rem}) or [platform]
+        for cur in currencies:
+            held_by_hq, at_branch = gifts.get((cur, "hq"), 0.0), gifts.get((cur, "branch"), 0.0)
+            to_hq, to_branch = rem.get((cur, "to_hq"), 0.0), rem.get((cur, "to_branch"), 0.0)
+            pos = branch_position(pct, held_by_hq, at_branch, to_hq, to_branch)
+            rows.append({"branch": b, "currency": cur, "pct": pct, "held_by_hq": held_by_hq, "at_branch": at_branch,
+                         "to_hq": to_hq, "to_branch": to_branch, **pos})
     return rows
 
 
@@ -6407,7 +6772,7 @@ async def admin_remittances(request: Request, db: AsyncSession = Depends(get_db)
 async def admin_remittances_store(
     request: Request, db: AsyncSession = Depends(get_db),
     branch_id: int = Form(...), direction: str = Form("to_hq"), amount: str = Form(""), paid_on: str = Form(""),
-    reference: str = Form(""), note: str = Form(""),
+    reference: str = Form(""), note: str = Form(""), currency: str = Form(""),
 ):
     admin = await _get_admin(request)
     if not admin or not has_perm(admin.role, "remittances") or not _sees_all_gifts(admin):
@@ -6423,9 +6788,12 @@ async def admin_remittances_store(
         value = 0
     if branch is None or branch.is_hq or direction not in ("to_hq", "to_branch") or not math.isfinite(value) or value <= 0:
         return _redirect(request, "/admin/remittances", "Choose a branch, a direction and a valid amount.", "error")
-    db.add(Remittance(branch_id=branch.id, direction=direction, amount=value, paid_on=_parse_date(paid_on) or datetime.utcnow().date(),
+    from app.core import geo
+
+    cur = await _branch_currency(db, branch.id)      # the platform currency (HQ's)
+    db.add(Remittance(branch_id=branch.id, direction=direction, amount=value, currency=cur, paid_on=_parse_date(paid_on) or datetime.utcnow().date(),
                       reference=reference.strip()[:255] or None, note=note.strip()[:1000] or None, recorded_by=admin.id))
-    await log_admin_action(db, admin.id, "remittance.recorded", "branch", branch.id, {"direction": direction, "amount": value}, request)
+    await log_admin_action(db, admin.id, "remittance.recorded", "branch", branch.id, {"direction": direction, "amount": value, "currency": cur}, request)
     return _redirect(request, "/admin/remittances", "Remittance recorded.")
 
 
@@ -6526,11 +6894,22 @@ async def _save_branch_settings(request: Request, db: AsyncSession, admin, branc
             accounts.setdefault(int(m.group(1)), {})[m.group(2)] = str(form[key]).strip()[:120]
     if form.get("accounts_present") == "1":
         values["church_accounts"] = json.dumps([accounts[i] for i in sorted(accounts) if any(accounts[i].values())])
+    # Contact details live on the branch itself. The region comes from the country's official list
+    # (the country, currency and time zone are HQ's to set, on the branch page).
+    if "region_code" in form and (err := await _apply_branch_location(db, branch, form, with_country=False)):
+        return _redirect(request, back, err, "error")
+    if "public_whatsapp" in values:
+        from app.core import geo
+
+        values["public_whatsapp"] = geo.normalize_phone(values["public_whatsapp"], branch.country_code)
     await update_branch_settings(db, branch.id, values)
-    # Contact details live on the branch itself.
-    for field, limit in (("phone", 50), ("email", 255), ("address", 500), ("city", 255), ("state", 255)):
+    for field, limit in (("email", 255), ("address", 500)):
         if field in form:
             setattr(branch, field, str(form[field]).strip()[:limit] or None)
+    if "phone" in form:
+        from app.core import geo
+
+        branch.phone = geo.normalize_phone(str(form["phone"]), branch.country_code) or None
     await log_admin_action(db, admin.id, "branch.settings_saved", "branch", branch.id,
                            {"secrets_changed": sorted(k for k in SECRET_KEYS if k in values)}, request)
     return _redirect(request, back, "Branch settings saved.")
@@ -6665,7 +7044,8 @@ def _report_fields(form) -> dict:
 
 
 @router.get("/branch-reports", name="admin_branch_reports")
-async def admin_branch_reports(request: Request, db: AsyncSession = Depends(get_db), branch_id: str = Query(""), month: str = Query("")):
+async def admin_branch_reports(request: Request, db: AsyncSession = Depends(get_db), branch_id: str = Query(""), month: str = Query(""),
+                               country: str = Query("")):
     admin = await _get_admin(request)
     if not admin or not has_perm(admin.role, "branch_reports"):
         return RedirectResponse(url="/admin/dashboard", status_code=303)
@@ -6678,6 +7058,8 @@ async def admin_branch_reports(request: Request, db: AsyncSession = Depends(get_
         q = q.where(BranchReport.status.in_(("submitted", "acknowledged")))          # HQ never sees a branch's drafts
         if _to_int(branch_id):
             q = q.where(BranchReport.branch_id == _to_int(branch_id))
+        if country:
+            q = q.where(BranchReport.branch_id.in_(select(Branch.id).where(Branch.country_code == country.upper())))
     else:
         q = q.where(BranchReport.branch_id == admin.branch_id)
     if _MONTH_RX.match(month or ""):
@@ -6688,6 +7070,10 @@ async def admin_branch_reports(request: Request, db: AsyncSession = Depends(get_
     track_month = month if _MONTH_RX.match(month or "") else _current_month()
     if reader:
         branches = list((await db.execute(select(Branch).where(Branch.is_hq == False, Branch.is_active == True).order_by(Branch.name))).scalars().all())  # noqa: E712
+        all_branches = branches
+        if country:
+            branches = [b for b in branches if b.country_code == country.upper()]
+        branches.sort(key=lambda b: (_country_name(b.country_code) or "~", b.region_code or "~", b.name.lower()))   # grouped by country
         have = {r.branch_id: r for r in (await db.execute(select(BranchReport).where(
             BranchReport.report_month == track_month, BranchReport.status.in_(("submitted", "acknowledged"))))).scalars().all()}
         tracker = [{"branch": b, "report": have.get(b.id)} for b in branches]
@@ -6695,6 +7081,8 @@ async def admin_branch_reports(request: Request, db: AsyncSession = Depends(get_
     return await render_template(request, "admin/branch-reports.html", {
         "_db": db, "items": items, "reader": reader, "tracker": tracker, "branches": branches, "track_month": track_month,
         "filter_branch": branch_id, "filter_month": month, "can_write": _is_branch_author(admin), "metrics_def": BRANCH_REPORT_METRICS,
+        "filter_country": country.upper(),
+        "country_options": sorted({(b.country_code, _country_name(b.country_code)) for b in (all_branches if reader else []) if b.country_code}, key=lambda x: x[1]),
         "title": "Branch Reports", "headerIcon": "ri-file-list-3-line", **ctx})
 
 
@@ -6888,7 +7276,7 @@ async def _minister_branches(db: AsyncSession, admin) -> list:
 
 @router.get("/ministers", name="admin_ministers")
 async def admin_ministers(request: Request, db: AsyncSession = Depends(get_db), q: str = Query(""), status: str = Query(""),
-                          branch_id: str = Query(""), page: int = Query(1, ge=1)):
+                          branch_id: str = Query(""), page: int = Query(1, ge=1), country: str = Query("")):
     admin = await _get_admin(request)
     if not admin or not has_perm(admin.role, "ministers.view"):
         return RedirectResponse(url="/admin/dashboard", status_code=303)
@@ -6900,13 +7288,15 @@ async def admin_ministers(request: Request, db: AsyncSession = Depends(get_db), 
         query = query.where(Minister.branch_id == admin.branch_id)
     elif _to_int(branch_id):
         query = query.where(Minister.branch_id == _to_int(branch_id))
+    if country and is_super_role(admin.role):
+        query = query.where(Minister.branch_id.in_(select(Branch.id).where(Branch.country_code == country.upper())))
     if status in dict(MINISTER_STATUSES):
         query = query.where(Minister.status == status)
     if q.strip():
         like = f"%{q.strip()}%"
         query = query.where(or_(Minister.full_name.ilike(like), Minister.email.ilike(like), Minister.phone.ilike(like), Minister.ministry_rank.ilike(like)))
     pagination = await paginate(db, query, page=page, per_page=20)
-    kw = dict(q=q, status=status, branch_id=branch_id)
+    kw = dict(q=q, status=status, branch_id=branch_id, country=country.upper())
     pagination["prev_url"] = _qs("/admin/ministers", page=page - 1, **kw) if pagination["has_prev"] else None
     pagination["next_url"] = _qs("/admin/ministers", page=page + 1, **kw) if pagination["has_next"] else None
     roles = await _minister_roles(db, pagination["items"])
@@ -6915,13 +7305,20 @@ async def admin_ministers(request: Request, db: AsyncSession = Depends(get_db), 
     return await render_template(request, "admin/ministers.html", {
         "_db": db, "items": pagination["items"], "pagination": pagination, "roles": roles, "branches": branches, "filters": kw,
         "statuses": MINISTER_STATUSES, "can_manage": has_perm(admin.role, "ministers"),
+        "country_options": sorted({(b.country_code, _country_name(b.country_code)) for b in branches if b.country_code}, key=lambda x: x[1]),
         "title": "Ministers", "headerIcon": "ri-user-voice-line", **ctx})
 
 
 async def _minister_form_page(request, db, admin, minister):
+    from app.core import lists as _lists
+
+    _site = await get_settings(db)
     ctx = await _admin_context(request, db, "admin.ministers")
     return await render_template(request, "admin/minister-form.html", {
-        "_db": db, "m": minister, "branches": await _minister_branches(db, admin), "titles": MINISTER_TITLES, "statuses": MINISTER_STATUSES,
+        "_db": db, "m": minister, "branches": await _minister_branches(db, admin), "statuses": MINISTER_STATUSES,
+        "titles": _lists.items(_site, "minister_titles"), "ranks": _lists.items(_site, "ministry_ranks"),
+        "education_levels": _lists.items(_site, "education_levels"), "marital_statuses": _lists.MARITAL_STATUSES,
+        "home_country": await _branch_country(db, minister.branch_id if minister else admin.branch_id),
         "title": "Minister", "headerIcon": "ri-user-voice-line", **ctx})
 
 
@@ -6933,18 +7330,45 @@ async def admin_ministers_create(request: Request, db: AsyncSession = Depends(ge
     return await _minister_form_page(request, db, admin, None)
 
 
-def _minister_fields(form) -> dict:
+async def _minister_fields(db: AsyncSession, form, branch_id: int | None) -> tuple[dict, str | None]:
+    """Validated minister fields: every category from its list, origin as ISO codes. (fields, error)."""
+    from app.core import geo, lists
+
+    site = await get_settings(db)
+
     def t(name, limit=255):
         return (str(form.get(name, "") or "").strip()[:limit]) or None
 
+    def pick(name, choices, what):
+        raw = t(name, 120)
+        value = lists.canonical(raw, choices) if raw else None
+        return value, (f"Choose the {what} from the list." if raw and not value else None)
+
+    title, e1 = pick("title", lists.items(site, "minister_titles"), "title")
+    rank, e2 = pick("ministry_rank", lists.items(site, "ministry_ranks"), "ministry rank")
+    level, e3 = pick("education_level", lists.items(site, "education_levels"), "education level")
+    marital, e4 = pick("marital_status", lists.MARITAL_STATUSES, "marital status")
+    gender = lists.gender(t("gender", 20))
+    e5 = "Choose the gender from the list." if t("gender", 20) and not gender else None
+    occ, orc = (t("origin_country_code", 2) or "").upper(), (t("origin_region_code", 10) or "").upper()
+    e6 = None
+    if occ and not geo.is_country(occ):
+        e6 = "Choose the country of origin from the list."
+    elif orc and not geo.is_region(occ, orc):
+        e6 = "Choose the state / region of origin from that country's list."
+    error = next((e for e in (e1, e2, e3, e4, e5, e6) if e), None)
+    home = await _branch_country(db, branch_id)
     return {
-        "title": t("title", 60), "full_name": (t("full_name") or ""), "gender": t("gender", 20), "date_of_birth": _parse_date(str(form.get("date_of_birth", "") or "")),
-        "marital_status": t("marital_status", 30), "spouse_name": t("spouse_name"), "phone": t("phone", 50), "email": (t("email") or None) and t("email").lower(),
-        "address": t("address", 500), "state_of_origin": t("state_of_origin", 100), "education": t("education", 500), "ministry_rank": t("ministry_rank", 120),
+        "title": title, "full_name": (t("full_name") or ""), "gender": gender, "date_of_birth": _parse_date(str(form.get("date_of_birth", "") or "")),
+        "marital_status": marital, "spouse_name": t("spouse_name"), "phone": geo.normalize_phone(t("phone", 50), home) or None,
+        "email": (t("email") or None) and t("email").lower(), "address": t("address", 500),
+        "origin_country_code": occ or None, "origin_region_code": orc or None,
+        "state_of_origin": (geo.region_name(orc) or None) if orc else None,
+        "education_level": level, "education": t("education", 500), "ministry_rank": rank,
         "date_joined": _parse_date(str(form.get("date_joined", "") or "")), "ordination_date": _parse_date(str(form.get("ordination_date", "") or "")),
         "bio": t("bio", 8000), "notes": t("notes", 4000),
         "status": str(form.get("status", "active")) if str(form.get("status", "active")) in dict(MINISTER_STATUSES) else "active",
-    }
+    }, error
 
 
 @router.post("/ministers", name="admin_ministers_store")
@@ -6955,12 +7379,14 @@ async def admin_ministers_store(request: Request, db: AsyncSession = Depends(get
     from app.models.minister import Minister
 
     form = await request.form()
-    fields = _minister_fields(form)
-    if not fields["full_name"]:
-        return _redirect(request, "/admin/ministers/create", "Enter the minister's full name.", "error")
     branch_id = _to_int(str(form.get("branch_id", ""))) if is_super_role(admin.role) else admin.branch_id
     if not branch_id or (await _load_branch(db, branch_id)) is None:
         return _redirect(request, "/admin/ministers/create", "Choose the church (HQ or a branch) this minister serves.", "error")
+    fields, error = await _minister_fields(db, form, branch_id)
+    if error:
+        return _redirect(request, "/admin/ministers/create", error, "error")
+    if not fields["full_name"]:
+        return _redirect(request, "/admin/ministers/create", "Enter the minister's full name.", "error")
     try:
         photo = await _save_minister_photo(form.get("photo"))
     except ValueError as exc:
@@ -7018,7 +7444,9 @@ async def admin_ministers_update(minister_id: int, request: Request, db: AsyncSe
     if m is None or not _minister_can_manage(admin, m):
         return _redirect(request, "/admin/ministers", "Minister not found.", "error")
     form = await request.form()
-    fields = _minister_fields(form)
+    fields, error = await _minister_fields(db, form, m.branch_id)
+    if error:
+        return _redirect(request, f"/admin/ministers/{minister_id}/edit", error, "error")
     if not fields["full_name"]:
         return _redirect(request, f"/admin/ministers/{minister_id}/edit", "Enter the minister's full name.", "error")
     try:

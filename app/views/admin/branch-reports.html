@@ -21,6 +21,13 @@
         <form method="get" action="{{ url_for('admin_branch_reports') }}" class="flex items-end gap-2" data-no-loading>
           <label class="flex flex-col text-[10.5px] font-mono text-ink-3 uppercase tracking-wider">Month
             <input type="month" name="month" value="{{ track_month }}" class="rounded-md border border-line-2 bg-surface px-2 py-1.5 text-xs text-ink normal-case"></label>
+          {% if country_options|length > 1 or filter_country %}
+          <label class="flex flex-col text-[10.5px] font-mono text-ink-3 uppercase tracking-wider">Country
+            <select name="country" class="rounded-md border border-line-2 bg-surface px-2 py-1.5 text-xs text-ink normal-case">
+              <option value="">All</option>
+              {% for code, name in country_options %}<option value="{{ code }}" {{ 'selected' if filter_country == code else '' }}>{{ name }}</option>{% endfor %}
+            </select></label>
+          {% endif %}
           <button type="submit" class="btn btn-secondary btn-sm">Show</button>
         </form>
       </div>
@@ -29,6 +36,7 @@
           <div class="rounded-md border border-line px-3 py-2.5 flex items-center gap-2.5">
             <span class="min-w-0 flex-grow">
               <span class="block text-[13px] font-medium text-ink truncate">{{ t.branch.name }}</span>
+              <span class="block text-[10.5px] text-ink-3 truncate">{{ [region_name(t.branch.region_code), country_name(t.branch.country_code)]|select|join(', ') }}</span>
               {% if t.report %}<span class="block font-mono text-[10.5px] text-ink-3">Departments {{ (t.report.rollup or {}).get('submitted', '—') }} of {{ (t.report.rollup or {}).get('expected', '—') }} reported</span>{% endif %}
             </span>
             {% if t.report %}<a href="{{ url_for('admin_branch_reports_show', report_id=t.report.id) }}" class="no-underline">{{ badge('Acknowledged' if t.report.status == 'acknowledged' else 'Read it', 'ok' if t.report.status == 'acknowledged' else 'warn') }}</a>

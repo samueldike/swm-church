@@ -29,6 +29,14 @@ async def lifespan(app: FastAPI):
 
         logging.getLogger(__name__).exception("Could not resync id sequences")
     await _seed_defaults()
+    try:
+        from app.core import geo_migration
+
+        await geo_migration.run()       # idempotent: fills empty country/currency/time-zone codes
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception("Global data backfill failed; the review page lists what is missing")
     from app.core import scheduler
 
     job_loop = scheduler.start()

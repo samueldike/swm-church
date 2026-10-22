@@ -213,7 +213,7 @@ with TestClient(app, raise_server_exceptions=False, base_url="https://testserver
     rec("an unpublished event is a 404 (page, .ics and reminder)", V.get(f"/events/{ev_draft}").status_code == 404 and V.get(f"/events/{ev_draft}/calendar.ics").status_code == 404)
     ics_r = V.get(f"/events/{ev_far}/calendar.ics")
     rec("the .ics download is a valid VEVENT in church time", ics_r.status_code == 200 and "text/calendar" in ics_r.headers["content-type"] and "attachment" in ics_r.headers["content-disposition"] and "BEGIN:VEVENT" in ics_r.text
-        and f"DTSTART;TZID=Africa/Lagos:{start_far.strftime('%Y%m%dT%H%M%S')}" in ics_r.text and "TZID:Africa/Lagos" in ics_r.text and "Annual Convention" in ics_r.text)
+        and f"DTSTART:{(start_far - timedelta(hours=1)).strftime('%Y%m%dT%H%M%S')}Z" in ics_r.text and "Annual Convention" in ics_r.text)   # Lagos (UTC+1) → UTC
     feed = V.get("/calendar.ics").text
     rec("the subscribe feed lists published events only", "Annual Convention" in feed and "Unpublished Retreat" not in feed)
     rec("the weekly-services file repeats Sundays", "RRULE:FREQ=WEEKLY;BYDAY=SU" in V.get("/services.ics").text)
@@ -322,7 +322,7 @@ with TestClient(app, raise_server_exceptions=False, base_url="https://testserver
     V.post("/give/transfer-notice", data={"csrf_token": tg, "name": "X", "email": "x@gmail.com", "amount": "100", "website": "spam"}, follow_redirects=False)
     rec("a bad amount and the honeypot record nothing", Q("select count(*) from givings")[0][0] == 1)
     from app.core import payment
-    async def _paid(**kw): return {"state": "paid", "success": True, "amount_kobo": 500000}
+    async def _paid(**kw): return {"state": "paid", "success": True, "amount_minor": 500000, "currency": "NGN"}
     payment.verify_paystack = _paid
     Q("insert into givings (reference, email, full_name, amount, giving_type, is_anonymous, payment_gateway, gateway_owner, method, status, created_at, updated_at) values ('R-1','payer@gmail.com','Pat Payer',5000,'tithe',0,'paystack','hq','online','pending',:n,:n)", n=datetime.utcnow())
     SENT.clear()

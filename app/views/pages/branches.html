@@ -27,17 +27,24 @@
         <div class="head">
             <div>
                 <p class="mono eyebrow"><span class="rule"></span>Our branches</p>
-                <h2 class="t-h2" style="margin-top:1rem;">{% if q or state %}{{ shown|length }} found{% else %}{{ total }} branch{{ '' if total == 1 else 'es' }}{% endif %}</h2>
+                <h2 class="t-h2" style="margin-top:1rem;">{% if q or state or country %}{{ shown|length }} found{% else %}{{ total }} branch{{ '' if total == 1 else 'es' }}{% endif %}</h2>
             </div>
             {% if total > 3 %}
             <form method="GET" action="{{ url_for('branches') }}" class="bx-filter" role="search">
                 <label class="sr-only" for="bx-q">Search branches</label>
                 <input id="bx-q" type="search" name="q" value="{{ q }}" placeholder="Search by town or pastor"/>
+                {% if countries|length > 1 %}
+                <label class="sr-only" for="bx-country">Country</label>
+                <select id="bx-country" name="country" onchange="this.form.state && (this.form.state.value=''); this.form.submit()">
+                    <option value="">All countries</option>
+                    {% for code, name in countries %}<option value="{{ code }}" {{ 'selected' if country == code else '' }}>{{ name }}</option>{% endfor %}
+                </select>
+                {% endif %}
                 {% if states|length > 1 %}
-                <label class="sr-only" for="bx-state">State</label>
+                <label class="sr-only" for="bx-state">State / region</label>
                 <select id="bx-state" name="state" onchange="this.form.submit()">
-                    <option value="">All states</option>
-                    {% for s in states %}<option value="{{ s }}" {{ 'selected' if state == s else '' }}>{{ s }}</option>{% endfor %}
+                    <option value="">All states / regions</option>
+                    {% for code, name in states %}<option value="{{ code }}" {{ 'selected' if state == code else '' }}>{{ name }}</option>{% endfor %}
                 </select>
                 {% endif %}
                 <button class="btn btn-gold" type="submit">Search</button>
@@ -48,6 +55,9 @@
         {% if shown %}
         <ul class="rows rows-play" style="margin-top:2rem;">
             {% for b in shown %}
+            {% if countries|length > 1 and (loop.first or b.country != loop.previtem.country) %}
+            <li class="mono eyebrow" style="padding:1.6rem 0 0.4rem;list-style:none;">{{ b.country or 'Other' }}</li>
+            {% endif %}
             <li class="row row-link">
                 <a href="{{ url_for('branch_detail', slug=b.slug) }}">
                     <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>

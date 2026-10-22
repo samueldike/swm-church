@@ -127,7 +127,9 @@ def _read(path):
 def test_giving_status_names_agree_between_callback_and_dashboard():
     pub, adm = _read("app/routes/public.py"), _read("app/routes/admin.py")
     assert 'giving.status = "completed"' in pub
-    assert 'Giving.status.in_(("completed", "success"))' in adm
+    # The dashboard trend counts the shared PAID_STATUSES, which must include the callback's "completed".
+    assert 'PAID_STATUSES = ("completed", "success")' in adm
+    assert "paid = Giving.status.in_(PAID_STATUSES)" in adm
 
 
 def test_prayer_newsletter_and_donations_are_reachable_from_the_admin_and_public_site():

@@ -27,8 +27,11 @@ class Minister(Base):
     phone: Mapped[str | None] = mapped_column(String(50))
     email: Mapped[str | None] = mapped_column(String(255))
     address: Mapped[str | None] = mapped_column(String(500))
-    state_of_origin: Mapped[str | None] = mapped_column(String(100))
-    education: Mapped[str | None] = mapped_column(String(500))
+    state_of_origin: Mapped[str | None] = mapped_column(String(100))   # display name, kept in sync with the codes below
+    origin_country_code: Mapped[str | None] = mapped_column(String(2))
+    origin_region_code: Mapped[str | None] = mapped_column(String(10))
+    education_level: Mapped[str | None] = mapped_column(String(40))   # from the "Education levels" list
+    education: Mapped[str | None] = mapped_column(String(500))        # field of study / institution (free text)
     ministry_rank: Mapped[str | None] = mapped_column(String(120))   # e.g. Associate Pastor, Minister-in-training
     date_joined: Mapped[date | None] = mapped_column(Date)
     ordination_date: Mapped[date | None] = mapped_column(Date)

@@ -77,7 +77,7 @@
                value="{{ request.form.get('others_label', (collections.get('others', {}).get('label', '')) if editMode else '') }}">
       </div>
       <div>
-        <label for="collections_total" class="field-label">Collections total (₦)</label>
+        <label for="collections_total" class="field-label">Collections total ({{ currency_symbol(report_currency) }} · {{ report_currency }})</label>
         <input id="collections_total" name="collections_total" inputmode="decimal" class="field-input field-mono"
                value="{{ request.form.get('collections_total', collections.get('total', '') if editMode else '') }}">
       </div>

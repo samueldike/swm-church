@@ -10,6 +10,12 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from app.core.audit import log_admin_action
+
+# HarvestTrack controlled values (the admin's Lists hold the follow-up types).
+HARVEST_SOURCES = ("invite", "walk_in", "outreach")
+CONTACT_STATUSES = ("active", "ended")
+_FOLLOW_ALIASES = {"text": "Text message", "sms": "Text message", "whatsapp": "WhatsApp", "call": "Call", "phone": "Call",
+                   "visit": "Visit", "prayer": "Prayer"}     # what the mobile app has always sent
 from app.core.auth import get_current_admin
 from app.core.pagination import paginate
 from app.core.security import (
@@ -435,10 +441,13 @@ async def ht_register(request: Request, db: AsyncSession = Depends(get_db)):
     if existing.scalar_one_or_none():
         return _error("An account with this email already exists", 409)
 
+    from app.core import geo
+    from app.core.platform import church_country
+
     worker = HarvestWorker(
         full_name=full_name,
         email=email,
-        phone=(body.get("phone") or "").strip() or None,
+        phone=geo.normalize_phone(body.get("phone"), await church_country(db, body.get("branch_id") if isinstance(body.get("branch_id"), int) else None)) or None,
         password_hash=hash_password(password),
         branch_id=body.get("branch_id"),
     )
@@ -678,16 +687,22 @@ async def ht_create_contact(request: Request, db: AsyncSession = Depends(get_db)
     if not full_name:
         return _error("Full name is required")
 
+    from app.core import geo
+    from app.core.platform import church_country
     from app.models.harvest import HarvestContact
 
+    source = (body.get("source") or "").strip().lower().replace("-", "_").replace(" ", "_") or None
+    if source and source not in HARVEST_SOURCES:
+        return _error("source must be one of: " + ", ".join(HARVEST_SOURCES))
     contact = HarvestContact(
         worker_id=worker.id,
         full_name=full_name,
         email=(body.get("email") or "").strip() or None,
-        phone=(body.get("phone") or "").strip() or None,
+        phone=geo.normalize_phone(body.get("phone"), await church_country(db, worker.branch_id)) or None,
         address=(body.get("address") or "").strip() or None,
         notes=(body.get("notes") or "").strip() or None,
         status="active",
+        source=source,
     )
     db.add(contact)
     await db.flush()
@@ -753,13 +768,21 @@ async def ht_update_contact(
             return _error("Full name cannot be empty")
         contact.full_name = name
 
-    for field in ("email", "phone", "address", "notes"):
+    for field in ("email", "address", "notes"):
         if field in body:
             val = body[field]
             setattr(contact, field, val.strip() if isinstance(val, str) and val.strip() else (val or None))
+    if "phone" in body:
+        from app.core import geo
+        from app.core.platform import church_country
+
+        contact.phone = geo.normalize_phone(body["phone"] if isinstance(body["phone"], str) else "", await church_country(db, worker.branch_id)) or None
 
     if "status" in body:
-        contact.status = body["status"]
+        status = str(body["status"] or "").strip().lower()
+        if status not in CONTACT_STATUSES:
+            return _error("status must be one of: " + ", ".join(CONTACT_STATUSES))
+        contact.status = status
 
     await db.flush()
 
@@ -819,9 +842,14 @@ async def ht_create_follow_up(
     except Exception:
         return _error("Invalid JSON body")
 
-    follow_type = (body.get("follow_type") or "").strip()
+    from app.core import lists
+    from app.core.settings_cache import get_settings
+
+    choices = lists.items(await get_settings(db), "followup_types")
+    raw_type = (body.get("follow_type") or "").strip()
+    follow_type = lists.canonical(_FOLLOW_ALIASES.get(raw_type.lower(), raw_type), choices)
     if not follow_type:
-        return _error("follow_type is required (e.g. call, visit, text, prayer)")
+        return _error("follow_type must be one of: " + ", ".join(choices))
 
     follow_up = HarvestFollowUp(
         contact_id=contact.id,

@@ -1,19 +1,24 @@
+"""Payment gateways. Every call names its currency (ISO 4217): the church's account may be abroad, and
+an unnamed currency silently falls back to the account's default. Amounts to Paystack are in the
+currency's minor unit (kobo, pesewas, cents: app.core.geo.minor_units); Flutterwave takes major units."""
 import httpx
 
 
 async def initialize_paystack(
     email: str,
-    amount_kobo: int,
+    amount_minor: int,
     reference: str,
     callback_url: str,
     metadata: dict | None = None,
     secret_key: str = "",
+    currency: str = "NGN",
 ) -> str | None:
     url = "https://api.paystack.co/transaction/initialize"
 
     payload = {
         "email": email,
-        "amount": amount_kobo,
+        "amount": amount_minor,
+        "currency": currency,
         "reference": reference,
         "callback_url": callback_url,
     }
@@ -59,8 +64,8 @@ async def verify_paystack(reference: str, secret_key: str = "") -> dict:
         "success": raw == "success",
         # "pending" = the customer has not finished paying yet (do not brand it failed)
         "state": "paid" if raw == "success" else ("pending" if raw in ("abandoned", "pending", "ongoing", "processing", "queued") else "failed"),
-        "amount_kobo": tx.get("amount", 0),
-        "currency": tx.get("currency", "NGN"),
+        "amount_minor": tx.get("amount", 0),
+        "currency": tx.get("currency") or "",
         "email": tx.get("customer", {}).get("email", ""),
     }
 
@@ -87,26 +92,27 @@ async def verify_flutterwave(transaction_id: str, tx_ref: str, secret_key: str =
         "success": ok,
         "state": "paid" if ok else ("pending" if raw in ("pending", "processing", "new") else "failed"),
         "amount": float(tx.get("amount", 0)),
-        "currency": tx.get("currency", "NGN"),
+        "currency": tx.get("currency") or "",
         "email": tx.get("customer", {}).get("email", ""),
     }
 
 
 async def initialize_flutterwave(
     email: str,
-    amount_naira: float,
+    amount: float,
     reference: str,
     redirect_url: str,
     customer: dict | None = None,
     customizations: dict | None = None,
     secret_key: str = "",
+    currency: str = "NGN",
 ) -> str | None:
     url = "https://api.flutterwave.com/v3/payments"
 
     payload = {
         "tx_ref": reference,
-        "amount": str(amount_naira),
-        "currency": "NGN",
+        "amount": str(amount),
+        "currency": currency,
         "redirect_url": redirect_url,
         "customer": customer or {"email": email},
         "customizations": customizations or {"title": "Payment"},

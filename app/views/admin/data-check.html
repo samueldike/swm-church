@@ -1,0 +1,36 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge, empty_state with context %}
+{% block title %}Data check | {{ siteName }}{% endblock %}
+{% block topbar_title %}Data check{% endblock %}
+{% block topbar_subtitle %}Records that need a value from the official lists{% endblock %}
+{% block topbar_icon %}ri-shield-check-line{% endblock %}
+
+{% block page_header %}
+  {{ page_header("Data check", "Places, purposes and categories must come from the official lists so reports group correctly. These records were typed before the lists existed and could not be matched exactly, so nothing was guessed: open each one and choose the right value.",
+      audit=[('To fix', items|length)]) }}
+{% endblock %}
+
+{% block content %}
+<div class="panel-flush">
+  {% if items %}
+    <div class="overflow-x-auto">
+      <table class="dtable dtable-responsive">
+        <thead><tr><th>Record</th><th>Field</th><th>Recorded as</th><th>What to do</th><th class="text-right"></th></tr></thead>
+        <tbody>
+          {% for i in items %}
+            <tr>
+              <td data-label="Record">{{ badge(i.kind, 'neut') }} <span class="font-medium text-ink">{{ i.name }}</span></td>
+              <td data-label="Field">{{ i.field }}</td>
+              <td data-label="Recorded as" class="font-mono text-xs">{{ i.value }}</td>
+              <td data-label="What to do" class="text-[12.5px] text-ink-2">{{ i.fix }}</td>
+              <td data-label="" class="text-right">{% if i.href %}<a href="{{ i.href }}" class="icon-btn" aria-label="Open {{ i.name }}"><i class="ri-arrow-right-line"></i></a>{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    {{ empty_state("ri-shield-check-line", "Everything matches the official lists", "Countries, states / regions, purposes and categories are all consistent.") }}
+  {% endif %}
+</div>
+{% endblock %}

@@ -1034,7 +1034,11 @@ async def casom(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.get("/contact", name="contact")
 async def contact(request: Request, db: AsyncSession = Depends(get_db)):
-    return await render_template(request, "pages/contact.html", {"_db": db, "branches": await _public_branches(db)})
+    from app.core import lists
+    from app.core.settings_cache import get_settings as _gs
+
+    return await render_template(request, "pages/contact.html", {"_db": db, "branches": await _public_branches(db),
+                                                                 "inquiry_topics": lists.items(await _gs(db), "inquiry_topics")})
 
 
 @router.post("/contact", name="contact_store")
@@ -1044,6 +1048,7 @@ async def contact_store(
     email: str = Form(...),
     phone: str = Form(""),
     subject: str = Form(""),
+    topic: str = Form(""),
     message: str = Form(...),
     branch_id: str = Form(""),
     website: str = Form(""),                     # honeypot: real visitors never see or fill it
@@ -1062,13 +1067,21 @@ async def contact_store(
     if len(message) > 5000:
         return _redirect(request, "/contact", "Please keep your message under 5,000 characters.", "error")
 
+    from app.core import geo, lists
+    from app.core.platform import church_country
+    from app.core.settings_cache import get_settings as _gs
+
+    church_id = await _pick_branch_id(db, branch_id)
+    topics = lists.items(await _gs(db), "inquiry_topics")
+    topic_value = lists.canonical(topic, topics) or (topics[0] if topics else None)
     inquiry = ContactInquiry(
         name=name.strip()[:255],
         email=email.strip()[:255],
-        phone=phone.strip()[:50] if phone else None,
-        subject=subject.strip()[:255] if subject else "General Inquiry",
+        phone=geo.normalize_phone(phone, await church_country(db, church_id)) or None,
+        topic=topic_value,
+        subject=(subject.strip()[:255] if subject and subject.strip() else (topic_value or "General question")),
         message=message.strip(),
-        branch_id=await _pick_branch_id(db, branch_id),
+        branch_id=church_id,
     )
     db.add(inquiry)
     await db.flush()
@@ -1104,27 +1117,9 @@ async def give(request: Request, db: AsyncSession = Depends(get_db)):
     import json
 
     settings = await get_settings(db)
-    purposes_raw = settings.get("giving_purposes", "")
-    if purposes_raw:
-        try:
-            giving_purposes = (
-                json.loads(purposes_raw)
-                if purposes_raw.strip().startswith("[")
-                else [p.strip() for p in purposes_raw.split(",") if p.strip()]
-            )
-        except Exception:
-            giving_purposes = [p.strip() for p in purposes_raw.split(",") if p.strip()]
-    else:
-        giving_purposes = [
-            "Tithe",
-            "Offering",
-            "Missions",
-            "Building Fund",
-            "Welfare",
-            "Others",
-        ]
-    if "Others" not in giving_purposes:
-        giving_purposes.append("Others")
+    from app.core import geo, lists
+
+    giving_purposes = lists.items(settings, "giving_purposes") + [lists.OTHERS]
     church_accounts = []
     if settings.get("church_accounts"):
         try:
@@ -1134,14 +1129,24 @@ async def give(request: Request, db: AsyncSession = Depends(get_db)):
     from app.core.branch_settings import get_branch_settings, parse_accounts
 
     giving_model = (settings.get("giving_model") or "central").strip()
+    branches = await _public_branches(db)
+    hq = next((b for b in branches if b.is_hq), None)
+    from app.core.platform import platform_currency
+
+    hq_currency = await platform_currency(db)          # one currency for all giving: HQ's
+
+    def money_info(cur: str) -> dict:
+        return {"currency": cur, "symbol": geo.currency_symbol(cur), "quick": geo.quick_amounts(cur), "min": geo.minimum_gift(cur)}
+
     give_branches = []
     if giving_model == "branch":
-        for b in await _public_branches(db):
+        for b in branches:
             if b.is_hq:
-                give_branches.append({"id": b.id, "name": b.name, "is_hq": True, "accounts": church_accounts})
+                give_branches.append({"id": b.id, "name": b.name, "is_hq": True, "accounts": church_accounts, **money_info(hq_currency)})
             else:
                 bs = await get_branch_settings(db, b.id)
-                give_branches.append({"id": b.id, "name": b.name, "is_hq": False, "accounts": parse_accounts(bs.get("church_accounts"))})
+                give_branches.append({"id": b.id, "name": b.name, "is_hq": False, "accounts": parse_accounts(bs.get("church_accounts")),
+                                      "country": geo.country_name(b.country_code), **money_info(hq_currency)})
     return await render_template(
         request,
         "pages/give.html",
@@ -1151,6 +1156,7 @@ async def give(request: Request, db: AsyncSession = Depends(get_db)):
             "church_accounts": church_accounts,
             "giving_model": giving_model,
             "give_branches": give_branches,
+            "default_money": money_info(hq_currency),
         },
     )
 
@@ -1205,12 +1211,23 @@ async def give_checkout(
             own_gw = bs.get("active_giving_gateway") or "paystack"
             if bs.get("collects_own_giving") == "1" and bs.get(f"{own_gw}_secret_key"):
                 gateway_owner, payment_gateway, secret_override = "branch", own_gw, bs[f"{own_gw}_secret_key"]
-    giving_type = purpose.strip() or "Tithe"
-    if giving_type == "Others" and purpose_text.strip():
-        giving_type = purpose_text.strip()
-    giving_type = giving_type[:50]     # column is VARCHAR(50): a longer purpose used to 500 on Postgres
+    # The purpose is always one of the list (so totals group); "Others" keeps the giver's words as a note.
+    from app.core import geo, lists
+    from app.models.branch import Branch
 
-    amount_kobo = int(round(amount * 100))
+    giving_type = lists.canonical(purpose, lists.items(site_settings, "giving_purposes") + [lists.OTHERS])
+    if not giving_type:
+        return _redirect(request, "/give", "Please choose what your gift is for.", "error")
+    other_note = purpose_text.strip()[:500] if giving_type == lists.OTHERS else ""
+
+    # One platform currency (HQ's) for all giving, whoever's payment account takes it.
+    from app.core.platform import platform_currency
+
+    currency = await platform_currency(db)
+    owner = (await db.execute(select(Branch).where(Branch.id == target_branch))).scalar_one_or_none()
+    amount_minor = int(round(amount * 10 ** geo.minor_units(currency)))
+    if amount_minor <= 0:
+        return _redirect(request, "/give", "Please enter a valid amount.", "error")
 
     reference = f"swm_{secrets.token_urlsafe(16)}"
     callback_url = f"{app_settings.APP_URL}/give/callback?reference={reference}"
@@ -1219,9 +1236,11 @@ async def give_checkout(
         reference=reference,
         email=email.strip(),
         full_name=full_name.strip()[:255] if full_name else None,
-        phone=phone.strip()[:50] if phone else None,
+        phone=geo.normalize_phone(phone, owner.country_code if owner else None) or None,
         amount=amount,
+        currency=currency,
         giving_type=giving_type,
+        note=(f"Purpose: {other_note}" if other_note else None),
         is_anonymous=anonymous,
         dedication=dedication.strip() if dedication else None,
         payment_gateway=payment_gateway,
@@ -1237,8 +1256,8 @@ async def give_checkout(
     try:
         authorization_url = await _init_gateway(
             payment_gateway, secret_override or _hq_secret(site_settings, app_settings, payment_gateway), email, full_name, phone, amount,
-            amount_kobo, reference, callback_url, giving_type, anonymous, dedication,
-            initialize_flutterwave, initialize_paystack,
+            amount_minor, reference, callback_url, (other_note or giving_type), anonymous, dedication,
+            initialize_flutterwave, initialize_paystack, currency,
         )
     except Exception:
         logging.exception("Payment gateway initialisation failed")
@@ -1262,13 +1281,14 @@ def _hq_secret(site_settings, app_settings, gateway: str) -> str:
 
 
 async def _init_gateway(payment_gateway, secret_key, email, full_name, phone, amount,
-                        amount_kobo, reference, callback_url, giving_type, anonymous, dedication,
-                        initialize_flutterwave, initialize_paystack):
+                        amount_minor, reference, callback_url, giving_type, anonymous, dedication,
+                        initialize_flutterwave, initialize_paystack, currency="NGN"):
     """Call the selected gateway; returns the hosted-checkout URL or ``None``."""
     if payment_gateway == "flutterwave":
         authorization_url = await initialize_flutterwave(
             email=email.strip(),
-            amount_naira=amount,
+            amount=amount,
+            currency=currency,
             reference=reference,
             redirect_url=callback_url,
             customer={
@@ -1285,7 +1305,8 @@ async def _init_gateway(payment_gateway, secret_key, email, full_name, phone, am
     else:
         authorization_url = await initialize_paystack(
             email=email.strip(),
-            amount_kobo=amount_kobo,
+            amount_minor=amount_minor,
+            currency=currency,
             reference=reference,
             callback_url=callback_url,
             metadata={
@@ -1363,12 +1384,17 @@ async def give_callback(
 
     state = verification.get("state") or ("paid" if verification.get("success") else "failed")
     if state == "paid":
-        # Never trust "paid" alone: the amount the provider took must match the gift we recorded.
-        expected = round(float(giving.amount) * 100)
-        if "amount_kobo" in verification:
-            paid_ok = int(verification["amount_kobo"]) >= expected
+        # Never trust "paid" alone: the provider must have taken the gift's amount IN THE GIFT'S CURRENCY.
+        from app.core import geo
+
+        units = 10 ** geo.minor_units(giving.currency)
+        expected = round(float(giving.amount) * units)
+        if "amount_minor" in verification:
+            taken = int(verification["amount_minor"])
         else:
-            paid_ok = round(float(verification.get("amount", 0)) * 100) >= expected
+            taken = round(float(verification.get("amount", 0)) * units)
+        same_currency = (verification.get("currency") or giving.currency or "").upper() == (giving.currency or "NGN").upper()
+        paid_ok = same_currency and taken >= expected
         if not paid_ok:
             giving.status = "mismatch"
             await db.flush()
@@ -1395,7 +1421,7 @@ async def give_callback(
                 heading="Thank you for your gift",
                 paragraphs=[f"Dear {(giving.full_name or 'friend').split()[0] if not giving.is_anonymous or giving.full_name else 'friend'}, your gift has been received. God bless you for your generosity.",
                             "Please keep this email as your record of the gift."],
-                details=[("Amount", f"₦{float(giving.amount):,.2f}"), ("For", giving.giving_type.replace("_", " ").title()), ("Given to", church),
+                details=[("Amount", geo.format_money(giving.amount, giving.currency)), ("For", giving.giving_type.replace("_", " ").title()), ("Given to", church),
                          ("Reference", giving.reference), ("Date", (giving.paid_at or datetime.utcnow()).strftime("%d %B %Y"))],
                 footnote="If anything on this receipt looks wrong, reply to this email with your reference and we will look into it."))
         return _redirect(
@@ -1582,10 +1608,13 @@ async def prayer_store(
     if len(text) > 5000:
         return _redirect(request, "/prayer", "Please keep your request under 5,000 characters.", "error")
 
+    from app.core import geo
+    from app.core.platform import church_country
+
     req = PrayerRequest(
         full_name=("Anonymous" if hide_name or not who else who)[:255],
         email=email.strip()[:255] if email else None,
-        phone=phone.strip()[:50] if phone else None,
+        phone=geo.normalize_phone(phone, await church_country(db, await _pick_branch_id(db, branch_id))) or None,
         prayer_request=text,
         is_public=is_public,
         notify_me=notify_me.lower() in ("1", "true", "on", "yes") and bool(email.strip() or phone.strip()),

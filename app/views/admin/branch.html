@@ -1,5 +1,5 @@
 {% extends "layouts/admin_base.html" %}
-{% from "macros/admin.html" import page_header, kpi, badge, person, field, checkbox, empty_state with context %}
+{% from "macros/admin.html" import page_header, kpi, badge, person, field, checkbox, empty_state, location_fields, branch_locale_fields with context %}
 {% block title %}{{ branch.name }} | {{ siteName }}{% endblock %}
 {% block topbar_title %}{{ branch.name }}{% endblock %}
 {% block topbar_subtitle %}Branch overview{% endblock %}
@@ -7,7 +7,7 @@
 
 {% block page_header %}
   {{ page_header(branch.name,
-      ([branch.address, branch.city, branch.state, branch.country]|select|join(', ')) or 'Branch overview',
+      ([branch.address, branch.city, region_name(branch.region_code) or branch.state, country_name(branch.country_code) or branch.country]|select|join(', ')) or 'Branch overview',
       actions=(('<a href="' ~ url_for('admin_branches') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All branches</a>')
                if can('system') else '')
              ~ ('<a href="' ~ (url_for('admin_branch_settings_for', branch_id=branch.id) if can('system') else url_for('admin_branch_settings')) ~ '" class="btn btn-secondary"><i class="ri-settings-3-line"></i>Branch settings</a>' if not branch.is_hq else '')
@@ -157,18 +157,15 @@
           {{ field('Email address', 'email', value=branch.email or '', type='email', mono=True) }}
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {{ field('Phone number', 'phone', value=branch.phone or '', mono=True) }}
+          <div>
+            <label for="phone" class="field-label">Phone number</label>
+            <input id="phone" name="phone" type="tel" value="{{ request.form.get('phone', branch.phone|phone) }}" class="field-input field-mono" placeholder="{{ phone_code(branch.country_code) }} …" data-geo-phone>
+          </div>
           {{ field('Street address', 'address', value=branch.address or '') }}
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {{ field('City', 'city', value=branch.city or '') }}
-          {{ field('State', 'state', value=branch.state or '') }}
-          <div>
-            <label for="country" class="field-label">Country</label>
-            <select id="country" name="country" class="field-select">
-              {% for c in countries.keys() %}<option value="{{ c }}" {{ 'selected' if branch.country == c else '' }}>{{ c }}</option>{% endfor %}
-            </select>
-          </div>
+          {{ location_fields({'country': 'country_code', 'region': 'region_code', 'city': 'city'}, country=branch.country_code or '', region=branch.region_code or '', city=branch.city or '', required=True, cities=cities) }}
+          {{ branch_locale_fields(branch.country_code or '', branch.currency or '', branch.timezone or '', is_hq=branch.is_hq) }}
         </div>
         {{ checkbox('Branch is active', 'is_active', checked=branch.is_active) }}
         <div class="flex items-center gap-2.5 pt-4 border-t border-line">

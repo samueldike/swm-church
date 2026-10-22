@@ -1,5 +1,5 @@
 {% extends "layouts/admin_base.html" %}
-{% from "macros/admin.html" import page_header, field, select, textarea, checkbox with context %}
+{% from "macros/admin.html" import page_header, field, select, textarea, checkbox, location_fields with context %}
 {% block title %}{{ 'Edit Member' if member else 'New Member' }} | {{ siteName }}{% endblock %}
 {% block topbar_title %}{{ 'Edit Member' if member else 'New Member' }}{% endblock %}
 {% block topbar_subtitle %}Members{% endblock %}
@@ -27,7 +27,17 @@
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {{ field('Email address', 'email', value=member.email if member else '', type='email', mono=True) }}
-        {{ field('Phone number', 'phone', value=member.phone if member else '', mono=True) }}
+        {{ field('Phone number', 'phone', value=(member.phone|phone) if member else '', mono=True, hint='Local numbers are saved in international format.') }}
+      </div>
+
+      <div>
+        <p class="field-label">Where the member lives <span class="font-normal text-ink-3">(optional)</span></p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-1">
+          {{ location_fields({'country': 'country_code', 'region': 'region_code', 'city': 'city'},
+                             country=(member.country_code if member else '') or '', region=(member.region_code if member else '') or '',
+                             city=(member.city if member else '') or '') }}
+        </div>
+        <p class="field-hint">For members who live away from their branch (for example in another country). Leave blank otherwise.</p>
       </div>
 
       {% if member %}

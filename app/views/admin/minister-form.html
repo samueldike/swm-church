@@ -1,5 +1,5 @@
 {% extends "layouts/admin_base.html" %}
-{% from "macros/admin.html" import page_header, field, textarea, file_field with context %}
+{% from "macros/admin.html" import page_header, field, textarea, file_field, location_fields with context %}
 {% set editing = m is not none %}
 {% block title %}{{ 'Edit' if editing else 'Add' }} minister | {{ siteName }}{% endblock %}
 {% block topbar_title %}{{ 'Edit minister' if editing else 'Add minister' }}{% endblock %}
@@ -19,10 +19,14 @@
   <section class="panel flex flex-col gap-4">
     <h2 class="text-[14px] font-semibold text-ink">Identity</h2>
     <div class="grid grid-cols-1 sm:grid-cols-[160px_1fr] gap-4">
+      {% set cur_title = f.get('title', m.title if editing else 'Pastor') or '' %}
       <div>
         <label for="title" class="field-label">Title</label>
-        <input id="title" name="title" list="titles" value="{{ f.get('title', m.title if editing else 'Pastor') or '' }}" class="field-input" autocomplete="off">
-        <datalist id="titles">{% for t in titles %}<option value="{{ t }}">{% endfor %}</datalist>
+        <select id="title" name="title" class="field-select">
+          <option value="">—</option>
+          {% for t in titles %}<option value="{{ t }}" {{ 'selected' if cur_title == t else '' }}>{{ t }}</option>{% endfor %}
+          {% if cur_title and cur_title not in titles %}<option value="{{ cur_title }}" selected>{{ cur_title }} (not in list)</option>{% endif %}
+        </select>
       </div>
       {{ field('Full name', 'full_name', value=m.full_name if editing else '', required=True) }}
     </div>
@@ -37,19 +41,32 @@
       <div>
         <label for="marital_status" class="field-label">Marital status</label>
         <select id="marital_status" name="marital_status" class="field-select">
-          {% for v in ['', 'Single', 'Married', 'Widowed', 'Divorced'] %}<option value="{{ v }}" {{ 'selected' if f.get('marital_status', (m.marital_status if editing else '') or '') == v else '' }}>{{ v or '—' }}</option>{% endfor %}
+          {% for v in [''] + marital_statuses %}<option value="{{ v }}" {{ 'selected' if f.get('marital_status', (m.marital_status if editing else '') or '') == v else '' }}>{{ v or '—' }}</option>{% endfor %}
         </select>
       </div>
       {{ field('Spouse', 'spouse_name', value=(m.spouse_name or '') if editing else '') }}
-      {{ field('State of origin', 'state_of_origin', value=(m.state_of_origin or '') if editing else '') }}
-      {{ field('Education / training', 'education', value=(m.education or '') if editing else '') }}
+      {% set cur_level = f.get('education_level', (m.education_level if editing else '') or '') %}
+      <div>
+        <label for="education_level" class="field-label">Highest education</label>
+        <select id="education_level" name="education_level" class="field-select">
+          <option value="">—</option>
+          {% for v in education_levels %}<option value="{{ v }}" {{ 'selected' if cur_level == v else '' }}>{{ v }}</option>{% endfor %}
+        </select>
+      </div>
     </div>
+    {{ field('Field of study / institution', 'education', value=(m.education or '') if editing else '', hint='e.g. "Theology, Nigerian Baptist Theological Seminary". The level above is what reports group by.') }}
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {{ location_fields({'country': 'origin_country_code', 'region': 'origin_region_code'},
+                         country=((m.origin_country_code if editing else '') or home_country), region=(m.origin_region_code if editing else '') or '',
+                         labels={'country': 'Country of origin', 'region': 'State / region of origin'}) }}
+    </div>
+    {% if editing and m.state_of_origin and not m.origin_region_code %}<p class="field-hint text-warn">Recorded before: “{{ m.state_of_origin }}”. Choose it from the list above to keep it consistent.</p>{% endif %}
   </section>
 
   <section class="panel flex flex-col gap-4">
     <h2 class="text-[14px] font-semibold text-ink">Contact</h2>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {{ field('Phone', 'phone', value=(m.phone or '') if editing else '', mono=True) }}
+      {{ field('Phone', 'phone', value=(m.phone|phone) if editing else '', mono=True, hint='Local numbers are saved in international format.') }}
       {{ field('Email', 'email', value=(m.email or '') if editing else '', type='email', mono=True, hint='Needed to give them a console login (department head or Resident Pastor).') }}
     </div>
     {{ field('Address', 'address', value=(m.address or '') if editing else '') }}
@@ -65,7 +82,16 @@
         </select>
         {% if editing and m.account %}<p class="field-hint">Fixed while they hold a console role.</p>{% endif %}
       </div>
-      {{ field('Ministry rank', 'ministry_rank', value=(m.ministry_rank or '') if editing else '', hint='e.g. Associate Pastor, Minister-in-training') }}
+      {% set cur_rank = f.get('ministry_rank', (m.ministry_rank if editing else '') or '') %}
+      <div>
+        <label for="ministry_rank" class="field-label">Ministry rank</label>
+        <select id="ministry_rank" name="ministry_rank" class="field-select">
+          <option value="">—</option>
+          {% for v in ranks %}<option value="{{ v }}" {{ 'selected' if cur_rank == v else '' }}>{{ v }}</option>{% endfor %}
+          {% if cur_rank and cur_rank not in ranks %}<option value="{{ cur_rank }}" selected>{{ cur_rank }} (not in list)</option>{% endif %}
+        </select>
+        <p class="field-hint">Edit the list in Settings → Lists.</p>
+      </div>
       {{ field('Date joined', 'date_joined', value=(m.date_joined.isoformat() if editing and m.date_joined else ''), type='date', mono=True) }}
       {{ field('Ordination date', 'ordination_date', value=(m.ordination_date.isoformat() if editing and m.ordination_date else ''), type='date', mono=True) }}
       <div>

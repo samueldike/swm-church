@@ -84,11 +84,27 @@
   <section class="panel flex flex-col gap-4">
     <h2 class="text-[15px] font-semibold text-ink">Branch details</h2>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {{ field('Phone', 'phone', value=branch.phone or '', mono=True) }}
+      <div>
+        <label for="phone" class="field-label">Phone</label>
+        <input id="phone" name="phone" type="tel" value="{{ request.form.get('phone', branch.phone|phone) }}" class="field-input field-mono" placeholder="{{ phone_code(branch.country_code) }} …">
+      </div>
       {{ field('Email', 'email', value=branch.email or '', type='email', mono=True) }}
       {{ field('Address', 'address', value=branch.address or '') }}
-      {{ field('City', 'city', value=branch.city or '') }}
-      {{ field('State', 'state', value=branch.state or '') }}
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div>
+        <p class="field-label">Country</p>
+        <p class="field-input bg-sunken text-ink-2">{{ country_name(branch.country_code) or 'Not set' }}</p>
+        <p class="field-hint">Set by HQ, with the time zone ({{ (branch.timezone or '—')|replace('_', ' ') }}). Giving is in HQ's currency.</p>
+      </div>
+      <div>
+        <label for="region_code" class="field-label">State / region</label>
+        <select id="region_code" name="region_code" class="field-select">
+          <option value="">Choose…</option>
+          {% for code, name in geo_regions(branch.country_code) %}<option value="{{ code }}" {{ 'selected' if (request.form.get('region_code', branch.region_code) or '') == code else '' }}>{{ name }}</option>{% endfor %}
+        </select>
+      </div>
+      {{ field('City / town', 'city', value=branch.city or '') }}
     </div>
     {{ textarea('Service times', 'service_times', value=values.get('service_times', ''), rows=4, hint='One per line, e.g. “Sunday 8:00 am — Main service”.') }}
   </section>
