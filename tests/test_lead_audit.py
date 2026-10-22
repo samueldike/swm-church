@@ -699,3 +699,38 @@ def test_production_hides_the_api_description_and_does_not_echo_sql():
 
 def test_docker_image_runs_in_production_mode():
     assert "APP_ENV=production" in pathlib.Path("Dockerfile").read_text(encoding="utf-8")
+
+
+# ─── UX-01: error pages ──────────────────────────────────────────────
+
+def test_missing_pages_get_an_html_404_and_api_keeps_json():
+    client = TestClient(app, raise_server_exceptions=False)
+    page = client.get("/no-such-page", headers={"accept": "text/html"})
+    assert page.status_code == 404 and page.headers["content-type"].startswith("text/html")
+    assert '{"detail"' not in page.text and ("could not find that page" in page.text or "home page" in page.text)
+    api = client.get("/api/no-such-thing")
+    assert api.status_code == 404 and api.headers["content-type"].startswith("application/json")
+
+
+def test_unhandled_errors_get_a_500_page(monkeypatch):
+    from app.routes import public as public_routes
+
+    async def boom(*_a, **_k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(public_routes, "_build_gallery", boom, raising=False)
+    route = next(r for r in app.routes if getattr(r, "path", "") == "/robots.txt")
+    monkeypatch.setattr(route, "endpoint", boom)
+    monkeypatch.setattr(route, "app", __import__("fastapi.routing", fromlist=["request_response"]).request_response(boom))
+    r = TestClient(app, raise_server_exceptions=False).get("/robots.txt", headers={"accept": "text/html"})
+    assert r.status_code == 500 and "boom" not in r.text and "text/html" in r.headers["content-type"]
+
+
+def test_bookmarked_admin_login_url_redirects():
+    r = TestClient(app).get("/admin/login", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/admin"
+
+
+def test_no_plain_text_not_found_responses_remain():
+    for path in ("app/routes/public.py", "app/routes/public_extra.py"):
+        assert 'not found", status_code=404)' not in pathlib.Path(path).read_text(encoding="utf-8"), path

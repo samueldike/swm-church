@@ -5,7 +5,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, HTTPException, Depends, Form, Query, Request
 from fastapi.responses import (
     HTMLResponse,
     RedirectResponse,
@@ -594,7 +594,7 @@ async def sermon_detail(
     )
     sermon = result.scalar_one_or_none()
     if not sermon:
-        return HTMLResponse("Sermon not found", status_code=404)
+        raise HTTPException(status_code=404)
 
     related = []
     try:
@@ -735,7 +735,7 @@ async def stream_sermon(
     sermon = result.scalar_one_or_none()
 
     if not sermon:
-        return HTMLResponse("Audio not found", status_code=404)
+        raise HTTPException(status_code=404)
 
     if sermon.audio_file_path:
         from app.core.media import to_abspath
@@ -753,7 +753,7 @@ async def stream_sermon(
         return RedirectResponse(url=sermon.media_url, status_code=302)
 
     if not sermon.telegram_file_id:
-        return HTMLResponse("Audio not found", status_code=404)
+        raise HTTPException(status_code=404)
 
     tg = TelegramDistributor()
     local_path, file_url = await tg.resolve_file(sermon.telegram_file_id)
@@ -797,7 +797,7 @@ async def download_sermon(
     sermon = result.scalar_one_or_none()
 
     if not sermon:
-        return HTMLResponse("Audio not found", status_code=404)
+        raise HTTPException(status_code=404)
 
     safe_title = (sermon.title or "sermon").replace('"', "_").replace("/", "_")
 
@@ -813,7 +813,7 @@ async def download_sermon(
             return _serve_local_audio(request, file_path, _content_disposition("attachment", sermon.title, ext))
 
     if not sermon.telegram_file_id:
-        return HTMLResponse("Audio not found", status_code=404)
+        raise HTTPException(status_code=404)
 
     tg = TelegramDistributor()
     local_path, file_url = await tg.resolve_file(sermon.telegram_file_id)
@@ -1509,7 +1509,7 @@ async def story_detail(slug: str, request: Request, db: AsyncSession = Depends(g
     )
     story = result.scalar_one_or_none()
     if not story:
-        return HTMLResponse("Story not found", status_code=404)
+        raise HTTPException(status_code=404)
     related = []
     try:
         result = await db.execute(

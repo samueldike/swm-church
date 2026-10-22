@@ -1,0 +1,32 @@
+{#- Shown for any page error: 404 (not found), 500 (our fault) and the rest. Set by app/main.py:http_error_handler. -#}
+{% set pageKey = 'error' %}
+{% set robots = 'noindex, nofollow' %}
+{% if status == 404 %}
+  {% set pageEyebrow = 'Page not found' %}
+  {% set pageTitle = 'We could not find that page.' %}
+  {% set pageLede = 'The link may be old, or the page may have moved. Everything below is still here for you.' %}
+{% elif status >= 500 %}
+  {% set pageEyebrow = 'Something went wrong' %}
+  {% set pageTitle = 'Sorry — that did not work.' %}
+  {% set pageLede = 'The problem is on our side, not yours. Please try again in a moment.' %}
+{% else %}
+  {% set pageEyebrow = 'Cannot open this page' %}
+  {% set pageTitle = 'That page is not available.' %}
+  {% set pageLede = 'Please go back and try again, or choose where to go next below.' %}
+{% endif %}
+{% include "partials/theme-page-open.html" %}
+
+<section class="band band-light">
+    <div class="shell">
+        <p class="mono eyebrow"><span class="rule"></span>Where would you like to go?</p>
+        <ul class="rows" style="margin-top:1.6rem;">
+            <li class="row"><a class="row-in" href="{{ url_for('home') }}"><span class="mono faint row-i">01</span><span class="row-main"><span class="t-h3">Home</span><span class="t-sm row-sub">Welcome, this week at church and the latest message.</span></span></a></li>
+            <li class="row"><a class="row-in" href="{{ url_for('visit') }}"><span class="mono faint row-i">02</span><span class="row-main"><span class="t-h3">Plan your visit</span><span class="t-sm row-sub">Service times, where we are and what to expect.</span></span></a></li>
+            <li class="row"><a class="row-in" href="{{ url_for('messages') }}"><span class="mono faint row-i">03</span><span class="row-main"><span class="t-h3">Messages</span><span class="t-sm row-sub">Listen to or download recent sermons.</span></span></a></li>
+            <li class="row"><a class="row-in" href="{{ url_for('contact') }}"><span class="mono faint row-i">04</span><span class="row-main"><span class="t-h3">Contact us</span><span class="t-sm row-sub">Tell us which link brought you here and we will fix it.</span></span></a></li>
+        </ul>
+        <p class="mono faint" style="margin-top:1.6rem;">Error {{ status }}</p>
+    </div>
+</section>
+
+{% include "partials/theme-page-close.html" %}

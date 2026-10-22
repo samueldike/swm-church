@@ -130,6 +130,57 @@ except ImportError as e:
     logging.error("Failed to load API routes: %s", e)
 
 
+def _wants_json(request) -> bool:
+    accept = request.headers.get("accept", "")
+    return request.url.path.startswith("/api/") or ("application/json" in accept and "text/html" not in accept)
+
+
+async def _error_page(request, status: int):
+    """The public error page (pages/error.html). Falls back to plain HTML if rendering itself fails."""
+    from fastapi.responses import HTMLResponse
+
+    from app.core.template import render_template
+    from app.database import async_session
+
+    try:
+        async with async_session() as db:
+            response = await render_template(request, "pages/error.html", {"_db": db, "status": status})
+        response.status_code = status
+        return response
+    except Exception:
+        logging.getLogger(__name__).exception("Could not render the error page")
+        return HTMLResponse("<!doctype html><meta charset=utf-8><title>Error</title><h1>Sorry — something went wrong.</h1>"
+                            '<p><a href="/">Go to the home page</a></p>', status_code=status)
+
+
+from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_error_handler(request, exc):
+    """404s and other HTTP errors: JSON for /api and JSON clients, the public error page for people (UX-01)."""
+    from fastapi.responses import JSONResponse
+
+    if _wants_json(request):
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=getattr(exc, "headers", None))
+    if exc.status_code == 405 and request.method == "GET" and request.url.path.rstrip("/") == "/admin/login":
+        from fastapi.responses import RedirectResponse
+
+        return RedirectResponse(url="/admin", status_code=303)        # HYG-04: a bookmarked sign-in URL
+    return await _error_page(request, exc.status_code)
+
+
+@app.exception_handler(Exception)
+async def server_error_handler(request, exc):
+    """Anything unhandled: logged with its traceback, a calm page (or JSON) for the visitor."""
+    from fastapi.responses import JSONResponse
+
+    logging.getLogger(__name__).exception("Unhandled error on %s %s", request.method, request.url.path)
+    if _wants_json(request):
+        return JSONResponse({"detail": "Internal Server Error"}, status_code=500)
+    return await _error_page(request, 500)
+
+
 @app.exception_handler(IntegrityError)
 async def integrity_error_handler(request, exc):
     """Safety net: a unique/foreign-key violation we did not pre-check becomes a message, not a 500 page."""

@@ -8,7 +8,7 @@ import secrets
 from datetime import date, datetime, timedelta
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, HTTPException, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -240,7 +240,7 @@ async def branch_detail(slug: str, request: Request, db: AsyncSession = Depends(
     b = (await db.execute(select(Branch).where(Branch.slug == slug, Branch.is_active == True))).scalar_one_or_none()  # noqa: E712
     d = await branch_public(db, b, site) if b else None
     if not d or not d["listed"]:
-        return HTMLResponse("Branch not found", status_code=404)
+        raise HTTPException(status_code=404)
     if d["is_hq"]:
         return pub._redirect(request, "/visit")
     base = pub._public_base_url(request)
@@ -270,7 +270,7 @@ async def event_detail(event_id: int, request: Request, db: AsyncSession = Depen
 
     ev = await _published_event(db, event_id)
     if ev is None:
-        return HTMLResponse("Event not found", status_code=404)
+        raise HTTPException(status_code=404)
     base = pub._public_base_url(request)
     from app.core.platform import platform_timezone
 
@@ -303,7 +303,7 @@ async def event_ics(event_id: int, request: Request, db: AsyncSession = Depends(
 
     ev = await _published_event(db, event_id)
     if ev is None:
-        return HTMLResponse("Event not found", status_code=404)
+        raise HTTPException(status_code=404)
     site = await get_settings(db)
     host = request.url.hostname or "localhost"
     slug = re.sub(r"[^a-z0-9]+", "-", ev.title.lower()).strip("-")[:50] or "event"
