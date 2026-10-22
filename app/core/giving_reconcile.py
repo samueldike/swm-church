@@ -98,7 +98,7 @@ async def reconcile(db: AsyncSession, giving, *, transaction_id: str = "", base_
         await db.commit()
         await db.refresh(giving)
         if claimed.rowcount == 1:
-            await _send_receipt(db, giving, base_url)
+            await send_receipt(db, giving, base_url)
         return "completed"
     elif state == "pending":
         outcome = "abandoned" if giving.created_at and now - giving.created_at > ABANDON_AFTER else "pending"
@@ -111,12 +111,13 @@ async def reconcile(db: AsyncSession, giving, *, transaction_id: str = "", base_
     return giving.status
 
 
-async def _send_receipt(db: AsyncSession, giving, base_url: str) -> None:
+async def send_receipt(db: AsyncSession, giving, base_url: str) -> bool:
+    """Email the giver a receipt in the background. False when nothing will be sent (no address or email not set up)."""
     from app.core import geo, mailer
     from app.core.settings_cache import get_settings
 
-    if not mailer.valid_email(giving.email):
-        return
+    if not mailer.valid_email(giving.email) or await mailer.get_config() is None:
+        return False
     church = (await get_settings(db)).get("siteName") or "Scent of Water Ministry"
     if giving.branch_id:
         from app.models.branch import Branch
@@ -132,6 +133,7 @@ async def _send_receipt(db: AsyncSession, giving, base_url: str) -> None:
         details=[("Amount", geo.format_money(giving.amount, giving.currency)), ("For", giving.giving_type.replace("_", " ").title()),
                  ("Given to", church), ("Reference", giving.reference), ("Date", (giving.paid_at or datetime.utcnow()).strftime("%d %B %Y"))],
         footnote="If anything on this receipt looks wrong, reply to this email with your reference and we will look into it."))
+    return True
 
 
 async def due_for_recheck(db: AsyncSession, now: datetime | None = None, limit: int = 20) -> list[int]:

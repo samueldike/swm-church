@@ -6751,7 +6751,7 @@ async def admin_donations_recheck(giving_id: int, request: Request, db: AsyncSes
     outcome = await reconcile(db, giving, base_url=_public_base_url(request))
     await log_admin_action(db, admin.id, "donations.rechecked", "giving", giving.id, {"reference": giving.reference, "from": before, "to": giving.status}, request)
     messages = {
-        "completed": ("The gateway confirmed this gift. It is now counted, and the giver was emailed a receipt.", "success"),
+        "completed": ("The gateway confirmed this gift. It is now counted (a receipt is emailed when email is set up).", "success"),
         "mismatch": ("The gateway says this was paid, but not the full amount. It is marked “Amount mismatch”.", "error"),
         "pending": ("The gateway says this gift has not been paid yet.", "info"),
         "abandoned": ("The gateway says this gift was never paid: the giver left the checkout. Marked “Abandoned”.", "info"),
@@ -6760,6 +6760,48 @@ async def admin_donations_recheck(giving_id: int, request: Request, db: AsyncSes
     }
     msg, kind = messages.get(outcome, (f"Status: {outcome}.", "info"))
     return _redirect(request, back, msg, kind)
+
+
+@router.post("/donations/{giving_id}/transfer", name="admin_donations_transfer")
+async def admin_donations_transfer(
+    giving_id: int, request: Request, db: AsyncSession = Depends(get_db),
+    action: str = Form(""), received_on: str = Form(""),
+):
+    """Finance checks a "I have sent a transfer" notice against the bank statement (DATA-02)."""
+    admin = await _get_admin(request)
+    if not admin or not has_perm(admin.role, "donations"):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from sqlalchemy import update
+
+    from app.core.giving_reconcile import send_receipt
+    from app.models.giving import Giving
+
+    back = request.headers.get("referer") or "/admin/donations"
+    back = back if "/admin/donations" in back else "/admin/donations"
+    giving = (await db.execute(select(Giving).where(Giving.id == giving_id))).scalar_one_or_none()
+    if giving is None or (not _sees_all_gifts(admin) and giving.branch_id != admin.branch_id):
+        return _redirect(request, back, "Gift not found.", "error")
+    if giving.method != "transfer" or giving.payment_gateway != "transfer":
+        return _redirect(request, back, "Only transfer notices from the Give page are confirmed here.", "error")
+    if action not in ("confirm", "reject"):
+        return _redirect(request, back, "Choose Confirm or Not received.", "error")
+
+    day = _parse_date(received_on)
+    paid_at = datetime.combine(day, datetime.min.time()) if day else datetime.utcnow()
+    values = {"status": "completed", "paid_at": paid_at} if action == "confirm" else {"status": "rejected"}
+    # Conditional: a notice confirmed twice (two tabs, double click) is counted and receipted once.
+    done = await db.execute(update(Giving).where(Giving.id == giving.id, Giving.status == "pending")
+                            .values(**values).execution_options(synchronize_session=False))
+    if done.rowcount != 1:
+        return _redirect(request, back, "This notice was already dealt with.", "info")
+    await db.refresh(giving)
+    await log_admin_action(db, admin.id, f"donations.transfer_{action}ed", "giving", giving.id,
+                           {"reference": giving.reference, "amount": float(giving.amount), "currency": giving.currency}, request)
+    if action == "confirm":
+        emailed = await send_receipt(db, giving, _public_base_url(request))
+        return _redirect(request, back, f"Transfer {giving.reference} confirmed and counted. "
+                         + ("A receipt is being emailed to the giver." if emailed else "No receipt was emailed (no address, or email is not set up in Settings)."))
+    return _redirect(request, back, f"Transfer {giving.reference} marked “Not received”. It is not counted.")
 
 
 # ─── Remittances: who owes whom between HQ and each branch ──────────

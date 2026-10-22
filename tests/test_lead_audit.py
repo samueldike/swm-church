@@ -291,8 +291,12 @@ def gifts(monkeypatch):
 
     monkeypatch.setattr(gr, "_verify", verify)
     monkeypatch.setattr(gr, "gateway_secret", secret)
+    async def mail_config():
+        return SimpleNamespace(api_key="re_x", sender="office@gmail.com", name="SWM")
+
     monkeypatch.setattr(mailer, "send_notice", send_notice)
     monkeypatch.setattr(mailer, "fire", fire)
+    monkeypatch.setattr(mailer, "get_config", mail_config)
 
     eng = create_async_engine("sqlite+aiosqlite://")
     maker = async_sessionmaker(eng, expire_on_commit=False)
@@ -307,9 +311,10 @@ def gifts(monkeypatch):
         from datetime import timedelta
 
         async with maker() as db:
-            g = Giving(reference=ref, email="giver@gmail.com", amount=amount, currency="NGN", giving_type="Tithe",
-                       payment_gateway="paystack", method="online", status=status, gateway_owner="hq",
-                       created_at=datetime.utcnow() - timedelta(hours=age_hours), **kw)
+            fields = dict(reference=ref, email="giver@gmail.com", amount=amount, currency="NGN", giving_type="Tithe",
+                          payment_gateway="paystack", method="online", status=status, gateway_owner="hq",
+                          created_at=datetime.utcnow() - timedelta(hours=age_hours))
+            g = Giving(**{**fields, **kw})
             db.add(g)
             await db.commit()
             return g.id
@@ -429,6 +434,59 @@ def test_paystack_webhook_requires_a_valid_signature(gifts, monkeypatch):
             return (await gifts.load(db, gid)).status
 
     assert asyncio.run(status()) == "completed"
+
+
+# ─── DATA-02 / DATA-16: bank-transfer notices ────────────────────────
+
+def _transfer(gifts, monkeypatch, gid, action, role="hq_finance", branch_id=1):
+    async def current(_request):
+        return _admin(role, branch_id=branch_id)
+
+    async def noop_log(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(admin_routes, "get_current_admin", current)
+    monkeypatch.setattr(admin_routes, "log_admin_action", noop_log)
+
+    async def run():
+        async with gifts.maker() as db:
+            request = SimpleNamespace(session={}, headers={}, base_url="https://x/")
+            await admin_routes.admin_donations_transfer(gid, request, db, action, "2026-10-20")
+            await db.commit()
+            g = await gifts.load(db, gid)
+            return request.session.get("flash_messages", [{}])[0], g.status, g.paid_at
+    return asyncio.run(run())
+
+
+def test_transfer_notice_is_confirmed_and_receipted_once(gifts, monkeypatch):
+    gid = asyncio.run(gifts.add(ref="TRF-1", payment_gateway="transfer", method="transfer", branch_id=2))
+    flash, status, paid_at = _transfer(gifts, monkeypatch, gid, "confirm")
+    assert flash["type"] == "success" and status == "completed" and paid_at.date().isoformat() == "2026-10-20"
+    flash, status, _ = _transfer(gifts, monkeypatch, gid, "confirm")          # second tab / double click
+    assert "already" in flash["message"] and status == "completed" and gifts.receipts == 1
+
+
+def test_transfer_notice_not_received_is_not_counted(gifts, monkeypatch):
+    gid = asyncio.run(gifts.add(ref="TRF-2", payment_gateway="transfer", method="transfer", branch_id=2))
+    _flash, status, _ = _transfer(gifts, monkeypatch, gid, "reject")
+    assert status == "rejected" and status not in admin_routes.PAID_STATUSES and gifts.receipts == 0
+
+
+def test_branch_admin_cannot_confirm_another_churchs_transfer(gifts, monkeypatch):
+    gid = asyncio.run(gifts.add(ref="TRF-3", payment_gateway="transfer", method="transfer", branch_id=1))
+    flash, status, _ = _transfer(gifts, monkeypatch, gid, "confirm", role="branch_admin", branch_id=2)
+    assert flash["type"] == "error" and status == "pending"
+
+
+def test_online_gifts_cannot_be_confirmed_as_transfers(gifts, monkeypatch):
+    gid = asyncio.run(gifts.add(ref="swm_online"))
+    flash, status, _ = _transfer(gifts, monkeypatch, gid, "confirm")
+    assert flash["type"] == "error" and status == "pending"
+
+
+def test_hq_transfer_notices_belong_to_hq():
+    src = pathlib.Path("app/routes/public_extra.py").read_text(encoding="utf-8")
+    assert "branch_id=church_id if church_id != hq_id else None" not in src
 
 
 def test_flutterwave_transaction_id_never_reaches_the_url_unchecked():

@@ -527,7 +527,7 @@ async def give_transfer_notice(
     if bank_ref.strip():
         note += f" Bank reference: {bank_ref.strip()[:120]}."
     g = Giving(reference="TRF-" + secrets.token_hex(6).upper(), email=email, full_name=name, amount=value, currency=currency, giving_type=purpose_value,
-               payment_gateway="transfer", method="transfer", status="pending", branch_id=church_id if church_id != hq_id else None, gateway_owner=owner, note=note)
+               payment_gateway="transfer", method="transfer", status="pending", branch_id=church_id, gateway_owner=owner, note=note)
     db.add(g)
     await db.flush()
     base = pub._public_base_url(request)
