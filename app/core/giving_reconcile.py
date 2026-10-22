@@ -1,4 +1,4 @@
-"""Confirming online gifts with the payment gateway (DATA-01).
+"""Confirming online gifts with the payment gateway (DATA-01): Paystack, Flutterwave or Bachs.
 
 Every trigger uses the same path: the donor's return to /give/callback, the gateway's webhook, the scheduled
 re-check of pending gifts and the "Re-check with gateway" button on Donations. The gateway's verify API is the
@@ -38,6 +38,8 @@ async def gateway_secret(db: AsyncSession, giving) -> str:
     site = await get_settings(db)
     if giving.payment_gateway == "flutterwave":
         return site.get("flutterwave_secret_key") or app_settings.FLUTTERWAVE_SECRET_KEY
+    if giving.payment_gateway == "bachs":
+        return site.get("bachs_secret_key") or ""
     return site.get("paystack_secret_key") or app_settings.PAYSTACK_SECRET_KEY
 
 
@@ -46,6 +48,8 @@ async def _verify(giving, secret: str, transaction_id: str) -> dict:
 
     if giving.payment_gateway == "flutterwave":
         return await payment.verify_flutterwave(transaction_id=transaction_id, tx_ref=giving.reference, secret_key=secret)
+    if giving.payment_gateway == "bachs":
+        return await payment.verify_bachs(transaction_id or giving.gateway_txn_id or "", giving.reference, secret)
     return await payment.verify_paystack(reference=giving.reference, secret_key=secret)
 
 
@@ -72,7 +76,9 @@ async def reconcile(db: AsyncSession, giving, *, transaction_id: str = "", base_
 
     if giving.status == "completed":
         return "completed"
-    if giving.method != "online" or giving.payment_gateway not in ("paystack", "flutterwave"):
+    from app.core.payment import GATEWAYS
+
+    if giving.method != "online" or giving.payment_gateway not in GATEWAYS:
         return giving.status
 
     secret = await gateway_secret(db, giving)
@@ -102,6 +108,8 @@ async def reconcile(db: AsyncSession, giving, *, transaction_id: str = "", base_
         return "completed"
     elif state == "pending":
         outcome = "abandoned" if giving.created_at and now - giving.created_at > ABANDON_AFTER else "pending"
+    elif state == "abandoned":                     # the gateway says the checkout expired or was cancelled
+        outcome = "abandoned"
     else:
         outcome = "failed"
     await db.execute(update(Giving).where(Giving.id == gift_id, Giving.status != "completed")
@@ -138,11 +146,12 @@ async def send_receipt(db: AsyncSession, giving, base_url: str) -> bool:
 
 async def due_for_recheck(db: AsyncSession, now: datetime | None = None, limit: int = 20) -> list[int]:
     """Pending online gifts the scheduler should ask about now."""
+    from app.core.payment import GATEWAYS
     from app.models.giving import Giving
 
     now = now or datetime.utcnow()
     q = (select(Giving.id).where(
-        Giving.method == "online", Giving.status == "pending", Giving.payment_gateway.in_(("paystack", "flutterwave")),
+        Giving.method == "online", Giving.status == "pending", Giving.payment_gateway.in_(tuple(GATEWAYS)),
         Giving.created_at <= now - RECHECK_AFTER, Giving.created_at >= now - RECHECK_WINDOW,
         (Giving.checked_at.is_(None)) | (Giving.checked_at <= now - RECHECK_EVERY),
     ).order_by(Giving.created_at).limit(limit))

@@ -1178,7 +1178,7 @@ async def give_checkout(
     db: AsyncSession = Depends(get_db),
 ):
     from app.config import settings as app_settings
-    from app.core.payment import initialize_paystack, initialize_flutterwave
+    from app.core.payment import GATEWAYS, initialize_bachs, initialize_flutterwave, initialize_paystack
     from app.core.settings_cache import get_settings
     from app.models.giving import Giving
 
@@ -1198,6 +1198,8 @@ async def give_checkout(
     payment_gateway = (
         site_settings.get("active_giving_gateway") or payment_gateway or "paystack"
     ).strip()
+    if payment_gateway not in GATEWAYS:
+        payment_gateway = "paystack"
 
     # Who is this gift for, and whose payment account takes it? (Admin switch: giving_model.)
     from app.core.branch_settings import get_branch_settings
@@ -1209,7 +1211,7 @@ async def give_checkout(
         target_branch = await _pick_branch_id(db, branch_id)
         if target_branch != hq_id:
             bs = await get_branch_settings(db, target_branch)
-            own_gw = bs.get("active_giving_gateway") or "paystack"
+            own_gw = bs.get("active_giving_gateway") if bs.get("active_giving_gateway") in GATEWAYS else "paystack"
             if bs.get("collects_own_giving") == "1" and bs.get(f"{own_gw}_secret_key"):
                 gateway_owner, payment_gateway, secret_override = "branch", own_gw, bs[f"{own_gw}_secret_key"]
     # The purpose is always one of the list (so totals group); "Others" keeps the giver's words as a note.
@@ -1229,6 +1231,13 @@ async def give_checkout(
     amount_minor = int(round(amount * 10 ** geo.minor_units(currency)))
     if amount_minor <= 0:
         return _redirect(request, "/give", "Please enter a valid amount.", "error")
+    if payment_gateway == "bachs":
+        from app.core.payment import BACHS_MINIMUMS
+
+        minimum = BACHS_MINIMUMS.get(currency.upper(), 0)
+        if amount < minimum:
+            return _redirect(request, "/give", f"The smallest online gift is {geo.format_money(minimum, currency)}. "
+                             "For a smaller amount, please use bank transfer.", "error")
 
     reference = f"swm_{secrets.token_urlsafe(16)}"
     callback_url = f"{app_settings.APP_URL}/give/callback?reference={reference}"
@@ -1254,12 +1263,24 @@ async def give_checkout(
     await db.flush()
 
     authorization_url = None
+    secret = secret_override or _hq_secret(site_settings, app_settings, payment_gateway)
     try:
-        authorization_url = await _init_gateway(
-            payment_gateway, secret_override or _hq_secret(site_settings, app_settings, payment_gateway), email, full_name, phone, amount,
-            amount_minor, reference, callback_url, (other_note or giving_type), anonymous, dedication,
-            initialize_flutterwave, initialize_paystack, currency,
-        )
+        if payment_gateway == "bachs":
+            # Bachs adds ?checkout_id=… to the success URL; cancelling comes back to the same check.
+            authorization_url, giving.gateway_txn_id = await initialize_bachs(
+                email=email.strip(), name=(full_name or "").strip(), amount=amount, currency=currency,
+                decimals=geo.minor_units(currency), reference=reference, success_url=callback_url, cancel_url=callback_url,
+                metadata={"purpose": other_note or giving_type, "anonymous": "yes" if anonymous else "no",
+                          "dedication": (dedication or "")[:200]},
+                secret_key=secret,
+            )
+            await db.flush()
+        else:
+            authorization_url = await _init_gateway(
+                payment_gateway, secret, email, full_name, phone, amount,
+                amount_minor, reference, callback_url, (other_note or giving_type), anonymous, dedication,
+                initialize_flutterwave, initialize_paystack, currency,
+            )
     except Exception:
         logging.exception("Payment gateway initialisation failed")
         giving.status = "failed"
@@ -1278,6 +1299,8 @@ async def give_checkout(
 def _hq_secret(site_settings, app_settings, gateway: str) -> str:
     if gateway == "flutterwave":
         return site_settings.get("flutterwave_secret_key") or app_settings.FLUTTERWAVE_SECRET_KEY
+    if gateway == "bachs":
+        return site_settings.get("bachs_secret_key") or ""
     return site_settings.get("paystack_secret_key") or app_settings.PAYSTACK_SECRET_KEY
 
 
@@ -1330,13 +1353,14 @@ async def give_callback(
     status: str = Query(""),
     transaction_id: str = Query(""),
     tx_ref: str = Query(""),
+    checkout_id: str = Query(""),
     db: AsyncSession = Depends(get_db),
 ):
     from app.core import mailer
     from app.core.giving_reconcile import reconcile
     from app.models.giving import Giving
 
-    # Paystack uses trxref; Flutterwave uses tx_ref + transaction_id
+    # Paystack uses trxref; Flutterwave uses tx_ref + transaction_id; Bachs keeps our reference and adds checkout_id
     actual_ref = trxref or reference or tx_ref
 
     result = await db.execute(select(Giving).where(Giving.reference == actual_ref))
@@ -1346,7 +1370,8 @@ async def give_callback(
         return _redirect(request, "/give", "Payment reference not found.", "error")
 
     already = giving.status == "completed"
-    outcome = await reconcile(db, giving, transaction_id=transaction_id, base_url=_public_base_url(request))
+    outcome = await reconcile(db, giving, transaction_id=checkout_id if giving.payment_gateway == "bachs" else transaction_id,
+                              base_url=_public_base_url(request))
     if outcome == "completed":
         return _redirect(
             request, "/give",
@@ -1372,6 +1397,8 @@ async def give_callback(
             "Your payment is still being processed. If you completed it, we will record it shortly; "
             "otherwise you can try again.", "info",
         )
+    if outcome == "abandoned":
+        return _redirect(request, "/give", "Your gift was not completed and nothing was charged. You can try again.", "info")
     return _redirect(
         request, "/give",
         "Payment could not be confirmed. Please contact us if you were charged.",

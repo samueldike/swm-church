@@ -78,6 +78,7 @@
       <option value="">All gateways</option>
       <option value="paystack" {{ 'selected' if filters.gateway == 'paystack' else '' }}>Paystack</option>
       <option value="flutterwave" {{ 'selected' if filters.gateway == 'flutterwave' else '' }}>Flutterwave</option>
+      <option value="bachs" {{ 'selected' if filters.gateway == 'bachs' else '' }}>Bachs</option>
     </select>
     <label class="flex flex-col text-[10.5px] font-mono text-ink-3 uppercase tracking-wider">From
       <input type="date" name="start" value="{{ filters.start }}" class="rounded-md border border-line-2 bg-surface px-2 py-1.5 text-xs text-ink normal-case"></label>

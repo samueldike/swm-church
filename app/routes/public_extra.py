@@ -419,7 +419,7 @@ async def resubscribe(token: str, request: Request, db: AsyncSession = Depends(g
 # ══════════════════════════════════════════════════════════════════════════
 #  Payment webhooks: the gateway tells us a gift changed, even if the donor never came back
 # ══════════════════════════════════════════════════════════════════════════
-# Set these URLs in the Paystack / Flutterwave dashboards (HQ's and each branch's own account).
+# Set these URLs in the Paystack / Flutterwave / Bachs dashboards (HQ's and each branch's own account).
 # The body only says WHICH gift to look at; reconcile() asks the gateway's verify API for the truth,
 # so a forged call can at most trigger a re-check.
 async def _webhook_gift(db: AsyncSession, reference: str):
@@ -473,6 +473,68 @@ async def give_webhook_flutterwave(request: Request, db: AsyncSession = Depends(
     if giving is None or giving.payment_gateway != "flutterwave":
         return JSONResponse({"ok": True})
     outcome = await reconcile(db, giving, transaction_id=tx_id if tx_id.isdigit() else "", base_url=pub._public_base_url(request))
+    return JSONResponse({"ok": outcome != "error"}, status_code=503 if outcome == "error" else 200)
+
+
+BACHS_WEBHOOK_TOLERANCE = 300          # seconds; older or future-dated deliveries are replays
+
+
+def bachs_signature_ok(raw: bytes, headers, secret: str, now: float | None = None) -> bool:
+    """HMAC-SHA256 of "{timestamp}.{raw body}" with the endpoint's signing secret (docs.bachs.io → Webhooks).
+
+    Accepts X-Bachs-Signature-V2 ("t=…,v1=…[,v1=…]", several v1 during a secret rotation) or
+    X-Bachs-Signature + X-Bachs-Timestamp.
+    """
+    import hashlib
+    import hmac
+    import time
+
+    if not secret:
+        return False
+    v2 = headers.get("x-bachs-signature-v2", "")
+    if v2:
+        parts = [p.strip().split("=", 1) for p in v2.split(",") if "=" in p]
+        stamp = next((v for k, v in parts if k == "t"), "")
+        sigs = [v for k, v in parts if k == "v1"]
+    else:
+        stamp, sigs = headers.get("x-bachs-timestamp", ""), [headers.get("x-bachs-signature", "")]
+    try:
+        ts = int(float(stamp))
+    except ValueError:
+        return False
+    if abs((now or time.time()) - ts) > BACHS_WEBHOOK_TOLERANCE:
+        return False
+    expected = hmac.new(secret.encode(), f"{ts}.".encode() + raw, hashlib.sha256).hexdigest()
+    return any(sig and hmac.compare_digest(expected, sig.strip()) for sig in sigs)
+
+
+@open_router.post("/give/webhook/bachs", name="give_webhook_bachs")
+async def give_webhook_bachs(request: Request, db: AsyncSession = Depends(get_db)):
+    import json
+
+    from app.core.giving_reconcile import reconcile
+
+    if pub._rate_limited(request, "webhook", limit=600, window=600):
+        return JSONResponse({"ok": False}, status_code=429)
+    raw = await request.body()
+    try:
+        event = json.loads(raw or b"{}")
+        data = event.get("data") or {}
+        ref, checkout_id = str(data.get("reference") or ""), str(data.get("checkout_id") or "")
+    except (ValueError, AttributeError):
+        return JSONResponse({"ok": False}, status_code=400)
+    giving = await _webhook_gift(db, ref)
+    if giving is None or giving.payment_gateway != "bachs":
+        return JSONResponse({"ok": True})            # not ours (subscriptions, payouts, other sites): acknowledged
+    secret = ""
+    if giving.gateway_owner == "branch" and giving.branch_id:
+        secret = (await get_branch_settings(db, giving.branch_id)).get("bachs_webhook_secret", "")
+    secret = secret or (await get_settings(db)).get("bachs_webhook_secret", "")
+    if not bachs_signature_ok(raw, request.headers, secret):
+        return JSONResponse({"ok": False}, status_code=400)   # Bachs: 4xx = rejected, not retried
+    if checkout_id and not giving.gateway_txn_id:
+        giving.gateway_txn_id = checkout_id[:128]    # verify_bachs still checks the session's reference is this gift's
+    outcome = await reconcile(db, giving, transaction_id=checkout_id, base_url=pub._public_base_url(request))
     return JSONResponse({"ok": outcome != "error"}, status_code=503 if outcome == "error" else 200)
 
 

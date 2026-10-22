@@ -291,7 +291,7 @@
           <div>
             <label for="active_giving_gateway" class="field-label">Active gateway <span class="normal-case text-ink-3 font-sans">(one at a time)</span></label>
             <select id="active_giving_gateway" name="active_giving_gateway" class="field-select">
-              {% for v, l in [('paystack', 'Paystack'), ('flutterwave', 'Flutterwave')] %}<option value="{{ v }}" {{ 'selected' if (S.get('active_giving_gateway') or 'paystack') == v else '' }}>{{ l }}</option>{% endfor %}
+              {% for v, l in [('paystack', 'Paystack'), ('flutterwave', 'Flutterwave'), ('bachs', 'Bachs')] %}<option value="{{ v }}" {{ 'selected' if (S.get('active_giving_gateway') or 'paystack') == v else '' }}>{{ l }}</option>{% endfor %}
             </select>
           </div>
           <div>
@@ -308,6 +308,8 @@
           {{ field('Flutterwave public key', 'flutterwave_public_key', value=S.get('flutterwave_public_key') or '', mono=True) }}
           {{ secret_field('Flutterwave secret key', 'flutterwave_secret_key', secret_status.flutterwave_secret_key, env_fallback.flutterwave_secret_key) }}
           {{ secret_field('Flutterwave encryption key', 'flutterwave_encryption_key', secret_status.flutterwave_encryption_key) }}
+          {{ secret_field('Bachs secret key', 'bachs_secret_key', secret_status.bachs_secret_key, hint='Starts with sk_live_ (real gifts) or sk_sandbox_ (testing). The key decides which one is used.') }}
+          {{ secret_field('Bachs webhook signing secret', 'bachs_webhook_secret', secret_status.bachs_webhook_secret, hint='Bachs Developer Portal → Webhooks: add the endpoint <your site address>/give/webhook/bachs, then paste its signing secret here. Without it, gifts are still confirmed when the giver returns and by the automatic re-check.') }}
         </div>
       </section>
 

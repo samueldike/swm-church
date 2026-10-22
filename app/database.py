@@ -91,6 +91,7 @@ _ADDED_COLUMNS = [
     ("ministers", "education_level", "VARCHAR(40)"),
     ("givings", "currency", "VARCHAR(3) DEFAULT 'NGN'"),
     ("givings", "checked_at", "TIMESTAMP"),
+    ("givings", "gateway_txn_id", "VARCHAR(128)"),
     ("remittances", "currency", "VARCHAR(3) DEFAULT 'NGN'"),
     ("contact_inquiries", "topic", "VARCHAR(40)"),
     ("newsletter_subscribers", "token", "VARCHAR(64)"),

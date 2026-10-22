@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.settings_cache import _ENC_PREFIX, _decrypt_strict, _encrypt
 from app.models.branch_setting import BranchSetting
 
-SECRET_KEYS = {"telegram_bot_token", "paystack_secret_key", "flutterwave_secret_key", "flutterwave_encryption_key"}
+SECRET_KEYS = {"telegram_bot_token", "paystack_secret_key", "flutterwave_secret_key", "flutterwave_encryption_key",
+               "bachs_secret_key", "bachs_webhook_secret"}
 PLAIN_KEYS = {
     "telegram_audio_chat_id", "paystack_public_key", "flutterwave_public_key", "active_giving_gateway",
     "church_accounts", "hq_share_percent", "collects_own_giving", "transcription_enabled", "service_times", "resident_pastor_since",

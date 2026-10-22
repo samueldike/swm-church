@@ -11,6 +11,8 @@ ENCRYPTED_SETTING_KEYS = {
     "paystack_secret_key",
     "flutterwave_secret_key",
     "flutterwave_encryption_key",
+    "bachs_secret_key",
+    "bachs_webhook_secret",       # signing secret of the Bachs webhook endpoint (Developer Portal → Webhooks)
     "anthropic_api_key",
     "openrouter_api_key",
     "groq_api_key",

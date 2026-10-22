@@ -39,7 +39,7 @@ def privacy_html(site_name: str, address: str = "", email: str = "", phone: str 
 <li><strong>Prayer requests</strong> — your request, and your name, email and phone if you give them (you may submit anonymously). It is read only by the prayer and pastoral team of the branch you selected. We do not publish it. If you tick “let me know”, we email you when it has been prayed over. <em>Basis: your consent. Because a prayer request can reveal religious belief or health, we treat it as sensitive and limit who can see it.</em></li>
 <li><strong>Newsletter and devotional emails</strong> — your email address. We send updates you asked for, and every email has an unsubscribe link. <em>Basis: consent.</em></li>
 <li><strong>Event reminders</strong> — your email address and the event you chose, used once to remind you. <em>Basis: consent.</em></li>
-<li><strong>Giving</strong> — your name, email, phone, the amount and purpose, and a payment reference. Card and bank details are entered on our payment providers’ pages (Paystack or Flutterwave); we never see or store them. We keep giving records to issue receipts and to meet our accounting and legal duties. <em>Basis: performing your gift instruction and our legal obligations.</em></li>
+<li><strong>Giving</strong> — your name, email, phone, the amount and purpose, and a payment reference. Card and bank details are entered on our payment providers’ pages (Paystack, Flutterwave or Bachs); we never see or store them. We keep giving records to issue receipts and to meet our accounting and legal duties. <em>Basis: performing your gift instruction and our legal obligations.</em></li>
 <li><strong>Visit statistics</strong> — we count page views, the site you came from and the type of device, without cookies, without storing your IP address, and without profiling you. The counts cannot identify you. <em>Basis: our legitimate interest in knowing which pages help people.</em></li>
 <li><strong>Security cookie</strong> — a small cookie keeps forms safe from forgery and remembers a message shown once. It is not used for tracking or advertising and expires within a day.</li>
 </ul>
@@ -47,7 +47,7 @@ def privacy_html(site_name: str, address: str = "", email: str = "", phone: str 
 <h2>Who receives your information</h2>
 <ul>
 <li>Our staff and volunteers, only as far as their role needs.</li>
-<li>Service providers who work for us under agreement: our payment providers (Paystack, Flutterwave), our email delivery provider (Resend), and our hosting provider. Some of these process data outside Nigeria; where they do, we rely on the safeguards the NDPA allows.</li>
+<li>Service providers who work for us under agreement: our payment providers (Paystack, Flutterwave, Bachs), our email delivery provider (Resend), and our hosting provider. Some of these process data outside Nigeria; where they do, we rely on the safeguards the NDPA allows.</li>
 <li>Authorities, where the law requires it.</li>
 </ul>
 <p>We do not sell your information and we do not share it for advertising.</p>
@@ -99,7 +99,7 @@ def terms_html(site_name: str, address: str = "", email: str = "", phone: str = 
 <h2>Giving</h2>
 <ul>
 <li>Gifts are voluntary and given to support the work of the ministry and the purpose you choose. Where you choose a branch, the gift is recorded for that branch.</li>
-<li>Payments are processed by Paystack or Flutterwave. Their terms apply to the payment itself.</li>
+<li>Payments are processed by Paystack, Flutterwave or Bachs. Their terms apply to the payment itself.</li>
 <li>We send a receipt to the email you provide. If something looks wrong — a double charge, a wrong amount — contact us promptly with your payment reference and we will look into it. Because a gift is a free-will offering, refunds are considered case by case.</li>
 <li>Gifts marked for a specific purpose are used for that purpose; if a project is fully funded or cannot go ahead, the ministry may apply the gift to a closely related need.</li>
 </ul>

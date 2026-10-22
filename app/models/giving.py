@@ -28,6 +28,7 @@ class Giving(Base):
     note: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     checked_at: Mapped[datetime | None] = mapped_column(DateTime)       # last scheduled re-check with the gateway (naive UTC)
+    gateway_txn_id: Mapped[str | None] = mapped_column(String(128))     # the gateway's own id when verification needs it (Bachs checkout_id)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.utcnow()

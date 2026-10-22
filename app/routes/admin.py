@@ -3604,6 +3604,9 @@ async def admin_settings_update(request: Request, db: AsyncSession = Depends(get
                 bad_models.append(settings_dict.pop(mk))
     if settings_dict.get("giving_model") not in (None, "central", "branch"):
         settings_dict.pop("giving_model")
+    from app.core.payment import GATEWAYS as _gateways
+    if settings_dict.get("active_giving_gateway") not in (None, *_gateways):
+        settings_dict.pop("active_giving_gateway")
     await update_settings(db, settings_dict)
     if {"telegram_api_id", "telegram_api_hash"} & set(settings_dict):
         saved = await get_settings(db)
@@ -6593,7 +6596,9 @@ def _donation_query(admin, status: str, gateway: str, q: str, start: str, end: s
     query = _gift_scope(admin, select(Giving).order_by(Giving.created_at.desc()), Giving)
     if status:
         query = query.where(Giving.status.in_(PAID_STATUSES) if status == "completed" else Giving.status == status)
-    if gateway in ("paystack", "flutterwave"):
+    from app.core.payment import GATEWAYS
+
+    if gateway in GATEWAYS:
         query = query.where(Giving.payment_gateway == gateway)
     if method == "online":
         query = query.where(Giving.method == "online")
@@ -6920,8 +6925,9 @@ async def _branch_settings_page(request: Request, db: AsyncSession, admin, branc
     from app.core.branch_settings import get_branch_settings, get_secret_status as branch_secret_status, parse_accounts
 
     values = await get_branch_settings(db, branch.id)
-    values.pop("telegram_bot_token", None); values.pop("paystack_secret_key", None)
-    values.pop("flutterwave_secret_key", None); values.pop("flutterwave_encryption_key", None)
+    from app.core.branch_settings import SECRET_KEYS
+    for secret_key in SECRET_KEYS:
+        values.pop(secret_key, None)
     ctx = await _admin_context(request, db, "admin.branch-settings" if not as_hq else "admin.branches")
     return await render_template(request, "admin/branch-settings.html", {
         "_db": db, "branch": branch, "values": values, "accounts": parse_accounts(values.get("church_accounts")),
@@ -6984,7 +6990,8 @@ async def _save_branch_settings(request: Request, db: AsyncSession, admin, branc
     # HQ changing just the share %) can never blank a branch's bank accounts or gateway choice.
     if form.get("giving_present") == "1":
         gw = str(form.get("active_giving_gateway") or "")
-        values["active_giving_gateway"] = gw if gw in ("paystack", "flutterwave") else "paystack"
+        from app.core.payment import GATEWAYS
+        values["active_giving_gateway"] = gw if gw in GATEWAYS else "paystack"
         values["collects_own_giving"] = "1" if form.get("collects_own_giving") == "1" else "0"
     if as_hq:                                    # only HQ decides how much of a branch's giving is HQ's
         values["hq_share_percent"] = str(share_percent(str(form.get("hq_share_percent") or "")))

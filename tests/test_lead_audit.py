@@ -502,3 +502,159 @@ def test_unit_reports_never_cascade_from_departments():
     fk = next(iter(UnitReport.__table__.c.department_id.foreign_keys))
     assert fk.ondelete == "RESTRICT"
     assert "delete" not in Department.unit_reports.property.cascade
+
+
+# ─── Bachs as a third gateway ────────────────────────────────────────
+
+def _mock_bachs(monkeypatch, handler):
+    import httpx
+
+    from app.core import payment
+
+    real = httpx.AsyncClient
+    seen = []
+
+    def wrapped(req):
+        seen.append(req)
+        return handler(req)
+
+    monkeypatch.setattr(payment.httpx, "AsyncClient", lambda **kw: real(transport=httpx.MockTransport(wrapped)))
+    return seen
+
+
+def test_bachs_checkout_request(monkeypatch):
+    import json
+
+    import httpx
+
+    from app.core import payment
+
+    seen = _mock_bachs(monkeypatch, lambda req: httpx.Response(201, json={
+        "checkout_id": "chk_123", "checkout_url": "https://checkout.bachs.io/c/abc", "status": "OPEN"}))
+    url, cid = asyncio.run(payment.initialize_bachs(
+        email="ada@gmail.com", name="", amount=5000, reference="swm_r1", success_url="https://x/give/callback?reference=swm_r1",
+        cancel_url="https://x/give/callback?reference=swm_r1", secret_key="sk_sandbox_abc", currency="NGN", decimals=2))
+    assert (url, cid) == ("https://checkout.bachs.io/c/abc", "chk_123")
+    req = seen[0]
+    body = json.loads(req.content)
+    assert str(req.url) == "https://sandbox-api.bachs.io/v1/checkout-sessions"       # key prefix picks the host
+    assert req.headers["authorization"] == "Bearer sk_sandbox_abc" and req.headers["idempotency-key"] == "swm_r1"
+    assert body["pricing"] == {"currency": "NGN", "amount": "5000.00"}                 # major units, decimal string
+    assert body["customer"] == {"email": "ada@gmail.com", "name": "ada"} and body["reference"] == "swm_r1"
+    assert payment.bachs_base_url("sk_live_x") == "https://api.bachs.io"
+
+
+@pytest.mark.parametrize("session,state,amount", [
+    ({"status": "COMPLETED", "amount": "5000.00", "currency": "NGN", "charge": {"status": "succeeded", "amount_paid": "5000.00", "currency": "NGN"}}, "paid", 5000.0),
+    ({"status": "OPEN", "payment_status": "processing", "amount": "5000.00", "currency": "NGN"}, "pending", None),
+    ({"status": "EXPIRED", "amount": "5000.00", "currency": "NGN"}, "abandoned", None),
+    ({"status": "OPEN", "amount": "5000.00", "currency": "NGN", "charge": {"status": "underpaid", "amount_paid": "3000.00", "currency": "NGN"}}, "paid", 3000.0),
+    ({"status": "COMPLETED", "reference": "someone_else", "amount": "5000.00", "currency": "NGN"}, "error", None),
+])
+def test_bachs_verify_states(monkeypatch, session, state, amount):
+    import httpx
+
+    from app.core import payment
+
+    body = {"checkout_id": "chk_1", "reference": "swm_r1", "created_at": "2026-10-22T10:00:00Z", **session}
+    seen = _mock_bachs(monkeypatch, lambda req: httpx.Response(200, json=body))
+    out = asyncio.run(payment.verify_bachs("chk_1", "swm_r1", "sk_live_x"))
+    assert out["state"] == state and str(seen[0].url) == "https://api.bachs.io/v1/checkout-sessions/chk_1"
+    if amount is not None:
+        assert out["amount"] == amount
+
+
+def test_bachs_verify_refuses_odd_ids_and_reports_unreachable(monkeypatch):
+    import httpx
+
+    from app.core import payment
+
+    assert asyncio.run(payment.verify_bachs("../v1/payouts", "swm_r1", "k"))["state"] == "error"
+    assert asyncio.run(payment.verify_bachs("", "swm_r1", "k"))["state"] == "pending"
+    _mock_bachs(monkeypatch, lambda req: httpx.Response(503))
+    assert asyncio.run(payment.verify_bachs("chk_1", "swm_r1", "k"))["state"] == "error"
+
+
+def test_underpaid_bachs_gift_is_a_mismatch(gifts):
+    gid = asyncio.run(gifts.add(ref="swm_b1", amount=5000, payment_gateway="bachs", gateway_txn_id="chk_1"))
+    gifts.answer = {"state": "paid", "success": False, "amount": 3000.0, "currency": "NGN"}
+    assert _reconcile(gifts, gid) == ("mismatch", "mismatch")
+
+
+def test_expired_bachs_checkout_is_abandoned_at_once(gifts):
+    gid = asyncio.run(gifts.add(ref="swm_b2", payment_gateway="bachs", gateway_txn_id="chk_2", age_hours=1))
+    gifts.answer = {"state": "abandoned"}
+    assert _reconcile(gifts, gid) == ("abandoned", "abandoned")
+
+
+def test_bachs_webhook_signature():
+    import hashlib
+    import hmac
+
+    from app.routes.public_extra import bachs_signature_ok
+
+    raw, secret, now = b'{"type":"collection.succeeded"}', "whsec_x", 1_800_000_000
+
+    def sig(key, ts=now):
+        return hmac.new(key.encode(), f"{ts}.".encode() + raw, hashlib.sha256).hexdigest()
+
+    assert bachs_signature_ok(raw, {"x-bachs-signature-v2": f"t={now},v1={sig(secret)}"}, secret, now=now)
+    assert bachs_signature_ok(raw, {"x-bachs-signature-v2": f"t={now},v1={sig('old')},v1={sig(secret)}"}, secret, now=now)  # rotation
+    assert bachs_signature_ok(raw, {"x-bachs-timestamp": str(now), "x-bachs-signature": sig(secret)}, secret, now=now)
+    assert not bachs_signature_ok(raw, {"x-bachs-signature-v2": f"t={now},v1={sig('wrong')}"}, secret, now=now)
+    assert not bachs_signature_ok(raw, {"x-bachs-signature-v2": f"t={now - 301},v1={sig(secret, now - 301)}"}, secret, now=now)  # replay
+    assert not bachs_signature_ok(raw, {"x-bachs-signature-v2": f"t={now},v1={sig('')}"}, "", now=now)   # no secret set: refuse
+
+
+def test_bachs_webhook_confirms_a_gift(gifts, monkeypatch):
+    import hashlib
+    import hmac
+    import json
+    import time
+
+    from app.core import throttle
+    from app.routes import public_extra
+
+    throttle.reset_all()
+    gid = asyncio.run(gifts.add(ref="swm_hookb", amount=5000, payment_gateway="bachs"))
+    gifts.answer = {"state": "paid", "success": True, "amount": 5000.0, "currency": "NGN"}
+
+    async def settings(_db):
+        return {"bachs_webhook_secret": "whsec_x"}
+
+    async def session():
+        async with gifts.maker() as db:
+            yield db
+
+    monkeypatch.setattr(public_extra, "get_settings", settings)
+    app.dependency_overrides[get_db] = session
+    try:
+        client = TestClient(app)
+        raw = json.dumps({"id": "evt_1", "type": "collection.succeeded",
+                          "data": {"checkout_id": "chk_9", "reference": "swm_hookb", "status": "SUCCEEDED"}}).encode()
+        ts = int(time.time())
+        bad = client.post("/give/webhook/bachs", content=raw, headers={"x-bachs-signature-v2": f"t={ts},v1={'0' * 64}"})
+        assert bad.status_code == 400 and gifts.calls == 0
+        good = hmac.new(b"whsec_x", f"{ts}.".encode() + raw, hashlib.sha256).hexdigest()
+        ok = client.post("/give/webhook/bachs", content=raw, headers={"x-bachs-signature-v2": f"t={ts},v1={good}"})
+        assert ok.status_code == 200 and gifts.calls == 1
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    async def row():
+        async with gifts.maker() as db:
+            g = await gifts.load(db, gid)
+            return g.status, g.gateway_txn_id
+
+    assert asyncio.run(row()) == ("completed", "chk_9")
+
+
+def test_gateway_lists_include_bachs():
+    from app.core import branch_settings, payment
+    from app.core.settings_cache import ENCRYPTED_SETTING_KEYS
+
+    assert "bachs" in payment.GATEWAYS
+    assert {"bachs_secret_key", "bachs_webhook_secret"} <= ENCRYPTED_SETTING_KEYS
+    assert {"bachs_secret_key", "bachs_webhook_secret"} <= branch_settings.SECRET_KEYS
+    for tpl in ("app/views/admin/settings.html", "app/views/admin/branch-settings.html", "app/views/admin/donations.html"):
+        assert "bachs" in pathlib.Path(tpl).read_text(encoding="utf-8"), tpl
