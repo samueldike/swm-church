@@ -25,6 +25,9 @@ class FakeResult:
     def scalar_one(self):
         return self.value
 
+    def first(self):
+        return self.value
+
 
 class FakeDB:
     """Answers each execute() with the next queued value; records deletes."""
@@ -189,6 +192,38 @@ def test_every_ip_lookup_uses_the_shared_helper():
     for path in ("app/routes/public.py", "app/routes/api.py", "app/routes/admin.py", "app/core/analytics.py"):
         src = pathlib.Path(path).read_text(encoding="utf-8")
         assert 'get("x-forwarded-for", "").split(",")[0]' not in src, path
+
+
+# ─── SEC-04: accepting an HOD invitation ─────────────────────────────
+
+def _accept_hod(monkeypatch, password, email_taken=None):
+    invitation = SimpleNamespace(name="Ada Choir", email="ada@gmail.com", branch_id=2, department_id=9, accepted_at=None)
+    db = FakeDB(invitation, email_taken)
+    shown = {}
+
+    async def render(_request, _template, ctx):
+        shown.update(ctx)
+        return "form"
+
+    monkeypatch.setattr(admin_routes, "render_template", render)
+    request = SimpleNamespace(session={})
+    resp = asyncio.run(admin_routes.hod_invitation_accept("tok", request, password, password, db))
+    return resp, db, shown, invitation
+
+
+def test_hod_invitation_gives_the_account_its_department(monkeypatch):
+    resp, db, _shown, invitation = _accept_hod(monkeypatch, "Choir-2026-ok")
+    assert resp.status_code == 303 and resp.headers["location"] == "/admin/hod/reports"
+    hod = db.added[0]
+    assert (hod.role, hod.branch_id, hod.department_id) == ("hod", 2, 9)
+    assert invitation.accepted_at is not None
+
+
+@pytest.mark.parametrize("password,taken,message", [("a", None, "at least 8"), ("Choir-2026-ok", (1,), "already exists")])
+def test_hod_invitation_refuses_short_password_and_existing_email(monkeypatch, password, taken, message):
+    resp, db, shown, invitation = _accept_hod(monkeypatch, password, taken)
+    assert resp == "form" and db.added == [] and invitation.accepted_at is None
+    assert message in shown["error_messages"]["password"][0]
 
 
 # ─── DATA-03: deleting a department ──────────────────────────────────

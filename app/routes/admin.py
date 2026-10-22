@@ -501,12 +501,17 @@ async def admin_invitation_accept(
             "_db": db, "invitation": invitation, "token": token,
             "error_messages": {"password": ["Password must be at least 8 characters."]},
         })
+    if await _value_taken(db, Admin.email, invitation.email):
+        return await render_template(request, "admin/invitation-accept.html", {
+            "_db": db, "invitation": invitation, "token": token,
+            "error_messages": {"password": ["An account with this email already exists. Sign in instead."]},
+        })
 
     admin_user = Admin(
         full_name=invitation.name or "Branch Admin",
         email=invitation.email,
         password_hash=hash_password(password),
-        role="branch_super_admin",
+        role="branch_admin",
         branch_id=invitation.branch_id,
         is_active=True,
     )
@@ -4185,10 +4190,14 @@ async def hod_invitation_accept(
     if not invitation:
         return RedirectResponse(url="/admin", status_code=303)
 
-    if password != password_confirmation:
+    problem = ("Passwords do not match." if password != password_confirmation
+               else "Password must be at least 8 characters." if len(password) < 8
+               else "An account with this email already exists. Sign in instead, or ask your branch office for help."
+               if await _value_taken(db, Admin.email, invitation.email) else None)
+    if problem:
         return await render_template(request, "hod/invitation-accept.html", {
             "_db": db, "invitation": invitation, "token": token,
-            "error_messages": {"password": ["Passwords do not match."]},
+            "error_messages": {"password": [problem]},
         })
 
     admin_user = Admin(
@@ -4197,6 +4206,7 @@ async def hod_invitation_accept(
         password_hash=hash_password(password),
         role="hod",
         branch_id=invitation.branch_id,
+        department_id=invitation.department_id,      # without it the HOD's reports belong to no department
         is_active=True,
     )
     db.add(admin_user)
@@ -4205,7 +4215,7 @@ async def hod_invitation_accept(
     invitation.accepted_at = datetime.utcnow()
     await db.flush()
 
-    login_admin(request, admin_user.id)
+    login_admin(request, admin_user.id, admin_user.session_version)
     return RedirectResponse(url="/admin/hod/reports", status_code=303)
 
 
