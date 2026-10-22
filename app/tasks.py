@@ -223,6 +223,15 @@ async def _mark_failed(sermon_id: int, reason: str) -> None:
         logger.exception("Could not mark sermon %d transcription failed", sermon_id)
 
 
+async def _transcription_hotwords(db, sermon) -> str:
+    """Names Whisper should spell right: the ministry, its programmes, this speaker and title."""
+    from app.core.settings_cache import get_settings
+
+    site = await get_settings(db)
+    words = [site.get("siteName") or "Scent of Water Ministry", "CASOM", sermon.preacher, sermon.title, sermon.series]
+    return ", ".join(dict.fromkeys(w.strip() for w in words if w and w.strip()))[:400]
+
+
 async def _transcribe(sermon_id: int, telegram_file_id: str | None):
     import asyncio
 
@@ -238,6 +247,7 @@ async def _transcribe(sermon_id: int, telegram_file_id: str | None):
         stored_path = sermon.audio_file_path
         telegram_file_id = telegram_file_id or sermon.telegram_file_id
         branch_id = sermon.branch_id
+        hotwords = await _transcription_hotwords(db, sermon)
 
         sermon.transcription_status = "processing"
         sermon.transcription_error = None
@@ -261,8 +271,10 @@ async def _transcribe(sermon_id: int, telegram_file_id: str | None):
     try:
         from app.core.transcription import transcribe_audio
 
+        import functools
+
         transcript = await asyncio.get_event_loop().run_in_executor(
-            None, transcribe_audio, audio_path
+            None, functools.partial(transcribe_audio, audio_path, hotwords=hotwords)
         )
 
         async with async_session() as db:
