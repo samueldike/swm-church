@@ -147,6 +147,7 @@ async def render_template(
     # A placeholder number (e.g. "+234 (555) 123-4567") must never reach visitors.
     ctx.setdefault("siteSupportPhone", _sc.clean_phone(site.get("siteSupportPhone", "")))
     ctx.setdefault("siteContactEmail", site.get("siteContactEmail", ""))
+    ctx.setdefault("configuredSiteUrl", (site.get("siteUrl") or "").strip().rstrip("/"))   # Settings → Website address
     ctx.setdefault("defaultPageHero", site.get("defaultPageHero", "/images/general-page-header.jpg"))
     _map_embed_url = (site.get("mapEmbedUrl") or "").strip()
     if not _map_embed_url and ctx.get("siteHeadquartersAddress"):

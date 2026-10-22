@@ -1,5 +1,5 @@
 {% extends "layouts/admin_base.html" %}
-{% from "macros/admin.html" import page_header, field, textarea, secret_field, checkbox with context %}
+{% from "macros/admin.html" import page_header, field, textarea, secret_field, checkbox, webhook_urls with context %}
 {% block title %}Branch settings — {{ branch.name }} | {{ siteName }}{% endblock %}
 {% block topbar_title %}Branch settings{% endblock %}
 {% block topbar_subtitle %}{{ branch.name }}{% endblock %}
@@ -63,8 +63,9 @@
         {{ secret_field('Flutterwave secret key', 'flutterwave_secret_key', secret_status.flutterwave_secret_key) }}
         {{ secret_field('Flutterwave encryption key', 'flutterwave_encryption_key', secret_status.flutterwave_encryption_key) }}
         {{ secret_field('Bachs secret key', 'bachs_secret_key', secret_status.bachs_secret_key, hint='Starts with sk_live_ (real gifts) or sk_sandbox_ (testing).') }}
-        {{ secret_field('Bachs webhook signing secret', 'bachs_webhook_secret', secret_status.bachs_webhook_secret, hint='Bachs Developer Portal → Webhooks: add the endpoint <your site address>/give/webhook/bachs, then paste its signing secret here. Without it, gifts are still confirmed when the giver returns and by the automatic re-check.') }}
+        {{ secret_field('Bachs webhook signing secret', 'bachs_webhook_secret', secret_status.bachs_webhook_secret, hint='Bachs Developer Portal → Webhooks: add the Bachs webhook URL shown below, then paste that endpoint’s signing secret here. Without it, gifts are still confirmed when the giver returns and by the automatic re-check.') }}
       </div>
+      {{ webhook_urls(configuredSiteUrl or siteUrl, values.get('active_giving_gateway') or 'paystack') }}
     </div>
 
     {% if as_hq %}

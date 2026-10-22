@@ -40,6 +40,24 @@
   </div>
 {%- endmacro %}
 
+{#- The payment webhook URLs to paste into each gateway's dashboard, with copy buttons. `base` = the public site address. -#}
+{% macro webhook_urls(base, active=None) -%}
+  <div class="rounded-md border border-line bg-paper p-3.5 flex flex-col gap-2.5">
+    <div>
+      <p class="text-[13px] font-semibold text-ink flex items-center gap-1.5"><i class="ri-links-line text-gold"></i>Webhook URLs</p>
+      <p class="field-hint mt-0.5">Paste the one for your gateway into its dashboard (Paystack: Settings → API Keys &amp; Webhooks; Flutterwave: Settings → Webhooks; Bachs: Developer Portal → Webhooks). It lets the gateway tell this site about a gift even when the giver never comes back from the payment page.</p>
+    </div>
+    {% for key, label in [('paystack', 'Paystack'), ('flutterwave', 'Flutterwave'), ('bachs', 'Bachs')] %}
+      {% set url = base.rstrip('/') ~ url_for('give_webhook_' ~ key) %}
+      <div class="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+        <span class="text-[12px] font-medium text-ink-2 sm:w-28 shrink-0">{{ label }}{% if active == key %} <span class="text-[10.5px] font-mono uppercase text-gold-text">active</span>{% endif %}</span>
+        <code class="flex-1 min-w-0 break-all rounded border border-line-2 bg-surface px-2 py-1.5 font-mono text-[11.5px] text-ink">{{ url }}</code>
+        <button type="button" class="btn btn-secondary btn-sm shrink-0 self-start sm:self-auto" data-copy="{{ url }}" aria-label="Copy the {{ label }} webhook URL"><i class="ri-file-copy-line"></i>Copy</button>
+      </div>
+    {% endfor %}
+  </div>
+{%- endmacro %}
+
 {#- Write-only secret input. The saved value is never sent to the browser: `status` is
    {state: unset|set|unreadable, hint: last4}. Blank = keep, typed = replace, tick = remove. -#}
 {% macro secret_field(label, name, status, env_fallback=False, placeholder='', hint=None) -%}

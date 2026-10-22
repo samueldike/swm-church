@@ -658,3 +658,12 @@ def test_gateway_lists_include_bachs():
     assert {"bachs_secret_key", "bachs_webhook_secret"} <= branch_settings.SECRET_KEYS
     for tpl in ("app/views/admin/settings.html", "app/views/admin/branch-settings.html", "app/views/admin/donations.html"):
         assert "bachs" in pathlib.Path(tpl).read_text(encoding="utf-8"), tpl
+
+
+def test_webhook_urls_are_shown_for_copying():
+    paths = {app.url_path_for(f"give_webhook_{k}") for k in ("paystack", "flutterwave", "bachs")}
+    assert paths == {"/give/webhook/paystack", "/give/webhook/flutterwave", "/give/webhook/bachs"}
+    macro = pathlib.Path("app/views/macros/admin.html").read_text(encoding="utf-8")
+    assert "macro webhook_urls" in macro and "data-copy=" in macro
+    for tpl in ("app/views/admin/settings.html", "app/views/admin/branch-settings.html"):
+        assert "webhook_urls(configuredSiteUrl or siteUrl" in pathlib.Path(tpl).read_text(encoding="utf-8"), tpl
