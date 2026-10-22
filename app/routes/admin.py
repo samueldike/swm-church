@@ -4258,9 +4258,12 @@ async def admin_telegram_archive(request: Request, db: AsyncSession = Depends(ge
         disk_free = shutil.disk_usage(archive_dir if os.path.isdir(archive_dir) else os.path.dirname(archive_dir) or ".").free
     except OSError:
         disk_free = None
+    job = await ta.get_job(db)
+    # When the shown result happened (church time, UTC+1), so an old result never looks current.
+    job_when = (datetime.utcfromtimestamp(float(job["heartbeat"])) + timedelta(hours=1)).strftime("%d %b %Y, %H:%M") if job.get("heartbeat") else ""
     ctx = await _admin_context(request, db, "admin.telegram-archive")
     return await render_template(request, "admin/telegram-archive.html", {
-        "_db": db, "login": await ta.login_state(), "job": await ta.get_job(db), "job_running": ta.job_running(await ta.get_job(db)),
+        "_db": db, "login": await ta.login_state(), "job": job, "job_running": ta.job_running(job), "job_when": job_when,
         "keys_saved": telegram_local.credentials_saved(site), "channel_saved": bool((site.get("telegram_audio_chat_id") or "").strip()),
         "counts": counts, "imported": imported, "items": items, "disk_free": disk_free, "disk_margin": ta.DISK_MARGIN,
         "queue_sizes": queue_sizes,

@@ -216,7 +216,11 @@ def _explain(exc: Exception) -> ArchiveError:
         return ArchiveError("That two-step verification password is not right.")
     if isinstance(exc, ArchiveError):
         return exc
-    return ArchiveError(f"Telegram said: {exc}")
+    if isinstance(exc, errors.RPCError):                 # an answer from Telegram itself
+        return ArchiveError(f"Telegram said: {exc}")
+    # Our own failure (network, server): say so instead of blaming Telegram.
+    return ArchiveError(f"The server hit an unexpected error ({type(exc).__name__}). Press the button to try again; "
+                        "if it happens again, the details are in the server log.")
 
 
 async def start_login(phone: str) -> None:

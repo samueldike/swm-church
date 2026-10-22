@@ -118,3 +118,12 @@ def test_each_file_carries_its_posts_caption_and_details():
     assert meta["telegram_embed"] == "https://t.me/swmchannel/12?embed=1" and meta["duration_seconds"] == 1800
     assert meta["posted_at_utc"] == "2019-01-01 09:00:00" and meta["edited_at_utc"] is None
     assert {"title", "performer", "sha256", "views", "forwards", "post_author", "voice_note"} <= meta.keys()
+
+
+def test_only_telegrams_own_errors_are_blamed_on_telegram():
+    from telethon import errors
+
+    ours = ta._explain(RuntimeError("got Future attached to a different loop"))
+    assert not str(ours).startswith("Telegram said") and "try again" in str(ours).lower()
+    theirs = ta._explain(errors.RPCError(request=None, message="CHANNEL_PRIVATE", code=400))
+    assert str(theirs).startswith("Telegram said")

@@ -52,6 +52,14 @@
     {% set pct = ((job.get('bytes_done', 0) / job.get('bytes_total')) * 100) if job.get('bytes_total') else (((job.get('done', 0) / job.get('total')) * 100) if job.get('total') else (100 if job.get('state') == 'done' else 0)) %}
     <div data-live-bar>{{ progress_bar(pct|round(1), 'bad' if job.get('state') == 'failed' else ('ok' if job.get('state') == 'done' else 'gold')) }}</div>
     <p class="text-[12.5px] {{ 'text-bad' if job.get('state') == 'failed' else 'text-ink-2' }}" data-live-message>{{ job.get('message') or '' }}</p>
+    {% if not busy and job_when %}<p class="text-[11px] text-ink-3">{{ 'Stopped' if job.get('state') == 'failed' else ('Paused' if job.get('state') == 'paused' else 'Finished') }} {{ job_when }}</p>{% endif %}
+    {% if not busy and job.get('state') == 'failed' and job.get('action') in ['scan', 'download', 'import'] %}
+      <form method="POST" action="{{ url_for('admin_telegram_archive_run') }}" data-turbo="false">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="{{ job.get('action') }}">
+        {% if job.get('action') == 'download' %}<input type="hidden" name="mode" value="continuous">{% endif %}
+        <button type="submit" class="btn btn-secondary btn-sm" {{ '' if ready else 'disabled' }}><i class="ri-refresh-line"></i>Try again</button>
+      </form>
+    {% endif %}
     {% if job.get('bytes_total') %}<p class="font-mono text-[11.5px] text-ink-3" data-live-bytes>{{ job.get('bytes_done', 0)|filesizeformat }} of {{ job.get('bytes_total')|filesizeformat }}</p>{% endif %}
     {% if busy %}<p class="text-[11.5px] text-ink-3">You can close this page; the work continues on the server.</p>{% endif %}
   </section>
