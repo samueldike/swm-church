@@ -15,3 +15,12 @@ node_modules
 plans/
 swm-backup/
 *.sql
+
+# Runtime data: bind-mounted into the containers, never baked into the image
+# (COPY . . once put the 4.4GB Whisper model cache into every image).
+whisper-models/
+telegram-archive/
+app/telegram-archive/
+app/media/*
+!app/media/.gitkeep
+media_files/

@@ -56,3 +56,6 @@ app/media/*
 telegram-archive/
 app/telegram-archive/
 *.stackdump
+
+# Whisper model cache (bind-mounted into the transcriber)
+whisper-models/
