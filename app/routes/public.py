@@ -118,8 +118,9 @@ def _rate_limited(request: Request, bucket: str, limit: int = 8, window: float =
     """Per-IP cap on public form submissions (spam / abuse guard). Counts every attempt."""
     from app.core import throttle
 
-    ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-          or (request.client.host if request.client else "unknown"))
+    from app.core.client_ip import client_ip
+
+    ip = client_ip(request)
     key = f"public:{bucket}:{ip}"
     if throttle.is_blocked(key, limit=limit, window=window):
         return True

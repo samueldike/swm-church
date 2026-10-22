@@ -136,8 +136,9 @@ class AnalyticsMiddleware:
             path = scope.get("path", "/")
             ua = headers.get("user-agent", "")
             if countable(path, info.get("status", 0), info.get("ctype", ""), ua, headers):
-                fwd = headers.get("x-forwarded-for", "").split(",")[0].strip()
-                ip = fwd or (scope.get("client") or ("", 0))[0] or ""
+                from app.core.client_ip import resolve
+
+                ip = resolve(headers, (scope.get("client") or ("", 0))[0])
                 record(path, ua, ip, headers.get("referer", ""), headers.get("host", ""))
         except Exception:
             logger.exception("analytics record failed")

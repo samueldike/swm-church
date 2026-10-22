@@ -34,8 +34,9 @@ router = APIRouter(prefix="/api", tags=["api"])
 # ---------------------------------------------------------------------------
 
 def _client_ip(request: Request) -> str:
-    return (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-            or (request.client.host if request.client else "unknown"))
+    from app.core.client_ip import client_ip
+
+    return client_ip(request)
 
 
 def _json(data: dict | list, status: int = 200) -> JSONResponse:

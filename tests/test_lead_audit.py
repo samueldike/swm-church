@@ -171,6 +171,26 @@ def test_uploaded_files_cannot_run_script(tmp_path, monkeypatch):
     assert any(m.cls is UploadHeadersMiddleware for m in app.user_middleware)
 
 
+# ─── SEC-03: the visitor's IP for rate limits ────────────────────────
+
+def test_spoofed_forwarded_for_does_not_change_the_rate_limit_key():
+    from app.core.client_ip import resolve
+
+    nginx = "172.18.0.5"                                              # proxy on the Docker network
+    # What nginx sends for a visitor at 102.89.1.1 who typed their own X-Forwarded-For:
+    spoofed = {"x-real-ip": "102.89.1.1", "x-forwarded-for": "6.6.6.6, 102.89.1.1"}
+    assert resolve(spoofed, nginx) == "102.89.1.1"
+    assert resolve({"x-forwarded-for": "6.6.6.6, 102.89.1.1"}, nginx) == "102.89.1.1"   # no X-Real-IP: last hop
+    assert resolve({"x-real-ip": "6.6.6.6", "x-forwarded-for": "6.6.6.6"}, "102.89.1.1") == "102.89.1.1"  # no proxy
+    assert resolve({}, nginx) == nginx and resolve({}, None) == "unknown"
+
+
+def test_every_ip_lookup_uses_the_shared_helper():
+    for path in ("app/routes/public.py", "app/routes/api.py", "app/routes/admin.py", "app/core/analytics.py"):
+        src = pathlib.Path(path).read_text(encoding="utf-8")
+        assert 'get("x-forwarded-for", "").split(",")[0]' not in src, path
+
+
 # ─── DATA-03: deleting a department ──────────────────────────────────
 
 def _call_destroy(monkeypatch, db):

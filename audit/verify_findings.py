@@ -59,13 +59,16 @@ served = httpx.get(BASE + "/" + str(found).lstrip("/")) if found and "html" in s
 report("SEC-02", bool(served is not None and served.status_code == 200 and "text/html" in served.headers.get("content-type", "")),
        f"upload -> {r.status_code}; stored {found}; served as {served.headers.get('content-type') if served is not None else '-'}")
 
-# F-SEC-03: X-Forwarded-For spoofing defeats the per-IP login limit
+# F-SEC-03: X-Forwarded-For spoofing defeats the per-IP login limit.
+# Headers are sent the way nginx/default.conf forwards them (X-Real-IP = real address, the visitor's own
+# X-Forwarded-For value first, nginx's view appended), since production always has nginx in front.
+
 c = httpx.Client(base_url=BASE, timeout=30, follow_redirects=True)
 tok = re.search(r'name="csrf_token" value="([^"]+)"', c.get("/admin/").text).group(1)
 codes = []
 for i in range(14):
     r = c.post("/admin/login", data={"csrf_token": tok, "email": f"nobody{i}@example.org", "password": "x"},
-               headers={"X-Forwarded-For": f"10.9.{i}.1"})
+               headers={"X-Forwarded-For": f"10.9.{i}.1, 203.0.113.7", "X-Real-IP": "203.0.113.7"})
     codes.append("blocked" if "too many" in r.text.lower() else "tried")
 report("SEC-03", "blocked" not in codes, f"14 failed logins from 14 spoofed IPs: {codes.count('blocked')} blocked")
 

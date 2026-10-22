@@ -399,8 +399,9 @@ async def admin_login_submit(
 
     from app.core import throttle
 
-    client_ip = (request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-                 or (request.client.host if request.client else "unknown"))
+    from app.core.client_ip import client_ip as _ip
+
+    client_ip = _ip(request)
     keys = (f"login:ip:{client_ip}", f"login:email:{email.lower().strip()}")
     wait = max(throttle.is_blocked(k, limit=10 if k.startswith("login:ip") else 5) for k in keys)
     if wait:
