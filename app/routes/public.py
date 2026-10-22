@@ -290,7 +290,7 @@ async def _photos(db: AsyncSession, collection: str) -> list[dict]:
 GALLERY_DIRS = ("images/sliders", "images/stories", "images/gallery")
 GALLERY_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".avif"}
 
-# Shipped by seed_content.py as demo artwork — generic stock crowds that are
+# Demo artwork from the old seed script (removed, R1) — generic stock crowds that are
 # not this congregation. Never surface them as the ministry's own photography.
 GALLERY_PLACEHOLDERS = {"slide-1.jpg", "slide-2.jpg", "slide-3.jpg"}
 
