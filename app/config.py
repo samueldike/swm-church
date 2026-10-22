@@ -5,7 +5,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://swm_user:swm_password@postgres:5432/swm_db"
     REDIS_URL: str = "redis://redis:6379/0"
     SECRET_KEY: str = "change-me"
-    APP_ENV: str = "development"
+    APP_ENV: str = "development"          # the Docker image sets "production"
+    SQL_ECHO: bool = False                # log every SQL statement (and its parameters: personal data). Debugging only.
+    LOG_LEVEL: str = "INFO"
     APP_NAME: str = "Scent of Water Ministry"
     APP_URL: str = "http://localhost"
 

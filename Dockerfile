@@ -4,8 +4,11 @@ FROM python:3.12-slim
 # even when a server's compose file or .env omits it (they once wrote to different dirs).
 # TELEGRAM_BOT_API_CONF_DIR is where the app hands the telegram-bot-api container its
 # api_id/api_hash (saved in Settings); nothing is written unless that volume is mounted.
+# APP_ENV=production: secure session cookie, no /docs or /openapi.json, and the app refuses to
+# start without a real SECRET_KEY. Local development runs uvicorn directly and stays "development".
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    APP_ENV=production \
     MEDIA_ROOT=/app/media \
     TELEGRAM_BOT_API_CONF_DIR=/run/swm-telegram \
     TELEGRAM_ARCHIVE_DIR=/app/telegram-archive

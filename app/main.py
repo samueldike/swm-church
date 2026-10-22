@@ -10,6 +10,17 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
 
+import logging
+
+# One readable format for every module's logger (INFO messages were silently dropped before).
+logging.basicConfig(level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO),
+                    format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+if not settings.is_development and (settings.SECRET_KEY in ("", "change-me") or len(settings.SECRET_KEY) < 32):
+    # Sessions would be forgeable and every key saved in Settings decryptable: never serve like that.
+    raise RuntimeError("SECRET_KEY is missing, the default, or shorter than 32 characters. Set a long random SECRET_KEY "
+                       "in the server's .env, e.g. the output of: python -c 'import secrets; print(secrets.token_urlsafe(48))'")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -40,21 +51,15 @@ async def lifespan(app: FastAPI):
     from app.core import scheduler
 
     job_loop = scheduler.start()
-    if not settings.is_development and settings.SECRET_KEY in ("", "change-me"):
-        import logging
-
-        logging.getLogger(__name__).critical(
-            "SECRET_KEY is the default value: admin sessions can be forged and saved API keys are trivially decryptable. "
-            "Set a long random SECRET_KEY in .env."
-        )
     yield
     await scheduler.stop(job_loop)
 
 
 app = FastAPI(
     title=settings.APP_NAME,
-    docs_url=None if settings.is_development is False else "/docs",
-    redoc_url=None if settings.is_development is False else "/redoc",
+    docs_url="/docs" if settings.is_development else None,
+    redoc_url="/redoc" if settings.is_development else None,
+    openapi_url="/openapi.json" if settings.is_development else None,   # the route list is not public in production
     lifespan=lifespan,
 )
 

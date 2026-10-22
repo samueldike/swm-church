@@ -4,7 +4,7 @@ import asyncio, os, re, sys, tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); os.chdir(ROOT); sys.path.insert(0, ROOT)
 DB = os.path.join(tempfile.gettempdir(), "swm_rbac.db")
 if os.path.exists(DB): os.remove(DB)
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///" + DB.replace("\\", "/"); os.environ["APP_ENV"] = "production"
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///" + DB.replace("\\", "/"); os.environ["APP_ENV"] = "production"; os.environ.setdefault("SECRET_KEY", "checks-only-" + "x" * 40)
 os.environ["SWM_DISABLE_SCHEDULER"] = "1"
 import sqlalchemy.ext.asyncio as _sa
 _o = _sa.create_async_engine

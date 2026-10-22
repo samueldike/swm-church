@@ -667,3 +667,35 @@ def test_webhook_urls_are_shown_for_copying():
     assert "macro webhook_urls" in macro and "data-copy=" in macro
     for tpl in ("app/views/admin/settings.html", "app/views/admin/branch-settings.html"):
         assert "webhook_urls(configuredSiteUrl or siteUrl" in pathlib.Path(tpl).read_text(encoding="utf-8"), tpl
+
+
+# ─── OPS-01: production mode ─────────────────────────────────────────
+
+def _run_prod(secret: str, code: str):
+    import os
+    import subprocess
+    import sys
+
+    env = {**os.environ, "APP_ENV": "production", "SECRET_KEY": secret, "SWM_DISABLE_SCHEDULER": "1",
+           "DATABASE_URL": "postgresql+asyncpg://nobody:x@127.0.0.1:1/none"}   # never connected: no startup hook
+    return subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=120)
+
+
+def test_production_refuses_a_weak_secret_key():
+    for weak in ("", "change-me", "short-key"):
+        r = _run_prod(weak, "import app.main")
+        assert r.returncode != 0 and "SECRET_KEY" in r.stderr, weak
+
+
+def test_production_hides_the_api_description_and_does_not_echo_sql():
+    code = ("from fastapi.testclient import TestClient\n"
+            "from app.main import app\nfrom app.database import engine\n"
+            "c = TestClient(app)\n"
+            "print(c.get('/docs').status_code, c.get('/openapi.json').status_code, c.get('/redoc').status_code, engine.echo)")
+    r = _run_prod("p" * 48, code)
+    assert r.returncode == 0, r.stderr[-2000:]
+    assert r.stdout.split()[-4:] == ["404", "404", "404", "False"]
+
+
+def test_docker_image_runs_in_production_mode():
+    assert "APP_ENV=production" in pathlib.Path("Dockerfile").read_text(encoding="utf-8")
