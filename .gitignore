@@ -55,3 +55,4 @@ app/media/*
 # Telegram archive (private backups of channel audio), never committed
 telegram-archive/
 app/telegram-archive/
+*.stackdump
