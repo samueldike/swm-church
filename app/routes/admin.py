@@ -4476,6 +4476,27 @@ async def admin_transcriptions_start_waiting(request: Request, db: AsyncSession 
                      "a one-hour sermon can take about an hour.")
 
 
+@router.get("/transcriptions/status", name="admin_transcriptions_status")
+async def admin_transcriptions_status(request: Request, db: AsyncSession = Depends(get_db)):
+    """Tiny JSON the Transcriptions and Audio Messages pages poll: a signature that changes whenever
+    any transcription status changes, and whether anything is still queued or transcribing."""
+    admin = await _get_admin(request)
+    if not admin:
+        return JSONResponse({"error": "signed out"}, status_code=401)
+    from app.models.sermon import Sermon
+
+    q = select(Sermon.id, Sermon.transcription_status, func.coalesce(func.length(Sermon.transcript), 0)).order_by(Sermon.id)
+    if admin.role != "super_admin" and admin.branch_id:
+        q = q.where(Sermon.branch_id == admin.branch_id)
+    rows = (await db.execute(q)).all()
+    return JSONResponse({"signature": transcription_signature(rows),
+                         "busy": any((s or "") in ("queued", "processing") for _, s, _ in rows)})
+
+
+def transcription_signature(rows) -> str:
+    return "|".join(f"{i}:{s or 'none'}:{n}" for i, s, n in rows)
+
+
 @router.get("/transcriptions", name="admin_transcriptions")
 async def admin_transcriptions(request: Request, db: AsyncSession = Depends(get_db)):
     admin = await _get_admin(request)

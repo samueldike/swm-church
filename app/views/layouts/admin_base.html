@@ -62,9 +62,11 @@
   if (window.__swmCopyBound) return;
   window.__swmCopyBound = true;
   document.addEventListener('click', async (event) => {
-    const btn = event.target.closest('[data-copy]');
+    const btn = event.target.closest('[data-copy], [data-copy-from]');
     if (!btn) return;
-    const text = btn.getAttribute('data-copy');
+    // data-copy-from="#id" copies an element's text (e.g. a long transcript) instead of an attribute
+    const source = btn.dataset.copyFrom && document.querySelector(btn.dataset.copyFrom);
+    const text = source ? source.innerText.trim() : btn.getAttribute('data-copy');
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(text);
@@ -77,9 +79,49 @@
       btn.innerHTML = '<i class="ri-check-line"></i>Copied';
       setTimeout(() => { btn.innerHTML = original; }, 1800);
     } catch (e) {
-      window.prompt('Copy this link:', text);
+      window.prompt('Copy this:', text);
     }
   });
+})();
+
+/* Live regions: an element with data-live-refresh="<status url>" and data-live-targets="#a,#b".
+   While the status says busy, poll it; when its signature changes, re-fetch this page and swap
+   the target elements in place (rendered by the same templates as a full load). This script
+   re-runs on every Turbo visit; a generation number retires the previous page's loop. */
+(() => {
+  const gen = (window.__swmLiveGen = (window.__swmLiveGen || 0) + 1);
+  const arm = () => {
+    clearTimeout(window.__swmLiveTimer);
+    const host = document.querySelector('[data-live-refresh]');
+    if (!host) return;
+    const url = host.dataset.liveRefresh;
+    const targets = (host.dataset.liveTargets || '').split(',').map((s) => s.trim()).filter(Boolean);
+    let sig = null;
+    const swap = async () => {
+      if (host.dataset.liveReload) { location.reload(); return; }   // pages whose inline scripts must re-run
+      const res = await fetch(location.href, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+      if (!res.ok) return;
+      const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+      targets.forEach((sel) => { const now = document.querySelector(sel), fresh = doc.querySelector(sel); if (now && fresh) now.replaceWith(fresh); });
+    };
+    const tick = async () => {
+      if (gen !== window.__swmLiveGen || !document.contains(host)) return;   // a newer page took over
+      let busy = true;
+      if (!document.hidden) {
+        try {
+          const res = await fetch(url, { credentials: 'same-origin' });
+          if (res.ok) {
+            const j = await res.json();
+            if (sig !== null && j.signature !== sig) await swap();
+            sig = j.signature; busy = j.busy;
+          }
+        } catch (_) { /* network blip: try again next tick */ }
+      }
+      if (busy && gen === window.__swmLiveGen) window.__swmLiveTimer = setTimeout(tick, 5000);
+    };
+    tick();
+  };
+  arm();
 })();
 </script>
 </body>

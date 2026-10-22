@@ -13,6 +13,9 @@
 {% endblock %}
 
 {% block content %}
+{% if ts in ['queued', 'processing'] %}{# watch only while THIS message is in progress: never reload mid-edit #}
+<div hidden data-live-refresh="{{ url_for('admin_transcriptions_status') }}" data-live-reload="1"></div>
+{% endif %}
 <div class="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 items-start">
   <div class="panel min-w-0">
     <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
@@ -23,8 +26,11 @@
 
     {% if sermon.transcript %}
       <div id="transcript-view">
-        <p class="text-[13.5px] text-ink-2 leading-[1.9] whitespace-pre-line">{{ sermon.transcript }}</p>
-        <button type="button" id="transcript-edit-toggle" class="btn btn-secondary btn-sm mt-4"><i class="ri-edit-line"></i>Edit transcript</button>
+        <p id="transcript-text" class="text-[13.5px] text-ink-2 leading-[1.9] whitespace-pre-line">{{ sermon.transcript }}</p>
+        <div class="flex flex-wrap gap-2 mt-4">
+          <button type="button" class="btn btn-primary btn-sm" data-copy-from="#transcript-text"><i class="ri-file-copy-line"></i>Copy transcript</button>
+          <button type="button" id="transcript-edit-toggle" class="btn btn-secondary btn-sm"><i class="ri-edit-line"></i>Edit transcript</button>
+        </div>
       </div>
       <form id="transcript-edit-form" method="POST" action="{{ url_for('admin_transcriptions_update', sermon_id=sermon.id) }}" class="hidden flex-col gap-3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -76,6 +82,7 @@
     </dl>
     <div class="flex flex-col gap-2 pt-3 border-t border-line">
       {% if sermon.transcript %}
+        <button type="button" class="btn btn-secondary w-full" data-copy-from="#transcript-text"><i class="ri-file-copy-line"></i>Copy transcript</button>
         <a href="{{ url_for('admin_transcriptions_show', sermon_id=sermon.id) }}?format=txt" class="btn btn-secondary w-full" data-turbo="false"><i class="ri-download-2-line"></i>Download .txt</a>
       {% endif %}
       <form method="POST" action="{{ url_for('admin_transcriptions_retranscribe', sermon_id=sermon.id) }}"

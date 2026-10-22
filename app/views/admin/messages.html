@@ -33,7 +33,8 @@
     {% if search or filter_status or filter_branch_id %}<a href="{{ url_for('admin_messages') }}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
   </form>
 
-  <div class="panel-flush">
+  <div hidden data-live-refresh="{{ url_for('admin_transcriptions_status') }}" data-live-targets="#msg-live"></div>
+  <div id="msg-live" class="panel-flush">
     {% if sermons %}
       <div class="overflow-x-auto">
         <table class="dtable dtable-responsive">

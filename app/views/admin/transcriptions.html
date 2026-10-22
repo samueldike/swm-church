@@ -8,16 +8,19 @@
 {% set ns = namespace(waiting=0) %}
 {% for sm in sermons %}{% if (sm.transcription_status or 'none') in ['none', 'failed'] and (sm.audio_file_path or sm.telegram_file_id) %}{% set ns.waiting = ns.waiting + 1 %}{% endif %}{% endfor %}
 {% block page_header %}
+  <div id="ts-header">
   {{ page_header("Transcriptions", "Every uploaded message is transcribed automatically, one at a time, in the background.",
       actions=(('<form method="POST" action="' ~ url_for('admin_transcriptions_start_waiting') ~ '" data-turbo="false"><input type="hidden" name="csrf_token" value="' ~ csrf_token ~ '"><button type="submit" class="btn btn-primary"><i class="ri-play-circle-line"></i>Transcribe ' ~ ns.waiting ~ ' waiting</button></form>') if ns.waiting else ''),
       audit=[('Completed', sermons|selectattr('transcription_status', 'equalto', 'completed')|list|length),
              ('In progress', (sermons|selectattr('transcription_status', 'in', ['queued', 'processing'])|list|length)),
              ('Failed', sermons|selectattr('transcription_status', 'equalto', 'failed')|list|length),
              ('Waiting', ns.waiting)]) }}
+  </div>
 {% endblock %}
 
 {% block content %}
-<div class="panel-flush">
+<div hidden data-live-refresh="{{ url_for('admin_transcriptions_status') }}" data-live-targets="#ts-header,#ts-live"></div>
+<div id="ts-live" class="panel-flush">
   {% if sermons %}
     <div class="overflow-x-auto">
       <table class="dtable dtable-responsive">
