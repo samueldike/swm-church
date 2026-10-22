@@ -53,6 +53,59 @@ async def _get_event_or_404(db: AsyncSession, event_id: int):
     return result.scalar_one_or_none()
 
 
+async def _event_viewer(request: Request):
+    """The signed-in admin when they may manage events, else None (they then see what visitors see)."""
+    from app.core.access import has_perm
+
+    admin = await get_current_admin(request)
+    return admin if admin and has_perm(admin.role, "events") else None
+
+
+async def _event_scope(query, admin, db: AsyncSession):
+    """Limit an Event query to what this caller may see — the same rule as the admin calendar."""
+    from app.core.access import is_super
+    from app.models.event import Event
+
+    if admin is None:
+        return query.where(Event.is_published == True)
+    if is_super(admin.role):
+        return query
+    from app.core.hq_branch import get_hq_branch_id
+    from app.routes.admin import _visible_event_scope
+
+    return query.where(_visible_event_scope(admin, await get_hq_branch_id(db)))
+
+
+async def _event_editor(request: Request):
+    """(admin, None) when the caller may write events through the API, else (None, error response).
+
+    These routes are cookie-authenticated but sit outside the admin router's CSRF and
+    access-policy dependencies, so both checks are made here.
+    """
+    from app.core.csrf import CSRFError, csrf_protect
+
+    admin = await get_current_admin(request)
+    if not admin:
+        return None, _error("Authentication required", 403)
+    if await _event_viewer(request) is None:
+        return None, _error("You do not have permission to manage events", 403)
+    try:
+        await csrf_protect(request)
+    except CSRFError:
+        return None, _error("Missing or invalid X-CSRF-Token header", 403)
+    return admin, None
+
+
+def _posted_branch_id(admin, body: dict):
+    """Branch an event is saved under: only the HQ Administrator chooses; everyone else gets their own."""
+    from app.core.access import is_super
+
+    if not is_super(admin.role):
+        return admin.branch_id
+    value = body.get("branch_id")
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
 async def _require_harvest_worker(request: Request, db: AsyncSession):
     auth_header = request.headers.get("authorization", "")
     if not auth_header.startswith("Bearer "):
@@ -177,14 +230,7 @@ async def events_calendar(
 ):
     from app.models.event import Event
 
-    admin = await get_current_admin(request)
-
-    query = select(Event)
-
-    if admin:
-        pass
-    else:
-        query = query.where(Event.is_published == True)
+    query = await _event_scope(select(Event), await _event_viewer(request), db)
 
     if start:
         try:
@@ -219,17 +265,14 @@ async def list_events(
 ):
     from app.models.event import Event
 
-    admin = await get_current_admin(request)
-
-    query = select(Event)
+    admin = await _event_viewer(request)
+    query = await _event_scope(select(Event), admin, db)
 
     if admin:
         if status == "published":
             query = query.where(Event.is_published == True)
         elif status == "draft":
             query = query.where(Event.is_published == False)
-    else:
-        query = query.where(Event.is_published == True)
 
     if search:
         pattern = f"%{search}%"
@@ -255,11 +298,7 @@ async def list_events(
 async def get_event(event_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     from app.models.event import Event
 
-    admin = await get_current_admin(request)
-
-    query = select(Event).where(Event.id == event_id)
-    if not admin:
-        query = query.where(Event.is_published == True)
+    query = await _event_scope(select(Event).where(Event.id == event_id), await _event_viewer(request), db)
 
     result = await db.execute(query)
     event = result.scalar_one_or_none()
@@ -272,9 +311,9 @@ async def get_event(event_id: int, request: Request, db: AsyncSession = Depends(
 
 @router.post("/events")
 async def create_event(request: Request, db: AsyncSession = Depends(get_db)):
-    admin = await get_current_admin(request)
-    if not admin:
-        return _error("Authentication required", 403)
+    admin, denied = await _event_editor(request)
+    if denied:
+        return denied
 
     try:
         body = await request.json()
@@ -309,10 +348,10 @@ async def create_event(request: Request, db: AsyncSession = Depends(get_db)):
         location=body.get("location", ""),
         starts_at=starts_at_dt,
         ends_at=ends_at_dt,
-        is_published=body.get("is_published", False),
-        is_major=body.get("is_major", False),
+        is_published=bool(body.get("is_published", False)),
+        is_major=bool(body.get("is_major", False)),
         cover_image=body.get("cover_image"),
-        branch_id=body.get("branch_id"),
+        branch_id=_posted_branch_id(admin, body),
         created_by=admin.id,
     )
     db.add(event)
@@ -327,13 +366,17 @@ async def create_event(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.put("/events/{event_id}")
 async def update_event(event_id: int, request: Request, db: AsyncSession = Depends(get_db)):
-    admin = await get_current_admin(request)
-    if not admin:
-        return _error("Authentication required", 403)
+    from app.routes.admin import _foreign
+
+    admin, denied = await _event_editor(request)
+    if denied:
+        return denied
 
     event = await _get_event_or_404(db, event_id)
     if not event:
         return _error("Event not found", 404)
+    if _foreign(admin, event.branch_id):
+        return _error("You can only manage events of your own branch", 403)
 
     try:
         body = await request.json()
@@ -366,7 +409,7 @@ async def update_event(event_id: int, request: Request, db: AsyncSession = Depen
             setattr(event, field, body[field])
 
     if "branch_id" in body:
-        event.branch_id = body["branch_id"]
+        event.branch_id = _posted_branch_id(admin, body)
 
     for bool_field in ("is_published", "is_major"):
         if bool_field in body:
@@ -383,13 +426,17 @@ async def update_event(event_id: int, request: Request, db: AsyncSession = Depen
 
 @router.delete("/events/{event_id}")
 async def delete_event(event_id: int, request: Request, db: AsyncSession = Depends(get_db)):
-    admin = await get_current_admin(request)
-    if not admin:
-        return _error("Authentication required", 403)
+    from app.routes.admin import _foreign
+
+    admin, denied = await _event_editor(request)
+    if denied:
+        return denied
 
     event = await _get_event_or_404(db, event_id)
     if not event:
         return _error("Event not found", 404)
+    if _foreign(admin, event.branch_id):
+        return _error("You can only manage events of your own branch", 403)
 
     title = event.title
     await db.delete(event)

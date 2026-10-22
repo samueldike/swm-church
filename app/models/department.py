@@ -26,5 +26,6 @@ class Department(Base):
     )
 
     creator = relationship("Admin", back_populates="departments", foreign_keys=[created_by_admin_id])
-    unit_reports = relationship("UnitReport", back_populates="department", cascade="all, delete-orphan")
+    # Reports are never deleted with their department (the FK is RESTRICT): retire a department with is_active.
+    unit_reports = relationship("UnitReport", back_populates="department", passive_deletes="all")
     hod_invitations = relationship("HodInvitation", back_populates="department", cascade="all, delete-orphan")

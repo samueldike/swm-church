@@ -112,6 +112,19 @@ async def ensure_schema() -> None:
         for table, col, ddl in await conn.run_sync(_missing):
             await conn.execute(text(f'ALTER TABLE "{table}" ADD COLUMN "{col}" {ddl}'))
 
+        if conn.dialect.name == "postgresql":
+            # Older databases created unit_reports.department_id with ON DELETE CASCADE, so deleting a
+            # department erased every church's reports for it. Re-point it at RESTRICT (data untouched).
+            cascading = (await conn.execute(text(
+                "SELECT conname FROM pg_constraint WHERE contype = 'f' AND confdeltype = 'c' "
+                "AND conrelid = 'unit_reports'::regclass AND confrelid = 'departments'::regclass"))).scalars().all() \
+                if (await conn.execute(text("SELECT to_regclass('unit_reports') IS NOT NULL"))).scalar() else []
+            for name in cascading:
+                await conn.execute(text(f'ALTER TABLE unit_reports DROP CONSTRAINT "{name}"'))
+                await conn.execute(text(
+                    f'ALTER TABLE unit_reports ADD CONSTRAINT "{name}" FOREIGN KEY (department_id) '
+                    "REFERENCES departments (id) ON DELETE RESTRICT"))
+
         # Exactly one HQ branch. Prefer an explicit slug/name; otherwise the oldest branch.
         flagged = (await conn.execute(text("SELECT COUNT(*) FROM branches WHERE is_hq = :t"), {"t": True})).scalar() or 0
         if flagged == 0:

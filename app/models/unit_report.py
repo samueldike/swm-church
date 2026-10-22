@@ -12,7 +12,7 @@ class UnitReport(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     branch_id: Mapped[int | None] = mapped_column(ForeignKey("branches.id", ondelete="CASCADE"))
     department_id: Mapped[int | None] = mapped_column(
-        ForeignKey("departments.id", ondelete="CASCADE")
+        ForeignKey("departments.id", ondelete="RESTRICT")
     )
     hod_admin_id: Mapped[int | None] = mapped_column(
         ForeignKey("admins.id", ondelete="CASCADE")

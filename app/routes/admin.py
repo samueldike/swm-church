@@ -2618,13 +2618,13 @@ async def admin_messages_store(
 
     if audio_file and audio_file.filename:
         ext = (audio_file.filename or "").rsplit(".", 1)[-1].lower() if "." in (audio_file.filename or "") else ""
-        if audio_file.content_type and not audio_file.content_type.startswith("audio/") and ext not in ["mp3","wav","m4a","ogg","flac","aac","wma","mpga"]:
+        if ext not in AUDIO_UPLOAD_EXTENSIONS:
             return _redirect(request, "/admin/messages/create", "Invalid audio format. Use mp3, wav, m4a, ogg, flac, aac, wma or mpga.", "error")
 
         # Stream to disk in chunks — a multi-gigabyte sermon must never be read
         # into memory, which is what the old audio_file.read() did.
         media_dir = media_subdir("sermons")
-        stored_filename = f"{secrets.token_hex(16)}.{ext or 'mp3'}"
+        stored_filename = f"{secrets.token_hex(16)}.{ext}"
         stored_abspath = os.path.join(media_dir, stored_filename)
         # The website keeps the full file; when it is over Telegram's cap the worker sends a
         # compressed copy, so Telegram's 50MB cloud limit must not cap the upload itself.
@@ -3055,6 +3055,9 @@ def _compress_image(raw: bytes, ext: str, max_width: int = 2400, quality: int = 
 
 
 IMAGE_UPLOAD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+# Judged by extension only: the browser-sent content type is the uploader's word, and an
+# ".html" accepted as "audio/mpeg" would be served as a page from the church's own domain.
+AUDIO_UPLOAD_EXTENSIONS = {"mp3", "wav", "m4a", "ogg", "flac", "aac", "wma", "mpga"}
 IMAGE_UPLOAD_MAX_BYTES = 5 * 1024 * 1024
 
 
@@ -4415,6 +4418,19 @@ async def admin_departments_destroy(department_id: int, request: Request, db: As
     if not dept:
         return _redirect(request, "/admin/departments", "Department not found.", "error")
 
+    # Departments are shared by every church: deleting one that has reports or HOD accounts
+    # would erase (or orphan) other churches' history, so only unused ones may go.
+    from app.models.admin import Admin
+    from app.models.unit_report import UnitReport
+    reports = (await db.execute(select(func.count(UnitReport.id)).where(UnitReport.department_id == dept.id))).scalar_one()
+    hods = (await db.execute(select(func.count(Admin.id)).where(Admin.department_id == dept.id))).scalar_one()
+    if reports or hods:
+        held = " and ".join(x for x in (f"{reports} report{'s' * (reports != 1)}" if reports else "",
+                                         f"{hods} HOD account{'s' * (hods != 1)}" if hods else "") if x)
+        return _redirect(request, "/admin/departments",
+                         f"{dept.name} has {held} across the churches, so it cannot be deleted. Untick Active on its edit page to retire it instead.",
+                         "error")
+
     await db.delete(dept)
     await db.flush()
     return _redirect(request, "/admin/departments", "Department deleted successfully.")
@@ -5609,7 +5625,6 @@ async def admin_stories_destroy(story_id: int, request: Request, db: AsyncSessio
 
 
 # ─── Books Pub: Daily Devotionals & Books ────────────────────────
-PUB_AUDIO_EXTS = {"mp3", "wav", "m4a", "ogg", "flac", "aac", "wma", "mpga"}
 PUB_AUDIO_MAX_BYTES = 2000 * 1024 * 1024
 
 
@@ -5902,7 +5917,7 @@ async def admin_pubs_messages_upload_audio(
     if not audio_file or not audio_file.filename:
         return _redirect(request, back, "Choose an audio file.", "error")
     ext = audio_file.filename.rsplit(".", 1)[-1].lower() if "." in audio_file.filename else ""
-    if ext not in PUB_AUDIO_EXTS:
+    if ext not in AUDIO_UPLOAD_EXTENSIONS:
         return _redirect(request, back, "Invalid audio format. Use mp3, wav, m4a, ogg, flac, aac, wma or mpga.", "error")
 
     from app.core.media import media_subdir

@@ -72,6 +72,10 @@ from app.core.analytics import AnalyticsMiddleware
 
 app.add_middleware(AnalyticsMiddleware)
 
+from app.core.upload_headers import UploadHeadersMiddleware
+
+app.add_middleware(UploadHeadersMiddleware)
+
 _base_dir = os.path.dirname(os.path.abspath(__file__))
 _static_dir = os.path.join(_base_dir, "static")
 # Single-sourced so the app, the Celery worker and the telegram-bot-api
