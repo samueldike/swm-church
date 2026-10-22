@@ -112,7 +112,7 @@ IDs: SEC = security/access, DATA = integrity/reliability, OPS = operations, GIVE
 
 ## 3b. Visual & UX findings
 
-Automated checks over all 534 captures (`audit/screenshots/_results_all.json`): 0 pages with horizontal overflow, 0 console errors, 0 broken images; every page returns 200 except the deliberate 404 probe. Titles, meta descriptions and Open Graph images are present on every public page. Admin pages were retaken with the inner scroll area unrolled so the whole page is visible (`_results.json`).
+Automated checks over all 534 captures (`audit/screenshots/_results_all.json`): 0 pages with horizontal overflow, 0 console errors, 0 broken images; every page returns 200 except the deliberate 404 probe. Titles, meta descriptions and Open Graph images are present on every public page. Admin pages scroll inside the layout, so the first pass captured only their first screen; a full-length retake was stopped after the 360 px light set (68 pages) because the local disk filled up. The remaining full-length admin captures will be retaken in Phase 4 once space is freed.
 
 ### P1
 
