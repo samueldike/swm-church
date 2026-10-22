@@ -118,22 +118,13 @@
             </div>
         </div>
 
-        {% set services = [
-            ('Sunday',      'First Service',       '7:00 — 9:30 am',     'The main gathering of the house.', true),
-            ('Sunday',      'Second Service',      '9:30 am — 12:00 pm', 'A second seating of the same service.', true),
-            ('Monday',      'Prayers',             '4:40 — 6:00 pm',     'Led by The Epaphras Company.', false),
-            ('Wednesday',   'Midweek Bible Study', '5:00 pm',            'Teaching, questions and depth.', false),
-            ('Saturday',    'Preservice Prayer',   '5:00 — 6:00 pm',     'Preparing the ground for Sunday.', false),
-            ('Last Friday', 'Monthly Vigil',       'from 9:00 pm',       'A night of prayer to close the month.', false)
-        ] %}
         <ul class="rows" style="margin-top:2rem;">
-            {% for day, name, time, blurb, lead in services %}
+            {% for svc in services %}{% set day, name, time, lead = svc.day, svc.name, svc.time, svc.lead %}
             <li class="row">
                 <span class="row-in">
                     <span class="mono row-i {{ 'gold' if lead else 'faint' }}" style="min-width:6.5rem;">{{ day }}</span>
                     <span class="row-main">
                         <span class="t-h3">{{ name }}</span>
-                        <span class="t-sm row-sub">{{ blurb }}</span>
                     </span>
                     <span class="row-meta mono {{ 'gold' if lead else 'faint' }}">{{ time }}</span>
                 </span>
@@ -142,8 +133,8 @@
         </ul>
 
         <p class="t-sm" style="margin-top:1.7rem;">
-            {{ siteHeadquartersAddress or '#1 Scent Close, off Barr. Otta Ewa Road, Mile 50, Abakaliki, Ebonyi State' }}
-            &nbsp;·&nbsp; HQ times are {{ platformTzLabel|default('local time') }}; branch events are in that church's local time.
+            {% if siteHeadquartersAddress %}{{ siteHeadquartersAddress }}
+            &nbsp;·&nbsp; {% endif %}HQ times are {{ platformTzLabel|default('local time') }}; branch events are in that church's local time.
         </p>
     </div>
 </section>

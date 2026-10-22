@@ -139,7 +139,7 @@
                 <span class="row-main">
                     <span class="t-h3">Obtain an application form</span>
                     <span class="t-sm row-sub">
-                        Visit the church office at {{ siteHeadquartersAddress or 'No. 1 Scent Close, Mile 50, Abakaliki' }}
+                        Visit the church office{% if siteHeadquartersAddress %} at {{ siteHeadquartersAddress }}{% endif %}
                         to pick up your application package.
                     </span>
                 </span>

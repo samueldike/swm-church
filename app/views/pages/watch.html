@@ -38,7 +38,7 @@
 
         {% if not (socialYouTube or socialFacebook or socialInstagram or socialTelegram) %}
         <div class="empty" style="margin-top:2rem;">
-            <p class="t-body">Streaming links have not been set yet. Add them under Admin → Settings → Social Links.</p>
+            <p class="t-body">Our online channels will be listed here soon. Until then, every message is in the <a class="lnk" href="{{ url_for('messages') }}">audio archive</a>.</p>
         </div>
         {% endif %}
     </div>
@@ -53,14 +53,18 @@
             </div>
             <a href="{{ url_for('messages') }}" class="lnk">Listen to the archive</a>
         </div>
+        {% if services %}
         <table class="sched" style="margin-top:2rem;">
+            <caption class="sr-only">Weekly service times</caption>
             <tbody>
-                <tr class="lead"><td class="s-day mono">Sunday</td><td class="s-name t-h3">First Service</td><td class="s-time mono">7:00 — 9:30 am</td></tr>
-                <tr class="lead"><td class="s-day mono">Sunday</td><td class="s-name t-h3">Second Service</td><td class="s-time mono">9:30 am — 12:00 pm</td></tr>
-                <tr><td class="s-day mono">Wednesday</td><td class="s-name t-h3">Midweek Bible Study</td><td class="s-time mono">5:00 pm</td></tr>
-                <tr><td class="s-day mono">Last Friday</td><td class="s-name t-h3">Monthly Vigil</td><td class="s-time mono">from 9:00 pm</td></tr>
+            {% for svc in services %}
+                <tr class="{{ 'lead' if svc.lead else '' }}"><td class="s-day mono">{{ svc.day }}</td><td class="s-name t-h3">{{ svc.name }}</td><td class="s-time mono">{{ svc.time }}</td></tr>
+            {% endfor %}
             </tbody>
         </table>
+        {% else %}
+        <div class="empty" style="margin-top:2rem;"><p class="t-body">Our service times will be published here soon.</p></div>
+        {% endif %}
         <p class="mono faint" style="margin-top:1.4rem;">All times are {{ platformTzLabel|default('local time') }}.</p>
     </div>
 </section>

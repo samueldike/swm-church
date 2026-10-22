@@ -187,8 +187,8 @@
             <div class="note" style="margin-top:1.7rem;">
                 <p class="t-h3">Give in person</p>
                 <p class="t-sm" style="margin-top:0.5rem;">
-                    You are welcome to give at any service at
-                    {{ siteHeadquartersAddress or 'Mile 50, Abakaliki' }}.
+                    You are welcome to give at any service{% if siteHeadquartersAddress %} at
+                    {{ siteHeadquartersAddress }}{% endif %}.
                 </p>
                 <a href="{{ url_for('calendar') }}" class="lnk" style="margin-top:0.9rem;">See service times</a>
             </div>

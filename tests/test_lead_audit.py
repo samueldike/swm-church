@@ -734,3 +734,17 @@ def test_bookmarked_admin_login_url_redirects():
 def test_no_plain_text_not_found_responses_remain():
     for path in ("app/routes/public.py", "app/routes/public_extra.py"):
         assert 'not found", status_code=404)' not in pathlib.Path(path).read_text(encoding="utf-8"), path
+
+
+# ─── UX-05 / UX-17: public content comes from Settings ───────────────
+
+def test_no_page_hard_codes_service_times_or_the_address():
+    import glob
+
+    for path in glob.glob("app/views/pages/*.html"):
+        src = pathlib.Path(path).read_text(encoding="utf-8")
+        assert "First Service" not in src and "9:30 am" not in src, path          # times live in Settings → serviceTimes
+        assert "siteHeadquartersAddress or '" not in src or "directions" in src, path   # no invented address
+        assert "Admin → Settings" not in src, path                                # never instructions for staff
+    for path in ("app/views/pages/watch.html", "app/views/pages/calendar.html", "app/views/pages/visit.html"):
+        assert "svc in services" in pathlib.Path(path).read_text(encoding="utf-8"), path

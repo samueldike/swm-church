@@ -56,7 +56,7 @@
 
             <div class="note" style="margin-top:1.4rem;">
                 <p class="t-h3">Visit us</p>
-                <p class="t-sm" style="margin-top:0.5rem;">{{ siteHeadquartersAddress or 'Mile 50, Abakaliki, Ebonyi State' }}</p>
+                <p class="t-sm" style="margin-top:0.5rem;">{{ siteHeadquartersAddress }}</p>
                 <a href="{{ url_for('visit') }}" class="lnk" style="margin-top:0.8rem;">Plan your visit</a>
             </div>
             {% if whatsappChat or whatsappChannel or telegramJoin %}
