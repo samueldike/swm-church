@@ -754,3 +754,8 @@ def test_remittances_never_state_a_balance_without_a_share():
     src = pathlib.Path("app/views/admin/remittances.html").read_text(encoding="utf-8")
     assert src.index("not r.share_set") < src.index("Branch owes HQ")      # checked before any balance is shown
     assert '"share_set": share_set' in pathlib.Path("app/routes/admin.py").read_text(encoding="utf-8")
+
+
+def test_admin_calendar_fits_a_phone():
+    src = pathlib.Path("app/views/admin/events-management.html").read_text(encoding="utf-8")
+    assert "min-w-[640px]" not in src and "data-cal-day" in src and "data-cal-list" in src

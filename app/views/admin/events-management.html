@@ -23,36 +23,64 @@
       </div>
     </div>
 
-    <div class="overflow-x-auto -mx-1 px-1">
-      <div class="min-w-[640px]">
-        <div class="grid grid-cols-7 border-l border-t border-line">
-          {% for dayLabel in ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] %}
-            <div class="border-r border-b border-line bg-sunken px-2 py-2 text-center mono-label">{{ dayLabel }}</div>
-          {% endfor %}
-          {% for day in calendarDays %}
-            {% set dateKey = day.isoformat() %}
-            {% set dayPrograms = eventsByDate.get(dateKey, []) %}
-            {% set inMonth = day.month == currentMonth.month %}
-            {% set isToday = dateKey == today %}
-            <div class="min-h-[92px] border-r border-b border-line p-1.5 {{ 'bg-surface' if inMonth else 'bg-sunken/60' }}">
-              <span class="inline-flex items-center justify-center w-6 h-6 rounded-full font-mono text-[11px] {{ 'bg-gold text-[#121110] font-bold' if isToday else ('text-ink-2 font-medium' if inMonth else 'text-ink-3') }}">{{ day.day }}</span>
-              <div class="mt-1 flex flex-col gap-1">
-                {% for ev in dayPrograms[:2] %}
-                  {% if ev.id in editable_event_ids %}
-                  <a href="{{ url_for('admin_events_edit_page', event_id=ev.id) }}"
-                     class="block truncate rounded-sm px-1.5 py-0.5 font-mono text-[9.5px] font-semibold no-underline {{ 'bg-gold text-[#121110]' if ev.is_major else 'bg-neut-bg text-neut' }}"
-                     title="{{ ev.title }}">{{ ev.title }}</a>
-                  {% else %}
-                  <span class="block truncate rounded-sm px-1.5 py-0.5 font-mono text-[9.5px] font-semibold {{ 'bg-gold text-[#121110]' if ev.is_major else 'bg-neut-bg text-neut' }}" title="{{ ev.title }} (HQ programme)">HQ · {{ ev.title }}</span>
-                  {% endif %}
-                {% endfor %}
-                {% if dayPrograms|length > 2 %}<span class="font-mono text-[9.5px] text-ink-3">+{{ dayPrograms|length - 2 }} more</span>{% endif %}
-              </div>
+    {#- All 7 days fit at 360px: on phones a day shows dots and opens its list below (UX-03); wider screens show titles. -#}
+    <div class="grid grid-cols-7 border-l border-t border-line" data-cal>
+      {% for dayLabel in ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] %}
+        <div class="border-r border-b border-line bg-sunken px-0.5 sm:px-2 py-2 text-center mono-label">{{ dayLabel }}</div>
+      {% endfor %}
+      {% for day in calendarDays %}
+        {% set dateKey = day.isoformat() %}
+        {% set dayPrograms = eventsByDate.get(dateKey, []) %}
+        {% set inMonth = day.month == currentMonth.month %}
+        {% set isToday = dateKey == today %}
+        <div class="min-w-0 min-h-[52px] sm:min-h-[92px] border-r border-b border-line p-1 sm:p-1.5 {{ 'bg-surface' if inMonth else 'bg-sunken/60' }}">
+          {% if dayPrograms %}
+          <button type="button" class="sm:hidden w-full h-full flex flex-col items-center gap-1 pt-0.5" data-cal-day="{{ dateKey }}"
+                  aria-controls="cal-day-{{ dateKey }}" aria-expanded="false" aria-label="{{ day.strftime('%A %d %B') }}: {{ dayPrograms|length }} programme{{ 's' if dayPrograms|length != 1 }}">
+          {% else %}
+          <div class="sm:hidden flex flex-col items-center pt-0.5">
+          {% endif %}
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full font-mono text-[11px] {{ 'bg-gold text-[#121110] font-bold' if isToday else ('text-ink-2 font-medium' if inMonth else 'text-ink-3') }}">{{ day.day }}</span>
+            {% if dayPrograms %}<span class="flex gap-0.5" aria-hidden="true">{% for ev in dayPrograms[:3] %}<span class="w-1.5 h-1.5 rounded-full {{ 'bg-gold' if ev.is_major else 'bg-ink-3' }}"></span>{% endfor %}</span>{% endif %}
+          {% if dayPrograms %}</button>{% else %}</div>{% endif %}
+          <div class="hidden sm:block">
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full font-mono text-[11px] {{ 'bg-gold text-[#121110] font-bold' if isToday else ('text-ink-2 font-medium' if inMonth else 'text-ink-3') }}">{{ day.day }}</span>
+            <div class="mt-1 flex flex-col gap-1">
+              {% for ev in dayPrograms[:2] %}
+                {% if ev.id in editable_event_ids %}
+                <a href="{{ url_for('admin_events_edit_page', event_id=ev.id) }}"
+                   class="block truncate rounded-sm px-1.5 py-0.5 font-mono text-[9.5px] font-semibold no-underline {{ 'bg-gold text-[#121110]' if ev.is_major else 'bg-neut-bg text-neut' }}"
+                   title="{{ ev.title }}">{{ ev.title }}</a>
+                {% else %}
+                <span class="block truncate rounded-sm px-1.5 py-0.5 font-mono text-[9.5px] font-semibold {{ 'bg-gold text-[#121110]' if ev.is_major else 'bg-neut-bg text-neut' }}" title="{{ ev.title }} (HQ programme)">HQ · {{ ev.title }}</span>
+                {% endif %}
+              {% endfor %}
+              {% if dayPrograms|length > 2 %}<span class="font-mono text-[9.5px] text-ink-3">+{{ dayPrograms|length - 2 }} more</span>{% endif %}
             </div>
-          {% endfor %}
+          </div>
         </div>
-      </div>
+      {% endfor %}
     </div>
+
+    {#- Phone: the programmes of the tapped day. -#}
+    {% for day in calendarDays %}{% set dateKey = day.isoformat() %}{% set dayPrograms = eventsByDate.get(dateKey, []) %}
+      {% if dayPrograms %}
+      <div id="cal-day-{{ dateKey }}" class="sm:hidden mt-3 rounded-md border border-line p-3" data-cal-list hidden>
+        <p class="text-[13px] font-semibold text-ink">{{ day.strftime('%A %d %B') }}</p>
+        <ul class="mt-2 flex flex-col gap-2">
+          {% for ev in dayPrograms %}
+          <li class="flex items-center justify-between gap-3">
+            <span class="min-w-0">
+              <span class="block text-[13px] text-ink truncate">{{ ev.title if ev.id in editable_event_ids else 'HQ · ' ~ ev.title }}</span>
+              <span class="block font-mono text-[11px] text-ink-3">{{ ev.starts_at.strftime('%H:%M') if ev.starts_at else '' }}{% if ev.location %} · {{ ev.location }}{% endif %}</span>
+            </span>
+            {% if ev.id in editable_event_ids %}<a href="{{ url_for('admin_events_edit_page', event_id=ev.id) }}" class="btn btn-secondary btn-sm shrink-0"><i class="ri-edit-line"></i>Edit</a>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    {% endfor %}
   </div>
 
   <div class="panel-flush">
@@ -92,4 +120,24 @@
     {% endif %}
   </div>
 </div>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+(() => {
+  window.__swmCalAbort?.abort();
+  const ctl = new AbortController(); window.__swmCalAbort = ctl;
+  const cal = document.querySelector('[data-cal]');
+  if (!cal) return;
+  cal.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-cal-day]');
+    if (!btn) return;
+    const target = document.getElementById('cal-day-' + btn.dataset.calDay);
+    const opening = target.hidden;
+    document.querySelectorAll('[data-cal-list]').forEach((el) => { el.hidden = true; });
+    cal.querySelectorAll('[data-cal-day]').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+    if (opening) { target.hidden = false; btn.setAttribute('aria-expanded', 'true'); target.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  }, { signal: ctl.signal });
+})();
+</script>
 {% endblock %}
