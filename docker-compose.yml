@@ -1,6 +1,9 @@
 services:
+  # ONE image for app, worker, beat and transcriber: building the same Dockerfile once per
+  # service made every deploy export/unpack four multi-GB copies of it.
   app:
     build: .
+    image: swm-app:latest
     container_name: swm-app
     restart: unless-stopped
     env_file: .env
@@ -24,7 +27,7 @@ services:
       - swm-net
 
   worker:
-    build: .
+    image: swm-app:latest
     container_name: swm-worker
     restart: unless-stopped
     env_file: .env
@@ -44,7 +47,7 @@ services:
   # Speech-to-text (Whisper on the CPU, ~3GB per loaded model): its own queue, ONE job at a
   # time, memory-capped, so transcriptions never starve Telegram sends or the website.
   transcriber:
-    build: .
+    image: swm-app:latest
     container_name: swm-transcriber
     restart: unless-stopped
     env_file: .env
@@ -60,7 +63,7 @@ services:
       - swm-net
 
   beat:
-    build: .
+    image: swm-app:latest
     container_name: swm-beat
     restart: unless-stopped
     env_file: .env

@@ -144,6 +144,12 @@
             linear-gradient(0deg, var(--ground) 0%, transparent 38%);
     }
     .hero-in { position: relative; z-index: 2; }
+    /* Desktop: the masthead overlays the top of the hero, so vertically centred copy read as
+       sitting high with an empty band below. Anchor it low, as on phones: the photograph gets
+       the open space above, and the copy sits just above the fold. */
+    @media (min-width: 768px) {
+        .frame-hero { justify-content: flex-end; padding-bottom: clamp(3.5rem, 11vh, 7.5rem); }
+    }
 
     /* Portrait hero: the desktop veil fades left-to-right, which on a phone
        drops copy straight onto the subject's face. Bottom-up instead, with the
