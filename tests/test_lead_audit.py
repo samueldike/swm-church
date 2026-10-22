@@ -748,3 +748,9 @@ def test_no_page_hard_codes_service_times_or_the_address():
         assert "Admin → Settings" not in src, path                                # never instructions for staff
     for path in ("app/views/pages/watch.html", "app/views/pages/calendar.html", "app/views/pages/visit.html"):
         assert "svc in services" in pathlib.Path(path).read_text(encoding="utf-8"), path
+
+
+def test_remittances_never_state_a_balance_without_a_share():
+    src = pathlib.Path("app/views/admin/remittances.html").read_text(encoding="utf-8")
+    assert src.index("not r.share_set") < src.index("Branch owes HQ")      # checked before any balance is shown
+    assert '"share_set": share_set' in pathlib.Path("app/routes/admin.py").read_text(encoding="utf-8")

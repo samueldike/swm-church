@@ -6843,13 +6843,15 @@ async def _branch_positions(db: AsyncSession, only_branch_id: int | None = None)
                 select(Remittance.currency, Remittance.direction, func.coalesce(func.sum(Remittance.amount), 0))
                 .where(Remittance.branch_id == b.id).group_by(Remittance.currency, Remittance.direction))).all():
             rem[(cur or "NGN", direction)] = float(total or 0)
-        pct = share_percent((await get_branch_settings(db, b.id)).get("hq_share_percent"))
+        raw_share = (await get_branch_settings(db, b.id)).get("hq_share_percent")
+        pct = share_percent(raw_share)
+        share_set = str(raw_share or "").strip() != ""       # unset != a deliberate 0%: no balance can be stated (UX-04)
         currencies = sorted({c for c, _ in gifts} | {c for c, _ in rem}) or [platform]
         for cur in currencies:
             held_by_hq, at_branch = gifts.get((cur, "hq"), 0.0), gifts.get((cur, "branch"), 0.0)
             to_hq, to_branch = rem.get((cur, "to_hq"), 0.0), rem.get((cur, "to_branch"), 0.0)
             pos = branch_position(pct, held_by_hq, at_branch, to_hq, to_branch)
-            rows.append({"branch": b, "currency": cur, "pct": pct, "held_by_hq": held_by_hq, "at_branch": at_branch,
+            rows.append({"branch": b, "currency": cur, "pct": pct, "share_set": share_set, "held_by_hq": held_by_hq, "at_branch": at_branch,
                          "to_hq": to_hq, "to_branch": to_branch, **pos})
     return rows
 

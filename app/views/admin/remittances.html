@@ -31,11 +31,12 @@
                 <td data-label="Gifts recorded" class="text-right font-mono text-xs">{{ r.total|money(r.currency) }}</td>
                 <td data-label="Taken by branch" class="text-right font-mono text-xs">{{ r.at_branch|money(r.currency) }}</td>
                 <td data-label="Held by HQ" class="text-right font-mono text-xs">{{ r.held_by_hq|money(r.currency) }}</td>
-                <td data-label="HQ share" class="text-right font-mono text-xs">{{ r.pct|round(1) }}% · {{ r.entitlement|money(r.currency) }}</td>
+                <td data-label="HQ share" class="text-right font-mono text-xs">{% if r.share_set %}{{ r.pct|round(1) }}% · {{ r.entitlement|money(r.currency) }}{% else %}<span class="text-ink-3 font-sans">Not set</span>{% endif %}</td>
                 <td data-label="Remitted to HQ" class="text-right font-mono text-xs">{{ r.to_hq|money(r.currency) }}</td>
                 <td data-label="Sent to branch" class="text-right font-mono text-xs">{{ r.to_branch|money(r.currency) }}</td>
                 <td data-label="Balance" class="text-right font-mono text-[13px] font-semibold whitespace-nowrap">
-                  {% if r.balance > 0.005 %}<span class="text-bad">Branch owes HQ {{ r.balance|money(r.currency) }}</span>
+                  {% if not r.share_set %}{% if can_record %}<a href="{{ url_for('admin_branch_settings_for', branch_id=r.branch.id) }}" class="text-ink-3 underline font-sans font-normal text-xs">Set the HQ share to see a balance</a>{% else %}<span class="text-ink-3 font-sans font-normal text-xs">HQ has not set this branch’s share yet</span>{% endif %}
+                  {% elif r.balance > 0.005 %}<span class="text-bad">Branch owes HQ {{ r.balance|money(r.currency) }}</span>
                   {% elif r.balance < -0.005 %}<span class="text-warn">HQ owes branch {{ (-r.balance)|money(r.currency) }}</span>
                   {% else %}<span class="text-ok">Settled</span>{% endif %}
                 </td>
