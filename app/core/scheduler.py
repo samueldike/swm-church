@@ -1,4 +1,5 @@
-"""Small in-process job loop for the web app: event reminders, subscriber campaigns, analytics flush and housekeeping.
+"""Small in-process job loop for the web app: event reminders, subscriber campaigns, analytics flush, re-checking
+pending online gifts with the gateway (app/core/giving_reconcile.py) and housekeeping.
 
 It runs inside the web process (no worker required) and is safe with several web workers: every job row is claimed with an
 atomic ``UPDATE ... WHERE status = 'pending'`` before it is sent, so two processes never send the same email.
@@ -161,6 +162,9 @@ async def _loop() -> None:
             await analytics.flush()
             await process_reminders()
             await process_campaigns()
+            from app.core.giving_reconcile import recheck_pending
+
+            await recheck_pending()
             if datetime.utcnow() - last_housekeeping > timedelta(hours=24):
                 await housekeeping()
                 last_housekeeping = datetime.utcnow()

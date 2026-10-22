@@ -1331,9 +1331,8 @@ async def give_callback(
     tx_ref: str = Query(""),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.config import settings as app_settings
-    from app.core.payment import verify_paystack, verify_flutterwave
-    from app.core.settings_cache import get_settings
+    from app.core import mailer
+    from app.core.giving_reconcile import reconcile
     from app.models.giving import Giving
 
     # Paystack uses trxref; Flutterwave uses tx_ref + transaction_id
@@ -1345,98 +1344,33 @@ async def give_callback(
     if not giving:
         return _redirect(request, "/give", "Payment reference not found.", "error")
 
-    # Already confirmed — avoid double-processing
-    if giving.status == "completed":
+    already = giving.status == "completed"
+    outcome = await reconcile(db, giving, transaction_id=transaction_id, base_url=_public_base_url(request))
+    if outcome == "completed":
         return _redirect(
             request, "/give",
-            "Thank you for your generous giving! God bless you.",
+            "Thank you for your generous giving! God bless you."
+            + (" A receipt has been emailed to you." if mailer.valid_email(giving.email) and not already else ""),
             "success",
         )
-
-    site_settings = await get_settings(db)
-
-    try:
-        branch_secret = ""
-        if giving.gateway_owner == "branch" and giving.branch_id:
-            from app.core.branch_settings import get_branch_settings
-
-            branch_secret = (await get_branch_settings(db, giving.branch_id)).get(f"{giving.payment_gateway}_secret_key", "")
-        if giving.payment_gateway == "flutterwave":
-            fw_secret = branch_secret or site_settings.get("flutterwave_secret_key") or app_settings.FLUTTERWAVE_SECRET_KEY
-            verification = await verify_flutterwave(
-                transaction_id=transaction_id,
-                tx_ref=actual_ref,
-                secret_key=fw_secret,
-            )
-        else:
-            ps_secret = branch_secret or site_settings.get("paystack_secret_key") or app_settings.PAYSTACK_SECRET_KEY
-            verification = await verify_paystack(
-                reference=actual_ref,
-                secret_key=ps_secret,
-            )
-    except Exception:
-        logging.exception("Payment verification failed for %s", actual_ref)
+    if outcome == "mismatch":
         return _redirect(
             request, "/give",
-            "We could not reach the payment provider to confirm your gift. If you were charged, please contact us with reference "
-            + actual_ref + ".", "error",
+            "Your payment was received but the amount does not match what was entered. "
+            "Please contact us with reference " + giving.reference + ".", "error",
         )
-
-    state = verification.get("state") or ("paid" if verification.get("success") else "failed")
-    if state == "paid":
-        # Never trust "paid" alone: the provider must have taken the gift's amount IN THE GIFT'S CURRENCY.
-        from app.core import geo
-
-        units = 10 ** geo.minor_units(giving.currency)
-        expected = round(float(giving.amount) * units)
-        if "amount_minor" in verification:
-            taken = int(verification["amount_minor"])
-        else:
-            taken = round(float(verification.get("amount", 0)) * units)
-        same_currency = (verification.get("currency") or giving.currency or "").upper() == (giving.currency or "NGN").upper()
-        paid_ok = same_currency and taken >= expected
-        if not paid_ok:
-            giving.status = "mismatch"
-            await db.flush()
-            logging.warning("Giving %s amount mismatch: expected %s", giving.reference, giving.amount)
-            return _redirect(
-                request, "/give",
-                "Your payment was received but the amount does not match what was entered. "
-                "Please contact us with reference " + giving.reference + ".", "error",
-            )
-        giving.status = "completed"
-        giving.paid_at = datetime.utcnow()
-        await db.flush()
-        from app.core import mailer
-
-        if mailer.valid_email(giving.email):
-            church = site_settings.get("siteName") or "Scent of Water Ministry"
-            if giving.branch_id:
-                from app.models.branch import Branch
-
-                b = (await db.execute(select(Branch).where(Branch.id == giving.branch_id))).scalar_one_or_none()
-                church = b.name if b else church
-            mailer.fire(mailer.send_notice(
-                giving.email, f"Your gift receipt — {giving.reference}", base_url=_public_base_url(request), kind="receipt",
-                heading="Thank you for your gift",
-                paragraphs=[f"Dear {(giving.full_name or 'friend').split()[0] if not giving.is_anonymous or giving.full_name else 'friend'}, your gift has been received. God bless you for your generosity.",
-                            "Please keep this email as your record of the gift."],
-                details=[("Amount", geo.format_money(giving.amount, giving.currency)), ("For", giving.giving_type.replace("_", " ").title()), ("Given to", church),
-                         ("Reference", giving.reference), ("Date", (giving.paid_at or datetime.utcnow()).strftime("%d %B %Y"))],
-                footnote="If anything on this receipt looks wrong, reply to this email with your reference and we will look into it."))
+    if outcome == "error":
         return _redirect(
             request, "/give",
-            "Thank you for your generous giving! God bless you." + (" A receipt has been emailed to you." if mailer.valid_email(giving.email) else ""),
-            "success",
+            "We could not reach the payment provider to confirm your gift yet. If you were charged, it will be recorded "
+            "automatically once they confirm it; your reference is " + giving.reference + ".", "info",
         )
-    if state == "pending":
+    if outcome == "pending":
         return _redirect(
             request, "/give",
             "Your payment is still being processed. If you completed it, we will record it shortly; "
             "otherwise you can try again.", "info",
         )
-    giving.status = "failed"
-    await db.flush()
     return _redirect(
         request, "/give",
         "Payment could not be confirmed. Please contact us if you were charged.",

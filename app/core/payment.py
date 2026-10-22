@@ -71,13 +71,21 @@ async def verify_paystack(reference: str, secret_key: str = "") -> dict:
 
 
 async def verify_flutterwave(transaction_id: str, tx_ref: str, secret_key: str = "") -> dict:
-    """Verify a Flutterwave transaction. Returns a dict with 'success' bool and 'amount' float."""
-    if not transaction_id:
-        return {"success": False, "state": "pending"}
-    url = f"https://api.flutterwave.com/v3/transactions/{transaction_id}/verify"
+    """Verify a Flutterwave transaction. Returns a dict with 'success' bool and 'amount' float.
+
+    Without the gateway's numeric transaction id (webhooks, scheduled re-checks) it verifies by our own reference.
+    """
+    transaction_id = str(transaction_id or "").strip()
+    if transaction_id and not transaction_id.isdigit():
+        return {"success": False, "state": "error"}       # it goes into the URL path: never pass anything else
+    if transaction_id:
+        url, params = f"https://api.flutterwave.com/v3/transactions/{transaction_id}/verify", None
+    else:
+        url, params = "https://api.flutterwave.com/v3/transactions/verify_by_reference", {"tx_ref": tx_ref}
     async with httpx.AsyncClient(timeout=30) as client:
         response = await client.get(
             url,
+            params=params,
             headers={"Authorization": f"Bearer {secret_key}"},
         )
     if response.status_code != 200:

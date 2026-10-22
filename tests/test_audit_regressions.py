@@ -113,9 +113,17 @@ def test_paystack_verify_provider_error(monkeypatch):
 
 @pytest.mark.parametrize("raw,state", [("successful", "paid"), ("pending", "pending"), ("failed", "failed")])
 def test_flutterwave_verify_state(monkeypatch, raw, state):
-    _patch_http(monkeypatch, lambda req: httpx.Response(200, json={"status": "success", "data": {"status": raw, "tx_ref": "R", "amount": 100}}))
+    urls = []
+
+    def answer(req):
+        urls.append(str(req.url))
+        return httpx.Response(200, json={"status": "success", "data": {"status": raw, "tx_ref": "R", "amount": 100}})
+
+    _patch_http(monkeypatch, answer)
     assert asyncio.run(payment.verify_flutterwave("1", "R", "sk"))["state"] == state
-    assert asyncio.run(payment.verify_flutterwave("", "R", "sk"))["state"] == "pending"
+    # Webhooks and scheduled re-checks have no transaction id: verify by our own reference (DATA-01).
+    assert asyncio.run(payment.verify_flutterwave("", "R", "sk"))["state"] == state
+    assert urls[0].endswith("/transactions/1/verify") and "verify_by_reference?tx_ref=R" in urls[1]
 
 
 # ─── promise wiring (static checks on the templates/routes that broke before) ──
@@ -125,8 +133,8 @@ def _read(path):
 
 
 def test_giving_status_names_agree_between_callback_and_dashboard():
-    pub, adm = _read("app/routes/public.py"), _read("app/routes/admin.py")
-    assert 'giving.status = "completed"' in pub
+    rec, adm = _read("app/core/giving_reconcile.py"), _read("app/routes/admin.py")
+    assert 'values(status="completed"' in rec                 # every confirmation path goes through reconcile()
     # The dashboard trend counts the shared PAID_STATUSES, which must include the callback's "completed".
     assert 'PAID_STATUSES = ("completed", "success")' in adm
     assert "paid = Giving.status.in_(PAID_STATUSES)" in adm

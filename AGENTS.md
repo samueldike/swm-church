@@ -108,7 +108,8 @@ FastAPI + async SQLAlchemy + Postgres (asyncpg) + Jinja2 + Celery/Redis. Python 
 - Every public form/API auth path is throttled (`app/core/throttle.py`, per process). Admin login: 5 failures/email, 10/IP per 15 min.
 - Visitor-facing notices go through `partials/public-flash.html` (included by `theme-page-close.html` and `home.html`). Do not read `session[...]` keys directly in page templates.
 - Anything collected from visitors needs an admin page: Prayer Requests, Subscribers, Donations exist; CSV exports use `_csv_response` (neutralises `= + - @`).
-- Giving: canonical paid status is `completed`; callback verifies amount (`mismatch`) and treats provider "pending" as pending. Audio routes use `_content_disposition` (header-safe) and `_serve_local_audio` (HTTP Range).
+- Giving: canonical paid status is `completed`; callback verifies amount (`mismatch`) and treats provider "pending" as pending.
+- **Confirming online gifts goes through `app/core/giving_reconcile.py:reconcile()` only** — the callback, the webhooks (`/give/webhook/paystack|flutterwave` on `open_router`; set them in each gateway dashboard), the scheduler's re-check of pending gifts (10 min–7 days old, every 30 min; unpaid after 72 h → `abandoned`) and Donations → "Re-check". A gateway that can't be reached (`error`) never changes the gift; `completed` is claimed with a conditional UPDATE so only one receipt is sent. Audio routes use `_content_disposition` (header-safe) and `_serve_local_audio` (HTTP Range).
 - Regression tests: `tests/test_audit_regressions.py`.
 
 ## Verification

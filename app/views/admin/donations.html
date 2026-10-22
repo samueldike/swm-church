@@ -67,7 +67,7 @@
     {% endif %}
     <select name="status" onchange="this.form.submit()" aria-label="Filter by status" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
       <option value="">All statuses</option>
-      {% for v, l in [('completed', 'Confirmed'), ('pending', 'Pending'), ('failed', 'Failed'), ('mismatch', 'Amount mismatch')] %}<option value="{{ v }}" {{ 'selected' if filters.status == v else '' }}>{{ l }}</option>{% endfor %}
+      {% for v, l in [('completed', 'Confirmed'), ('pending', 'Pending'), ('failed', 'Failed'), ('abandoned', 'Abandoned'), ('mismatch', 'Amount mismatch')] %}<option value="{{ v }}" {{ 'selected' if filters.status == v else '' }}>{{ l }}</option>{% endfor %}
     </select>
     <select name="method" onchange="this.form.submit()" aria-label="Filter by source" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
       <option value="">Online + recorded</option>
@@ -105,7 +105,15 @@
                 {% if sees_all %}<td data-label="Branch" class="text-xs">{{ branch_names.get(g.branch_id, 'HQ') }}{% if g.gateway_owner == 'hq' and g.branch_id and not branch_names.get(g.branch_id, '') == 'HQ' %}<p class="text-[10.5px] text-ink-3">held by HQ</p>{% endif %}</td>{% endif %}
                 <td data-label="Amount" class="text-right font-mono text-[13px] font-semibold text-ink whitespace-nowrap">{{ g.amount|money(g.currency) }}</td>
                 <td data-label="Received via" class="text-xs">{{ (g.payment_gateway|capitalize) if g.method == 'online' else (g.method|capitalize) }}</td>
-                <td data-label="Status">{{ badge('Confirmed' if paid else (g.status|capitalize), 'ok' if paid else ('warn' if g.status == 'pending' else 'bad')) }}</td>
+                <td data-label="Status">
+                  {{ badge('Confirmed' if paid else ('Amount mismatch' if g.status == 'mismatch' else g.status|capitalize), 'ok' if paid else ('warn' if g.status == 'pending' else 'bad')) }}
+                  {% if g.method == 'online' and g.status in recheck_statuses %}
+                    <form method="POST" action="{{ url_for('admin_donations_recheck', giving_id=g.id) }}" class="mt-1.5">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                      <button type="submit" class="btn btn-ghost btn-sm" title="Ask {{ g.payment_gateway|capitalize }} whether this gift was paid"><i class="ri-refresh-line"></i>Re-check</button>
+                    </form>
+                  {% endif %}
+                </td>
                 <td data-label="Reference" class="font-mono text-[10.5px] text-ink-3 break-all max-w-[190px]">{{ g.reference }}</td>
               </tr>
             {% endfor %}

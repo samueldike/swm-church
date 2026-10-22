@@ -6643,6 +6643,7 @@ async def admin_donations(request: Request, db: AsyncSession = Depends(get_db), 
         "platform_currency": await _branch_currency(db, None),
         "purposes": _lists_mod.items(await get_settings(db), "giving_purposes") + [_lists_mod.OTHERS],
         "branches": branches, "branch_names": branch_names, "sees_all": _sees_all_gifts(admin), "gift_methods": GIFT_METHODS,
+        "recheck_statuses": GIFT_RECHECK_STATUSES,
         "title": "Donations", "headerIcon": "ri-hand-coin-line", **ctx})
 
 
@@ -6714,6 +6715,40 @@ async def admin_donations_record(
     ))
     await log_admin_action(db, admin.id, "donations.recorded", "giving", None, {"amount": value, "currency": cur, "branch": target, "method": method}, request)
     return _redirect(request, "/admin/donations", "Gift recorded.")
+
+
+GIFT_RECHECK_STATUSES = ("pending", "failed", "abandoned")
+
+
+@router.post("/donations/{giving_id}/recheck", name="admin_donations_recheck")
+async def admin_donations_recheck(giving_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    """Ask the payment gateway again about an online gift that is not confirmed (DATA-01)."""
+    admin = await _get_admin(request)
+    if not admin or not has_perm(admin.role, "donations"):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from app.core.giving_reconcile import reconcile
+    from app.models.giving import Giving
+
+    back = request.headers.get("referer") or "/admin/donations"
+    back = back if "/admin/donations" in back else "/admin/donations"
+    giving = (await db.execute(select(Giving).where(Giving.id == giving_id))).scalar_one_or_none()
+    if giving is None or (not _sees_all_gifts(admin) and giving.branch_id != admin.branch_id):
+        return _redirect(request, back, "Gift not found.", "error")
+    if giving.method != "online" or giving.status not in GIFT_RECHECK_STATUSES:
+        return _redirect(request, back, "Only online gifts that are not confirmed can be re-checked.", "error")
+    before = giving.status
+    outcome = await reconcile(db, giving, base_url=_public_base_url(request))
+    await log_admin_action(db, admin.id, "donations.rechecked", "giving", giving.id, {"reference": giving.reference, "from": before, "to": giving.status}, request)
+    messages = {
+        "completed": ("The gateway confirmed this gift. It is now counted, and the giver was emailed a receipt.", "success"),
+        "mismatch": ("The gateway says this was paid, but not the full amount. It is marked “Amount mismatch”.", "error"),
+        "pending": ("The gateway says this gift has not been paid yet.", "info"),
+        "abandoned": ("The gateway says this gift was never paid: the giver left the checkout. Marked “Abandoned”.", "info"),
+        "failed": ("The gateway says this payment failed.", "info"),
+        "error": ("Could not reach the gateway (or its key in Settings is wrong). Nothing was changed; try again later.", "error"),
+    }
+    msg, kind = messages.get(outcome, (f"Status: {outcome}.", "info"))
+    return _redirect(request, back, msg, kind)
 
 
 # ─── Remittances: who owes whom between HQ and each branch ──────────

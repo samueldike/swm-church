@@ -417,6 +417,66 @@ async def resubscribe(token: str, request: Request, db: AsyncSession = Depends(g
 
 
 # ══════════════════════════════════════════════════════════════════════════
+#  Payment webhooks: the gateway tells us a gift changed, even if the donor never came back
+# ══════════════════════════════════════════════════════════════════════════
+# Set these URLs in the Paystack / Flutterwave dashboards (HQ's and each branch's own account).
+# The body only says WHICH gift to look at; reconcile() asks the gateway's verify API for the truth,
+# so a forged call can at most trigger a re-check.
+async def _webhook_gift(db: AsyncSession, reference: str):
+    from app.models.giving import Giving
+
+    if not reference or len(reference) > 255:
+        return None
+    return (await db.execute(select(Giving).where(Giving.reference == reference, Giving.method == "online"))).scalar_one_or_none()
+
+
+@open_router.post("/give/webhook/paystack", name="give_webhook_paystack")
+async def give_webhook_paystack(request: Request, db: AsyncSession = Depends(get_db)):
+    import hashlib
+    import hmac
+    import json
+
+    from app.core.giving_reconcile import gateway_secret, reconcile
+
+    if pub._rate_limited(request, "webhook", limit=600, window=600):
+        return JSONResponse({"ok": False}, status_code=429)
+    raw = await request.body()
+    try:
+        data = (json.loads(raw or b"{}").get("data") or {})
+    except (ValueError, AttributeError):
+        return JSONResponse({"ok": False}, status_code=400)
+    giving = await _webhook_gift(db, str(data.get("reference") or ""))
+    if giving is None or giving.payment_gateway != "paystack":
+        return JSONResponse({"ok": True})            # not ours: 200 so Paystack stops retrying
+    secret = await gateway_secret(db, giving)
+    expected = hmac.new(secret.encode(), raw, hashlib.sha512).hexdigest() if secret else ""
+    if not expected or not hmac.compare_digest(expected, request.headers.get("x-paystack-signature", "")):
+        return JSONResponse({"ok": False}, status_code=401)
+    outcome = await reconcile(db, giving, base_url=pub._public_base_url(request))
+    # 5xx makes Paystack retry later, which is what we want while their verify API is unreachable.
+    return JSONResponse({"ok": outcome != "error"}, status_code=503 if outcome == "error" else 200)
+
+
+@open_router.post("/give/webhook/flutterwave", name="give_webhook_flutterwave")
+async def give_webhook_flutterwave(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core.giving_reconcile import reconcile
+
+    if pub._rate_limited(request, "webhook", limit=600, window=600):
+        return JSONResponse({"ok": False}, status_code=429)
+    try:
+        body = await request.json()
+        data = body.get("data") or body              # v3 nests under "data"; older hooks send it flat
+        ref, tx_id = str(data.get("tx_ref") or data.get("txRef") or ""), str(data.get("id") or "")
+    except (ValueError, AttributeError):
+        return JSONResponse({"ok": False}, status_code=400)
+    giving = await _webhook_gift(db, ref)
+    if giving is None or giving.payment_gateway != "flutterwave":
+        return JSONResponse({"ok": True})
+    outcome = await reconcile(db, giving, transaction_id=tx_id if tx_id.isdigit() else "", base_url=pub._public_base_url(request))
+    return JSONResponse({"ok": outcome != "error"}, status_code=503 if outcome == "error" else 200)
+
+
+# ══════════════════════════════════════════════════════════════════════════
 #  Giving by bank transfer: "I have sent a transfer"
 # ══════════════════════════════════════════════════════════════════════════
 @router.post("/give/transfer-notice", name="give_transfer_notice")

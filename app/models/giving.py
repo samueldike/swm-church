@@ -27,6 +27,7 @@ class Giving(Base):
     method: Mapped[str] = mapped_column(String(20), default="online")
     note: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="pending")
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime)       # last scheduled re-check with the gateway (naive UTC)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.utcnow()

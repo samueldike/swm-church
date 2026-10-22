@@ -204,6 +204,184 @@ def test_unused_department_is_deleted(monkeypatch):
     assert db.deleted == [dept] and session["flash_messages"][0]["type"] == "success"
 
 
+# ─── DATA-01: online gifts are reconciled with the gateway ───────────
+
+@pytest.fixture
+def gifts(monkeypatch):
+    """In-memory database with gifts, a scripted gateway and a receipt counter."""
+    from datetime import datetime
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.core import giving_reconcile as gr
+    from app.core import mailer
+    from app.database import Base
+    from app.models.giving import Giving
+
+    state = SimpleNamespace(answer={"state": "error"}, receipts=0, calls=0)
+
+    async def verify(_giving, _secret, _tx):
+        state.calls += 1
+        return dict(state.answer)
+
+    async def secret(_db, _giving):
+        return "sk_test_x"
+
+    async def send_notice(*_a, **_k):
+        return True, ""
+
+    def fire(coro):
+        state.receipts += 1
+        coro.close()
+
+    monkeypatch.setattr(gr, "_verify", verify)
+    monkeypatch.setattr(gr, "gateway_secret", secret)
+    monkeypatch.setattr(mailer, "send_notice", send_notice)
+    monkeypatch.setattr(mailer, "fire", fire)
+
+    eng = create_async_engine("sqlite+aiosqlite://")
+    maker = async_sessionmaker(eng, expire_on_commit=False)
+
+    async def setup():
+        async with eng.begin() as c:
+            await c.run_sync(Base.metadata.create_all)
+
+    asyncio.run(setup())
+
+    async def add(ref="swm_a", amount=5000, age_hours=1.0, status="pending", **kw):
+        from datetime import timedelta
+
+        async with maker() as db:
+            g = Giving(reference=ref, email="giver@gmail.com", amount=amount, currency="NGN", giving_type="Tithe",
+                       payment_gateway="paystack", method="online", status=status, gateway_owner="hq",
+                       created_at=datetime.utcnow() - timedelta(hours=age_hours), **kw)
+            db.add(g)
+            await db.commit()
+            return g.id
+
+    async def load(db, gid):
+        from sqlalchemy import select
+        return (await db.execute(select(Giving).where(Giving.id == gid))).scalar_one()
+
+    state.maker, state.add, state.load, state.gr = maker, add, load, gr
+    yield state
+    asyncio.run(eng.dispose())
+
+
+def _reconcile(state, gid):
+    async def run():
+        async with state.maker() as db:
+            g = await state.load(db, gid)
+            return await state.gr.reconcile(db, g, base_url="https://x"), g.status
+    return asyncio.run(run())
+
+
+def test_unreachable_gateway_never_marks_a_gift_failed(gifts):
+    gid = asyncio.run(gifts.add())
+    gifts.answer = {"state": "error"}
+    assert _reconcile(gifts, gid) == ("error", "pending")
+
+
+def test_paid_gift_is_confirmed_once_with_one_receipt(gifts):
+    gid = asyncio.run(gifts.add(amount=5000))
+    gifts.answer = {"state": "paid", "success": True, "amount_minor": 500000, "currency": "NGN"}
+    assert _reconcile(gifts, gid) == ("completed", "completed")
+    assert _reconcile(gifts, gid) == ("completed", "completed")
+    assert gifts.receipts == 1 and gifts.calls == 1               # the second call did not even ask the gateway
+
+
+def test_two_simultaneous_confirmations_send_one_receipt(gifts):
+    """DATA-15: callback and webhook arrive together; both loaded the gift while it was still pending."""
+    gid = asyncio.run(gifts.add(amount=5000))
+    gifts.answer = {"state": "paid", "success": True, "amount_minor": 500000, "currency": "NGN"}
+
+    async def run():
+        async with gifts.maker() as a, gifts.maker() as b:
+            ga, gb = await gifts.load(a, gid), await gifts.load(b, gid)
+            return await gifts.gr.reconcile(a, ga), await gifts.gr.reconcile(b, gb)
+
+    assert asyncio.run(run()) == ("completed", "completed")
+    assert gifts.receipts == 1
+
+
+def test_short_payment_is_a_mismatch_not_a_gift(gifts):
+    gid = asyncio.run(gifts.add(amount=5000))
+    gifts.answer = {"state": "paid", "success": True, "amount_minor": 100, "currency": "NGN"}
+    assert _reconcile(gifts, gid) == ("mismatch", "mismatch")
+    gifts.answer = {"state": "paid", "success": True, "amount_minor": 500000, "currency": "USD"}
+    gid2 = asyncio.run(gifts.add(ref="swm_b", amount=5000))
+    assert _reconcile(gifts, gid2) == ("mismatch", "mismatch") and gifts.receipts == 0
+
+
+def test_unpaid_gift_is_abandoned_only_after_72_hours(gifts):
+    gifts.answer = {"state": "pending"}
+    fresh = asyncio.run(gifts.add(ref="swm_new", age_hours=2))
+    old = asyncio.run(gifts.add(ref="swm_old", age_hours=80))
+    assert _reconcile(gifts, fresh) == ("pending", "pending")
+    assert _reconcile(gifts, old) == ("abandoned", "abandoned")
+
+
+def test_scheduler_rechecks_only_due_gifts(gifts):
+    from datetime import datetime, timedelta
+
+    ids = {
+        "too_new": asyncio.run(gifts.add(ref="r1", age_hours=0.05)),
+        "due": asyncio.run(gifts.add(ref="r2", age_hours=1)),
+        "checked_recently": asyncio.run(gifts.add(ref="r3", age_hours=1, checked_at=datetime.utcnow() - timedelta(minutes=5))),
+        "checked_long_ago": asyncio.run(gifts.add(ref="r4", age_hours=5, checked_at=datetime.utcnow() - timedelta(hours=1))),
+        "too_old": asyncio.run(gifts.add(ref="r5", age_hours=24 * 10)),
+        "done": asyncio.run(gifts.add(ref="r6", age_hours=1, status="completed")),
+    }
+
+    async def run():
+        async with gifts.maker() as db:
+            return set(await gifts.gr.due_for_recheck(db))
+
+    assert asyncio.run(run()) == {ids["due"], ids["checked_long_ago"]}
+
+
+def test_paystack_webhook_requires_a_valid_signature(gifts, monkeypatch):
+    import hashlib
+    import hmac
+    import json
+
+    from app.core import throttle
+
+    throttle.reset_all()
+    gid = asyncio.run(gifts.add(ref="swm_hook", amount=5000))
+    gifts.answer = {"state": "paid", "success": True, "amount_minor": 500000, "currency": "NGN"}
+
+    async def session():
+        async with gifts.maker() as db:
+            yield db
+
+    app.dependency_overrides[get_db] = session
+    try:
+        client = TestClient(app)
+        body = json.dumps({"event": "charge.success", "data": {"reference": "swm_hook", "amount": 500000}}).encode()
+        bad = client.post("/give/webhook/paystack", content=body, headers={"x-paystack-signature": "0" * 128})
+        assert bad.status_code == 401 and gifts.calls == 0
+        sig = hmac.new(b"sk_test_x", body, hashlib.sha512).hexdigest()
+        ok = client.post("/give/webhook/paystack", content=body, headers={"x-paystack-signature": sig})
+        assert ok.status_code == 200 and gifts.calls == 1
+        unknown = client.post("/give/webhook/paystack", content=b'{"data":{"reference":"nope"}}')
+        assert unknown.status_code == 200                        # not ours: acknowledged so Paystack stops retrying
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    async def status():
+        async with gifts.maker() as db:
+            return (await gifts.load(db, gid)).status
+
+    assert asyncio.run(status()) == "completed"
+
+
+def test_flutterwave_transaction_id_never_reaches_the_url_unchecked():
+    from app.core import payment
+
+    assert asyncio.run(payment.verify_flutterwave("../../v3/transfers", "swm_x", "k"))["state"] == "error"
+
+
 def test_unit_reports_never_cascade_from_departments():
     from app.models.department import Department
     from app.models.unit_report import UnitReport
