@@ -59,3 +59,6 @@ app/telegram-archive/
 
 # Whisper model cache (bind-mounted into the transcriber)
 whisper-models/
+
+# Audit screenshots are review artefacts (tens of MB); kept locally, not in git
+audit/screenshots/
