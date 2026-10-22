@@ -202,6 +202,14 @@
   .admin-scrollbar::-webkit-scrollbar-thumb { background: rgba(184, 137, 31, 0.4); border-radius: 999px; }
 }
 
+/* ── Monospace text (dates, amounts, references, badges, labels): in a monospace font a space is
+   as wide as a letter, so "29 Aug 2026 02:35" reads as spaced-out words. Halve the gap between
+   words; letters and digits keep their even widths, so columns still line up. ── */
+@layer base {
+  .font-mono, .field-mono, .field-label, .badge, .dtable th, .mono-label, .kpi-value,
+  .dtable-responsive td[data-label]::before, code, kbd, samp, pre { word-spacing: -0.3em; }
+}
+
 /* ── Cursors: Tailwind v4's reset gives buttons the arrow; everything clickable shows the hand. ── */
 @layer base {
   button:not(:disabled), [role="button"], summary, select:not(:disabled),
