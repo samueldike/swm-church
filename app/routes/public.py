@@ -1163,6 +1163,13 @@ async def give(request: Request, db: AsyncSession = Depends(get_db)):
             church_accounts = json.loads(settings["church_accounts"])
         except Exception:
             church_accounts = []
+    # A logo whose file is gone must not show a broken image: the page falls back to the bank's initial.
+    import os
+
+    static_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+    for acct in church_accounts:
+        if isinstance(acct, dict) and acct.get("bank_logo") and not os.path.isfile(os.path.join(static_root, acct["bank_logo"])):
+            acct["bank_logo"] = ""
     from app.core.branch_settings import get_branch_settings, parse_accounts
 
     giving_model = (settings.get("giving_model") or "central").strip()
