@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400..800&display=swap"/>
-<link rel="stylesheet" href="{{ url_for('static', path='home-v2/home-v2.css') }}?v=3"/>
+<link rel="stylesheet" href="{{ url_for('static', path='home-v2/home-v2.css') }}?v=4"/>
 {% set third_slide = ('/' ~ sliders[0].image_path) if sliders else '/static/home/worship.jpg' %}
 {% set slides = [
     ('/static/home/interlude.jpg', 'Every dead dream can live again.', "At Scent of Water, we believe in second chances, fresh starts, and the God who breathes life into dry places.", 'Join us Sunday', url_for('visit')),
@@ -40,7 +40,7 @@
         <a href="{{ url_for('give') }}">Give</a>
     </nav>
     <div class="bar-end">
-        <a class="btn btn-green btn-small" href="{{ url_for('visit') }}">Plan your visit</a>
+        <a class="btn btn-dark btn-small" href="{{ url_for('visit') }}">Plan your visit</a>
         <button class="menu-btn" type="button" id="menu-open" aria-haspopup="dialog">Menu</button>
     </div>
 </header>
@@ -79,7 +79,7 @@
             <div class="slide {{ 'on' if loop.first else '' }}" data-slide {% if not loop.first %}aria-hidden="true"{% endif %}>
                 {% if loop.first %}<h1>{{ head }}</h1>{% else %}<p class="h1">{{ head }}</p>{% endif %}
                 <p class="hero-sub">{{ sub }}</p>
-                <a class="btn btn-sun" href="{{ url }}" {% if not loop.first %}tabindex="-1"{% endif %}>{{ cta }}</a>
+                <a class="btn btn-gold" href="{{ url }}" {% if not loop.first %}tabindex="-1"{% endif %}>{{ cta }}</a>
             </div>
             {% endfor %}
         </div>
@@ -100,7 +100,7 @@
         <div class="clock" id="clock" aria-hidden="true" hidden>
             <span><b data-c="d">0</b>days</span><span><b data-c="h">0</b>hours</span><span><b data-c="m">0</b>mins</span><span><b data-c="s">0</b>secs</span>
         </div>
-        <a class="btn btn-green" href="{{ url_for('visit') }}">Save me a seat</a>
+        <a class="btn btn-dark" href="{{ url_for('visit') }}">Save me a seat</a>
     </div>
 </section>
 {% endif %}
@@ -109,11 +109,11 @@
 <section class="belong">
     <div class="wrap belong-grid">
         <div class="reveal">
-            <p class="tag tag-green">Welcome home</p>
+            <p class="tag tag-soft">Welcome home</p>
             <h2>This is more than a church. It's family.</h2>
             <p class="big">We're a grace-driven community where the broken find healing, the weary find rest, and the lost find purpose.</p>
             <p class="big">No matter what you're facing or where you've been, you belong here.</p>
-            <a class="btn btn-green" href="{{ url_for('about') }}">Our story</a>
+            <a class="btn btn-dark" href="{{ url_for('about') }}">Our story</a>
         </div>
         <div class="collage" aria-hidden="true">
             <img class="c1 reveal" src="/static/images/gallery/swm-11.jpg" alt="" loading="lazy" decoding="async" data-speed="-0.05"/>
@@ -145,7 +145,7 @@
 <section class="first" id="visit">
     <div class="wrap">
         <div class="section-head reveal">
-            <p class="tag tag-green">Your first Sunday</p>
+            <p class="tag tag-soft">Your first Sunday</p>
             <h2>You won't walk in alone.</h2>
         </div>
         <ol class="expect">
@@ -158,7 +158,7 @@
             {% endfor %}
         </ol>
         <div class="actions reveal">
-            <a class="btn btn-green" href="{{ url_for('visit') }}">Plan your visit</a>
+            <a class="btn btn-dark" href="{{ url_for('visit') }}">Plan your visit</a>
             <a class="btn btn-line" href="{{ url_for('prayer') }}">Request prayer</a>
         </div>
     </div>
@@ -171,7 +171,7 @@
             <img src="{{ ('/' ~ sliders[0].image_path) if sliders else '/static/home/preacher.jpg' }}" alt="{{ pastorName }} preaching" loading="lazy" decoding="async"/>
         </figure>
         <div class="reveal" style="--d:.1s">
-            <p class="tag tag-green">The Word</p>
+            <p class="tag tag-soft">The Word</p>
             <h2>A word for where you are today.</h2>
             {% if latest_sermons %}
             <ol class="tracks">
@@ -188,7 +188,7 @@
             <p class="big">New messages are published here after each service.</p>
             {% endif %}
             <div class="actions">
-                <a class="btn btn-green" href="{{ url_for('messages') }}">Watch or listen</a>
+                <a class="btn btn-dark" href="{{ url_for('messages') }}">Watch or listen</a>
                 <a class="btn btn-line" href="{{ url_for('watch') }}">Watch live</a>
             </div>
         </div>
@@ -199,7 +199,7 @@
 <section class="whats-on" id="whats-on">
     <div class="wrap">
         <div class="section-head reveal">
-            <p class="tag tag-green">What's on</p>
+            <p class="tag tag-soft">What's on</p>
             <h2>There's always a seat for you.</h2>
         </div>
         <div class="on-grid">
@@ -270,14 +270,14 @@
         <div class="wrap"><h3 class="programs-title reveal">Programmes for every season of life</h3></div>
         <ul class="program-rail" tabindex="0" aria-label="Programmes">
             {% for name, line, tone in [
-                ('Singles Point Blank', 'Annual programme equipping singles with practical scriptural knowledge.', 'sun'),
-                ('Built to Last Marriage Prayer Network', 'Triweekly prayer, restoring order in marriages across the nations.', 'green'),
-                ('Corpers Transition Network', 'Weekly practical leadership skills for youth corpers.', 'sky'),
-                ('The Alpha Team', 'An interdenominational conclave for CEOs, ministers, principals and leaders.', 'sun'),
-                ('Doxa Connect', 'The radio podcast airing on stations across Nigeria.', 'green'),
-                ('Oasis Fellowship (OFEL)', 'Our campus expression at Ebonyi State University, CAS Campus.', 'sky'),
-                ('Cave of Adullam School of Ministry', 'Training at CASOM, the school of ministry.', 'sun'),
-                ('Marriage Counselling', 'Counselling and mentorship for marriages.', 'green')
+                ('Singles Point Blank', 'Annual programme equipping singles with practical scriptural knowledge.', 'gold'),
+                ('Built to Last Marriage Prayer Network', 'Triweekly prayer, restoring order in marriages across the nations.', 'ink'),
+                ('Corpers Transition Network', 'Weekly practical leadership skills for youth corpers.', 'white'),
+                ('The Alpha Team', 'An interdenominational conclave for CEOs, ministers, principals and leaders.', 'gold'),
+                ('Doxa Connect', 'The radio podcast airing on stations across Nigeria.', 'ink'),
+                ('Oasis Fellowship (OFEL)', 'Our campus expression at Ebonyi State University, CAS Campus.', 'white'),
+                ('Cave of Adullam School of Ministry', 'Training at CASOM, the school of ministry.', 'gold'),
+                ('Marriage Counselling', 'Counselling and mentorship for marriages.', 'ink')
             ] %}
             <li class="tone-{{ tone }}"><h4>{{ name }}</h4><p>{{ line }}</p></li>
             {% endfor %}
@@ -305,7 +305,7 @@
 <section class="stand">
     <div class="wrap stand-grid">
         <div class="reveal">
-            <p class="tag tag-sun">Our vision</p>
+            <p class="tag">Our vision</p>
             <p class="vision">Repositioning men for God's very best.</p>
             <p class="stand-body">Scent of Water Ministry is a divine mandate received from the Lord Jesus Christ, with a message of restoration and hope to the downtrodden, downcast and weary. We teach and focus only on the Grace of God.</p>
         </div>
@@ -329,7 +329,7 @@
 <section class="family" id="family">
     <div class="wrap">
         <div class="section-head reveal">
-            <p class="tag tag-green">Community</p>
+            <p class="tag tag-soft">Community</p>
             <h2>Find your people. Use your gifts.</h2>
         </div>
     </div>
@@ -352,7 +352,7 @@
             <li>{{ name }}{% if role %} <span>{{ role }}</span>{% endif %}</li>
             {% endfor %}
         </ul>
-        <a class="btn btn-green reveal" href="{{ url_for('get_involved') }}">Join a team today</a>
+        <a class="btn btn-dark reveal" href="{{ url_for('get_involved') }}">Join a team today</a>
     </div>
 </section>
 
@@ -360,7 +360,7 @@
 <section class="love">
     <div class="wrap love-grid">
         <div class="love-copy reveal">
-            <p class="tag tag-green">Love in action</p>
+            <p class="tag tag-soft">Love in action</p>
             <h2>Love doesn't stay inside the walls.</h2>
             <ul class="love-links">
                 <li><a href="{{ url_for('outreach_detail', kind='prison') }}">Annual Prison Outreach</a></li>
@@ -392,7 +392,7 @@
             <img src="{{ pastorPhoto if pastorPhoto.startswith('/') else '/' ~ pastorPhoto }}" alt="{{ pastorName }}" loading="lazy" decoding="async"/>
         </figure>
         <div class="reveal" style="--d:.1s">
-            <p class="tag tag-green">Meet our senior pastor</p>
+            <p class="tag tag-soft">Meet our senior pastor</p>
             <h2>{{ pastorName }}</h2>
             <p class="creed">Author. Mentor. Revivalist. Builder of men.</p>
             <p class="big">A dynamic teacher and prophetic voice, called to raise leaders and restore order in lives, families, and systems. Married to Pastor Mary and blessed with five children, they reside in Abakaliki, Nigeria.</p>
@@ -418,7 +418,7 @@
         <ul class="places reveal" style="--d:.1s">
             {% for b in branches %}
             <li>
-                <p class="tag tag-green">{{ 'Headquarters' if b.is_hq else 'Branch' }}</p>
+                <p class="tag tag-soft">{{ 'Headquarters' if b.is_hq else 'Branch' }}</p>
                 <h3>{{ b.name }}</h3>
                 <p>{{ b.address or b.place or siteHeadquartersAddress }}</p>
                 {% if b.phone %}<p><a href="tel:{{ b.phone|replace(' ', '') }}">{{ b.phone }}</a></p>{% endif %}
@@ -426,10 +426,10 @@
                 {% if not b.is_hq %}<a class="link" href="{{ url_for('branch_detail', slug=b.slug) }}">Service times</a>{% endif %}
             </li>
             {% else %}
-            <li><p class="tag tag-green">Headquarters</p><h3>{{ siteName }}</h3><p>{{ siteHeadquartersAddress }}</p></li>
+            <li><p class="tag tag-soft">Headquarters</p><h3>{{ siteName }}</h3><p>{{ siteHeadquartersAddress }}</p></li>
             {% endfor %}
             <li>
-                <p class="tag tag-green">Campus expression</p>
+                <p class="tag tag-soft">Campus expression</p>
                 <h3>Oasis Fellowship (OFEL)</h3>
                 <p>Ebonyi State University, CAS Campus</p>
             </li>
@@ -467,7 +467,7 @@
                 <label for="news-email">Subscribe for updates</label>
                 <div class="news-row">
                     <input id="news-email" type="email" name="email" required autocomplete="email" placeholder="Your email address"/>
-                    <button class="btn btn-sun" type="submit">Subscribe</button>
+                    <button class="btn btn-gold" type="submit">Subscribe</button>
                 </div>
             </form>
         </div>
@@ -513,6 +513,6 @@
 </div>
 
 {% include "partials/public-flash.html" %}
-<script src="{{ url_for('static', path='home-v2/home-v2.js') }}?v=3" defer></script>
+<script src="{{ url_for('static', path='home-v2/home-v2.js') }}?v=4" defer></script>
 </body>
 </html>
