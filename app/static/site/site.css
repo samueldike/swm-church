@@ -653,3 +653,5 @@ input:not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=button
 #ai-question:focus,#guide-question:focus{outline:none;border-color:transparent}
 #scentai-form:focus-within,#message-ask:focus-within{border-color:#8b8c87}
 .message-discuss-form{border:1px solid #d5d0c4;border-radius:18px;background:#fff;padding:1rem;margin:1rem 0}.message-discuss-form textarea{width:100%;border:0;resize:vertical;min-height:90px;background:transparent;font:inherit;padding:.5rem}.message-discuss-form:focus-within{border-color:#8b8c87}.message-discuss-form textarea:focus{outline:none}.message-discussion .guide-note{margin:1rem 0;color:#6b6658;line-height:1.7}.message-discussion .ai-conversation{margin-top:1.5rem}
+/* The AI workspace uses light surfaces, independently of the site's photo headings. */
+.scentai-app .ai-welcome h1{color:#252620}
