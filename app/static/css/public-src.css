@@ -1,0 +1,12 @@
+/* Source file for app/static/css/public.css — the Tailwind utilities used by the public website (UX-02).
+   The site's colours, type and components live in partials/theme-head.html / theme-styles; this file only
+   replaces the 271 KB in-browser Tailwind compiler with the same utilities, built once. Rebuild after
+   changing classes in a public template (command in README-admin-css.txt). */
+@import "tailwindcss" source(none);
+
+@source "../../views/pages";
+@source "../../views/partials";
+@source "../../views/layouts";
+@source "../../views/macros";
+@source "../js/live-actions.js";
+@source "../js/site-confirm.js";

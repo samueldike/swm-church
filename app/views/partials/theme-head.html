@@ -3,8 +3,8 @@
    swm-logo.png (core #A87810, highlight #E8C870). No teal, no glows.
    Type:    Geist + Geist Mono. Hierarchy by weight and colour, not scale.
    Scroll:  strict one-frame-per-screen snap on desktop; free on mobile.
-   Colour and motion live here, NOT in the Tailwind config — the browser
-   build only reliably ships its built-in layout utilities.
+   Colour and motion live here, NOT in the Tailwind config: public.css only
+   carries Tailwind's built-in layout utilities.
    ───────────────────────────────────────────────────────────────────────── #}
 <script>
     document.documentElement.style.visibility = 'hidden';
@@ -17,7 +17,8 @@
         document.documentElement.style.visibility = 'visible';
     }
 </script>
-<script src="{{ url_for('static', path='js/tailwind-browser.global.js') }}"></script>
+{# Precompiled Tailwind utilities (static/css/public-src.css); replaced the 271 KB in-browser compiler (UX-02). #}
+<link rel="stylesheet" href="{{ url_for('static', path='css/public.css') }}"/>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400..600&display=swap"/>

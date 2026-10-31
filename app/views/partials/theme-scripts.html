@@ -208,10 +208,15 @@
     /* ── hero plates ──────────────────────────────────────────────────── */
     var plates = [].slice.call(document.querySelectorAll('[data-plate]'));
     var dots = [].slice.call(document.querySelectorAll('[data-dot]'));
+    var loadPlate = function (p) {
+        if (p && p.dataset.bg) { p.style.backgroundImage = "url('" + p.dataset.bg + "')"; delete p.dataset.bg; }
+    };
     if (plates.length > 1) {
         var pi = 0, timer = null, DELAY = 6000;
         var show = function (i) {
             pi = (i + plates.length) % plates.length;
+            loadPlate(plates[pi]);
+            loadPlate(plates[(pi + 1) % plates.length]);          // fetch the next one while this one shows
             plates.forEach(function (p, n) { p.classList.toggle('on', n === pi); });
             dots.forEach(function (d, n) {
                 d.classList.toggle('on', n === pi);
@@ -224,6 +229,8 @@
             d.addEventListener('click', function () { show(+d.dataset.i); stop(); start(); });
         });
         document.addEventListener('visibilitychange', function () { document.hidden ? stop() : start(); });
+        if (document.readyState === 'complete') loadPlate(plates[1]);
+        else window.addEventListener('load', function () { loadPlate(plates[1]); });
         start();
     }
 

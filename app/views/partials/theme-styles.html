@@ -327,6 +327,163 @@
         .values-split .row:nth-child(5) { border-top: 1px solid var(--line); }
     }
 
+    /* Mandate beside a worship photograph. The photo column is fixed to the
+       frame height so the split still fits one screen. */
+    @media (min-width: 900px) {
+        .mandate-split { grid-template-columns: 0.9fr 1.1fr; }
+        .mandate-split .split-media.photo { height: min(74svh, 660px); }
+        .mandate-split .split-media.photo img { max-height: none; }
+    }
+    /* margin-block only: the mobile layer's full-bleed negative inline margins must survive. */
+    .split-media.photo { margin-block: 0; background: var(--surface); }
+    .split-media.photo img { filter: grayscale(0.2) contrast(1.04); }
+    .values-run {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem 0;
+        margin-top: 0.8rem;
+        font-size: clamp(0.98rem, 1.25vw, 1.12rem);
+        letter-spacing: -0.012em;
+        line-height: 1.5;
+        color: var(--fg);
+    }
+    .values-run span:not(:last-child)::after {
+        content: '';
+        display: inline-block;
+        width: 5px;
+        height: 5px;
+        margin-inline: 0.8rem;
+        border-radius: 999px;
+        background: var(--gold);
+        vertical-align: middle;
+    }
+
+    /* ══ messages — featured latest message ════════════════════════════════ */
+    .msg-feature-split { display: grid; gap: clamp(1.4rem, 3.5vw, 3rem); grid-template-columns: 1fr; margin-top: 2rem; align-items: center; }
+    @media (min-width: 900px) { .msg-feature-split { grid-template-columns: 0.95fr 1.05fr; } }
+    .msg-feature {
+        position: relative;
+        display: flex;
+        align-items: flex-end;
+        min-height: clamp(300px, 54svh, 540px);
+        overflow: hidden;
+        border-radius: 13px;
+        background: var(--surface);
+        isolation: isolate;
+    }
+    .msg-feature img {
+        position: absolute;
+        inset: 0;
+        z-index: -2;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center 22%;
+        transition: transform 1100ms var(--ease);
+    }
+    .msg-feature::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        background: linear-gradient(180deg, rgba(10,10,11,0) 35%, rgba(10,10,11,0.78) 70%, rgba(10,10,11,0.96) 100%);
+    }
+    .msg-feature:hover img { transform: scale(1.04); }
+    .msg-feature-in { display: flex; flex-direction: column; gap: 0.6rem; padding: 1.6rem 5.5rem 1.6rem 1.5rem; }
+    .msg-feature-title {
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        transition: color 300ms var(--ease);
+    }
+    .msg-feature:hover .msg-feature-title { color: var(--gold-lt); }
+    .msg-feature-play {
+        position: absolute;
+        right: 1.4rem;
+        bottom: 1.6rem;
+        width: 3.4rem;
+        height: 3.4rem;
+        border-radius: 999px;
+        background: var(--gold);
+        color: var(--ink);
+        font-size: 30px;
+        box-shadow: 0 0 0 0 rgba(184,137,31,0.45);
+        animation: msg-pulse 2.6s var(--ease) infinite;
+        transition: background-color 300ms var(--ease), transform 300ms var(--ease);
+    }
+    .msg-feature:hover .msg-feature-play { background: var(--gold-lt); transform: scale(1.06); }
+    @keyframes msg-pulse {
+        0%   { box-shadow: 0 0 0 0 rgba(184,137,31,0.45); }
+        70%  { box-shadow: 0 0 0 16px rgba(184,137,31,0); }
+        100% { box-shadow: 0 0 0 0 rgba(184,137,31,0); }
+    }
+    @media (prefers-reduced-motion: reduce) { .msg-feature-play { animation: none; } }
+
+    /* ══ photo frames — interlude + gather ═════════════════════════════════ */
+    /* A whole screen given to one of the church's own photographs. The image
+       keeps more of its colour than the hero; the veil is what protects the copy. */
+    .photo-frame { overflow: hidden; background: var(--ink); }
+    .photo-frame > .shell { position: relative; z-index: 1; }
+    .photo-bed { position: absolute; inset: 0; }
+    .photo-bed img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        filter: grayscale(0.25) contrast(1.06);
+        transform: scale(1.08);
+        transition: transform 2400ms var(--ease);
+    }
+    .photo-frame.in .photo-bed img { transform: scale(1); }
+    .photo-bed::after { content: ''; position: absolute; inset: 0; }
+
+    .interlude { justify-content: flex-end; padding-bottom: clamp(3.5rem, 12vh, 8rem); }
+    .interlude .photo-bed::after {
+        background:
+            linear-gradient(0deg, rgba(10,10,11,0.97) 0%, rgba(10,10,11,0.72) 34%, rgba(10,10,11,0.12) 68%),
+            linear-gradient(90deg, rgba(10,10,11,0.75) 0%, rgba(10,10,11,0.35) 45%, transparent 70%);
+    }
+    .interlude-head {
+        margin-top: 1.3rem;
+        font-size: clamp(2.8rem, 6.6vw, 6.4rem);
+        line-height: 0.98;
+        letter-spacing: -0.045em;
+    }
+
+    .gather .photo-bed img { object-position: 70% center; }
+    .gather .photo-bed::after {
+        background:
+            linear-gradient(90deg, var(--ink) 0%, rgba(10,10,11,0.94) 42%, rgba(10,10,11,0.5) 72%, rgba(10,10,11,0.3) 100%),
+            linear-gradient(0deg, var(--ink) 0%, transparent 30%);
+    }
+    @media (min-width: 900px) { .gather .shell > * { max-width: 760px; } }
+
+    /* ══ units — strip of the people who serve ═════════════════════════════ */
+    .serve-strip {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr 1fr 0.75fr 1fr;
+        gap: 4px;
+        height: clamp(120px, 20svh, 210px);
+        margin-top: 1.6rem;
+        border-radius: 13px;
+        overflow: hidden;
+    }
+    .serve-tile { display: block; min-width: 0; background: var(--surface); }
+    .serve-tile img { width: 100%; height: 100%; object-fit: cover; display: block; filter: grayscale(0.15); }
+    .serve-strip + .units { margin-top: 1.4rem !important; }
+
+    @media (max-width: 767.98px) {
+        .values-run { font-size: 1.02rem; }
+        .msg-feature { min-height: 112vw; }
+        .msg-feature-title { font-size: 1.55rem; }
+        .interlude { min-height: 88svh; padding-bottom: 3rem; }
+        .interlude-head { font-size: 3rem; }
+        .gather .photo-bed::after { background: linear-gradient(0deg, var(--ink) 10%, rgba(10,10,11,0.86) 100%); }
+        .serve-strip { grid-template-columns: 1.2fr 1fr 0.8fr; height: 38vw; }
+        .serve-tile:nth-child(n + 4) { display: none; }
+    }
+
     /* Vertical scripture rail, right edge of the hero. */
     .rail {
         position: absolute;

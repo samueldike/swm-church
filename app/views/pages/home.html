@@ -3,8 +3,8 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>{{ siteName }} — Repositioning men for God's best</title>
-<link rel="icon" href="/images/swm-logo.png" type="image/png"/>
-<link rel="apple-touch-icon" href="/images/swm-logo.png"/>
+<link rel="icon" href="/static/brand/swm-logo-128.png" type="image/png"/>
+<link rel="apple-touch-icon" href="/static/brand/swm-logo-180.png"/>
 {% set metaTitle = siteName %}
 {% set metaDescription = 'Repositioning men for God\'s best. A message of restoration and hope from Abakaliki — at the scent of water, it will sprout again.' %}
 {% include "partials/theme-meta.html" %}
@@ -19,8 +19,9 @@
 <section class="frame frame-hero" id="f-hero" data-frame style="padding-top:0;">
     <div class="hero-bed" aria-hidden="true">
         {% for slider in sliders %}
+        {#- Only the first slide's photo loads with the page; the rest load just before they are shown (UX-02). -#}
         <div class="hero-plate {{ 'on' if loop.first else '' }}" data-plate
-             style="background-image:url('/{{ slider.image_path }}')"></div>
+             {% if loop.first %}style="background-image:url('/{{ slider.image_path }}')"{% else %}data-bg="/{{ slider.image_path }}"{% endif %}></div>
         {% else %}
         <div class="hero-plate on" data-plate style="background-image:url('/images/general-page-header.jpg')"></div>
         {% endfor %}
@@ -117,24 +118,26 @@
 
 {# ═══ 03 · VISION, MISSION, VALUES ════════════════════════════════════════ #}
 <section class="frame" id="f-mandate" data-frame>
-    <div class="shell">
-        {# The vision IS "what we are here to do", so it carries the headline
-           rather than sitting in a stub column under a generic one. Mission
-           and values then pair off underneath at matched heights. #}
-        <p class="mono eyebrow"><span class="rule"></span>The mandate</p>
+    {# Worship photograph beside the vision, so the mandate is seen as well as read. #}
+    <div class="shell split mandate-split">
+        <figure class="split-media photo wipe" style="--d:80ms">
+            <img src="/static/home/worship.jpg" alt="Worship at Scent of Water Ministry" loading="lazy" decoding="async"/>
+        </figure>
 
-        <div class="mandate-head">
-            <p class="mono faint fade" style="--d:120ms">Vision</p>
-            <h2 class="t-h2 vision-head" style="margin-top:0.8rem;">
-                <span class="rise"><span>Repositioning men</span></span>
-                <span class="rise"><span class="gold-lt" style="--d:90ms">for God’s very best.</span></span>
-            </h2>
-        </div>
+        <div>
+            <p class="mono eyebrow"><span class="rule"></span>The mandate</p>
 
-        <div class="mandate-cols">
-            <div class="fade" style="--d:260ms">
+            <div class="mandate-head">
+                <p class="mono faint fade" style="--d:120ms">Vision</p>
+                <h2 class="t-h2 vision-head" style="margin-top:0.8rem;">
+                    <span class="rise"><span>Repositioning men</span></span>
+                    <span class="rise"><span class="gold-lt" style="--d:90ms">for God’s very best.</span></span>
+                </h2>
+            </div>
+
+            <div class="fade" style="--d:260ms;margin-top:clamp(1.4rem, 3.5vh, 2.2rem);">
                 <p class="mono faint">Mission</p>
-                <ul class="rows" style="margin-top:0.9rem;">
+                <ul class="rows" style="margin-top:0.7rem;">
                     {% for m in [
                         'Equipping men to enjoy their God given inheritance in Christ Jesus.',
                         'Enforcing God’s Kingdom on earth.',
@@ -151,20 +154,14 @@
                 </ul>
             </div>
 
-            <div class="fade" style="--d:350ms">
+            <div class="fade" style="--d:350ms;margin-top:clamp(1.2rem, 3vh, 1.8rem);">
                 <p class="mono faint">Core values</p>
-                {# Seven values in two sub-columns (4 + 3) so this block lands
-                   at roughly the same height as the four-item mission list. #}
-                <ul class="rows values-split" style="margin-top:0.9rem;">
+                {# A run of words, not a second ruled list: seven values read as one creed. #}
+                <p class="values-run">
                     {% for v in ['Faith in God’s Word', 'Passion', 'Love', 'Maximizing the presence of God', 'Excellence', 'Time consciousness', 'Integrity'] %}
-                    <li class="row">
-                        <span class="row-in">
-                            <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
-                            <span class="row-main">{{ v }}</span>
-                        </span>
-                    </li>
+                    <span>{{ v }}</span>
                     {% endfor %}
-                </ul>
+                </p>
             </div>
         </div>
     </div>
@@ -184,11 +181,25 @@
         </div>
 
         {% if latest_sermons %}
-        <ul class="rows rows-play fade" style="--d:240ms;margin-top:2rem;">
-            {% for sermon in latest_sermons %}
+        {% set lead = latest_sermons[0] %}
+        <div class="msg-feature-split">
+            {# The newest message gets the stage photograph; the rest follow as rows. #}
+            <a class="msg-feature wipe" style="--d:120ms" href="{{ url_for('messages_show', slug=lead.slug) }}">
+                <img src="/static/home/preacher.jpg" alt="" loading="lazy" decoding="async"/>
+                <span class="msg-feature-in">
+                    <span class="mono gold">Latest message</span>
+                    <span class="t-h2 msg-feature-title">{{ lead.title }}</span>
+                    {% if lead.preacher %}<span class="mono faint">{{ lead.preacher }}</span>{% endif %}
+                </span>
+                <span class="msg-feature-play material-symbols-outlined" aria-hidden="true">play_arrow</span>
+            </a>
+
+        {% if latest_sermons|length > 1 %}
+        <ul class="rows rows-play fade" style="--d:240ms;">
+            {% for sermon in latest_sermons[1:] %}
             <li class="row row-link">
                 <a href="{{ url_for('messages_show', slug=sermon.slug) }}">
-                    <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
+                    <span class="mono faint row-i">{{ '%02d'|format(loop.index + 1) }}</span>
                     <span class="row-play material-symbols-outlined" aria-hidden="true">play_arrow</span>
                     <span class="row-main">
                         <span class="t-h3">{{ sermon.title }}</span>
@@ -203,6 +214,12 @@
             {% endfor %}
         </ul>
         {% else %}
+        <div class="fade" style="--d:240ms">
+            <a href="{{ url_for('messages') }}" class="btn btn-ghost">Browse the archive</a>
+        </div>
+        {% endif %}
+        </div>
+        {% else %}
         <div class="empty fade" style="--d:240ms">
             <p class="t-body">New messages are published here after each service.</p>
             <a href="{{ url_for('messages') }}" class="btn btn-ghost" style="margin-top:1.2rem;">Browse the archive</a>
@@ -211,9 +228,31 @@
     </div>
 </section>
 
+{# ═══ INTERLUDE · a full-screen photograph, one line, one action ═════════ #}
+<section class="frame photo-frame interlude" id="f-interlude" data-frame>
+    <div class="photo-bed" aria-hidden="true">
+        <img src="/static/home/interlude.jpg" alt="" loading="lazy" decoding="async"/>
+    </div>
+    <div class="shell interlude-in">
+        <p class="mono eyebrow fade"><span class="rule"></span>Worship with us</p>
+        <h2 class="t-display interlude-head">
+            <span class="rise"><span>Come thirsty.</span></span>
+            <span class="rise"><span class="gold-lt" style="--d:120ms">Leave restored.</span></span>
+        </h2>
+        <div class="flex flex-wrap items-center gap-3 fade" style="--d:320ms;margin-top:2rem;">
+            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan your visit</a>
+            <a href="{{ url_for('watch') }}" class="btn btn-ghost">Watch live</a>
+        </div>
+    </div>
+</section>
+
 {# ═══ 04 · WHEN WE GATHER ═════════════════════════════════════════════════ #}
-{# A schedule is tabular data — set it as a table, not as a row of cards. #}
-<section class="frame" id="f-gather" data-frame style="background:var(--ink);">
+{# A schedule is tabular data — set it as a table, not as a row of cards.
+   The congregation sits behind it, faded out under the table side. #}
+<section class="frame photo-frame gather" id="f-gather" data-frame>
+    <div class="photo-bed" aria-hidden="true">
+        <img src="/static/home/gather.jpg" alt="" loading="lazy" decoding="async"/>
+    </div>
     <div class="shell">
         <div class="head">
             <div>
@@ -255,6 +294,15 @@
                 </h2>
             </div>
             <a href="{{ url_for('get_involved') }}" class="lnk fade" style="--d:180ms">Join a unit</a>
+        </div>
+
+        {# The people behind the units: one flush strip of photographs. #}
+        <div class="serve-strip" aria-hidden="true">
+            {% for n in range(1, 6) %}
+            <span class="serve-tile wipe" style="--d:{{ 120 + loop.index0 * 90 }}ms">
+                <img src="/static/home/serve-{{ n }}.jpg" alt="" loading="lazy" decoding="async"/>
+            </span>
+            {% endfor %}
         </div>
 
         {% set units = [
@@ -320,7 +368,7 @@
                         aria-label="View photo">
                     {# Not lazy: inside a transformed marquee the viewport test
                        never fires for off-screen frames, so they stay blank. #}
-                    <img src="{{ shot.src }}" decoding="async" alt="{{ shot.alt }}"/>
+                    <img src="{{ shot.src }}" decoding="async" loading="lazy" alt="{{ shot.alt }}"/>
                 </button>
                 {% endfor %}
                 {% endfor %}
@@ -335,7 +383,7 @@
                         aria-label="View photo">
                     {# Not lazy: inside a transformed marquee the viewport test
                        never fires for off-screen frames, so they stay blank. #}
-                    <img src="{{ shot.src }}" decoding="async" alt="{{ shot.alt }}"/>
+                    <img src="{{ shot.src }}" decoding="async" loading="lazy" alt="{{ shot.alt }}"/>
                 </button>
                 {% endfor %}
                 {% endfor %}
