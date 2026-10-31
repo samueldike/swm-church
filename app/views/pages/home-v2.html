@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400..800&display=swap"/>
-<link rel="stylesheet" href="{{ url_for('static', path='home-v2/home-v2.css') }}?v=4"/>
+<link rel="stylesheet" href="{{ url_for('static', path='home-v2/home-v2.css') }}?v=6"/>
 {% set third_slide = ('/' ~ sliders[0].image_path) if sliders else '/static/home/worship.jpg' %}
 {% set slides = [
     ('/static/home/interlude.jpg', 'Every dead dream can live again.', "At Scent of Water, we believe in second chances, fresh starts, and the God who breathes life into dry places.", 'Join us Sunday', url_for('visit')),
@@ -513,6 +513,6 @@
 </div>
 
 {% include "partials/public-flash.html" %}
-<script src="{{ url_for('static', path='home-v2/home-v2.js') }}?v=4" defer></script>
+<script src="{{ url_for('static', path='home-v2/home-v2.js') }}?v=6" defer></script>
 </body>
 </html>
