@@ -1,11 +1,30 @@
 {% set pageKey = 'messages' %}
 {% set pagePhoto = '/static/images/sliders/slide-0e9f3d70-78df-4877-9ba3-f50f6c50fcd7.jpg' %}
 {% set pageEyebrow = 'Audio messages' %}
-{% set pageTitle = 'A word for where you are today.' %}
+{% set pageTitle = 'What’s on your heart?' %}
 {% set metaTitle = 'Audio messages' %}
-{% set pageLede = 'Listen, download and share.' %}
+{% set pageLede = 'Ask a question. Discover a message. Find a next step.' %}
 {% include "partials/site-page-open.html" %}
 
+<section class="band message-guide">
+ <div class="shell guide-shell">
+  <span class="guide-tag">SCENTAI · SCENT OF WATER</span>
+  <h2>Space for your questions.</h2>
+  <p>Explore faith, everyday life and the teachings in our message library.</p>
+  <form id="message-ask" action="{{ url_for('messages_ask') }}" method="post">
+   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+   <label class="sr-only" for="guide-question">Ask ScentAI</label>
+   <textarea id="guide-question" name="question" maxlength="1200" required rows="3" placeholder="How can I trust God when the future feels uncertain?"></textarea>
+   <div class="guide-compose"><span>Grounded in reviewed message transcripts</span><button class="btn btn-dark" type="submit">Ask ScentAI ↗</button></div>
+  </form>
+  <div class="guide-prompts" aria-label="Suggested questions">
+   <button type="button">How do I grow in prayer?</button><button type="button">Find hope in difficult times</button><button type="button">What does faith look like daily?</button>
+  </div>
+  <div id="guide-result" aria-live="polite" aria-atomic="true" hidden></div>
+  <p class="guide-note">AI can make mistakes. Explore the linked messages for context. Only published, approved transcripts are used.</p>
+ </div>
+</section>
+<script src="/static/site/message-guide.js" defer></script>
 <section class="band">
     <div class="shell">
         {% if featured_sermon and not filtered %}
