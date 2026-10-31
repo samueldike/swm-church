@@ -3415,6 +3415,112 @@ async def admin_program_flyers_destroy(
 
 # ─── Settings ──────────────────────────────────────────────────────
 
+# ─── ScentAI knowledge base ───
+
+async def _knowledge_guard(request):
+    admin = await _get_admin(request)
+    return admin if admin and has_perm(admin.role, "system") else None
+
+
+@router.get("/settings/scentai", name="admin_scentai_knowledge")
+async def admin_scentai_knowledge(request: Request, db: AsyncSession = Depends(get_db)):
+    admin = await _knowledge_guard(request)
+    if not admin:
+        return _redirect(request, "/admin/dashboard")
+    from app.models.ai_knowledge import AIKnowledge
+    items = (await db.execute(select(AIKnowledge).order_by(AIKnowledge.updated_at.desc()))).scalars().all()
+    return await render_template(request, "admin/scentai-knowledge.html", {**(await _admin_context(request, db, "admin.settings.scentai")), "items": items, "_db": db})
+
+
+@router.get("/settings/scentai/create", name="admin_scentai_create")
+async def admin_scentai_create(request: Request, db: AsyncSession = Depends(get_db)):
+    admin = await _knowledge_guard(request)
+    if not admin:
+        return _redirect(request, "/admin/dashboard")
+    return await render_template(request, "admin/scentai-knowledge-form.html", {**(await _admin_context(request, db, "admin.settings.scentai")), "item": None, "_db": db})
+
+
+@router.get("/settings/scentai/{entry_id}/edit", name="admin_scentai_edit")
+async def admin_scentai_edit(request: Request, entry_id: int, db: AsyncSession = Depends(get_db)):
+    admin = await _knowledge_guard(request)
+    if not admin:
+        return _redirect(request, "/admin/dashboard")
+    from app.models.ai_knowledge import AIKnowledge
+    item = await db.get(AIKnowledge, entry_id)
+    if not item:
+        return _redirect(request, "/admin/settings/scentai", "Entry not found.", "error")
+    return await render_template(request, "admin/scentai-knowledge-form.html", {**(await _admin_context(request, db, "admin.settings.scentai")), "item": item, "_db": db})
+
+
+async def _save_knowledge(request, db, entry_id=None):
+    import asyncio
+    from app.models.ai_knowledge import AIKnowledge
+    from app.core.ai_knowledge import KnowledgeError, clean_text, extract_file, fetch_link, MAX_FILE
+    admin = await _knowledge_guard(request)
+    if not admin:
+        return _redirect(request, "/admin/dashboard")
+    item = await db.get(AIKnowledge, entry_id) if entry_id else AIKnowledge()
+    if item is None:
+        return _redirect(request, "/admin/settings/scentai", "Entry not found.", "error")
+    back = f"/admin/settings/scentai/{entry_id}/edit" if entry_id else "/admin/settings/scentai/create"
+    form = await request.form()
+    try:
+        title = str(form.get("title", "")).strip()
+        if not title or len(title) > 255:
+            raise KnowledgeError("Enter a title of 255 characters or fewer.")
+        method = form.get("method", "text")
+        source = item.source
+        if method == "file":
+            upload = form.get("document")
+            if not upload or not getattr(upload, "filename", None):
+                raise KnowledgeError("Choose a .txt, .pdf or .docx file.")
+            raw = await upload.read(MAX_FILE + 1)
+            content = await asyncio.to_thread(extract_file, upload.filename, raw)
+            source = os.path.basename(upload.filename.replace("\\", "/"))[:2000]
+        elif method == "link":
+            source = str(form.get("source_url", "")).strip()
+            if len(source) > 2000:
+                raise KnowledgeError("This link is too long.")
+            content = await fetch_link(source)
+        elif method == "text":
+            content = clean_text(str(form.get("content", "")))
+        else:
+            raise KnowledgeError("Choose text, file or link.")
+        item.title, item.content, item.source = title, content, source
+        item.is_active = form.get("is_active") == "1"
+        db.add(item)
+        await db.flush()
+        await log_admin_action(db, admin.id, "update" if entry_id else "create", "AIKnowledge", item.id)
+        await db.commit()
+    except KnowledgeError as exc:
+        return _redirect(request, back, str(exc), "error")
+    return _redirect(request, f"/admin/settings/scentai/{item.id}/edit", "Knowledge saved. " + ("ScentAI can use this entry." if item.is_active else "Review the text and enable it when ready."))
+
+
+@router.post("/settings/scentai/create", name="admin_scentai_store")
+async def admin_scentai_store(request: Request, db: AsyncSession = Depends(get_db)):
+    return await _save_knowledge(request, db)
+
+
+@router.post("/settings/scentai/{entry_id}/update", name="admin_scentai_update")
+async def admin_scentai_update(request: Request, entry_id: int, db: AsyncSession = Depends(get_db)):
+    return await _save_knowledge(request, db, entry_id)
+
+
+@router.post("/settings/scentai/{entry_id}/delete", name="admin_scentai_delete")
+async def admin_scentai_delete(request: Request, entry_id: int, db: AsyncSession = Depends(get_db)):
+    admin = await _knowledge_guard(request)
+    if not admin:
+        return _redirect(request, "/admin/dashboard")
+    from app.models.ai_knowledge import AIKnowledge
+    item = await db.get(AIKnowledge, entry_id)
+    if item:
+        await db.delete(item)
+        await log_admin_action(db, admin.id, "delete", "AIKnowledge", entry_id)
+        await db.commit()
+    return _redirect(request, "/admin/settings/scentai", "Knowledge entry removed.")
+
+
 @router.get("/settings", name="admin_settings")
 async def admin_settings(request: Request, db: AsyncSession = Depends(get_db)):
     admin = await _get_admin(request)

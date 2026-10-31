@@ -1,0 +1,22 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, field, textarea with context %}
+{% set editing = item is not none %}
+{% block title %}{{ 'Edit' if editing else 'Add' }} knowledge | {{ siteName }}{% endblock %}
+{% block topbar_title %}ScentAI knowledge{% endblock %}
+{% block page_header %}{{ page_header('Edit knowledge' if editing else 'Add knowledge', 'Review the information and decide when ScentAI may use it.', actions='<a class="btn btn-secondary" href="' ~ url_for('admin_scentai_knowledge') ~ '">All knowledge</a>') }}{% endblock %}
+{% block content %}
+<form class="panel flex flex-col gap-4 max-w-3xl" method="post" enctype="multipart/form-data" data-turbo="false" action="{{ url_for('admin_scentai_update', entry_id=item.id) if editing else url_for('admin_scentai_store') }}">
+ <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+ {{ field('Title', 'title', value=item.title if editing else '', required=True) }}
+ <label class="field-label" for="kb-method">Add or replace content using</label>
+ <select class="input" id="kb-method" name="method"><option value="text">Plain text / edit existing text</option><option value="file">Upload TXT, PDF or Word</option><option value="link">Import a website link</option></select>
+ {{ textarea('Text', 'content', value=item.content if editing else '', rows=16) }}
+ <label class="field-label" for="kb-file">Document (5 MB maximum)</label><input class="input" type="file" name="document" id="kb-file" accept=".txt,.pdf,.docx">
+ <p class="text-xs text-ink-3">PDFs need selectable text, up to 150 pages. For scanned pages, paste the text. Each entry supports up to 100,000 characters.</p>
+ {{ field('Public HTTPS link', 'source_url', value=item.source if editing and item.source and item.source.startswith('https://') else '', type='url') }}
+ {% if editing and item.source %}<p class="text-xs text-ink-3">Imported from: {{ item.source }}</p>{% endif %}
+ <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" value="1" {{ 'checked' if editing and item.is_active else '' }}>Use this entry in public ScentAI answers</label>
+ <p class="text-xs text-ink-3">For imports, save as a draft first, then review the extracted text here and enable it. To refresh a link, choose “Import a website link” again.</p>
+ <div class="flex gap-2"><button type="submit" class="btn btn-primary">Save knowledge</button><a class="btn btn-secondary" href="{{ url_for('admin_scentai_knowledge') }}">Cancel</a></div>
+</form>
+{% endblock %}

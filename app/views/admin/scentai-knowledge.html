@@ -1,0 +1,16 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header, badge with context %}
+{% block title %}ScentAI knowledge | {{ siteName }}{% endblock %}
+{% block topbar_title %}ScentAI knowledge{% endblock %}
+{% block topbar_subtitle %}Ministry information for the assistant{% endblock %}
+{% block page_header %}{{ page_header('ScentAI knowledge', 'Manage the ministry information ScentAI uses alongside teachings and the published calendar.', actions='<a class="btn btn-primary" href="' ~ url_for('admin_scentai_create') ~ '">Add knowledge</a>') }}{% endblock %}
+{% block content %}
+<div class="panel max-w-6xl">
+ <p class="text-sm text-ink-2 mb-4">Add plain text, a TXT, PDF or Word document, or import a public website link. Review imported text before enabling it. Enabled entries may be used in public answers. Links are imported as a snapshot; import again to refresh. Published calendar changes are available automatically.</p>
+ <table class="dtable dtable-responsive"><thead><tr><th>Title</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
+ {% for item in items %}<tr><td data-label="Title"><a href="{{ url_for('admin_scentai_edit', entry_id=item.id) }}">{{ item.title }}</a></td><td data-label="Status">{{ badge('Enabled' if item.is_active else 'Draft', 'ok' if item.is_active else 'neut') }}</td><td data-label="Updated">{{ item.updated_at.strftime('%d %b %Y') }}</td><td data-label="Actions"><a class="btn btn-secondary btn-sm" href="{{ url_for('admin_scentai_edit', entry_id=item.id) }}">Edit</a><form class="inline" method="post" action="{{ url_for('admin_scentai_delete', entry_id=item.id) }}" data-confirm="Remove this knowledge entry?"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-secondary btn-sm" type="submit">Delete</button></form></td></tr>
+ {% else %}<tr><td data-label="Knowledge" colspan="4">No knowledge entries yet. Add ministry history, FAQs, contacts or visitor information.</td></tr>{% endfor %}
+ </tbody></table>
+ <a class="btn btn-secondary mt-4" href="{{ url_for('scentai') }}" target="_blank" rel="noopener">Open ScentAI ↗</a>
+</div>
+{% endblock %}

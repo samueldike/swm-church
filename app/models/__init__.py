@@ -73,3 +73,5 @@ __all__ = [
     "NewsletterSubscriber",
     "Giving",
 ]
+
+from app.models.ai_knowledge import AIKnowledge

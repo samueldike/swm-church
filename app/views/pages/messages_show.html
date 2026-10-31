@@ -57,6 +57,22 @@
     </div>
 </section>
 
+<section class="band band-light">
+ <div class="shell narrow-col message-discussion">
+  <p class="guide-tag">✦ SCENTAI</p><h2 class="sec-title">Discuss this message</h2>
+  <p>Ask about “{{ sermon.title }}”. Explore the teaching in the preacher’s voice.</p>
+  <div id="ai-conversation" class="ai-conversation" role="log" aria-live="polite" aria-label="Message discussion"></div>
+  <form id="message-discuss-form" class="message-discuss-form" action="{{ url_for('messages_ask') }}" method="post">
+   <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="sermon_id" value="{{ sermon.id }}">
+   <label class="sr-only" for="ai-question">Ask about this message</label><textarea id="ai-question" name="question" maxlength="1200" rows="3" placeholder="What does this message teach about…?" required></textarea>
+   <button class="btn btn-dark" type="submit">Ask ScentAI ↗</button>
+  </form>
+  <p class="guide-note">ScentAI explains this teaching in the preacher’s style. This is an AI response, not a personal reply from the preacher.</p>
+  <a class="lnk-inline" href="{{ url_for('scentai') }}">Explore more with ScentAI ↗</a>
+ </div>
+</section>
+<script src="/static/site/message-guide.js?v=4" defer></script>
+
 {% if related %}
 <section class="band band-light">
     <div class="shell narrow-col">

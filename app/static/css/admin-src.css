@@ -284,3 +284,12 @@
   .modal-scroll { scrollbar-width: none; -ms-overflow-style: none; }
   .modal-scroll::-webkit-scrollbar { display: none; }
 }
+
+/* Consistent subtle focus for text fields across the console. */
+input:not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=button]):focus,
+textarea:focus,select:focus,[contenteditable=true]:focus {
+  outline: 1px solid #8b8c87 !important;
+  outline-offset: 1px !important;
+  box-shadow: none !important;
+  border-color: #8b8c87 !important;
+}

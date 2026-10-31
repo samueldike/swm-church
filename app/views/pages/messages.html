@@ -1,48 +1,17 @@
 {% set pageKey = 'messages' %}
 {% set pagePhoto = '/static/images/sliders/slide-0e9f3d70-78df-4877-9ba3-f50f6c50fcd7.jpg' %}
 {% set pageEyebrow = 'Audio messages' %}
-{% set pageTitle = 'What’s on your heart?' %}
+{% set pageTitle = 'Find a word for your season.' %}
 {% set metaTitle = 'Audio messages' %}
-{% set pageLede = 'Ask a question. Discover a message. Find a next step.' %}
+{% set pageLede = 'Search the teachings. Explore the message library.' %}
 {% include "partials/site-page-open.html" %}
 
-<section class="band message-guide">
- <div class="shell guide-shell">
-  <span class="guide-tag">SCENTAI · SCENT OF WATER</span>
-  <h2>Space for your questions.</h2>
-  <p>Explore faith, everyday life and the teachings in our message library.</p>
-  <form id="message-ask" action="{{ url_for('messages_ask') }}" method="post">
-   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-   <label class="sr-only" for="guide-question">Ask ScentAI</label>
-   <textarea id="guide-question" name="question" maxlength="1200" required rows="3" placeholder="How can I trust God when the future feels uncertain?"></textarea>
-   <div class="guide-compose"><span>Grounded in reviewed message transcripts</span><button class="btn btn-dark" type="submit">Ask ScentAI ↗</button></div>
-  </form>
-  <div class="guide-prompts" aria-label="Suggested questions">
-   <button type="button">How do I grow in prayer?</button><button type="button">Find hope in difficult times</button><button type="button">What does faith look like daily?</button>
-  </div>
-  <div id="guide-result" aria-live="polite" aria-atomic="true" hidden></div>
-  <p class="guide-note">AI can make mistakes. Explore the linked messages for context. Only published, approved transcripts are used.</p>
- </div>
-</section>
-<script src="/static/site/message-guide.js" defer></script>
 <section class="band">
     <div class="shell">
-        {% if featured_sermon and not filtered %}
-        <div class="next-strip" style="margin-bottom:1rem;">
-            <div>
-                <p>{{ featured_sermon.title }}</p>
-                <span class="t-sm" style="color:var(--ink);">Latest{% if featured_sermon.preacher %} · {{ featured_sermon.preacher }}{% endif %}</span>
-            </div>
-            <div class="actions-row">
-                <a href="{{ url_for('messages_show', slug=featured_sermon.slug) }}" class="btn btn-dark" style="margin-top:0;">Listen now</a>
-                <a href="{{ url_for('watch') }}" class="btn btn-ghost">Watch live</a>
-            </div>
-        </div>
-        {% endif %}
-
-        <form method="GET" action="{{ url_for('messages') }}" class="filters" role="search" aria-label="Search and filter messages">
+        <form method="GET" action="{{ url_for('messages') }}" class="filters message-search" role="search" aria-label="Search and filter messages">
             <label class="sr-only" for="msg-search">Search messages</label>
-            <input id="msg-search" type="search" name="search" value="{{ search or '' }}" placeholder="Search messages" style="flex:1 1 13rem;"/>
+            <input id="msg-search" type="search" name="search" value="{{ search or '' }}" placeholder="Search a topic, scripture or question…" list="message-suggestions" maxlength="100" style="flex:1 1 13rem;"/>
+            <datalist id="message-suggestions"><option value="Faith"><option value="Prayer"><option value="Hope"><option value="Grace">{% for s in series_opts %}<option value="{{ s }}">{% endfor %}</datalist>
             {% if series_opts %}
             <label class="sr-only" for="f-series">Series</label>
             <select id="f-series" name="series" onchange="this.form.submit()"><option value="">All series</option>{% for s in series_opts %}<option value="{{ s }}" {{ 'selected' if f_series == s else '' }}>{{ s }}</option>{% endfor %}</select>
@@ -58,6 +27,16 @@
             <button class="btn btn-gold btn-sm" type="submit">Search</button>
             {% if filtered %}<a class="lnk-inline" href="{{ url_for('messages') }}">Clear all</a>{% endif %}
         </form>
+        <div class="library-tabs"><span>Message library · {{ pagination.total }} messages</span><a href="{{ url_for('scentai') }}">Open ScentAI ↗</a></div>
+        {% if search %}
+        <aside class="search-overview" data-overview data-question="{{ search }}" data-endpoint="{{ url_for('messages_ask') }}" data-token="{{ csrf_token }}">
+            <span class="guide-tag">✦ SCENTAI OVERVIEW</span>
+            <p data-overview-text role="status">Exploring teachings related to your search…</p>
+            <div data-overview-sources></div>
+            <a class="btn btn-dark" href="{{ url_for('scentai') }}?q={{ search|urlencode }}">Explore this with ScentAI ↗</a>
+        </aside>
+        {% endif %}
+
 
         {% if sermons %}
         <ul class="tracks" style="margin-top:.8rem;">
@@ -92,4 +71,5 @@
     </div>
 </section>
 
+<script src="/static/site/message-guide.js?v=4" defer></script>
 {% include "partials/site-page-close.html" %}

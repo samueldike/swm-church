@@ -35,3 +35,5 @@ babel==2.18.0
 pytz==2026.5
 phonenumbers==9.0.41
 tzdata==2026.5
+
+pypdf==6.21.4
