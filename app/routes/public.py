@@ -165,6 +165,17 @@ def _public_base_url(request: Request) -> str:
 @router.get("/", name="home")
 async def home(request: Request, db: AsyncSession = Depends(get_db)):
     """Homepage — dark, frame-by-frame scroll design."""
+    return await render_template(request, "pages/home.html", await _home_context(request, db))
+
+
+@router.get("/home-v2", name="home_v2")
+async def home_v2(request: Request, db: AsyncSession = Depends(get_db)):
+    """Landing page preview: the Job 14 journey, a scroll-driven three.js world."""
+    return await render_template(request, "pages/home-v2.html", await _home_context(request, db))
+
+
+async def _home_context(request: Request, db: AsyncSession) -> dict:
+    """Everything the landing pages show; each section tolerates a table it cannot read."""
     from app.models.site_settings import SiteSetting
     from app.models.slider import Slider
     from app.models.sermon import Sermon
@@ -244,22 +255,18 @@ async def home(request: Request, db: AsyncSession = Depends(get_db)):
     _addr = (settings.get("siteHeadquartersAddress") or "").strip()
     _home_ld = _church_jsonld(request, settings, settings.get("siteName") or "Scent of Water Ministry", _addr, _sc.clean_phone(settings.get("siteSupportPhone")),
                               (settings.get("siteContactEmail") or "").strip(), _sc.get_services(settings), _base + "/")
-    return await render_template(
-        request,
-        "pages/home.html",
-        {
-            "_db": db,
-            "jsonld": _home_ld,
-            "sliders": sliders,
-            "settings": settings,
-            "latest_sermons": latest_sermons,
-            "featuredStories": featuredStories,
-            "branches": branches,
-            "gallery": gallery,
-            "outreach": outreach,
-            "program_flyers": program_flyers,
-        },
-    )
+    return {
+        "_db": db,
+        "jsonld": _home_ld,
+        "sliders": sliders,
+        "settings": settings,
+        "latest_sermons": latest_sermons,
+        "featuredStories": featuredStories,
+        "branches": branches,
+        "gallery": gallery,
+        "outreach": outreach,
+        "program_flyers": program_flyers,
+    }
 
 
 HOME2_MESSAGE_LIMIT = 5

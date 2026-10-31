@@ -363,6 +363,8 @@ with TestClient(app, raise_server_exceptions=False, base_url="https://testserver
         "xml" in sm.headers["content-type"] and "/visit" in sm.text and "/messages/grace-abounds" in sm.text and "/branches/abuja-branch" in sm.text and "draft-message" not in sm.text and "kano-only" not in sm.text and "unpublished" not in sm.text.lower())
     rb = V.get("/robots.txt").text
     rec("robots.txt blocks admin/api and points at the sitemap", "Disallow: /admin" in rb and "Sitemap: https://testserver/sitemap.xml" in rb)
+    hv = V.get("/home-v2")
+    rec("/home-v2 renders the journey, stays out of search, and shows times from Settings", hv.status_code == 200 and "noindex" in hv.text and "scent of water" in hv.text and all(s["name"] in hv.text for s in __import__("app.core.site_content", fromlist=["x"]).get_services({})) and "/home-v2" not in sm.text)
     v = V.get("/visit").text
     rec("each page has a unique title, description and Open Graph tags", "<title>Plan your visit —" in v and 'name="description"' in v and 'property="og:image"' in v)
     rec("the home page has Church JSON-LD", '"@type": "Church"' in V.get("/").text)

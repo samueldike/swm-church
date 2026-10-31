@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en" class="no-js"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>{{ siteName }} — Repositioning men for God's best</title>
+<link rel="icon" href="/static/brand/swm-logo-128.png" type="image/png"/>
+<link rel="apple-touch-icon" href="/static/brand/swm-logo-180.png"/>
+{# Preview address: stays out of search results until it replaces the home page. #}
+{% set robots = 'noindex, nofollow' %}
+{% set metaTitle = siteName %}
+{% set metaDescription = 'Every dead dream can live again. Step into a message of restoration and hope from Abakaliki, Nigeria: at the scent of water, it will sprout again.' %}
+<meta name="theme-color" content="#FAF5E9"/>
+{% include "partials/theme-meta.html" %}
+<script>document.documentElement.className = 'js';</script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Newsreader:ital,opsz,wght@0,6..72,300..500;1,6..72,300..500&display=swap"/>
+<link rel="stylesheet" href="{{ url_for('static', path='home-v2/home-v2.css') }}?v=1"/>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+{# The world. Text never depends on it: without WebGL the page is a plain, complete read. #}
+<canvas id="world" aria-hidden="true"></canvas>
+<div class="world-fallback" aria-hidden="true"></div>
+
+<header class="bar" id="bar">
+    <a class="brand" href="{{ url_for('home_v2') }}" aria-label="{{ siteName }}, top of the page">
+        <img src="/static/brand/swm-logo-128.png" alt="" width="40" height="40"/>
+        <span>Scent of Water<br/>Ministry</span>
+    </a>
+    <nav class="bar-links" aria-label="Main">
+        <a href="{{ url_for('about') }}">About</a>
+        <a href="{{ url_for('messages') }}">Messages</a>
+        <a href="{{ url_for('events') }}">Events</a>
+        <a href="{{ url_for('give') }}">Give</a>
+    </nav>
+    <div class="bar-end">
+        <a class="btn btn-solid btn-small" href="{{ url_for('visit') }}">Plan your visit</a>
+        <button class="menu-btn" type="button" id="menu-open" aria-haspopup="dialog">Menu</button>
+    </div>
+</header>
+
+<dialog class="menu" id="menu" aria-label="Site menu">
+    <button class="menu-close" type="button" id="menu-close">Close</button>
+    <nav aria-label="All pages">
+        <a href="{{ url_for('home_v2') }}">Home</a>
+        <a href="{{ url_for('about') }}">About</a>
+        <a href="{{ url_for('departments') }}">Departments</a>
+        <a href="{{ url_for('messages') }}">Messages</a>
+        <a href="{{ url_for('casom') }}">CASOM</a>
+        <a href="{{ url_for('events') }}">Events</a>
+        <a href="{{ url_for('get_involved') }}">Get involved</a>
+        <a href="{{ url_for('contact') }}">Contact</a>
+        <a href="{{ url_for('give') }}">Give</a>
+    </nav>
+</dialog>
+
+<main id="main" tabindex="-1">
+
+{# ═══ I · DRY GROUND ═══════════════════════════════════════════════════════ #}
+<section class="act hero" data-act="hero" data-name="Dry ground">
+    <div class="wrap hero-in">
+        <div class="wash wash-left narrow">
+        <p class="kicker rise-in">Job 14 : 7–9 · Abakaliki, Nigeria</p>
+        <h1 class="rise-in" style="--d:.12s">Every dead dream can live again.</h1>
+        <p class="lede rise-in" style="--d:.26s">At Scent of Water, we believe in second chances, fresh starts, and the God who breathes life into dry places.</p>
+        <div class="actions rise-in" style="--d:.38s">
+            <a class="btn btn-solid" href="#promise">Begin the journey</a>
+            <a class="btn btn-line" href="{{ url_for('visit') }}">Join us Sunday</a>
+        </div>
+        </div>
+    </div>
+    <p class="touch-hint rise-in" style="--d:1s" data-world-only>
+        <span class="hint-drop" aria-hidden="true"></span>
+        <span class="hint-fine">Click the dry ground</span><span class="hint-coarse">Tap the dry ground</span>
+    </p>
+</section>
+
+{# ═══ II · THE PROMISE: the verse fills in as the drop falls ═══════════════ #}
+<section class="act tall promise" id="promise" data-act="promise" data-name="There is hope for a tree">
+    <div class="sticky">
+        <div class="wrap">
+            <div class="wash wash-left narrow">
+                <p class="kicker">The promise</p>
+                <blockquote class="verse" id="verse">“For there is hope for a tree, if it is cut down, that it will sprout again, and that its tender shoots will not cease. Though its root may grow old in the earth, and its stump may die in the ground, yet at the <em>scent of water</em> it will bud and bring forth branches like a plant.”</blockquote>
+                <p class="cite">Job 14 : 7–9</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ═══ III · WELCOME HOME ═══════════════════════════════════════════════════ #}
+<section class="act home" data-act="home" data-name="Welcome home">
+    <div class="wrap grid-right">
+        <div class="wash wash-right reveal">
+            <p class="kicker">You belong here</p>
+            <h2>Welcome home.</h2>
+            <p>We're a grace-driven community where the broken find healing, the weary find rest, and the lost find purpose. Here, we've witnessed marriages restored, dreams reignited, and lives completely transformed by the power of God's Word and Spirit.</p>
+            <p>No matter what you're facing or where you've been, you belong here. This is more than a church. It's family.</p>
+            <p class="aside">Scent of Water Ministry is a divine mandate received from the Lord Jesus Christ, with a message of restoration and hope to the downtrodden, downcast and weary. Every dry bone can resuscitate through the scent (fragrance, aroma) of water: God's Word and His Spirit. We teach and focus only on the Grace of God.</p>
+            <a class="link" href="{{ url_for('about') }}">Our story</a>
+        </div>
+    </div>
+</section>
+
+{# ═══ IV · SEVEN RIPPLES: scrolling walks outward through the core values ══ #}
+<section class="act tall values" id="values" data-act="values" data-name="Seven ripples">
+    <div class="sticky">
+        <div class="wrap">
+            <div class="wash wash-left narrow">
+                <p class="kicker">Core values</p>
+                <h2>One drop.<br/>Seven ripples.</h2>
+                <ol class="ripple-list" id="ripples">
+                    {% for v in ['Faith in God’s Word', 'Passion', 'Love', 'Maximizing the presence of God', 'Excellence', 'Time consciousness', 'Integrity'] %}
+                    <li><span class="num">{{ loop.index }}</span>{{ v }}</li>
+                    {% endfor %}
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ═══ V · VISION ═══════════════════════════════════════════════════════════ #}
+<section class="act vision" data-act="vision" data-name="It will sprout again">
+    <div class="wrap">
+        <p class="kicker reveal">Our vision</p>
+        <p class="vision-line reveal" style="--d:.12s">Repositioning men for God's very best.</p>
+    </div>
+</section>
+
+{# ═══ VI · MISSION ═════════════════════════════════════════════════════════ #}
+<section class="act mission" data-act="mission" data-name="Tender shoots">
+    <div class="wrap">
+        <div class="wash wash-left narrow reveal">
+            <p class="kicker">Our mission</p>
+            <h2>What the tree is growing into.</h2>
+            <ul class="shoots">
+                <li>Equipping men to enjoy their God given inheritance in Christ Jesus.</li>
+                <li>Enforcing God's Kingdom on earth.</li>
+                <li>Aligning men with destiny.</li>
+                <li>Models of excellence.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+{# ═══ VII · TWELVE UNITS: each name lights its own place on the tree ═══════ #}
+{% set units = [
+    ('Herald',                'Ushers'),
+    ('The Follow-up Team',    ''),
+    ('The Still Waters',      'Choir'),
+    ('The Vineyard Keepers',  'Sanitation'),
+    ('Kings and Priests',     "Children's church"),
+    ('The Technical Department', ''),
+    ('The Epaphras Company',  'Prayer team'),
+    ('The Armor Bearer',      'Protocol'),
+    ('The Joseph Ministry',   'Welfare'),
+    ('Media and ICT',         ''),
+    ('Dance and Drama',       ''),
+    ('Host and Hostess',      '')
+] %}
+<section class="act units" data-act="units" data-name="Branches like a plant">
+    <div class="wrap grid-right">
+        <div class="wash wash-right reveal">
+            <p class="kicker">Get involved</p>
+            <h2>Twelve units.<br/>One tree.</h2>
+            <p>Find your place. Use your gifts. Grow in community.</p>
+            <ul class="unit-list" id="units">
+                {% for name, role in units %}
+                <li tabindex="0" data-unit="{{ loop.index0 }}"><strong>{{ name }}</strong>{% if role %}<span>{{ role }}</span>{% endif %}</li>
+                {% endfor %}
+            </ul>
+            <a class="btn btn-solid" href="{{ url_for('get_involved') }}">Join a team today</a>
+        </div>
+    </div>
+</section>
+
+{# ═══ VIII · BEYOND THE WALLS ══════════════════════════════════════════════ #}
+<section class="act beyond" data-act="beyond" data-name="Beyond the walls">
+    <div class="wrap">
+        <div class="beyond-head wash wash-left reveal">
+            <p class="kicker">Our impact beyond the walls</p>
+            <h2>Seeds carried on the wind.</h2>
+        </div>
+        <div class="beyond-grid">
+            <div class="drift" aria-hidden="{{ 'false' if outreach else 'true' }}">
+                {% for shot in outreach[:4] %}
+                <figure class="drift-{{ loop.index }} reveal" style="--d:{{ loop.index0 * 0.08 }}s" data-speed="{{ [0.06, -0.05, 0.09, -0.03][loop.index0] }}">
+                    <img src="{{ shot.src }}" alt="{{ shot.alt }}" loading="lazy" decoding="async"/>
+                </figure>
+                {% else %}
+                <figure class="drift-1 reveal"><img src="/static/home/gather.jpg" alt="" loading="lazy" decoding="async"/></figure>
+                {% endfor %}
+            </div>
+            <ul class="seeds reveal">
+                <li><a href="{{ url_for('outreach_detail', kind='prison') }}">Annual Prison Outreach</a></li>
+                <li><a href="{{ url_for('outreach_detail', kind='medical') }}">Annual Free Medical &amp; Community Outreach</a></li>
+                <li>Marriage Counselling and Mentorship</li>
+                <li>Corpers Transition Network (CTN)</li>
+                <li>Built to Last Marriage Prayer Network (BLM)</li>
+                <li>Singles Point Blank Conference</li>
+                <li>Campus Fellowship (OFEL, CAS Campus)</li>
+                <li><a href="{{ url_for('casom') }}">Cave of Adullam School of Ministry (CASOM)</a></li>
+                <li>Doxa Connect Radio Broadcast</li>
+                <li>Scent Daily Devotional</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+{# ═══ IX · MOMENTS ═════════════════════════════════════════════════════════ #}
+{% if gallery %}
+<section class="act moments" data-act="moments" data-name="Real people. Real faith.">
+    <div class="wrap"><div class="wash wash-left narrow reveal">
+        <p class="kicker">You belong here</p>
+        <h2>Real people. Real faith.<br/>Real transformation.</h2>
+    </div></div>
+    {% set half = (gallery[:14]|length / 2)|round(0, 'ceil')|int %}
+    <div class="belts" id="belts">
+        <div class="belt" data-dir="-1">{% for shot in gallery[:half] %}<img data-src="{{ shot.src }}" alt="{{ shot.alt }}" decoding="async"/>{% endfor %}</div>
+        <div class="belt" data-dir="1">{% for shot in gallery[half:14] %}<img data-src="{{ shot.src }}" alt="{{ shot.alt }}" decoding="async"/>{% endfor %}</div>
+    </div>
+</section>
+{% endif %}
+
+{# ═══ X · MESSAGES: played on the page, each one sends ripples through the world ═ #}
+<section class="act messages" data-act="messages" data-name="Water for dry places">
+    <div class="wrap grid-left">
+        <div class="wash wash-left reveal">
+            <p class="kicker">Messages</p>
+            <h2>Water for dry places.</h2>
+            {% if latest_sermons %}
+            <ol class="tracks">
+                {% for s in latest_sermons %}
+                <li>
+                    {% if s.audio_file_path or s.media_url or s.telegram_file_id %}
+                    <button class="play" type="button" data-play="{{ url_for('messages_stream', sermon_id=s.id) }}" data-title="{{ s.title }}" data-page="{{ url_for('messages_show', slug=s.slug) }}" aria-label="Play {{ s.title }}"><i aria-hidden="true"></i></button>
+                    {% else %}<span class="play is-off" aria-hidden="true"><i></i></span>{% endif %}
+                    <a href="{{ url_for('messages_show', slug=s.slug) }}"><strong>{{ s.title }}</strong>{% if s.preacher %}<span>{{ s.preacher }}</span>{% endif %}</a>
+                </li>
+                {% endfor %}
+            </ol>
+            {% else %}
+            <p>New messages are published here after each service.</p>
+            {% endif %}
+            <div class="actions">
+                <a class="link" href="{{ url_for('messages') }}">All messages</a>
+                {% if socialTelegram %}<a class="link" href="{{ socialTelegram }}" target="_blank" rel="noopener">Audio archive on Telegram<span class="sr">(opens in a new tab)</span></a>{% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+
+{# ═══ XI · SENIOR PASTOR ═══════════════════════════════════════════════════ #}
+<section class="act pastor" data-act="pastor" data-name="Builder of men">
+    <div class="wrap pastor-grid">
+        <figure class="arch reveal">
+            <img src="{{ pastorPhoto if pastorPhoto.startswith('/') else '/' ~ pastorPhoto }}" alt="{{ pastorName }}" loading="lazy" decoding="async"/>
+        </figure>
+        <div class="wash wash-right reveal" style="--d:.12s">
+            <p class="kicker">Meet our senior pastor</p>
+            <h2>{{ pastorName }}</h2>
+            <p class="creed">Author. Mentor. Revivalist. Builder of men.</p>
+            <p>A dynamic teacher and prophetic voice, called to raise leaders and restore order in lives, families, and systems. He leads initiatives that are touching singles, marriages, campuses, and corporate spaces.</p>
+            <p>His ministry carries a grace for healing, insight, leadership, and practical kingdom life. Married to Pastor Mary and blessed with five children, they reside in Abakaliki, Nigeria.</p>
+            <a class="link" href="{{ url_for('our_pastor') }}">More about our pastor</a>
+        </div>
+    </div>
+</section>
+
+{# ═══ XII · WHEN WE GATHER: times always come from Settings ════════════════ #}
+<section class="act gather" data-act="gather" data-name="Our church life">
+    <div class="wrap grid-right">
+        <div class="wash wash-right reveal">
+            <p class="kicker">Our church life</p>
+            <h2>Come to the water.</h2>
+            {% if services %}
+            <table class="week">
+                <caption class="sr">Weekly services</caption>
+                <tbody>
+                    {% for svc in services %}
+                    <tr><th scope="row">{{ svc.day }}</th><td>{{ svc.name }}</td><td class="time">{{ svc.time }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
+            <div class="actions">
+                <a class="btn btn-solid" href="{{ url_for('visit') }}">Plan your visit</a>
+                <a class="link" href="{{ url_for('calendar') }}">View full service schedule</a>
+            </div>
+            {% if program_flyers %}
+            <div class="flyers" aria-label="Upcoming programmes">
+                {% for flyer in program_flyers[:4] %}
+                <a href="{{ flyer.src }}" target="_blank" rel="noopener"><img src="{{ flyer.src }}" alt="{{ flyer.title or 'Upcoming programme flyer' }}" loading="lazy" decoding="async"/></a>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+{# ═══ XIII · LOCATIONS ═════════════════════════════════════════════════════ #}
+<section class="act places" data-act="places" data-name="Find a location">
+    <div class="wrap">
+        <div class="wash wash-left narrow reveal">
+            <p class="kicker">Find a location</p>
+            <h2>A place near you.</h2>
+        </div>
+        <ul class="place-list reveal">
+            {% for b in branches %}
+            <li>
+                <p class="kicker">{{ 'Headquarters' if b.is_hq else 'Branch' }}</p>
+                <h3>{{ b.name }}</h3>
+                <p>{{ b.address or b.place or siteHeadquartersAddress }}</p>
+                {% if b.phone %}<p class="phone">{{ b.phone }}</p>{% endif %}
+                {% if b.directions %}<a class="link" href="{{ b.directions }}" target="_blank" rel="noopener">Get directions<span class="sr">(opens in a new tab)</span></a>{% endif %}
+                {% if not b.is_hq %}<a class="link" href="{{ url_for('branch_detail', slug=b.slug) }}">Service times</a>{% endif %}
+            </li>
+            {% else %}
+            <li><p class="kicker">Headquarters</p><h3>{{ siteName }}</h3><p>{{ siteHeadquartersAddress }}</p></li>
+            {% endfor %}
+            <li>
+                <p class="kicker">Campus expression</p>
+                <h3>Oasis Fellowship (OFEL)</h3>
+                <p>Ebonyi State University, CAS Campus</p>
+            </li>
+        </ul>
+    </div>
+</section>
+
+{# ═══ XIV · NEXT STEP ══════════════════════════════════════════════════════ #}
+<section class="act next" data-act="next" data-name="Come as you are">
+    <div class="wrap grid-right">
+        <div class="wash wash-right reveal">
+            <p class="kicker">Take a next step</p>
+            <h2>Your best days are ahead.</h2>
+            <ul class="steps">
+                <li><a href="{{ url_for('visit') }}">Plan your visit</a></li>
+                <li><a href="{{ url_for('prayer') }}">Request prayer</a></li>
+                <li><a href="{{ url_for('give') }}">Give online</a></li>
+                <li><a href="{{ url_for('messages') }}">Watch or listen to messages</a></li>
+                <li><a href="{{ url_for('get_involved') }}">Volunteer or serve</a></li>
+            </ul>
+            {% if counsellingPhone %}
+            <p class="counsel">Need to talk to someone? <a href="tel:{{ counsellingPhone|replace(' ', '') }}">{{ counsellingPhone }}</a>{% if counsellingHours %} · {{ counsellingHours }}{% endif %}</p>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer class="foot">
+    <div class="wrap">
+        <div class="foot-top">
+            <div>
+                <p class="foot-name">{{ siteName }}</p>
+                <p class="foot-line">Restoring Hope. Raising Men. Repositioning for Destiny.</p>
+            </div>
+            <form class="news" method="POST" action="{{ url_for('newsletter_subscribe') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
+                <label for="news-email">Subscribe for updates</label>
+                <div class="news-row">
+                    <input id="news-email" type="email" name="email" required autocomplete="email" placeholder="Your email address"/>
+                    <button class="btn btn-solid" type="submit">Subscribe</button>
+                </div>
+            </form>
+        </div>
+        <div class="foot-cols">
+            <nav aria-label="Quick links">
+                <h3>Quick links</h3>
+                <a href="{{ url_for('about') }}">About us</a>
+                <a href="{{ url_for('messages') }}">Messages</a>
+                <a href="{{ url_for('departments') }}">Ministries</a>
+                <a href="{{ url_for('events') }}">Events</a>
+                <a href="{{ url_for('give') }}">Give</a>
+                <a href="{{ url_for('contact') }}">Contact</a>
+            </nav>
+            <div>
+                <h3>Contact</h3>
+                <p>{{ siteHeadquartersAddress }}</p>
+                {% if counsellingPhone %}<p><a href="tel:{{ counsellingPhone|replace(' ', '') }}">{{ counsellingPhone }}</a></p>{% endif %}
+                {% if siteContactEmail %}<p><a href="mailto:{{ siteContactEmail }}">{{ siteContactEmail }}</a></p>{% endif %}
+            </div>
+            <div>
+                <h3>Service times</h3>
+                {% for svc in services %}<p>{{ svc.day }}: {{ svc.time }}</p>{% endfor %}
+            </div>
+            <nav aria-label="Follow us online">
+                <h3>Follow us</h3>
+                {% for href, label in [(socialFacebook, 'Facebook'), (socialInstagram, 'Instagram'), (socialX, 'X'), (socialYouTube, 'YouTube'), (socialTelegram, 'Telegram')] %}{% if href %}
+                <a href="{{ href }}" target="_blank" rel="noopener">{{ label }}<span class="sr">(opens in a new tab)</span></a>
+                {% endif %}{% endfor %}
+                {% if whatsappChat %}<a href="{{ whatsappChat }}" target="_blank" rel="noopener">WhatsApp<span class="sr">(opens in a new tab)</span></a>{% endif %}
+            </nav>
+        </div>
+        <div class="foot-end">
+            <span>© {{ now().year }} {{ siteName }}. All Rights Reserved.</span>
+            <span><a href="{{ url_for('privacy_policy') }}">Privacy</a> <a href="{{ url_for('terms_of_service') }}">Terms</a></span>
+        </div>
+    </div>
+</footer>
+
+<div class="now" id="now" hidden>
+    <button class="play is-on" type="button" id="now-toggle" aria-label="Pause"><i aria-hidden="true"></i></button>
+    <span id="now-title"></span>
+    <button class="now-x" type="button" id="now-close" aria-label="Stop listening">Close</button>
+</div>
+<p class="chapter" id="chapter" aria-hidden="true"><i></i><span></span></p>
+
+{% include "partials/public-flash.html" %}
+<script src="{{ url_for('static', path='home-v2/home-v2.js') }}?v=1" defer></script>
+</body>
+</html>

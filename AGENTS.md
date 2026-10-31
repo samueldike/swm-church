@@ -100,6 +100,9 @@ FastAPI + async SQLAlchemy + Postgres (asyncpg) + Jinja2 + Celery/Redis. Python 
 - Message pages: series/scripture/`transcript_public` (a transcript is shown and searchable only after an admin ticks it). The audio player URL is `messages_stream` with `sermon_id`, not `slug`.
 - Accessibility rules: skip link + `<main id="main">`, `aria-current` in the nav, 44px touch targets on phones, colour tokens meet WCAG AA (`--fg-faint`, `--on-paper-faint`, `--gold-deep`; gold *text* on paper uses `--gold-deep`). Checks: `scripts/site_checks.py` (also run by `tests/test_public_site.py`).
 
+## Landing page preview (`/home-v2`)
+- `app/views/pages/home-v2.html` + `app/static/home-v2/` (noindex, shares `_home_context` with `/`). The 3D world is `src/world.js`, bundled to `world.min.js` (three is bundled, never a CDN): **rebuild after editing**, command at the top of `src/world.js`. Camera and story state per chapter live in `KEYS`, matched to `data-act` sections. Text must stay complete without WebGL or JS; service times and addresses come from Settings as everywhere else.
+
 ## Reliability rules learned from the promise audit (`PROMISE_AUDIT.md`)
 - **Test on Postgres, not just SQLite.** SQLite hid: stale id sequences, `VARCHAR(n)` overflows, unique-index violations, timestamptz columns. Clone the real DB (`CREATE DATABASE swm_audit TEMPLATE swm_db` with the app stopped) and run flows against the clone.
 - `app/database.py:sync_sequences()` runs at startup and repoints every Postgres id sequence at `MAX(id)`. Anything that inserts rows with explicit ids (migrations/imports) relies on it.
