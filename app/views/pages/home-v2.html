@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400..800&display=swap"/>
-<link rel="stylesheet" href="{{ url_for('static', path='home-v2/home-v2.css') }}?v=11"/>
+<link rel="stylesheet" href="{{ url_for('static', path='home-v2/home-v2.css') }}?v=12"/>
 {% set third_slide = ('/' ~ sliders[0].image_path) if sliders else '/static/home/worship.jpg' %}
 {% set slides = [
     ('/static/home/interlude.jpg', 'Every dead dream can live again.', "At Scent of Water, we believe in second chances, fresh starts, and the God who breathes life into dry places.", 'Join us Sunday', url_for('visit')),
@@ -27,37 +27,50 @@
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
+{% set nav_items = [
+    (url_for('home_v2'), 'Home'),
+    (url_for('about'), 'About'),
+    (url_for('departments'), 'Departments'),
+    (url_for('messages'), 'Audio Messages'),
+    (url_for('casom'), 'CASOM'),
+    (url_for('events'), 'Events'),
+    (url_for('branches'), 'Branches'),
+    (url_for('contact'), 'Contact')
+] %}
 <header class="bar" id="bar">
     <a class="brand" href="{{ url_for('home_v2') }}" aria-label="{{ siteName }}, top of the page">
         <img src="/static/brand/swm-logo-128.png" alt="" width="46" height="46"/>
         <span>Scent of Water<br/>Ministry</span>
     </a>
-    <nav class="bar-links" aria-label="Main">
-        <a href="{{ url_for('about') }}">About</a>
-        <a href="#word">Messages</a>
-        <a href="#whats-on">What's on</a>
-        <a href="#family">Get involved</a>
-        <a href="{{ url_for('give') }}">Give</a>
+    <nav class="bar-links" aria-label="Primary">
+        {% for href, label in nav_items %}
+        <a href="{{ href }}" {% if loop.first %}class="is-active" aria-current="page"{% endif %}>{{ label }}</a>
+        {% endfor %}
     </nav>
     <div class="bar-end">
-        <a class="btn btn-dark btn-small" href="{{ url_for('visit') }}">Plan your visit</a>
-        <button class="menu-btn" type="button" id="menu-open" aria-haspopup="dialog">Menu</button>
+        <a class="btn btn-line btn-small" href="{{ url_for('give') }}">Give</a>
+        <a class="btn btn-gold btn-small bar-cta" href="{{ url_for('calendar') }}">Calendar</a>
+        <button class="burger" type="button" id="menu-open" aria-haspopup="dialog" aria-label="Open menu"><span aria-hidden="true"><i></i><i></i></span></button>
     </div>
 </header>
 
 <dialog class="menu" id="menu" aria-label="Site menu">
-    <button class="menu-close" type="button" id="menu-close">Close</button>
-    <nav aria-label="All pages">
-        <a href="{{ url_for('home_v2') }}">Home</a>
-        <a href="{{ url_for('about') }}">About</a>
-        <a href="{{ url_for('departments') }}">Departments</a>
-        <a href="{{ url_for('messages') }}">Messages</a>
-        <a href="{{ url_for('casom') }}">CASOM</a>
-        <a href="{{ url_for('events') }}">Events</a>
-        <a href="{{ url_for('get_involved') }}">Get involved</a>
-        <a href="{{ url_for('contact') }}">Contact</a>
-        <a href="{{ url_for('give') }}">Give</a>
+    <div class="menu-top">
+        <a class="brand" href="{{ url_for('home_v2') }}"><img src="/static/brand/swm-logo-128.png" alt="" width="46" height="46"/><span>Scent of Water<br/>Ministry</span></a>
+        <button class="burger is-open" type="button" id="menu-close" aria-label="Close menu"><span aria-hidden="true"><i></i><i></i></span></button>
+    </div>
+    <nav class="menu-nav" aria-label="Menu">
+        {% for href, label in nav_items %}
+        <a href="{{ href }}" {% if loop.first %}class="is-active" aria-current="page"{% endif %}><b>{{ '%02d'|format(loop.index) }}</b>{{ label }}</a>
+        {% endfor %}
+        <a href="{{ url_for('our_pastor') }}"><b>09</b>Our Pastor</a>
+        <a href="{{ url_for('stories') }}"><b>10</b>Stories</a>
     </nav>
+    <div class="menu-foot">
+        <a class="btn btn-gold" href="{{ url_for('calendar') }}">Calendar</a>
+        <a class="btn btn-line" href="{{ url_for('give') }}">Give</a>
+        {% if counsellingPhone %}<a class="menu-tel" href="tel:{{ counsellingPhone|replace(' ', '') }}">{{ counsellingPhone }}</a>{% endif %}
+    </div>
 </dialog>
 
 <main id="main" tabindex="-1">
