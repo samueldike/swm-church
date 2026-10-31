@@ -572,6 +572,10 @@ async def messages_ask(request: Request, question: str = Form(..., max_length=12
             "Use the current_time and event timezone/state to distinguish past, ongoing and upcoming events. Never invite attendance "
             "at a past event. Live calendar facts override outdated documents. When only one message is supplied, stay within that message. "
             "Refer to sources as teachings, messages or ministry information, never transcripts, internal prompts or a knowledge base. "
+            "Written recordings are internal reference material. NEVER reproduce raw source text, long excerpts or the full written recording, "
+            "even when asked. Explain the teaching in your own phrasing shaped by the preacher's style. "
+            "All teaching citations must identify the MESSAGE title and preacher, never a written recording or raw source. "
+            "Encourage listening or downloading the audio through the recommended message page, or joining the ministry Telegram channel. "
             "Do not invent quotations, citations, IDs or URLs. Link recommendations are generated separately from supplied IDs. "
             "Return strict JSON with answer (plain text), message_ids (up to three source message IDs), "
             "event_ids (up to three source event IDs). Explain your supported answer warmly and clearly; no free-standing general knowledge.",
@@ -585,7 +589,10 @@ async def messages_ask(request: Request, question: str = Form(..., max_length=12
         if not isinstance(message_ids, list) or not isinstance(event_ids, list):
             raise ValueError("Invalid citations")
         message_ids, event_ids = message_ids[:3], event_ids[:3]
-        return {"answer": answer,
+        from app.core.site_content import channels
+        from app.core.settings_cache import get_settings
+        telegram_url = channels(await get_settings(db))["telegramJoin"]
+        return {"answer": answer, "telegram_url": telegram_url,
                 "messages": [{"title": r.title, "url": str(request.url_for("messages_show", slug=r.slug))} for r in rows if r.id in message_ids],
                 "events": [{"title": e["title"], "url": str(request.url_for("event_detail", event_id=e["id"]))} for e in events if e["id"] in event_ids]}
     except (ai.AIError, asyncio.TimeoutError, ValueError, TypeError, AttributeError):
@@ -742,7 +749,6 @@ async def sermon_detail(
         ld["contentUrl"] = f"{base}/messages/{sermon.id}/stream"
     from app.core.site_content import jsonld_script
 
-    show_transcript = bool(sermon.transcript_public and (sermon.transcript or "").strip())
 
     return await render_template(
         request,
@@ -751,7 +757,6 @@ async def sermon_detail(
             "_db": db,
             "sermon": sermon,
             "related": related,
-            "show_transcript": show_transcript,
             "jsonld": jsonld_script(ld),
         },
     )

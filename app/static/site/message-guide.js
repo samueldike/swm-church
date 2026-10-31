@@ -7,12 +7,13 @@
   return data;
  };
  const sources = (container, messages, events = false) => (messages || []).forEach(message => {
-  const link = document.createElement('a'); link.href = message.url; link.textContent = (events ? 'Event · ' : 'Listen · ') + message.title; link.className = 'ai-source'; container.append(link);
+  const link = document.createElement('a'); link.href = message.url; link.textContent = (events ? 'Event · ' : 'Listen / download · ') + message.title; link.className = 'ai-source'; container.append(link);
  });
+ const telegram = (container, url) => {if(!url || !/^https?:\/\//i.test(url)) return;const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.className='ai-source';a.textContent='Join our Telegram channel ↗';container.append(a);};
  const overview = document.querySelector('[data-overview]');
  if (overview && !overview.dataset.ready) {
   overview.dataset.ready = '1'; const body = new FormData(); body.set('question',overview.dataset.question); body.set('csrf_token',overview.dataset.token);
-  request(overview.dataset.endpoint,body).then(data => {overview.querySelector('[data-overview-text]').textContent = data.answer; sources(overview.querySelector('[data-overview-sources]'),data.messages); sources(overview.querySelector('[data-overview-sources]'),data.events,true);}).catch(error => {overview.querySelector('[data-overview-text]').textContent = error.message;});
+  request(overview.dataset.endpoint,body).then(data => {overview.querySelector('[data-overview-text]').textContent = data.answer; sources(overview.querySelector('[data-overview-sources]'),data.messages); sources(overview.querySelector('[data-overview-sources]'),data.events,true);telegram(overview.querySelector('[data-overview-sources]'),data.telegram_url);}).catch(error => {overview.querySelector('[data-overview-text]').textContent = error.message;});
  }
  const form = document.querySelector('#scentai-form, #message-discuss-form'); if (!form || form.dataset.ready) return;
  form.dataset.ready = '1'; let history = []; let busy = false;
@@ -24,7 +25,7 @@
   busy = true; button.disabled = true; if(welcome) welcome.hidden = true;
   turn('user',question); const reply = turn('assistant','Exploring the teachings…'); reply.setAttribute('aria-busy','true');
   const body = new FormData(form);body.set('question',question);body.set('history',JSON.stringify(history));field.value = '';
-  try {const data = await request(form.action,body);reply.querySelector('p').textContent = data.answer;sources(reply,data.messages);sources(reply,data.events,true);history.push({role:'user',text:question},{role:'assistant',text:data.answer});history=history.slice(-8);}
+  try {const data = await request(form.action,body);reply.querySelector('p').textContent = data.answer;sources(reply,data.messages);sources(reply,data.events,true);telegram(reply,data.telegram_url);history.push({role:'user',text:question},{role:'assistant',text:data.answer});history=history.slice(-8);}
   catch(error){reply.querySelector('p').textContent = error.message || 'Connection failed. Please try again.';field.value = question;}
   finally {busy=false;button.disabled=false;reply.setAttribute('aria-busy','false');scroll();field.focus();}
  });

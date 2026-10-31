@@ -350,12 +350,12 @@ with TestClient(app, raise_server_exceptions=False, base_url="https://testserver
     rec("an unreviewed transcript is NOT shown", "UNIQUEWORD" not in show and "Read the transcript" not in show)
     rec("the series and scripture are shown and link to the filter", "Series: Foundations" in show and "Hebrews 11" in show)
     pub = V.get("/messages/grace-abounds").text
-    rec("a published transcript is shown with the accuracy notice", "PUBLICWORD" in pub and "Read the transcript" in pub and "may contain small errors" in pub)
+    rec("reviewed recordings remain internal; visitors see audio and ScentAI", "PUBLICWORD" not in pub and "Read the transcript" not in pub and "message-discuss-form" in pub)
     rec("message pages have AudioObject JSON-LD and share links", '"@type": "AudioObject"' in show and "wa.me/?text=" in show)
-    rec("an admin can edit series, scripture and transcript visibility", "Main scripture" in MEDIA.get(f"/admin/messages/{Q('select id from sermons where slug=:s', s='faith-that-moves')[0][0]}/edit").text)
+    rec("an admin can edit series, scripture and AI teaching approval", "Main scripture" in MEDIA.get(f"/admin/messages/{Q('select id from sermons where slug=:s', s='faith-that-moves')[0][0]}/edit").text)
     sid = Q("select id from sermons where slug='faith-that-moves'")[0][0]
     MEDIA.post(f"/admin/messages/{sid}/update", data={"csrf_token": tok(MEDIA.get(f"/admin/messages/{sid}/edit").text), "title": "Faith That Moves", "speaker": "Pastor Sam", "series": "Foundations 2", "scripture": "Heb 11:1", "transcript_public": "1", "status": "published"})
-    rec("…and the change reaches the public page", "UNIQUEWORD" in V.get("/messages/faith-that-moves").text and "Foundations 2" in V.get("/messages/faith-that-moves").text)
+    rec("approved teaching is searchable but raw text stays internal", "UNIQUEWORD" not in V.get("/messages/faith-that-moves").text and "Foundations 2" in V.get("/messages/faith-that-moves").text and "Faith That Moves" in V.get("/messages?search=UNIQUEWORD").text)
 
     # ══ 11. sitemap + robots + SEO basics ══════════════════════════════════
     sm = V.get("/sitemap.xml")

@@ -40,7 +40,7 @@ class Sermon(Base):
 
     transcript: Mapped[str | None] = mapped_column(Text)
     # Public page facets: a series the message belongs to, its main scripture, and whether the (machine-made)
-    # transcript has been reviewed and may be shown to visitors.
+    # transcript has been reviewed for ScentAI and search. Raw text stays internal.
     series: Mapped[str | None] = mapped_column(String(150), index=True)
     scripture: Mapped[str | None] = mapped_column(String(150))
     transcript_public: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")

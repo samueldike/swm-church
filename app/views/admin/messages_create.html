@@ -66,7 +66,7 @@
     <div class="panel flex flex-col gap-4">
       <h2 class="text-[14px] font-semibold text-ink">Publishing</h2>
       {% if editing and sermon.transcript %}
-      <label class="flex items-start gap-2.5 text-[12.5px] text-ink"><input type="checkbox" name="transcript_public" value="1" {{ 'checked' if sermon.transcript_public else '' }} class="field-checkbox mt-0.5"><span><b>Show the transcript on the public page</b><span class="block text-[11.5px] text-ink-3">The transcript is written by software and may contain mistakes. Read it first, then tick this.</span></span></label>
+      <label class="flex items-start gap-2.5 text-[12.5px] text-ink"><input type="checkbox" name="transcript_public" value="1" {{ 'checked' if sermon.transcript_public else '' }} class="field-checkbox mt-0.5"><span><b>Use this teaching in ScentAI and message search</b><span class="block text-[11.5px] text-ink-3">Review the written recording first. It remains internal; visitors receive AI explanations and links to the audio.</span></span></label>
       {% endif %}
       {% if is_branch_owner %}<input type="hidden" name="status" value="published">{% else %}
       <div>

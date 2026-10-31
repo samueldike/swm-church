@@ -38,7 +38,7 @@
             <a class="lnk-inline" target="_blank" rel="noopener" href="https://x.com/intent/tweet?url={{ canonicalUrl|urlencode }}&amp;text={{ sermon.title|urlencode }}">X<span class="sr-only"> (opens in a new tab)</span></a>
         </p>
 
-        {% if sermon.description or show_transcript %}
+        {% if sermon.description %}
         <div style="margin-top:1rem;">
             {% if sermon.description %}
             <details class="fold" open>
@@ -46,12 +46,7 @@
                 <div class="fold-in"><p>{{ sermon.description }}</p></div>
             </details>
             {% endif %}
-            {% if show_transcript %}
-            <details class="fold transcript">
-                <summary>Read the transcript</summary>
-                <div class="fold-in"><p class="form-note">Written from the recording. It may contain small errors.</p>{% for para in sermon.transcript.replace('\r\n', '\n').split('\n\n') if para.strip() %}<p>{{ para.strip() }}</p>{% endfor %}</div>
-            </details>
-            {% endif %}
+
         </div>
         {% endif %}
     </div>
@@ -60,7 +55,7 @@
 <section class="band band-light">
  <div class="shell narrow-col message-discussion">
   <p class="guide-tag">✦ SCENTAI</p><h2 class="sec-title">Discuss this message</h2>
-  <p>Ask about “{{ sermon.title }}”. Explore the teaching in the preacher’s voice.</p>
+  <p>Ask about “{{ sermon.title }}”. Explore the teaching in the preacher’s voice, then listen to the message for more.</p>
   <div id="ai-conversation" class="ai-conversation" role="log" aria-live="polite" aria-label="Message discussion"></div>
   <form id="message-discuss-form" class="message-discuss-form" action="{{ url_for('messages_ask') }}" method="post">
    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="sermon_id" value="{{ sermon.id }}">
@@ -68,10 +63,10 @@
    <button class="btn btn-dark" type="submit">Ask ScentAI ↗</button>
   </form>
   <p class="guide-note">ScentAI explains this teaching in the preacher’s style. This is an AI response, not a personal reply from the preacher.</p>
-  <a class="lnk-inline" href="{{ url_for('scentai') }}">Explore more with ScentAI ↗</a>
+  <div class="actions-row"><a class="btn btn-ghost" href="{{ url_for('messages_download', sermon_id=sermon.id) }}">Download audio</a>{% if telegramJoin %}<a class="btn btn-ghost" href="{{ telegramJoin }}" target="_blank" rel="noopener">Join our Telegram channel ↗</a>{% endif %}<a class="lnk-inline" href="{{ url_for('scentai') }}">Explore more with ScentAI ↗</a></div>
  </div>
 </section>
-<script src="/static/site/message-guide.js?v=4" defer></script>
+<script src="/static/site/message-guide.js?v=5" defer></script>
 
 {% if related %}
 <section class="band band-light">
