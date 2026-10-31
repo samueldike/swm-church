@@ -1,7 +1,8 @@
 /* The Job 14 world behind /home-v2: dry ground, a cut stump, a drop of water, a tree.
  *
- * Everything is generated here, there are no model or texture files. Scroll position picks a
- * point on the KEYS timeline; pointer and tap only add small life on top.
+ * Everything is generated here, there are no model or texture files. The page passes scroll
+ * progress through the pinned story chapter (setProgress); that picks a point on the KEYS timeline.
+ * The loop only runs while the chapter is on screen (setActive).
  *
  * Build (three is bundled, tree-shaken, so nothing is fetched from a CDN):
  *   npm i three@0.187.0 --prefix <scratch dir>
@@ -15,23 +16,15 @@ import {
 } from "three";
 
 /* ─── Timeline: one key per chapter, reached when that chapter is centred on screen ─── */
-const BASE = { spread: 0, water: 0, life: 0, grow: 0, rings: 0, lanterns: 0, drop: 0, scent: 0, seeds: 0, birds: 0, sx: 0 };
-const KEYS = {
-  hero:     { pos: [6.6, 2.1, 11.5],  look: [0, 1.3, 0],   sx: -0.2 },
-  promise:  { pos: [3.4, 1.5, 7],     look: [0, 1.6, 0],   sx: -0.25, drop: 0.86, scent: 0.2 },
-  home:     { pos: [-5.5, 2.6, 8.5],  look: [0, 0.9, 0],   sx: 0.22, drop: 1, spread: 8, water: 0.35, life: 0.4, grow: 0.06, scent: 0.7 },
-  values:   { pos: [0.01, 17, 3.6],   look: [0, 0, 0],     sx: -0.2, drop: 1, spread: 12, water: 0.5, life: 0.5, grow: 0.08, rings: 1, scent: 0.5 },
-  vision:   { pos: [4, 1, 11],        look: [0, 3.4, 0],   sx: -0.24, drop: 1, spread: 20, water: 0.75, life: 0.7, grow: 0.34, scent: 0.8 },
-  mission:  { pos: [13, 3.5, 19],     look: [0, 6.5, 0],   sx: -0.22, drop: 1, spread: 36, water: 0.9, life: 0.85, grow: 0.66, scent: 0.8 },
-  units:    { pos: [-17, 6.5, 27],    look: [0, 9, 0],     sx: 0.23, drop: 1, spread: 70, water: 1, life: 1, grow: 1, lanterns: 1, scent: 0.8, birds: 0.5 },
-  beyond:   { pos: [24, 11, 36],      look: [-3, 8.5, 0],  sx: 0, drop: 1, spread: 90, water: 1, life: 1, grow: 1, seeds: 1, scent: 0.6, birds: 1 },
-  moments:  { pos: [30, 17, 40],      look: [0, 9, 0],     sx: 0, drop: 1, spread: 90, water: 1, life: 1, grow: 1, seeds: 1, scent: 0.4, birds: 1 },
-  messages: { pos: [9, 5.5, 17],      look: [-3, 10, -6],  sx: -0.24, drop: 1, spread: 90, water: 1, life: 1, grow: 1, scent: 1, birds: 1 },
-  pastor:   { pos: [-18, 7, 29],      look: [0, 8.5, 0],   sx: 0.27, drop: 1, spread: 90, water: 1, life: 1, grow: 1, scent: 0.5, birds: 1 },
-  gather:   { pos: [-34, 5, 21],      look: [-25, 3.5, -8], sx: 0.22, drop: 1, spread: 90, water: 1, life: 1, grow: 1, scent: 0.4, birds: 1 },
-  places:   { pos: [12, 34, 36],      look: [0, 0, -3],    sx: -0.16, drop: 1, spread: 90, water: 1, life: 1, grow: 1, lanterns: 1, birds: 1 },
-  next:     { pos: [-6, 1.8, 28],     look: [0, 8.5, 0],   sx: 0.22, drop: 1, spread: 90, water: 1, life: 1, grow: 1, lanterns: 1, scent: 0.9, birds: 1 },
-};
+const BASE = { spread: 0, water: 0, life: 0, grow: 0, lanterns: 0, drop: 0, scent: 0, seeds: 0, birds: 0 };
+const KEYS = [
+  { at: 0,    pos: [6.6, 2.0, 11.5], look: [0, 1.5, 0] },
+  { at: 0.2,  pos: [4.6, 1.5, 8],    look: [0, 1.6, 0], drop: 0.3 },
+  { at: 0.42, pos: [2.6, 1.6, 6.8],  look: [0, 1.5, 0], drop: 1, spread: 1.5, water: 0.1, life: 0.15, scent: 0.3 },
+  { at: 0.58, pos: [-4.6, 1.6, 8],   look: [0, 1.9, 0], drop: 1, spread: 16, water: 0.55, life: 0.6, grow: 0.08, scent: 0.8 },
+  { at: 0.76, pos: [9, 2.2, 16],     look: [0, 5, 0],   drop: 1, spread: 80, water: 0.9, life: 0.9, grow: 0.5, scent: 0.8, birds: 0.3 },
+  { at: 1,    pos: [-15, 3.2, 27],   look: [-1, 8.6, 0], drop: 1, spread: 360, water: 1, life: 1, grow: 1, lanterns: 0, scent: 0.8, birds: 1 },
+];
 const STATE_KEYS = Object.keys(BASE);
 
 /* ─── Small maths ─── */
@@ -66,7 +59,7 @@ const COMMON = /* glsl */`
 uniform vec3 uFog; uniform float uFogNear, uFogFar; uniform float uTime, uLife;
 vec3 lit(vec3 base, vec3 n){
   float d = dot(n, normalize(vec3(.46,.8,.38))) * .5 + .5;
-  return base * mix(vec3(.66,.62,.58), vec3(1.1,1.06,.98), d*d);
+  return base * mix(vec3(.58,.64,.64), vec3(1.14,1.12,1.02), d*d);
 }
 vec3 fogged(vec3 c, float dist){ return mix(c, uFog, smoothstep(uFogNear, uFogFar, dist)); }
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
@@ -87,8 +80,8 @@ export function start(canvas, { lite = false, still = false } = {}) {
 
   const shared = {
     uTime: { value: 0 }, uLife: { value: 0 }, uFog: { value: new Vector3() },
-    uFogNear: { value: 40 }, uFogFar: { value: 240 },
-    uSpread: { value: 0 }, uRings: { value: 0 }, uActiveRing: { value: -1 }, uGrow: { value: 0 },
+    uFogNear: { value: 24 }, uFogFar: { value: 170 },
+    uSpread: { value: 0 }, uGrow: { value: 0 },
     uDrops: { value: Array.from({ length: 6 }, () => new Vector3(0, 0, 99)) },
   };
 
@@ -101,8 +94,8 @@ export function start(canvas, { lite = false, still = false } = {}) {
       void main(){
         vec3 d = normalize(vD);
         float h = pow(max(d.y, 0.), .55);
-        vec3 horizon = mix(vec3(.985,.875,.72), vec3(.995,.955,.86), uLife);
-        vec3 zenith = mix(vec3(.93,.76,.62), vec3(.64,.83,.91), uLife);
+        vec3 horizon = mix(vec3(.985,.885,.74), vec3(.90,.965,.99), uLife);
+        vec3 zenith = mix(vec3(.92,.74,.58), vec3(.22,.58,.93), uLife);
         vec3 c = mix(horizon, zenith, h);
         vec3 sun = normalize(vec3(.55, mix(.1,.36,uLife), -.72));
         float s = max(dot(d, sun), 0.);
@@ -110,7 +103,7 @@ export function start(canvas, { lite = false, still = false } = {}) {
         if (d.y > 0.) {
           vec2 q = d.xz / (d.y + .16) * 1.6 + vec2(uTime * .012, 0.);
           float n = noise(q) * .55 + noise(q*2.1) * .3 + noise(q*4.3) * .15;
-          c = mix(c, vec3(1.,.985,.95), smoothstep(.52, .78, n) * smoothstep(0., .22, d.y) * .8);
+          c = mix(c, vec3(1.), smoothstep(.5, .72, n) * smoothstep(0., .2, d.y) * .94);
         }
         gl_FragColor = vec4(c, 1.);
       }`,
@@ -143,7 +136,7 @@ export function start(canvas, { lite = false, still = false } = {}) {
     uniforms: shared,
     vertexShader: `varying vec3 vP, vN; void main(){ vP = position; vN = normal; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }`,
     fragmentShader: COMMON + /* glsl */`
-      uniform float uSpread, uRings, uActiveRing; uniform vec3 uDrops[6];
+      uniform float uSpread, uGrow; uniform vec3 uDrops[6];
       varying vec3 vP, vN;
       float cracks(vec2 p){
         vec2 i = floor(p), f = fract(p); float a = 8., b = 8.;
@@ -163,22 +156,17 @@ export function start(canvas, { lite = false, still = false } = {}) {
         float inside = 1. - smoothstep(edge - 1.4, edge, r);
         vec3 dry = mix(vec3(.87,.75,.57), vec3(.80,.65,.46), n);
         if (inside < 1. && dist < 60.) dry = mix(dry * .76, dry, cracks(vP.xz * 2.7));
-        vec3 green = mix(vec3(.55,.70,.38), vec3(.40,.59,.33), n);
-        green = mix(green, vec3(.73,.78,.48), smoothstep(.5, .95, noise(vP.xz * .09)) * .7);
+        vec3 green = mix(vec3(.33,.70,.22), vec3(.15,.54,.19), n);
+        green = mix(green, vec3(.52,.78,.27), smoothstep(.45, .9, noise(vP.xz * .09)) * .7);
         float wetEdge = smoothstep(edge - 2.5, edge, r) * (1. - smoothstep(edge, edge + 2.4, r));
         vec3 c = mix(dry, green, inside);
         c = mix(c, c * vec3(.74,.72,.66), wetEdge);
-        c = mix(c, vec3(.84,.77,.60), (1. - smoothstep(-.75, -.28, vP.y)) * inside);
+        c = mix(c, vec3(.86,.80,.62), (1. - smoothstep(-.75, -.34, vP.y)) * inside);
         c = lit(c, normalize(vN));
+        float shade = (1. - smoothstep(1.5, 12., length(vP.xz - vec2(3., -2.)))) * (.5 + .5 * noise(vP.xz * 1.3)) * smoothstep(.45, 1., uGrow);
+        c *= 1. - shade * .62;
+        c *= 1. - .5 * (1. - smoothstep(.85, 2.1, r));
 
-        if (uRings > 0.) for (int i=0;i<7;i++){
-          float k = float(i), rr = 2.3 + k * 1.28;
-          float on = smoothstep(k/7., (k+.8)/7., uRings);
-          float act = 1. - step(.5, abs(uActiveRing - k));
-          float w = mix(.022, .075, act);
-          float line = 1. - smoothstep(w, w + .03, abs(r - rr));
-          c = mix(c, mix(vec3(.72,.53,.13), vec3(.96,.85,.5), act), line * on * .92);
-        }
         for (int i=0;i<6;i++){
           vec3 dp = uDrops[i];
           if (dp.z < 3.) {
@@ -204,7 +192,7 @@ export function start(canvas, { lite = false, still = false } = {}) {
         vec2 p = vP.xz * .55;
         float a = noise(p + vec2(uTime*.22, uTime*.1));
         float b = noise(p*2.2 - vec2(uTime*.16, -uTime*.12));
-        vec3 c = mix(vec3(.50,.76,.84), vec3(.70,.89,.92), a);
+        vec3 c = mix(vec3(.08,.56,.84), vec3(.34,.82,.94), a);
         c += vec3(1.) * smoothstep(.6, .98, b * a * 1.75) * .3;
         gl_FragColor = vec4(fogged(c, distance(cameraPosition, vP)), 1.);
       }`,
@@ -346,9 +334,9 @@ export function start(canvas, { lite = false, still = false } = {}) {
   const leafGeo = new BufferGeometry();
   leafGeo.setAttribute("position", new BufferAttribute(new Float32Array([0, 0, 0, 0.3, 0.02, 0.42, 0, 0.06, 1, -0.3, 0.02, 0.42]), 3));
   leafGeo.setIndex([0, 1, 2, 0, 2, 3]);
-  const perSeed = lite ? 12 : 14;
+  const perSeed = lite ? 16 : 30;
   const firstLeaves = 6;
-  const leafCount = Math.min(leafSeeds.length * perSeed, lite ? 5000 : 16000) + firstLeaves;
+  const leafCount = Math.min(leafSeeds.length * perSeed, lite ? 8000 : 34000) + firstLeaves;
   const leafT = new Float32Array(leafCount), leafTone = new Float32Array(leafCount);
   const leafMat = new ShaderMaterial({
     side: DoubleSide, uniforms: shared,
@@ -369,9 +357,9 @@ export function start(canvas, { lite = false, still = false } = {}) {
     fragmentShader: COMMON + /* glsl */`
       varying float vTone; varying vec3 vN, vW;
       void main(){
-        vec3 c = mix(vec3(.47,.67,.34), vec3(.70,.80,.42), vTone);
-        if (vTone > .93) c = vec3(.86,.70,.30);
-        c *= mix(.68, 1.12, smoothstep(6., 17., vW.y));
+        vec3 c = mix(vec3(.13,.58,.17), vec3(.56,.88,.20), vTone);
+        if (vTone > .93) c = vec3(.70,.95,.28);
+        c *= mix(.62, 1.22, smoothstep(5., 17., vW.y));
         c = lit(c, normalize(vN) * sign(vN.y + .001));
         gl_FragColor = vec4(fogged(c, distance(cameraPosition, vW)), 1.);
       }`,
@@ -390,7 +378,7 @@ export function start(canvas, { lite = false, still = false } = {}) {
   }
   for (let i = firstLeaves; i < leafCount; i++) {
     const sd = leafSeeds[Math.floor(R() * leafSeeds.length)];
-    place(i, sd.p.x + (R() - 0.5) * 1.5, sd.p.y + (R() - 0.5) * 1.1, sd.p.z + (R() - 0.5) * 1.5, 0.3 + R() * 0.26,
+    place(i, sd.p.x + (R() - 0.5) * 1.3, sd.p.y + (R() - 0.5) * 1, sd.p.z + (R() - 0.5) * 1.3, 0.2 + R() * 0.17,
       new Vector3(R() - 0.5, R() - 0.5, R() - 0.5), R() * 6.28, sd.t);
     if (R() < 0.05) leafTone[i] = 0.96;
   }
@@ -402,10 +390,10 @@ export function start(canvas, { lite = false, still = false } = {}) {
   const bladeGeo = new BufferGeometry();
   bladeGeo.setAttribute("position", new BufferAttribute(new Float32Array([-0.06, 0, 0, 0.06, 0, 0, 0.0, 1, 0.1]), 3));
   bladeGeo.setIndex([0, 1, 2]);
-  const bladeCount = lite ? 5000 : 20000;
+  const bladeCount = lite ? 9000 : 42000;
   const bladeOff = new Float32Array(bladeCount * 3), bladeSeed = new Float32Array(bladeCount);
   for (let i = 0; i < bladeCount; i++) {
-    const a = R() * 6.283, r = 1.3 + Math.pow(R(), 1.8) * 34;
+    const a = R() * 6.283, r = 1.1 + Math.pow(R(), 1.7) * 44;
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
     bladeOff[i * 3] = x; bladeOff[i * 3 + 1] = height(x, z); bladeOff[i * 3 + 2] = z; bladeSeed[i] = R();
   }
@@ -422,7 +410,7 @@ export function start(canvas, { lite = false, still = false } = {}) {
         float up = (1. - smoothstep(uSpread - 3.2, uSpread - .4, r)) * step(.1, uSpread) * step(-.3, aOff.y);
         float a = aSeed * 40.;
         vec3 p = vec3(position.x * cos(a) - position.z * sin(a), position.y, position.x * sin(a) + position.z * cos(a));
-        p *= vec3(1.05, .2 + aSeed * .3, 1.05) * up;
+        p *= vec3(.8, .24 + aSeed * .32, .8) * up;
         float t = uTime * 1.5 + aOff.x * .35 + aOff.z * .3;
         p.x += sin(t) * .1 * position.y; p.z += cos(t * .8) * .07 * position.y;
         vec3 w = aOff + p;
@@ -432,8 +420,8 @@ export function start(canvas, { lite = false, still = false } = {}) {
     fragmentShader: COMMON + /* glsl */`
       varying vec3 vW; varying float vH, vS;
       void main(){
-        vec3 c = mix(vec3(.38,.56,.30), vec3(.68,.80,.42), vH * (.5 + vS * .5));
-        if (vS > .985) c = vec3(.97,.84,.42) * (.7 + vH * .4);
+        vec3 c = mix(vec3(.08,.42,.12), vec3(.50,.90,.22), vH * (.45 + vS * .55));
+        if (vS > .972 && vH > .75) c = vS > .986 ? vec3(1.,.97,.9) : vec3(1.,.83,.15);
         gl_FragColor = vec4(fogged(c, distance(cameraPosition, vW)), 1.);
       }`,
   }), bladeCount);
@@ -571,26 +559,20 @@ export function start(canvas, { lite = false, still = false } = {}) {
   scene.add(birds);
 
   /* ─── Scroll → timeline ─── */
-  const sections = [...document.querySelectorAll("[data-act]")].filter((el) => KEYS[el.dataset.act]);
-  const steps = sections.map((el) => {
-    const k = { ...BASE, ...KEYS[el.dataset.act] };
-    return { el, k, c: 0 };
-  });
-  const measure = () => { for (const st of steps) { const b = st.el.getBoundingClientRect(); st.c = b.top + window.scrollY + b.height / 2; } };
+  const steps = KEYS.map((key) => ({ ...BASE, ...key }));
+  let progress = 0;
 
   const cur = { ...BASE, px: 0, py: 0, pz: 0, lx: 0, ly: 0, lz: 0 };
   const target = { ...cur };
   function readScroll() {
-    const x = window.scrollY + window.innerHeight / 2;
     let i = 0;
-    while (i < steps.length - 2 && x > steps[i + 1].c) i++;
+    while (i < steps.length - 2 && progress > steps[i + 1].at) i++;
     const a = steps[i], b = steps[i + 1];
-    let t = clamp((x - a.c) / Math.max(1, b.c - a.c));
-    const raw = t;
-    t = t * t * (3 - 2 * t);
-    for (const key of STATE_KEYS) target[key] = mix(a.k[key], b.k[key], key === "drop" ? raw : t);
-    target.px = mix(a.k.pos[0], b.k.pos[0], t); target.py = mix(a.k.pos[1], b.k.pos[1], t); target.pz = mix(a.k.pos[2], b.k.pos[2], t);
-    target.lx = mix(a.k.look[0], b.k.look[0], t); target.ly = mix(a.k.look[1], b.k.look[1], t); target.lz = mix(a.k.look[2], b.k.look[2], t);
+    const raw = clamp((progress - a.at) / (b.at - a.at));
+    const t = raw * raw * (3 - 2 * raw);
+    for (const key of STATE_KEYS) target[key] = mix(a[key], b[key], key === "drop" ? raw : t);
+    target.px = mix(a.pos[0], b.pos[0], t); target.py = mix(a.pos[1], b.pos[1], t); target.pz = mix(a.pos[2], b.pos[2], t);
+    target.lx = mix(a.look[0], b.look[0], t); target.ly = mix(a.look[1], b.look[1], t); target.lz = mix(a.look[2], b.look[2], t);
   }
 
   let W = 1, H = 1, portrait = false;
@@ -602,7 +584,6 @@ export function start(canvas, { lite = false, still = false } = {}) {
     camera.fov = portrait ? 50 : 38;
     camera.updateProjectionMatrix();
     lampMat.uniforms.uPx.value = moteMat.uniforms.uPx.value = dpr * Math.min(1, H / 800 + 0.15);
-    measure();
   }
 
   /* ─── Life on top of the scroll ─── */
@@ -645,13 +626,13 @@ export function start(canvas, { lite = false, still = false } = {}) {
     for (const key of Object.keys(cur)) cur[key] = mix(cur[key], target[key], k);
     smx = mix(smx, mx, 1 - Math.exp(-dt * 2)); smy = mix(smy, my, 1 - Math.exp(-dt * 2));
 
-    shared.uSpread.value = cur.spread; shared.uRings.value = cur.rings; shared.uGrow.value = cur.grow;
+    shared.uSpread.value = cur.spread; shared.uGrow.value = cur.grow;
     shared.uLife.value = cur.life;
     lampMat.uniforms.uShow.value = cur.lanterns;
     moteMat.uniforms.uShow.value = cur.scent; moteMat.uniforms.uSeeds.value = cur.seeds;
     birdMat.uniforms.uShow.value = cur.birds; birds.visible = cur.birds > 0.02;
     water.position.y = mix(-2.4, -0.42, cur.water);
-    shared.uFog.value.set(mix(0.985, 0.995, cur.life), mix(0.875, 0.955, cur.life), mix(0.72, 0.86, cur.life));
+    shared.uFog.value.set(mix(0.985, 0.82, cur.life), mix(0.885, 0.93, cur.life), mix(0.74, 0.98, cur.life));
 
     // The scripted drop, tied to the scrollbar; when it lands it stays landed.
     heroDrop.visible = cur.drop > 0.02 && cur.drop < 0.985;
@@ -672,7 +653,7 @@ export function start(canvas, { lite = false, still = false } = {}) {
     shared.uDrops.value.forEach((vd, i) => { const r = ripples[i]; vd.set(r ? r.x : 0, r ? r.z : 0, r ? r.age : 99); });
     while (ripples.length && ripples[0].age > 3) ripples.shift();
 
-    const dist = portrait ? 1.38 : 1;
+    const dist = portrait ? 1.5 : 1;
     look.set(cur.lx, cur.ly, cur.lz);
     camera.position.set(
       look.x + (cur.px - look.x) * dist + smx * 0.9,
@@ -681,8 +662,6 @@ export function start(canvas, { lite = false, still = false } = {}) {
     );
     camera.position.y = Math.max(camera.position.y, height(camera.position.x, camera.position.z) + 0.55);
     camera.lookAt(look);
-    if (portrait) camera.setViewOffset(W, H, 0, H * 0.12, W, H);
-    else camera.setViewOffset(W, H, W * cur.sx, 0, W, H);
     camera.updateMatrixWorld();
 
     renderer.render(scene, camera);
@@ -698,12 +677,10 @@ export function start(canvas, { lite = false, still = false } = {}) {
   const kick = () => { if (!raf) raf = requestAnimationFrame(frame); };
 
   const onResize = () => { resize(); if (still) kick(); };
-  const onVis = () => { running = !document.hidden; last = performance.now(); if (running) kick(); };
+  let active = true;
+  const onVis = () => { running = active && !document.hidden; last = performance.now(); if (running) kick(); };
   window.addEventListener("resize", onResize, { passive: true });
-  window.addEventListener("load", measure, { once: true });
   document.addEventListener("visibilitychange", onVis);
-  if (still) window.addEventListener("scroll", kick, { passive: true });
-  if ("ResizeObserver" in window) new ResizeObserver(measure).observe(document.body);
 
   resize();
   readScroll();
@@ -711,9 +688,7 @@ export function start(canvas, { lite = false, still = false } = {}) {
   kick();
 
   return {
-    rain,
-    pulse() { addRipple((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6 + 3); },
-    setRing(i) { shared.uActiveRing.value = i; if (still) kick(); },
-    setLamp(i) { lampMat.uniforms.uActive.value = i; if (still) kick(); },
+    setProgress(p) { progress = clamp(p); if (still) kick(); },
+    setActive(on) { active = on; onVis(); },
   };
 }

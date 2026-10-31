@@ -1,174 +1,256 @@
-/* Page behaviour for /home-v2. All content works without this file; it adds the journey on top,
-   and only asks for the 3D world (world.min.js) once the page itself is ready. */
+/* Page behaviour for /home-v2. All content works without this file; it adds the life on top. */
 (function () {
   "use strict";
   var doc = document, root = doc.documentElement;
   var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  var world = null;
+  var $ = function (id) { return doc.getElementById(id); };
+  var all = function (sel, el) { return Array.prototype.slice.call((el || doc).querySelectorAll(sel)); };
 
-  /* ─── The world: skipped for Save-Data and machines without WebGL ─── */
-  function webgl() {
-    try { return !!doc.createElement("canvas").getContext("webgl2"); } catch (e) { return false; }
-  }
-  function loadWorld() {
-    var conn = navigator.connection || {};
-    if (conn.saveData || !webgl()) { root.classList.add("no-world"); return; }
-    var lite = (navigator.deviceMemory && navigator.deviceMemory <= 3) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2) || innerWidth < 768;
-    var url = doc.querySelector('script[src*="home-v2.js"]').src.replace("home-v2.js", "world.min.js");
-    import(url).then(function (mod) {
-      world = mod.start(doc.getElementById("world"), { lite: !!lite, still: reduce });
-      root.classList.add("has-world");
-    }).catch(function () { root.classList.add("no-world"); });
-  }
-  if (doc.readyState === "complete") setTimeout(loadWorld, 60);
-  else addEventListener("load", function () { setTimeout(loadWorld, 60); });
+  /* ─── Menu ─── */
+  var menu = $("menu");
+  $("menu-open").addEventListener("click", function () { menu.showModal(); });
+  $("menu-close").addEventListener("click", function () { menu.close(); });
 
-  // Tap the ground and a drop falls there. Controls and reading text keep their own clicks.
-  // "click", not a pointer event: a finger that scrolled the page never fires one.
-  addEventListener("click", function (ev) {
-    if (!world || reduce) return;
-    if (ev.target.closest && ev.target.closest("a,button,input,label,li,table,dialog,figure,img,form,.now,p,h1,h2,h3,blockquote")) return;
-    if (world.rain(ev.clientX, ev.clientY)) root.classList.add("has-rained");
-  });
-
-  /* ─── Header, menu ─── */
-  var bar = doc.getElementById("bar"), menu = doc.getElementById("menu");
-  doc.getElementById("menu-open").addEventListener("click", function () { menu.showModal(); });
-  doc.getElementById("menu-close").addEventListener("click", function () { menu.close(); });
-  menu.addEventListener("click", function (e) { if (e.target === menu) menu.close(); });
-
-  /* ─── Reveal on arrival ─── */
-  var reveals = doc.querySelectorAll(".reveal");
+  /* ─── Arrivals ─── */
+  var reveals = all(".reveal");
   if ("IntersectionObserver" in window && !reduce) {
     var io = new IntersectionObserver(function (es) {
       es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } });
-    }, { rootMargin: "0px 0px -8% 0px" });
+    }, { rootMargin: "0px 0px -6% 0px" });
     reveals.forEach(function (el) { io.observe(el); });
   } else reveals.forEach(function (el) { el.classList.add("in"); });
 
-  /* ─── The verse: word by word, as the drop falls ─── */
-  var verse = doc.getElementById("verse"), words = [];
-  if (verse && !reduce) {
-    (function split(node) {
-      Array.prototype.slice.call(node.childNodes).forEach(function (n) {
-        if (n.nodeType === 1) { split(n); return; }
-        var frag = doc.createDocumentFragment();
-        n.textContent.split(/(\s+)/).forEach(function (t) {
-          if (!t.trim()) { frag.appendChild(doc.createTextNode(t)); return; }
-          var s = doc.createElement("span"); s.className = "w"; s.textContent = t; words.push(s); frag.appendChild(s);
-        });
-        node.replaceChild(frag, n);
-      });
-    })(verse);
-  }
+  /* ─── Hero: photographs of the house, with water moving across them ─── */
+  var slides = all("[data-slide]"), photos = all("[data-slide-photo]"), dots = all("[data-dot]");
+  var pauseBtn = $("hero-pause"), slide = 0, paused = reduce, timer = 0, ripple = null;
 
-  /* ─── Scroll-linked pieces, all read in one pass per frame ─── */
-  var promise = doc.getElementById("promise"), values = doc.getElementById("values");
-  var ripples = doc.querySelectorAll("#ripples li");
-  var acts = doc.querySelectorAll("[data-act]");
-  var drifts = doc.querySelectorAll("[data-speed]");
-  var belts = doc.querySelectorAll(".belt");
-  var beltBox = doc.getElementById("belts");
-  var chapter = doc.getElementById("chapter"), chapterText = chapter.querySelector("span"), chapterBar = chapter.querySelector("i");
-  var ring = -2, lit = 0, ticking = false;
-
-  function within(el) {
-    var b = el.getBoundingClientRect(), span = b.height - innerHeight;
-    var p = el.classList.contains("flow") ? (innerHeight * 0.85 - b.top) / b.height : span > 0 ? -b.top / span : 0;
-    return Math.min(1, Math.max(0, p));
-  }
-  // A pinned chapter must fit its screen. When it cannot (a phone on its side, a small phone,
-  // large text settings) it stops pinning and reads as an ordinary section.
-  function fit() {
-    doc.querySelectorAll(".tall").forEach(function (sec) {
-      sec.classList.remove("flow");
-      var pad = sec.querySelector(".sticky .wrap");
-      if (pad && pad.offsetHeight + 96 > innerHeight) sec.classList.add("flow");
+  photos.forEach(function (im) { if (im.dataset.src && !reduce) setTimeout(function () { im.src = im.dataset.src; }, 1800); });
+  function show(n) {
+    slide = n % slides.length;
+    var ph = photos[slide];
+    if (!ph.getAttribute("src")) ph.src = ph.dataset.src;
+    slides.forEach(function (s, i) {
+      var on = i === slide;
+      s.classList.toggle("on", on);
+      s.setAttribute("aria-hidden", on ? "false" : "true");
+      var a = s.querySelector("a"); if (on) a.removeAttribute("tabindex"); else a.setAttribute("tabindex", "-1");
     });
-    update();
+    photos.forEach(function (p, i) { p.classList.toggle("on", i === slide); });
+    dots.forEach(function (d, i) { d.classList.toggle("on", i === slide); });
+    if (ripple) ripple.to(ph);
+  }
+  function tick() { clearTimeout(timer); if (!paused) timer = setTimeout(function () { show(slide + 1); tick(); }, 7000); }
+  pauseBtn.addEventListener("click", function () {
+    paused = !paused;
+    pauseBtn.textContent = paused ? "Play" : "Pause";
+    pauseBtn.setAttribute("aria-pressed", String(paused));
+    tick();
+  });
+  if (reduce) { pauseBtn.textContent = "Play"; pauseBtn.setAttribute("aria-pressed", "true"); }
+  tick();
+
+  function startRipple() {
+    var cv = $("ripple"), gl = cv.getContext("webgl", { antialias: false, alpha: false });
+    if (!gl) return null;
+    var vs = "attribute vec2 p;varying vec2 u;void main(){u=p*.5+.5;gl_Position=vec4(p,0.,1.);}";
+    var fs = "precision mediump float;varying vec2 u;uniform sampler2D a,b;uniform float t,m;uniform vec2 sa,sb;uniform vec3 d[4];" +
+      "vec2 cov(vec2 v,vec2 s){return (v-.5)*s+.5;}" +
+      "void main(){vec2 v=vec2(u.x,1.-u.y);vec2 o=vec2(sin(v.y*9.+t*.7),cos(v.x*7.-t*.5))*.0016;" +
+      "for(int i=0;i<4;i++){float r=distance(v,d[i].xy);float k=d[i].z;if(k<2.5){float w=sin(r*62.-k*11.)*exp(-r*5.)*exp(-k*1.5);o+=normalize(v-d[i].xy+.0001)*w*.02;}}" +
+      "vec4 c=mix(texture2D(a,cov(v+o,sa)),texture2D(b,cov(v+o,sb)),m);gl_FragColor=vec4(c.rgb,1.);}";
+    function sh(type, src) { var s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; }
+    var pr = gl.createProgram();
+    gl.attachShader(pr, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(pr);
+    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return null;
+    gl.useProgram(pr);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    var lp = gl.getAttribLocation(pr, "p"); gl.enableVertexAttribArray(lp); gl.vertexAttribPointer(lp, 2, gl.FLOAT, false, 0, 0);
+    var U = {}; ["a", "b", "t", "m", "sa", "sb"].forEach(function (n) { U[n] = gl.getUniformLocation(pr, n); });
+    var dl = [0, 1, 2, 3].map(function (i) { return gl.getUniformLocation(pr, "d[" + i + "]"); });
+    gl.uniform1i(U.a, 0); gl.uniform1i(U.b, 1);
+    var tex = [gl.createTexture(), gl.createTexture()], size = [[1, 1], [1, 1]];
+    function put(i, im) {
+      gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, tex[i]);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, im);
+      [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T].forEach(function (k) { gl.texParameteri(gl.TEXTURE_2D, k, gl.CLAMP_TO_EDGE); });
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      size[i] = [im.naturalWidth, im.naturalHeight];
+    }
+    var W = 1, H = 1;
+    function fit() {
+      var d = Math.min(devicePixelRatio || 1, 1.5);
+      W = cv.width = cv.clientWidth * d; H = cv.height = cv.clientHeight * d; gl.viewport(0, 0, W, H);
+    }
+    function cover(s) { var ca = W / H, ia = s[0] / s[1]; return ca > ia ? [1, ia / ca] : [ca / ia, 1]; }
+    var drops = [[0, 0, 9], [0, 0, 9], [0, 0, 9], [0, 0, 9]], di = 0, blend = 0, fading = false, visible = true, last = performance.now(), t = 0, raf = 0, pending = null;
+    function drop(x, y) { drops[di++ % 4] = [x, y, 0]; }
+    function frame(now) {
+      raf = 0;
+      var dt = Math.min(.05, (now - last) / 1000); last = now; t += dt;
+      if (fading) { blend += dt / 1.3; if (blend >= 1) { blend = 0; fading = false; put(0, pending); } }
+      gl.uniform1f(U.t, t); gl.uniform1f(U.m, blend);
+      var a = cover(size[0]), b = cover(size[1]);
+      gl.uniform2f(U.sa, a[0], a[1]); gl.uniform2f(U.sb, b[0], b[1]);
+      drops.forEach(function (d, i) { d[2] += dt; gl.uniform3f(dl[i], d[0], d[1], d[2]); });
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      if (visible && !doc.hidden) raf = requestAnimationFrame(frame);
+    }
+    function kick() { if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); } }
+    addEventListener("resize", fit, { passive: true });
+    doc.addEventListener("visibilitychange", kick);
+    var hero = $("hero");
+    if ("IntersectionObserver" in window) new IntersectionObserver(function (es) { visible = es[0].isIntersecting; if (visible) kick(); }).observe(hero);
+    hero.addEventListener("pointerdown", function (e) { if (!e.target.closest("a,button")) { var r = hero.getBoundingClientRect(); drop((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height); } });
+    var lastMove = 0;
+    hero.addEventListener("pointermove", function (e) {
+      if (e.pointerType !== "mouse" || e.timeStamp - lastMove < 420) return;
+      lastMove = e.timeStamp;
+      var r = hero.getBoundingClientRect(); drop((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+    });
+    fit();
+    return {
+      first: function (im) { put(0, im); put(1, im); kick(); cv.classList.add("is-on"); },
+      to: function (im) {
+        var go = function () { pending = im; put(1, im); blend = 0; fading = true; };
+        if (im.complete && im.naturalWidth) go(); else im.addEventListener("load", go, { once: true });
+      },
+    };
+  }
+
+  /* ─── Next gathering ─── */
+  var up = doc.querySelector(".next-up"), clock = $("clock");
+  if (up && clock) {
+    var at = Date.parse(up.dataset.at), parts = {};
+    all("[data-c]", clock).forEach(function (b) { parts[b.dataset.c] = b; });
+    var tickClock = function () {
+      var left = Math.floor((at - Date.now()) / 1000);
+      if (isNaN(at) || left <= 0) { clock.hidden = true; return false; }
+      clock.hidden = false;
+      parts.d.textContent = Math.floor(left / 86400);
+      parts.h.textContent = Math.floor(left % 86400 / 3600);
+      parts.m.textContent = Math.floor(left % 3600 / 60);
+      parts.s.textContent = left % 60;
+      return true;
+    };
+    if (tickClock() && !reduce) setInterval(tickClock, 1000);
+  }
+
+  /* ─── Calendar: real services and events; pick a day to see what is on ─── */
+  var months = all("[data-month]"), panel = $("day-panel"), monthIx = 0;
+  function esc(s) { var d = doc.createElement("div"); d.textContent = s == null ? "" : s; return d.innerHTML; }
+  function pick(btn) {
+    all(".day.is-picked").forEach(function (d) { d.classList.remove("is-picked"); });
+    btn.classList.add("is-picked");
+    var items = JSON.parse(btn.dataset.items || "[]");
+    panel.innerHTML = "<h4>" + esc(btn.dataset.label) + "</h4>" + (items.length ? "<ul>" + items.map(function (it) {
+      var name = it.event_id ? '<a href="/events/' + it.event_id + '">' + esc(it.title) + "</a>" : esc(it.title);
+      return "<li>" + name + "<span>" + esc(it.time) + "</span></li>";
+    }).join("") + "</ul>" : "<p>Nothing scheduled. See you at the next gathering.</p>");
+  }
+  function pickFirst(month) {
+    var today = month.querySelector(".day.is-today"), chosen = today && today.classList.contains("has-items") ? today : null;
+    if (!chosen) {
+      var days = all(".day.has-items", month), from = today ? days.filter(function (d) { return +d.textContent >= +today.textContent; }) : days;
+      chosen = from[0] || days[0];
+    }
+    if (chosen) pick(chosen);
+  }
+  if (months.length) {
+    $("cal").addEventListener("click", function (e) {
+      var day = e.target.closest(".day"), step = e.target.closest("[data-cal-step]");
+      if (day) pick(day);
+      if (step && !step.disabled) {
+        months[monthIx].hidden = true;
+        monthIx += +step.dataset.calStep;
+        months[monthIx].hidden = false;
+        pickFirst(months[monthIx]);
+      }
+    });
+    pickFirst(months[0]);
+  }
+
+  /* ─── Scroll-linked: worship opening, parallax, the ring, the 3D story ─── */
+  var worship = $("worship"), frameEl = $("worship-frame"), inWorship = worship && worship.querySelector(".worship-in");
+  var drift = all("[data-speed]"), halo = $("halo"), stage = $("halo-stage");
+  var story = $("story"), lines = all("[data-line]"), world = null, ticking = false, lineOn = 0;
+
+  function pinned(el) {
+    var b = el.getBoundingClientRect(), span = b.height - innerHeight;
+    return span > 0 ? Math.min(1, Math.max(0, -b.top / span)) : 0;
   }
   function update() {
     ticking = false;
-    var y = scrollY, h = innerHeight, max = doc.documentElement.scrollHeight - h;
-    bar.classList.toggle("solid", y > h * 0.6);
-
-    if (words.length) {
-      var n = Math.round(Math.min(1, within(promise) * 1.25) * words.length);
-      while (lit < n) words[lit++].classList.add("on");
-      while (lit > n) words[--lit].classList.remove("on");
-    }
-
-    var v = within(values), i = v > 0 && v < 1 ? Math.min(6, Math.floor(v * 7)) : -1;
-    if (i !== ring) {
-      ring = i;
-      ripples.forEach(function (li, k) { li.classList.toggle("on", k === i); });
-      if (world) world.setRing(i);
-    }
-
-    if (!reduce) {
-      drifts.forEach(function (el) {
+    var h = innerHeight;
+    if (!reduce && worship) {
+      var w = pinned(worship), open = Math.min(1, w * 1.5), ease = 1 - Math.pow(1 - open, 3);
+      var base = innerWidth < 640 ? 7 : 12;
+      frameEl.style.setProperty("--c", (base * (1 - ease)).toFixed(2) + "%");
+      frameEl.style.setProperty("--z", (1.14 - .14 * ease).toFixed(3));
+      inWorship.style.setProperty("--t", Math.min(1, Math.max(0, (w - .35) * 3)).toFixed(3));
+      drift.forEach(function (el) {
         var b = el.getBoundingClientRect();
-        if (b.bottom > -80 && b.top < h + 80) el.style.translate = "0 " + ((b.top + b.height / 2 - h / 2) * parseFloat(el.dataset.speed)).toFixed(1) + "px";
+        if (b.bottom > -80 && b.top < h + 80) el.style.transform = "translateY(" + ((b.top + b.height / 2 - h / 2) * parseFloat(el.dataset.speed)).toFixed(1) + "px)";
       });
-      if (beltBox) {
-        var bb = beltBox.getBoundingClientRect();
-        if (bb.bottom > 0 && bb.top < h) belts.forEach(function (el) {
-          var range = Math.max(0, el.scrollWidth - innerWidth), p = (h - bb.top) / (h + bb.height);
-          el.style.transform = "translate3d(" + (-(el.dataset.dir === "1" ? p : 1 - p) * range).toFixed(1) + "px,0,0)";
-        });
+      if (halo) {
+        var r = stage.getBoundingClientRect();
+        if (r.bottom > -100 && r.top < h + 100) halo.style.transform = "translateZ(calc(var(--r) * -1)) rotateY(" + (-(r.top / h) * 110).toFixed(2) + "deg)";
       }
     }
-
-    var mid = h / 2, name = "";
-    for (var a = 0; a < acts.length; a++) {
-      var r = acts[a].getBoundingClientRect();
-      if (r.top <= mid && r.bottom > mid) { name = acts[a].dataset.name; break; }
+    if (story && lines.length) {
+      var p = pinned(story);
+      var n = Math.min(lines.length - 1, Math.floor(p * lines.length * .999));
+      if (n !== lineOn) { lines[lineOn].classList.remove("on"); lines[n].classList.add("on"); lineOn = n; }
+      if (world) world.setProgress(p);
     }
-    if (name !== chapterText.textContent) chapterText.textContent = name;
-    chapterBar.style.transform = "scaleX(" + (max > 0 ? y / max : 0).toFixed(3) + ")";
   }
   function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(update); } }
   addEventListener("scroll", onScroll, { passive: true });
-  addEventListener("resize", fit, { passive: true });
-  addEventListener("orientationchange", fit, { passive: true });
-  if (doc.fonts && doc.fonts.ready) doc.fonts.ready.then(fit);
-  fit();
+  addEventListener("resize", onScroll, { passive: true });
+  update();
 
-  /* ─── Twelve units light the tree ─── */
-  var unitList = doc.getElementById("units");
-  if (unitList) {
-    var pick = function (e) { var li = e.target.closest("[data-unit]"); if (world) world.setLamp(li ? +li.dataset.unit : -1); };
-    var clear = function () { if (world) world.setLamp(-1); };
-    unitList.addEventListener("pointerover", pick);
-    unitList.addEventListener("focusin", pick);
-    unitList.addEventListener("pointerleave", clear);
-    unitList.addEventListener("focusout", clear);
+  /* ─── The heavy pieces wait until the page is up, and until they are nearly in view ─── */
+  function webgl2() { try { return !!doc.createElement("canvas").getContext("webgl2"); } catch (e) { return false; } }
+  function loadWorld() {
+    var conn = navigator.connection || {};
+    if (conn.saveData || !webgl2()) { root.classList.add("no-world"); return; }
+    var lite = (navigator.deviceMemory && navigator.deviceMemory <= 3) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2) || innerWidth < 768;
+    var url = doc.querySelector('script[src*="home-v2.js"]').src.replace("home-v2.js", "world.min.js");
+    import(url).then(function (mod) {
+      world = mod.start($("world"), { lite: !!lite, still: reduce });
+      world.setProgress(pinned(story));
+      new IntersectionObserver(function (es) { world.setActive(es[0].isIntersecting); }).observe(story);
+    }).catch(function () { root.classList.add("no-world"); });
   }
-
-  /* ─── Gallery photos load when the belts come near ─── */
-  if (beltBox) {
-    var load = function () { beltBox.querySelectorAll("img[data-src]").forEach(function (im) { im.src = im.dataset.src; im.removeAttribute("data-src"); }); };
+  function ready() {
+    if (!reduce) {
+      var first = photos[0], begin = function () { ripple = startRipple(); if (ripple) ripple.first(first); };
+      if (first.complete && first.naturalWidth) begin(); else first.addEventListener("load", begin, { once: true });
+    }
     if ("IntersectionObserver" in window) {
-      var near = new IntersectionObserver(function (es) { if (es[0].isIntersecting) { load(); near.disconnect(); } }, { rootMargin: "120% 0px" });
-      near.observe(beltBox);
-    } else load();
+      var near = new IntersectionObserver(function (es) { if (es[0].isIntersecting) { near.disconnect(); loadWorld(); } }, { rootMargin: "150% 0px" });
+      near.observe(story);
+      if (stage) {
+        var soon = new IntersectionObserver(function (es) {
+          if (es[0].isIntersecting) { soon.disconnect(); all("img[data-src]", stage).forEach(function (im) { im.src = im.dataset.src; }); }
+        }, { rootMargin: "120% 0px" });
+        soon.observe(stage);
+      }
+    } else { loadWorld(); if (stage) all("img[data-src]", stage).forEach(function (im) { im.src = im.dataset.src; }); }
   }
+  if (doc.readyState === "complete") setTimeout(ready, 60); else addEventListener("load", function () { setTimeout(ready, 60); });
 
   /* ─── Listening on the page ─── */
-  var audio = null, active = null, pulse = 0;
-  var now = doc.getElementById("now"), nowTitle = doc.getElementById("now-title"), nowToggle = doc.getElementById("now-toggle");
-
+  var audio = null, active = null;
+  var now = $("now"), nowTitle = $("now-title"), nowToggle = $("now-toggle");
   function setPlaying(on) {
     nowToggle.classList.toggle("is-on", on);
     nowToggle.setAttribute("aria-label", on ? "Pause" : "Play");
     if (active) active.classList.toggle("is-on", on);
-    clearInterval(pulse);
-    if (on && !reduce) pulse = setInterval(function () { if (world) world.pulse(); }, 2600);
   }
   function stop() {
     if (audio) { audio.pause(); audio.removeAttribute("src"); audio.load(); }
-    setPlaying(false);
-    active = null; now.hidden = true;
+    setPlaying(false); active = null; now.hidden = true;
   }
   doc.addEventListener("click", function (e) {
     var btn = e.target.closest("[data-play]");
@@ -191,5 +273,5 @@
     audio.play().catch(function () {});
   });
   nowToggle.addEventListener("click", function () { if (audio) { audio.paused ? audio.play() : audio.pause(); } });
-  doc.getElementById("now-close").addEventListener("click", stop);
+  $("now-close").addEventListener("click", stop);
 })();

@@ -170,8 +170,45 @@ async def home(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.get("/home-v2", name="home_v2")
 async def home_v2(request: Request, db: AsyncSession = Depends(get_db)):
-    """Landing page preview: the Job 14 journey, a scroll-driven three.js world."""
-    return await render_template(request, "pages/home-v2.html", await _home_context(request, db))
+    """Landing page preview: the church first, its calendar, and the Job 14 story in 3D."""
+    from datetime import date
+
+    from app.core import church_week, geo, site_content as _sc
+    from app.core.platform import platform_timezone
+    from app.models.event import Event
+
+    ctx = await _home_context(request, db)
+    settings, tz = ctx["settings"], await platform_timezone(db)
+    services = _sc.get_services(settings)
+    now = geo.local_now(tz)
+    this_month = now.date().replace(day=1)
+    firsts = [this_month]
+    for _ in range(2):
+        firsts.append((firsts[-1] + timedelta(days=32)).replace(day=1))
+
+    events = []
+    try:
+        result = await db.execute(
+            select(Event)
+            .where(Event.is_published == True, Event.starts_at >= this_month - timedelta(days=7))  # noqa: E712
+            .where(Event.starts_at < (firsts[-1] + timedelta(days=45)))
+            .order_by(Event.starts_at.asc())
+        )
+        events = list(result.scalars().all())
+    except Exception:
+        logging.exception("home-v2 events")
+
+    upcoming = [ev for ev in events if ev.starts_at >= now][:6]
+    gathering = church_week.next_gathering(services, now)
+    if gathering:
+        gathering["at_utc"] = geo.to_utc(gathering["at"], tz).isoformat() + "Z"
+    ctx.update({
+        "upcoming_events": upcoming,
+        "gathering": gathering,
+        "months": [church_week.month_view(services, events, first, now.date()) for first in firsts],
+        "expect": _sc.get_expect(settings),
+    })
+    return await render_template(request, "pages/home-v2.html", ctx)
 
 
 async def _home_context(request: Request, db: AsyncSession) -> dict:
