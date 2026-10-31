@@ -293,3 +293,7 @@ textarea:focus,select:focus,[contenteditable=true]:focus {
   box-shadow: none !important;
   border-color: #8b8c87 !important;
 }
+
+/* Hide scrollbar chrome while preserving native scrolling and scroll snapping. */
+html, body, * { scrollbar-width: none !important; -ms-overflow-style: none; }
+*::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
