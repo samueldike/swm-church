@@ -100,8 +100,10 @@ FastAPI + async SQLAlchemy + Postgres (asyncpg) + Jinja2 + Celery/Redis. Python 
 - Message pages: series/scripture/`transcript_public` (a transcript is shown and searchable only after an admin ticks it). The audio player URL is `messages_stream` with `sermon_id`, not `slug`.
 - Accessibility rules: skip link + `<main id="main">`, `aria-current` in the nav, 44px touch targets on phones, colour tokens meet WCAG AA (`--fg-faint`, `--on-paper-faint`, `--gold-deep`; gold *text* on paper uses `--gold-deep`). Checks: `scripts/site_checks.py` (also run by `tests/test_public_site.py`).
 
-## Landing page preview (`/home-v2`)
-- `app/views/pages/home-v2.html` + `app/static/home-v2/` (noindex, shares `_home_context` with `/`). The church leads: real photos, next-gathering countdown and month calendar (`app/core/church_week.py`, built from Settings services and published events), programmes. The one 3D chapter is `src/world.js`, bundled to `world.min.js` (three is bundled, never a CDN): **rebuild after editing**, command at the top of the file; its `KEYS` timeline is driven by `setProgress`. Never name a class `.on` on a section: slides and lines use it as their state. Text must stay complete without WebGL or JS.
+## Public site design
+- One design for every public page: logo black, grey and gold on a light page, Bricolage Grotesque + Figtree. Styles: `app/static/site/site.css`. Scripts: `site.js` (all pages), `home.js` (home).
+- Interior pages include `partials/site-page-open.html` (head, header, photo banner), write `<section class="band">` blocks, and close with `partials/site-page-close.html`. Header and footer are `partials/site-header.html` and `site-footer.html`.
+- Home: church first, countdown and month calendar (`app/core/church_week.py`, from Settings services and published events). The one 3D chapter is `app/static/site/src/world.js`, bundled to `world.min.js` (three is bundled, never a CDN): **rebuild after editing**, command at the top of the file. Never name a section class `.on`: slides and lines use it as their state.
 
 ## Reliability rules learned from the promise audit (`PROMISE_AUDIT.md`)
 - **Test on Postgres, not just SQLite.** SQLite hid: stale id sequences, `VARCHAR(n)` overflows, unique-index violations, timestamptz columns. Clone the real DB (`CREATE DATABASE swm_audit TEMPLATE swm_db` with the app stopped) and run flows against the clone.
@@ -109,7 +111,7 @@ FastAPI + async SQLAlchemy + Postgres (asyncpg) + Jinja2 + Celery/Redis. Python 
 - Many-to-one relationships used by templates are `lazy="selectin"`, so `x.branch.name` in a template cannot raise `MissingGreenlet`. Keep that when adding relationships.
 - Unique columns: check first with `_value_taken()` (admin.py) and show a message; `main.py` has an `IntegrityError` handler as a safety net, not a substitute. Clamp public input to the column length.
 - Every public form/API auth path is throttled (`app/core/throttle.py`, per process). Admin login: 5 failures/email, 10/IP per 15 min.
-- Visitor-facing notices go through `partials/public-flash.html` (included by `theme-page-close.html` and `home.html`). Do not read `session[...]` keys directly in page templates.
+- Visitor-facing notices go through `partials/public-flash.html` (included by `site-page-close.html` and `home.html`). Do not read `session[...]` keys directly in page templates.
 - Anything collected from visitors needs an admin page: Prayer Requests, Subscribers, Donations exist; CSV exports use `_csv_response` (neutralises `= + - @`).
 - Giving: canonical paid status is `completed`; callback verifies amount (`mismatch`) and treats provider "pending" as pending.
 - **Gateways** are `payment.GATEWAYS` (Paystack, Flutterwave, Bachs); the admin picks one in Settings → Giving gateway (`active_giving_gateway`; a branch's own in Branch settings). **Bachs**: hosted checkout sessions, major-unit decimal amounts, NGN minimum ₦1,000 (`BACHS_MINIMUMS`), host chosen by key prefix (`sk_sandbox_`/`sk_live_`); verification needs its `checkout_id`, stored in `Giving.gateway_txn_id`; `verify_bachs` refuses a session whose reference is not the gift's. Webhook signing secret is a separate setting (`bachs_webhook_secret`, HMAC-SHA256 of `timestamp.body`, 300 s tolerance).

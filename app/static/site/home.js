@@ -1,15 +1,10 @@
-/* Page behaviour for /home-v2. All content works without this file; it adds the life on top. */
+/* Page behaviour for the home page. All content works without this file; it adds the life on top. */
 (function () {
   "use strict";
   var doc = document, root = doc.documentElement;
   var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   var $ = function (id) { return doc.getElementById(id); };
   var all = function (sel, el) { return Array.prototype.slice.call((el || doc).querySelectorAll(sel)); };
-
-  /* ─── Menu ─── */
-  var menu = $("menu");
-  $("menu-open").addEventListener("click", function () { menu.showModal(); });
-  $("menu-close").addEventListener("click", function () { menu.close(); });
 
   /* ─── Arrivals ─── */
   var reveals = all(".reveal");
@@ -211,7 +206,7 @@
     var conn = navigator.connection || {};
     if (conn.saveData || !webgl2()) { root.classList.add("no-world"); return; }
     var lite = (navigator.deviceMemory && navigator.deviceMemory <= 3) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 2) || innerWidth < 768;
-    var url = doc.querySelector('script[src*="home-v2.js"]').src.replace("home-v2.js", "world.min.js");
+    var url = doc.querySelector('script[src*="home.js"]').src.replace("home.js", "world.min.js");
     import(url).then(function (mod) {
       world = mod.start($("world"), { lite: !!lite, still: reduce });
       world.setProgress(pinned(story));

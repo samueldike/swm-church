@@ -1,7 +1,7 @@
 {% set pageEyebrow = 'Email updates' %}
 {% set pageTitle = 'You are unsubscribed.' if done and sub else ('Unsubscribe' if sub else 'Link not recognised') %}
 {% set pageLede = ('We will not email this address any more.' if done and sub else ('Confirm that you no longer want updates from us.' if sub else 'This unsubscribe link is not valid. It may already have been used.')) %}
-{% include "partials/theme-page-open.html" %}
+{% include "partials/site-page-open.html" %}
 
 <section class="band band-light">
     <div class="shell" style="max-width:56ch;">
@@ -24,4 +24,4 @@
     </div>
 </section>
 
-{% include "partials/theme-page-close.html" %}
+{% include "partials/site-page-close.html" %}

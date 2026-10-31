@@ -2,7 +2,7 @@
 {% set pageEyebrow = 'Event' %}
 {% set pageTitle = ev.title %}
 {% set pageLede = (ev.starts_at|longdate) ~ ' · ' ~ (ev.starts_at|clock) %}
-{% include "partials/theme-page-open.html" %}
+{% include "partials/site-page-open.html" %}
 
 <section class="band band-light">
     <div class="shell ev-split">
@@ -79,4 +79,4 @@
     .ev-cal { margin-top: 2.4rem; padding-top: 1.6rem; border-top: 1px solid var(--line); }
 </style>
 
-{% include "partials/theme-page-close.html" %}
+{% include "partials/site-page-close.html" %}

@@ -164,15 +164,7 @@ def _public_base_url(request: Request) -> str:
 
 @router.get("/", name="home")
 async def home(request: Request, db: AsyncSession = Depends(get_db)):
-    """Homepage — dark, frame-by-frame scroll design."""
-    return await render_template(request, "pages/home.html", await _home_context(request, db))
-
-
-@router.get("/home-v2", name="home_v2")
-async def home_v2(request: Request, db: AsyncSession = Depends(get_db)):
-    """Landing page preview: the church first, its calendar, and the Job 14 story in 3D."""
-    from datetime import date
-
+    """Home page: the church first, its calendar, and the Job 14 story in 3D."""
     from app.core import church_week, geo, site_content as _sc
     from app.core.platform import platform_timezone
     from app.models.event import Event
@@ -196,7 +188,7 @@ async def home_v2(request: Request, db: AsyncSession = Depends(get_db)):
         )
         events = list(result.scalars().all())
     except Exception:
-        logging.exception("home-v2 events")
+        logging.exception("home events")
 
     upcoming = [ev for ev in events if ev.starts_at >= now][:6]
     gathering = church_week.next_gathering(services, now)
@@ -208,7 +200,7 @@ async def home_v2(request: Request, db: AsyncSession = Depends(get_db)):
         "months": [church_week.month_view(services, events, first, now.date()) for first in firsts],
         "expect": _sc.get_expect(settings),
     })
-    return await render_template(request, "pages/home-v2.html", ctx)
+    return await render_template(request, "pages/home.html", ctx)
 
 
 async def _home_context(request: Request, db: AsyncSession) -> dict:

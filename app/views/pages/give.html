@@ -3,7 +3,7 @@
 {% set pageTitle = 'Give, and keep the work moving.' %}
 {% set metaTitle = 'Give' %}
 {% set pageLede = 'Your giving funds the teaching, the outreaches, and the care of this house — at home in Abakaliki and beyond its walls.' %}
-{% include "partials/theme-page-open.html" %}
+{% include "partials/site-page-open.html" %}
 
 <section class="band band-light">
     <div class="shell give-split">
@@ -270,7 +270,7 @@
 
     .give-copy {
         margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: 0.35rem;
-        padding: 0.5rem 0.75rem; min-height: 40px; font-size: 0.78rem; font-family: 'Geist Mono', monospace;
+        padding: 0.5rem 0.75rem; min-height: 40px; font-size: 0.78rem; font-family: var(--text);
         color: var(--fg); background: transparent; border: 1px solid var(--line-2); cursor: pointer;
         transition: border-color 200ms var(--ease), color 200ms var(--ease);
     }
@@ -339,7 +339,7 @@
         color: var(--on-paper-dim);
     }
     .give-account-num {
-        font-family: 'Geist Mono', ui-monospace, monospace;
+        font-family: var(--text);
         font-size: 1rem;
         font-weight: 600;
         color: var(--on-paper);
@@ -415,4 +415,4 @@
 })();
 </script>
 
-{% include "partials/theme-page-close.html" %}
+{% include "partials/site-page-close.html" %}

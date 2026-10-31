@@ -5,7 +5,7 @@
 {% set pageMeta = (sermon.caption or sermon.description or sermon.title)[:150] %}
 {% set metaType = 'article' %}
 {% set metaTitle = sermon.title %}
-{% include "partials/theme-page-open.html" %}
+{% include "partials/site-page-open.html" %}
 
 <section class="band band-light">
     <div class="shell msg-split">
@@ -141,4 +141,4 @@
     .transcript-body p + p { margin-top: 1rem; }
 </style>
 
-{% include "partials/theme-page-close.html" %}
+{% include "partials/site-page-close.html" %}

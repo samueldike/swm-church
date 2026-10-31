@@ -3,7 +3,7 @@
 {% set pageTitle = 'What is coming up.' %}
 {% set metaTitle = 'Events' %}
 {% set pageLede = 'Services, programmes and gatherings at Mile 50 and across our branches.' %}
-{% include "partials/theme-page-open.html" %}
+{% include "partials/site-page-open.html" %}
 
 {% if featured_event %}
 <section class="band band-dark">
@@ -106,9 +106,9 @@
         display: flex; align-items: center; justify-content: center;
         aspect-ratio: 4 / 3; max-height: 44svh;
         border: 1px solid var(--line);
-        background: linear-gradient(150deg, var(--surface), var(--ink));
+        background: linear-gradient(150deg, #F4E7C4, var(--brand-gold));
     }
-    .feat-art .material-symbols-outlined { font-size: 74px; color: var(--gold); opacity: 0.5; }
+    .feat-art .material-symbols-outlined { font-size: 74px; color: var(--ink); opacity: .6; }
 </style>
 
-{% include "partials/theme-page-close.html" %}
+{% include "partials/site-page-close.html" %}

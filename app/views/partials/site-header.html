@@ -1,0 +1,47 @@
+{# Site header and full-screen menu, on every public page. Behaviour lives in static/site/site.js. #}
+<a class="skip-link" href="#main">Skip to content</a>
+{% set nav_items = [
+    (url_for('home'), 'Home'),
+    (url_for('about'), 'About'),
+    (url_for('departments'), 'Departments'),
+    (url_for('messages'), 'Audio Messages'),
+    (url_for('casom'), 'CASOM'),
+    (url_for('events'), 'Events'),
+    (url_for('branches'), 'Branches'),
+    (url_for('contact'), 'Contact')
+] %}
+<header class="bar" id="bar">
+    <a class="brand" href="{{ url_for('home') }}" aria-label="{{ siteName }}, top of the page">
+        <img src="/static/brand/swm-logo-128.png" alt="" width="46" height="46"/>
+        <span>Scent of Water<br/>Ministry</span>
+    </a>
+    <nav class="bar-links" aria-label="Primary">
+        {% for href, label in nav_items %}
+        <a href="{{ href }}" {% if request.url.path == href %}class="is-active" aria-current="page"{% endif %}>{{ label }}</a>
+        {% endfor %}
+    </nav>
+    <div class="bar-end">
+        <a class="btn btn-line btn-small" href="{{ url_for('give') }}">Give</a>
+        <a class="btn btn-gold btn-small bar-cta" href="{{ url_for('calendar') }}">Calendar</a>
+        <button class="burger" type="button" id="menu-open" aria-haspopup="dialog" aria-label="Open menu"><span aria-hidden="true"><i></i><i></i></span></button>
+    </div>
+</header>
+
+<dialog class="menu" id="menu" aria-label="Site menu">
+    <div class="menu-top">
+        <a class="brand" href="{{ url_for('home') }}"><img src="/static/brand/swm-logo-128.png" alt="" width="46" height="46"/><span>Scent of Water<br/>Ministry</span></a>
+        <button class="burger is-open" type="button" id="menu-close" aria-label="Close menu"><span aria-hidden="true"><i></i><i></i></span></button>
+    </div>
+    <nav class="menu-nav" aria-label="Menu">
+        {% for href, label in nav_items %}
+        <a href="{{ href }}" {% if request.url.path == href %}class="is-active" aria-current="page"{% endif %}><b>{{ '%02d'|format(loop.index) }}</b>{{ label }}</a>
+        {% endfor %}
+        <a href="{{ url_for('our_pastor') }}"><b>09</b>Our Pastor</a>
+        <a href="{{ url_for('stories') }}"><b>10</b>Stories</a>
+    </nav>
+    <div class="menu-foot">
+        <a class="btn btn-gold" href="{{ url_for('calendar') }}">Calendar</a>
+        <a class="btn btn-line" href="{{ url_for('give') }}">Give</a>
+        {% if counsellingPhone %}<a class="menu-tel" href="tel:{{ counsellingPhone|replace(' ', '') }}">{{ counsellingPhone }}</a>{% endif %}
+    </div>
+</dialog>

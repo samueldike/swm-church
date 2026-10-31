@@ -1,0 +1,56 @@
+{# Site footer, on every public page. #}
+<footer class="foot">
+    <div class="wrap">
+        <div class="foot-top">
+            <div>
+                <p class="foot-name">{{ siteName }}</p>
+                <p class="foot-line">Restoring Hope. Raising Men. Repositioning for Destiny.</p>
+            </div>
+            <form class="news" method="POST" action="{{ url_for('newsletter_subscribe') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
+                <label for="news-email">Subscribe for updates</label>
+                <div class="news-row">
+                    <input id="news-email" type="email" name="email" required autocomplete="email" placeholder="Your email address"/>
+                    <button class="btn btn-gold" type="submit">Subscribe</button>
+                </div>
+                <p class="news-note">Every email has a one-click unsubscribe link.</p>
+            </form>
+        </div>
+        <div class="foot-cols">
+            <nav aria-label="Quick links">
+                <h3>Quick links</h3>
+                <a href="{{ url_for('about') }}">About us</a>
+                <a href="{{ url_for('messages') }}">Messages</a>
+                <a href="{{ url_for('departments') }}">Departments</a>
+                <a href="{{ url_for('visit') }}">Plan your visit</a>
+                <a href="{{ url_for('prayer') }}">Prayer</a>
+                <a href="{{ url_for('events') }}">Events</a>
+                <a href="{{ url_for('give') }}">Give</a>
+                <a href="{{ url_for('contact') }}">Contact</a>
+            </nav>
+            <div>
+                <h3>Contact</h3>
+                <p>{{ siteHeadquartersAddress }}</p>
+                {% if counsellingPhone %}<p><a href="tel:{{ counsellingPhone|replace(' ', '') }}">{{ counsellingPhone }}</a></p>{% endif %}
+                {% if siteContactEmail %}<p><a href="mailto:{{ siteContactEmail }}">{{ siteContactEmail }}</a></p>{% endif %}
+            </div>
+            <div>
+                <h3>Service times</h3>
+                {% for svc in services %}<p>{{ svc.day }}: {{ svc.time }}</p>{% endfor %}
+            </div>
+            <nav aria-label="Follow us online">
+                <h3>Follow us</h3>
+                {% for href, label in [(socialFacebook, 'Facebook'), (socialInstagram, 'Instagram'), (socialX, 'X'), (socialYouTube, 'YouTube'), (socialTelegram, 'Telegram')] %}{% if href %}
+                <a href="{{ href }}" target="_blank" rel="noopener">{{ label }}<span class="sr">(opens in a new tab)</span></a>
+                {% endif %}{% endfor %}
+                {% if whatsappChat %}<a href="{{ whatsappChat }}" target="_blank" rel="noopener">WhatsApp<span class="sr">(opens in a new tab)</span></a>{% endif %}
+                {% if whatsappChannel %}<a href="{{ whatsappChannel }}" target="_blank" rel="noopener">WhatsApp channel<span class="sr">(opens in a new tab)</span></a>{% endif %}
+                {% if telegramJoin and telegramJoin != socialTelegram %}<a href="{{ telegramJoin }}" target="_blank" rel="noopener">Join on Telegram<span class="sr">(opens in a new tab)</span></a>{% endif %}
+            </nav>
+        </div>
+        <div class="foot-end">
+            <span>© {{ now().year }} {{ siteName }}. All Rights Reserved.</span>
+            <span><a href="{{ url_for('privacy_policy') }}">Privacy</a> <a href="{{ url_for('terms_of_service') }}">Terms</a> <a href="{{ url_for('sitemap') }}">Sitemap</a></span>
+        </div>
+    </div>
+</footer>

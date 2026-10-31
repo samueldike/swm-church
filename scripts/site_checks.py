@@ -125,7 +125,7 @@ with TestClient(app, raise_server_exceptions=False, base_url="https://testserver
     rec("skip link + main landmark on every page shell", 'class="skip-link"' in home and 'id="main"' in home and 'id="main"' in V.get("/visit").text)
     about = V.get("/about").text
     rec("the current page is marked in the navigation (aria-current)", 'aria-current="page"' in about and re.search(r'is-active"[^>]*aria-current="page"[^>]*>About<', about) is not None)
-    rec("navigation offers Branches and a Plan-a-visit call to action", ">Branches<" in home and 'Plan a visit' in home)
+    rec("navigation offers Branches and Calendar, and the home page a Plan-your-visit call to action", all(x in home for x in ('href="/branches"', 'href="/calendar"', 'href="/visit"', "Plan your visit")))
 
     # ══ 2. legal pages, placeholder phone, real content ═══════════════════
     priv = V.get("/privacy-policy").text
@@ -363,8 +363,7 @@ with TestClient(app, raise_server_exceptions=False, base_url="https://testserver
         "xml" in sm.headers["content-type"] and "/visit" in sm.text and "/messages/grace-abounds" in sm.text and "/branches/abuja-branch" in sm.text and "draft-message" not in sm.text and "kano-only" not in sm.text and "unpublished" not in sm.text.lower())
     rb = V.get("/robots.txt").text
     rec("robots.txt blocks admin/api and points at the sitemap", "Disallow: /admin" in rb and "Sitemap: https://testserver/sitemap.xml" in rb)
-    hv = V.get("/home-v2")
-    rec("/home-v2 renders the journey, stays out of search, and shows times from Settings", hv.status_code == 200 and "noindex" in hv.text and "scent of water" in hv.text and all(s["name"] in hv.text for s in __import__("app.core.site_content", fromlist=["x"]).get_services({})) and "/home-v2" not in sm.text)
+    rec("the home page is the only landing page: no preview address remains", V.get("/home-v2").status_code == 404)
     v = V.get("/visit").text
     rec("each page has a unique title, description and Open Graph tags", "<title>Plan your visit —" in v and 'name="description"' in v and 'property="og:image"' in v)
     rec("the home page has Church JSON-LD", '"@type": "Church"' in V.get("/").text)

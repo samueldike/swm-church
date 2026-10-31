@@ -5,7 +5,7 @@
 {% set pageMeta = (story.excerpt or story.title)[:150] %}
 {% set metaType = 'article' %}
 {% set pageHeroImage = (story.featured_image if story.featured_image and story.featured_image.startswith('/') else ('/' ~ story.featured_image if story.featured_image else None)) %}
-{% include "partials/theme-page-open.html" %}
+{% include "partials/site-page-open.html" %}
 
 <section class="band band-light">
     <div class="shell story-wrap">
@@ -81,4 +81,4 @@
     .prose li + li { margin-top: 0.4rem; }
 </style>
 
-{% include "partials/theme-page-close.html" %}
+{% include "partials/site-page-close.html" %}

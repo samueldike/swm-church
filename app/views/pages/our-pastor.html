@@ -4,7 +4,7 @@
 {% set pageLede = pastorTitle ~ ', ' ~ siteName %}
 {% set pageHeroImage = pastorPhoto if pastorPhoto.startswith('/') else '/' ~ pastorPhoto %}
 {% set pageMeta = pastorBio[:150] %}
-{% include "partials/theme-page-open.html" %}
+{% include "partials/site-page-open.html" %}
 
 <section class="band band-light">
     <div class="shell pastor-split">
@@ -119,4 +119,4 @@
     .pastor-portrait img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; object-position: top center; display: block; }
 </style>
 
-{% include "partials/theme-page-close.html" %}
+{% include "partials/site-page-close.html" %}

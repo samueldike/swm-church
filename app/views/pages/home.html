@@ -1,703 +1,484 @@
 <!DOCTYPE html>
-<html lang="en"><head>
+<html lang="en" class="no-js"><head>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
 <title>{{ siteName }} — Repositioning men for God's best</title>
-<link rel="icon" href="/static/brand/swm-logo-128.png" type="image/png"/>
-<link rel="apple-touch-icon" href="/static/brand/swm-logo-180.png"/>
 {% set metaTitle = siteName %}
-{% set metaDescription = 'Repositioning men for God\'s best. A message of restoration and hope from Abakaliki — at the scent of water, it will sprout again.' %}
-{% include "partials/theme-meta.html" %}
-{% include "partials/theme-head.html" %}
+{% set metaDescription = 'You belong here. A grace-driven church family in Abakaliki, Nigeria, where every dead dream can live again. Come and worship with us.' %}
+{% include "partials/site-meta.html" %}
+{% include "partials/site-head.html" %}
+{% set third_slide = ('/' ~ sliders[0].image_path) if sliders else '/static/home/worship.jpg' %}
+{% set slides = [
+    ('/static/home/interlude.jpg', 'Every dead dream can live again.', "At Scent of Water, we believe in second chances, fresh starts, and the God who breathes life into dry places.", 'Join us Sunday', url_for('visit')),
+    ('/static/home/gather.jpg', 'A place where broken finds beautiful.', "Real people. Real faith. Real transformation. Experience a community that walks with you from where you are to where God is taking you.", 'Plan your visit', url_for('visit')),
+    (third_slide, 'Discover the life you were created for.', "Through powerful teaching, authentic relationships, and God's presence, step into your purpose with clarity and confidence.", 'Connect with us', url_for('contact'))
+] %}
+<link rel="preload" as="image" href="/static/home/interlude.jpg"/>
 </head>
-<body class="home-page">
-{% include "partials/theme-header.html" %}
+<body>
+
+{% include "partials/site-header.html" %}
 
 <main id="main" tabindex="-1">
 
-{# ═══ 01 · HERO ═══════════════════════════════════════════════════════════ #}
-<section class="frame frame-hero" id="f-hero" data-frame style="padding-top:0;">
-    <div class="hero-bed" aria-hidden="true">
-        {% for slider in sliders %}
-        {#- Only the first slide's photo loads with the page; the rest load just before they are shown (UX-02). -#}
-        <div class="hero-plate {{ 'on' if loop.first else '' }}" data-plate
-             {% if loop.first %}style="background-image:url('/{{ slider.image_path }}')"{% else %}data-bg="/{{ slider.image_path }}"{% endif %}></div>
-        {% else %}
-        <div class="hero-plate on" data-plate style="background-image:url('/images/general-page-header.jpg')"></div>
+{# ═══ THE HOUSE: your people, in worship, first thing ══════════════════════ #}
+<section class="hero" id="hero" aria-roledescription="carousel" aria-label="Welcome">
+    <div class="hero-photos" aria-hidden="true">
+        {% for src, _h, _s, _c, _u in slides %}
+        <img class="hero-photo {{ 'on' if loop.first else '' }}" {% if loop.first %}src="{{ src }}"{% else %}data-src="{{ src }}"{% endif %} alt="" data-slide-photo/>
         {% endfor %}
-        <div class="hero-veil"></div>
+        <canvas id="ripple"></canvas>
     </div>
+    <div class="hero-shade" aria-hidden="true"></div>
 
-    <div class="shell hero-in">
-        <p class="mono eyebrow fade" style="--d:120ms">
-            <span class="rule"></span>{{ siteName }} · Abakaliki
-        </p>
-
-        <h1 class="t-display" style="margin-top:1.5rem;max-width:17ch;">
-            <span class="rise"><span style="--d:220ms">Repositioning men</span></span>
-            <span class="rise"><span class="gold-lt" style="--d:310ms">for God's best.</span></span>
-        </h1>
-
-        <p class="t-body fade" style="--d:480ms;margin-top:1.5rem;max-width:48ch;">
-            A message of restoration and hope. Every dead dream can live again —
-            at the scent of water, it will sprout again.
-        </p>
-
-        <div class="flex flex-wrap items-center gap-3 fade" style="--d:580ms;margin-top:2rem;">
-            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan your visit</a>
-            <a href="{{ url_for('messages') }}" class="btn btn-ghost">Listen to messages</a>
-        </div>
-
-        {% if sliders|length > 1 %}
-        <div class="plate-dots fade" style="--d:680ms" role="tablist" aria-label="Featured slides">
-            {% for slider in sliders %}
-            <button class="plate-dot {{ 'on' if loop.first else '' }}" data-dot data-i="{{ loop.index0 }}"
-                    role="tab" aria-selected="{{ 'true' if loop.first else 'false' }}"
-                    aria-label="Slide {{ loop.index }}"><i></i></button>
+    <div class="wrap hero-in">
+        <div class="hero-copy">
+            <p class="tag">You belong here</p>
+            {% for _src, head, sub, cta, url in slides %}
+            <div class="slide {{ 'on' if loop.first else '' }}" data-slide {% if not loop.first %}aria-hidden="true"{% endif %}>
+                {% if loop.first %}<h1>{{ head }}</h1>{% else %}<p class="h1">{{ head }}</p>{% endif %}
+                <p class="hero-sub">{{ sub }}</p>
+                <a class="btn btn-gold" href="{{ url }}" {% if not loop.first %}tabindex="-1"{% endif %}>{{ cta }}</a>
+            </div>
             {% endfor %}
         </div>
-        {% endif %}
-    </div>
-
-    {# Ministry scripture, set vertically down the right edge of the hero. #}
-    <div class="rail mono" aria-hidden="true">
-        <span>JOB 14 : 7-9</span>
-        <i></i>
-    </div>
-</section>
-
-{% if program_flyers %}
-<section class="frame program-flyers-frame" id="f-program-flyers" data-frame>
-    <div class="shell">
-        <div class="program-flyers">
-            {% for flyer in program_flyers %}
-            <button type="button" class="program-flyer-card fade" style="--d:{{ 120 + loop.index0 * 80 }}ms"
-                    data-flyer-open data-src="{{ flyer.src }}" data-title="{{ flyer.title or 'Upcoming program flyer' }}"
-                    aria-label="Open {{ flyer.title or 'program flyer' }}">
-                <img src="{{ flyer.src }}" alt="{{ flyer.title or 'Upcoming program flyer' }}" loading="lazy" decoding="async"/>
-            </button>
-            {% endfor %}
+        <div class="hero-controls">
+            <span class="dots" aria-hidden="true">{% for _ in slides %}<i class="{{ 'on' if loop.first else '' }}" data-dot></i>{% endfor %}</span>
+            <button class="pause" type="button" id="hero-pause" aria-pressed="false">Pause</button>
         </div>
     </div>
 </section>
 
-<div class="flyer-lightbox" data-flyer-lightbox hidden aria-hidden="true">
-    <button type="button" class="flyer-lightbox__backdrop" data-flyer-close aria-label="Close flyer"></button>
-    <div class="flyer-lightbox__panel" role="dialog" aria-modal="true" aria-label="Program flyer preview">
-        <button type="button" class="flyer-lightbox__close" data-flyer-close aria-label="Close flyer">&times;</button>
-        <img src="" alt="" data-flyer-image/>
+{% if gathering %}
+<section class="next-up" aria-label="Next gathering" data-at="{{ gathering.at_utc }}">
+    <div class="wrap next-in">
+        <div>
+            <p class="next-label">Next time we gather</p>
+            <p class="next-name">{{ gathering.name }} <span>{{ gathering.day }}, {{ gathering.time }}</span></p>
+        </div>
+        <div class="clock" id="clock" aria-hidden="true" hidden>
+            <span><b data-c="d">0</b>days</span><span><b data-c="h">0</b>hours</span><span><b data-c="m">0</b>mins</span><span><b data-c="s">0</b>secs</span>
+        </div>
+        <a class="btn btn-dark" href="{{ url_for('visit') }}">Save me a seat</a>
     </div>
-</div>
+</section>
 {% endif %}
 
-{# ═══ 02 · WHO WE ARE — the anchor scripture ══════════════════════════════ #}
-<section class="frame has-crest" id="f-anchor" data-frame style="background:var(--ink);">
-    {# Ministry crest, held well back so it reads as watermark, not decoration. #}
-    <div class="crest" aria-hidden="true"></div>
-    <div class="shell scripture-wrap">
-        <p class="mono eyebrow"><span class="rule"></span>Who we are</p>
-
-        <blockquote class="scripture fade" style="--d:180ms">
-            “For there is hope for a tree, if it is cut down, that it will sprout again,
-            and that its tender shoots will not cease. Though its root may grow old in
-            the earth, and its stump may die in the ground, yet at the
-            <span class="circled">scent of water</span> it will bud and bring forth
-            branches like a plant.”
-        </blockquote>
-
-        <p class="mono gold fade" style="--d:340ms;margin-top:1.6rem;">Job 14 : 7-9</p>
-
-        <p class="t-body fade" style="--d:420ms;margin-top:1.6rem;max-width:64ch;">
-            Scent of Water Ministry is a divine mandate received from the Lord Jesus
-            Christ — a message of restoration and hope to the downtrodden, the downcast
-            and the weary. We teach and focus only on the grace of God.
-        </p>
-        <a href="{{ url_for('about') }}" class="lnk fade" style="--d:500ms;margin-top:1.7rem;">Read our story</a>
+{# ═══ BELONG ═══════════════════════════════════════════════════════════════ #}
+<section class="belong">
+    <div class="wrap belong-grid">
+        <div class="reveal">
+            <p class="tag tag-soft">Welcome home</p>
+            <h2>This is more than a church. It's family.</h2>
+            <p class="big">We're a grace-driven community where the broken find healing, the weary find rest, and the lost find purpose.</p>
+            <p class="big">No matter what you're facing or where you've been, you belong here.</p>
+            <a class="btn btn-dark" href="{{ url_for('about') }}">Our story</a>
+        </div>
+        <div class="collage" aria-hidden="true">
+            <img class="c1 reveal" src="/static/images/gallery/swm-11.jpg" alt="" loading="lazy" decoding="async" data-speed="-0.05"/>
+            <img class="c2 reveal" src="/static/images/gallery/swm-10.jpg" alt="" loading="lazy" decoding="async" style="--d:.1s" data-speed="0.06"/>
+            <img class="c3 reveal" src="/static/home/serve-3.jpg" alt="" loading="lazy" decoding="async" style="--d:.2s" data-speed="-0.03"/>
+            <img class="c4 reveal" src="/static/images/gallery/swm-18.jpg" alt="" loading="lazy" decoding="async" style="--d:.15s" data-speed="0.08"/>
+        </div>
     </div>
 </section>
 
-{# ═══ 03 · VISION, MISSION, VALUES ════════════════════════════════════════ #}
-<section class="frame" id="f-mandate" data-frame>
-    {# Worship photograph beside the vision, so the mandate is seen as well as read. #}
-    <div class="shell split mandate-split">
-        <figure class="split-media photo wipe" style="--d:80ms">
-            <img src="/static/home/worship.jpg" alt="Worship at Scent of Water Ministry" loading="lazy" decoding="async"/>
+<div class="words" aria-hidden="true">
+    <div>{% for _ in range(4) %}<span>Worship</span><span>The Word</span><span>Prayer</span><span>Family</span><span>Love</span><span>Grace</span>{% endfor %}</div>
+</div>
+
+{# ═══ WORSHIP: the photograph opens until it fills the screen ══════════════ #}
+<section class="worship" id="worship">
+    <div class="worship-pin">
+        <div class="worship-frame" id="worship-frame">
+            <img src="{{ ('/' ~ sliders[-1].image_path) if sliders else '/static/home/interlude.jpg' }}" alt="The choir leading worship at Scent of Water Ministry" loading="lazy" decoding="async"/>
+        </div>
+        <div class="wrap worship-in">
+            <h2>Come thirsty.<br/>Leave restored.</h2>
+            <p>Experience the presence of God with a family that worships, prays and believes together.</p>
+        </div>
+    </div>
+</section>
+
+{# ═══ YOUR FIRST SUNDAY ════════════════════════════════════════════════════ #}
+<section class="first" id="visit">
+    <div class="wrap">
+        <div class="section-head reveal">
+            <p class="tag tag-soft">Your first Sunday</p>
+            <h2>You won't walk in alone.</h2>
+        </div>
+        <ol class="expect">
+            {% for title, text in expect %}
+            <li class="reveal" style="--d:{{ loop.index0 * 0.1 }}s">
+                <span class="step">{{ loop.index }}</span>
+                <h3>{{ title }}</h3>
+                <p>{{ text }}</p>
+            </li>
+            {% endfor %}
+        </ol>
+        <div class="actions reveal">
+            <a class="btn btn-dark" href="{{ url_for('visit') }}">Plan your visit</a>
+            <a class="btn btn-line" href="{{ url_for('prayer') }}">Request prayer</a>
+        </div>
+    </div>
+</section>
+
+{# ═══ THE WORD ═════════════════════════════════════════════════════════════ #}
+<section class="word" id="word">
+    <div class="wrap word-grid">
+        <figure class="word-photo reveal">
+            <img src="{{ ('/' ~ sliders[0].image_path) if sliders else '/static/home/preacher.jpg' }}" alt="{{ pastorName }} preaching" loading="lazy" decoding="async"/>
         </figure>
+        <div class="reveal" style="--d:.1s">
+            <p class="tag tag-soft">The Word</p>
+            <h2>A word for where you are today.</h2>
+            {% if latest_sermons %}
+            <ol class="tracks">
+                {% for s in latest_sermons %}
+                <li>
+                    {% if s.audio_file_path or s.media_url or s.telegram_file_id %}
+                    <button class="play" type="button" data-play="{{ url_for('messages_stream', sermon_id=s.id) }}" data-title="{{ s.title }}" data-page="{{ url_for('messages_show', slug=s.slug) }}" aria-label="Play {{ s.title }}"><i aria-hidden="true"></i></button>
+                    {% else %}<span class="play is-off" aria-hidden="true"><i></i></span>{% endif %}
+                    <a href="{{ url_for('messages_show', slug=s.slug) }}"><strong>{{ s.title }}</strong>{% if s.preacher %}<span>{{ s.preacher }}</span>{% endif %}</a>
+                </li>
+                {% endfor %}
+            </ol>
+            {% else %}
+            <p class="big">New messages are published here after each service.</p>
+            {% endif %}
+            <div class="actions">
+                <a class="btn btn-dark" href="{{ url_for('messages') }}">Watch or listen</a>
+                <a class="btn btn-line" href="{{ url_for('watch') }}">Watch live</a>
+            </div>
+        </div>
+    </div>
+</section>
 
-        <div>
-            <p class="mono eyebrow"><span class="rule"></span>The mandate</p>
+{# ═══ DAILY DEVOTIONAL ════════════════════════════════════════════════════ #}
+<section class="devo" id="devotional">
+    <div class="wrap devo-grid">
+        <div class="devo-book reveal">
+            <img src="{{ url_for('static', path='site/devotional.webp') }}" alt="The Scent Daily Devotional 2026 book" width="730" height="1047" loading="lazy" decoding="async"/>
+        </div>
+        <div class="reveal" style="--d:.1s">
+            <p class="tag">Daily inspiration</p>
+            <h2>Scent Daily Devotional</h2>
+            <p class="big">A companion for a deeper walk with God, and clarity for every day of the year.</p>
+            <ul class="devo-points">
+                <li>Daily nuggets of wisdom</li>
+                <li>Prayer points</li>
+                <li>Scriptural insight</li>
+            </ul>
+            <p class="devo-by">By {{ pastorName }}</p>
+            <div class="actions"><a class="btn btn-dark" href="{{ url_for('contact') }}">Get your copy</a></div>
+        </div>
+    </div>
+</section>
 
-            <div class="mandate-head">
-                <p class="mono faint fade" style="--d:120ms">Vision</p>
-                <h2 class="t-h2 vision-head" style="margin-top:0.8rem;">
-                    <span class="rise"><span>Repositioning men</span></span>
-                    <span class="rise"><span class="gold-lt" style="--d:90ms">for God’s very best.</span></span>
-                </h2>
+{# ═══ WHAT'S ON: real services and published events, one calendar ══════════ #}
+<section class="whats-on" id="whats-on">
+    <div class="wrap">
+        <div class="section-head reveal">
+            <p class="tag tag-soft">What's on</p>
+            <h2>There's always a seat for you.</h2>
+        </div>
+        <div class="on-grid">
+            <div class="cal reveal" id="cal">
+                {% for month in months %}
+                <div class="cal-month" data-month {% if not loop.first %}hidden{% endif %}>
+                    <div class="cal-head">
+                        <button type="button" data-cal-step="-1" aria-label="Previous month" {% if loop.first %}disabled{% endif %}><i></i></button>
+                        <h3>{{ month.label }}</h3>
+                        <button type="button" data-cal-step="1" aria-label="Next month" {% if loop.last %}disabled{% endif %}><i></i></button>
+                    </div>
+                    <table>
+                        <thead><tr>{% for d in ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'] %}<th scope="col">{{ d }}</th>{% endfor %}</tr></thead>
+                        <tbody>
+                            {% for week in month.weeks %}
+                            <tr>
+                                {% for c in week %}
+                                <td>
+                                    {% if c.in_month %}
+                                    {% set has_event = c['items']|selectattr('major')|list %}
+                                    <button type="button" class="day {{ 'is-today' if c.today }} {{ 'has-event' if has_event }} {{ 'has-items' if c['items'] }}"
+                                            data-label="{{ c.date.strftime('%A, %B ') ~ c.date.day }}"
+                                            data-items='{{ c["items"]|tojson|forceescape }}'
+                                            aria-label="{{ c.date.strftime('%B ') ~ c.date.day }}{{ ', ' ~ c['items']|length ~ ' on' if c['items'] else '' }}">{{ c.date.day }}</button>
+                                    {% endif %}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endfor %}
+                <p class="cal-key"><span><i class="k-ev"></i>Special event</span><span><i class="k-sv"></i>Weekly gathering</span></p>
+                <div class="day-panel" id="day-panel" aria-live="polite"></div>
             </div>
 
-            <div class="fade" style="--d:260ms;margin-top:clamp(1.4rem, 3.5vh, 2.2rem);">
-                <p class="mono faint">Mission</p>
-                <ul class="rows" style="margin-top:0.7rem;">
-                    {% for m in [
-                        'Equipping men to enjoy their God given inheritance in Christ Jesus.',
-                        'Enforcing God’s Kingdom on earth.',
-                        'Aligning men with destiny.',
-                        'Models of excellence.'
-                    ] %}
-                    <li class="row">
-                        <span class="row-in">
-                            <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
-                            <span class="row-main">{{ m }}</span>
-                        </span>
+            <div class="soon reveal" style="--d:.1s">
+                <h3>Coming up</h3>
+                {% if upcoming_events %}
+                <ul>
+                    {% for ev in upcoming_events %}
+                    <li>
+                        <a href="{{ url_for('event_detail', event_id=ev.id) }}">
+                            <span class="date"><b>{{ ev.starts_at.day }}</b>{{ ev.starts_at.strftime('%b') }}</span>
+                            <span class="what"><strong>{{ ev.title }}</strong><small>{{ ev.starts_at.strftime('%A') }}, {{ ev.starts_at.strftime('%I:%M %p').lstrip('0') }}</small></span>
+                        </a>
                     </li>
                     {% endfor %}
                 </ul>
-            </div>
-
-            <div class="fade" style="--d:350ms;margin-top:clamp(1.2rem, 3vh, 1.8rem);">
-                <p class="mono faint">Core values</p>
-                {# A run of words, not a second ruled list: seven values read as one creed. #}
-                <p class="values-run">
-                    {% for v in ['Faith in God’s Word', 'Passion', 'Love', 'Maximizing the presence of God', 'Excellence', 'Time consciousness', 'Integrity'] %}
-                    <span>{{ v }}</span>
-                    {% endfor %}
-                </p>
+                {% else %}
+                <p class="big">New events are announced here. Every week, the calendar shows when we gather.</p>
+                {% endif %}
+                <a class="btn btn-line" href="{{ url_for('events') }}">See all events</a>
             </div>
         </div>
-    </div>
-</section>
 
-{# ═══ 03 · MESSAGES ═══════════════════════════════════════════════════════ #}
-<section class="frame" id="f-messages" data-frame>
-    <div class="shell">
-        <div class="head">
-            <div>
-                <p class="mono eyebrow"><span class="rule"></span>The Word</p>
-                <h2 class="t-h2" style="margin-top:1.1rem;">
-                    <span class="rise"><span>Latest messages</span></span>
-                </h2>
-            </div>
-            <a href="{{ url_for('messages') }}" class="lnk fade" style="--d:180ms">All messages</a>
-        </div>
-
-        {% if latest_sermons %}
-        {% set lead = latest_sermons[0] %}
-        <div class="msg-feature-split">
-            {# The newest message gets the stage photograph; the rest follow as rows. #}
-            <a class="msg-feature wipe" style="--d:120ms" href="{{ url_for('messages_show', slug=lead.slug) }}">
-                <img src="/static/home/preacher.jpg" alt="" loading="lazy" decoding="async"/>
-                <span class="msg-feature-in">
-                    <span class="mono gold">Latest message</span>
-                    <span class="t-h2 msg-feature-title">{{ lead.title }}</span>
-                    {% if lead.preacher %}<span class="mono faint">{{ lead.preacher }}</span>{% endif %}
-                </span>
-                <span class="msg-feature-play material-symbols-outlined" aria-hidden="true">play_arrow</span>
-            </a>
-
-        {% if latest_sermons|length > 1 %}
-        <ul class="rows rows-play fade" style="--d:240ms;">
-            {% for sermon in latest_sermons[1:] %}
-            <li class="row row-link">
-                <a href="{{ url_for('messages_show', slug=sermon.slug) }}">
-                    <span class="mono faint row-i">{{ '%02d'|format(loop.index + 1) }}</span>
-                    <span class="row-play material-symbols-outlined" aria-hidden="true">play_arrow</span>
-                    <span class="row-main">
-                        <span class="t-h3">{{ sermon.title }}</span>
-                        {% if sermon.caption %}<span class="t-sm row-sub">{{ sermon.caption }}</span>{% endif %}
-                    </span>
-                    <span class="row-meta mono faint">
-                        {% if sermon.preacher %}{{ sermon.preacher }}{% endif %}
-                    </span>
-                    <span class="row-go material-symbols-outlined">arrow_outward</span>
-                </a>
-            </li>
+        {% if program_flyers %}
+        <div class="flyers reveal" aria-label="Upcoming programme flyers">
+            {% for flyer in program_flyers[:6] %}
+            <a href="{{ flyer.src }}" target="_blank" rel="noopener"><img src="{{ flyer.src }}" alt="{{ flyer.title or 'Upcoming programme flyer' }}" loading="lazy" decoding="async"/></a>
             {% endfor %}
-        </ul>
-        {% else %}
-        <div class="fade" style="--d:240ms">
-            <a href="{{ url_for('messages') }}" class="btn btn-ghost">Browse the archive</a>
-        </div>
-        {% endif %}
-        </div>
-        {% else %}
-        <div class="empty fade" style="--d:240ms">
-            <p class="t-body">New messages are published here after each service.</p>
-            <a href="{{ url_for('messages') }}" class="btn btn-ghost" style="margin-top:1.2rem;">Browse the archive</a>
         </div>
         {% endif %}
     </div>
-</section>
 
-{# ═══ INTERLUDE · a full-screen photograph, one line, one action ═════════ #}
-<section class="frame photo-frame interlude" id="f-interlude" data-frame>
-    <div class="photo-bed" aria-hidden="true">
-        <img src="/static/home/interlude.jpg" alt="" loading="lazy" decoding="async"/>
-    </div>
-    <div class="shell interlude-in">
-        <p class="mono eyebrow fade"><span class="rule"></span>Worship with us</p>
-        <h2 class="t-display interlude-head">
-            <span class="rise"><span>Come thirsty.</span></span>
-            <span class="rise"><span class="gold-lt" style="--d:120ms">Leave restored.</span></span>
-        </h2>
-        <div class="flex flex-wrap items-center gap-3 fade" style="--d:320ms;margin-top:2rem;">
-            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan your visit</a>
-            <a href="{{ url_for('watch') }}" class="btn btn-ghost">Watch live</a>
-        </div>
-    </div>
-</section>
-
-{# ═══ 04 · WHEN WE GATHER ═════════════════════════════════════════════════ #}
-{# A schedule is tabular data — set it as a table, not as a row of cards.
-   The congregation sits behind it, faded out under the table side. #}
-<section class="frame photo-frame gather" id="f-gather" data-frame>
-    <div class="photo-bed" aria-hidden="true">
-        <img src="/static/home/gather.jpg" alt="" loading="lazy" decoding="async"/>
-    </div>
-    <div class="shell">
-        <div class="head">
-            <div>
-                <p class="mono eyebrow"><span class="rule"></span>Church life</p>
-                <h2 class="t-h2" style="margin-top:1.1rem;">
-                    <span class="rise"><span>When we gather</span></span>
-                </h2>
-            </div>
-            <a href="{{ url_for('calendar') }}" class="lnk fade" style="--d:180ms">Full calendar</a>
-        </div>
-        <table class="sched fade" style="--d:240ms;margin-top:2rem;">
-            <tbody>
-            {% for svc in services %}
-            <tr class="{{ 'lead' if svc.lead else '' }}">
-                <td class="s-day mono">{{ svc.day }}</td>
-                <td class="s-name t-h3">{{ svc.name }}</td>
-                <td class="s-time mono">{{ svc.time }}</td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-
-        <p class="t-sm fade" style="--d:420ms;margin-top:1.6rem;">
-            {{ siteHeadquartersAddress }}
-        </p>
-    </div>
-</section>
-
-{# ═══ 05 · SERVE ══════════════════════════════════════════════════════════ #}
-{# Twelve named units. A list reads as a real roster; twelve boxed cards
-   reads as filler. Index + name + role, ruled, two columns. #}
-<section class="frame" id="f-units" data-frame>
-    <div class="shell">
-        <div class="head">
-            <div>
-                <p class="mono eyebrow"><span class="rule"></span>Get involved</p>
-                <h2 class="t-h2" style="margin-top:1.1rem;">
-                    <span class="rise"><span>Find your place to serve</span></span>
-                </h2>
-            </div>
-            <a href="{{ url_for('get_involved') }}" class="lnk fade" style="--d:180ms">Join a unit</a>
-        </div>
-
-        {# The people behind the units: one flush strip of photographs. #}
-        <div class="serve-strip" aria-hidden="true">
-            {% for n in range(1, 6) %}
-            <span class="serve-tile wipe" style="--d:{{ 120 + loop.index0 * 90 }}ms">
-                <img src="/static/home/serve-{{ n }}.jpg" alt="" loading="lazy" decoding="async"/>
-            </span>
-            {% endfor %}
-        </div>
-
-        {% set units = [
-            ('The Still Waters',     'Choir'),
-            ('The Epaphras Company', 'Prayer team'),
-            ('Herald',               'Ushers'),
-            ('The Vineyard Keepers', 'Sanitation'),
-            ('Kings and Priests',    "Children's church"),
-            ('The Armor Bearer',     'Protocol'),
-            ('The Joseph Ministry',  'Welfare'),
-            ('The Follow-up Team',   'Discipleship'),
-            ('Media and ICT',        'Communications'),
-            ('The Technical Team',   'Sound and stage'),
-            ('Dance and Drama',      'Creative arts'),
-            ('Host and Hostess',     'Hospitality')
-        ] %}
-        <ul class="rows units fade" style="--d:240ms;margin-top:1.8rem;">
-            {% for name, role in units %}
-            <li class="row">
-                <span class="row-in">
-                    <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
-                    <span class="row-main t-h3">{{ name }}</span>
-                    <span class="row-meta mono faint">{{ role }}</span>
-                </span>
-            </li>
+    <div class="programs">
+        <div class="wrap"><h3 class="programs-title reveal">Programmes for every season of life</h3></div>
+        <ul class="program-rail" tabindex="0" aria-label="Programmes">
+            {% for name, line, tone in [
+                ('Singles Point Blank', 'Annual programme equipping singles with practical scriptural knowledge.', 'gold'),
+                ('Built to Last Marriage Prayer Network', 'Triweekly prayer, restoring order in marriages across the nations.', 'ink'),
+                ('Corpers Transition Network', 'Weekly practical leadership skills for youth corpers.', 'white'),
+                ('The Alpha Team', 'An interdenominational conclave for CEOs, ministers, principals and leaders.', 'gold'),
+                ('Doxa Connect', 'The radio podcast airing on stations across Nigeria.', 'ink'),
+                ('Oasis Fellowship (OFEL)', 'Our campus expression at Ebonyi State University, CAS Campus.', 'white'),
+                ('Cave of Adullam School of Ministry', 'Training at CASOM, the school of ministry.', 'gold'),
+                ('Marriage Counselling', 'Counselling and mentorship for marriages.', 'ink')
+            ] %}
+            <li class="tone-{{ tone }}"><h4>{{ name }}</h4><p>{{ line }}</p></li>
             {% endfor %}
         </ul>
     </div>
 </section>
 
-{# ═══ 06 · GALLERY ════════════════════════════════════════════════════════ #}
-{# Two counter-scrolling belts of identically sized frames. Equal boxes by
-   construction — fixed width and height, object-fit: cover. #}
-<section class="frame" id="f-gallery" data-frame style="background:var(--ink);">
-    <div class="shell">
-        <div class="head">
-            <div>
-                <p class="mono eyebrow"><span class="rule"></span>In the room</p>
-                <h2 class="t-h2" style="margin-top:1.1rem;">
-                    <span class="rise"><span>Moments of the house</span></span>
-                </h2>
-            </div>
-            <p class="t-sm fade" style="--d:180ms;max-width:26ch;text-align:right;">
-                Worship, teaching and community life at Mile 50.
-            </p>
+{# ═══ THE PROMISE: the one 3D moment, the heart of the name ════════════════ #}
+<section class="story" id="story">
+    <div class="story-pin">
+        <canvas id="world" aria-hidden="true"></canvas>
+        <div class="story-still" aria-hidden="true"></div>
+        <div class="wrap story-copy">
+            <p class="tag">Job 14 : 7–9</p>
+            <p class="line on" data-line>“For there is hope for a tree, if it is cut down…”</p>
+            <p class="line" data-line>“…though its root may grow old in the earth, and its stump may die in the ground…”</p>
+            <p class="line" data-line>“…yet at the scent of water…”</p>
+            <p class="line" data-line>“…it will bud and bring forth branches like a plant.”</p>
+            <p class="line" data-line>Every dead dream can live again.</p>
         </div>
     </div>
+</section>
 
+{# ═══ WHAT WE STAND FOR ════════════════════════════════════════════════════ #}
+<section class="stand">
+    <div class="wrap stand-grid">
+        <div class="reveal">
+            <p class="tag">Our vision</p>
+            <p class="vision">Repositioning men for God's very best.</p>
+            <p class="stand-body">Scent of Water Ministry is a divine mandate received from the Lord Jesus Christ, with a message of restoration and hope to the downtrodden, downcast and weary. We teach and focus only on the Grace of God.</p>
+        </div>
+        <div class="reveal" style="--d:.1s">
+            <h3>Our mission</h3>
+            <ul class="mission">
+                <li>Equipping men to enjoy their God given inheritance in Christ Jesus.</li>
+                <li>Enforcing God's Kingdom on earth.</li>
+                <li>Aligning men with destiny.</li>
+                <li>Models of excellence.</li>
+            </ul>
+            <h3>Our core values</h3>
+            <ul class="values">
+                {% for v in ['Faith in God’s Word', 'Passion', 'Love', 'Maximizing the presence of God', 'Excellence', 'Time consciousness', 'Integrity'] %}<li>{{ v }}</li>{% endfor %}
+            </ul>
+        </div>
+    </div>
+</section>
+
+{# ═══ FAMILY: a true 3D ring of the people themselves ══════════════════════ #}
+<section class="family" id="family">
+    <div class="wrap">
+        <div class="section-head reveal">
+            <p class="tag tag-soft">Community</p>
+            <div class="title-row">
+                <h2>Find your people. Use your gifts.</h2>
+                {% if gallery %}<button type="button" class="icon-btn" id="belts-toggle" aria-pressed="false" aria-controls="belts" aria-label="Pause moving photos" title="Pause moving photos"><i aria-hidden="true"></i></button>{% endif %}
+            </div>
+        </div>
+    </div>
     {% if gallery %}
     {% set half = (gallery|length / 2)|round(0, 'ceil')|int %}
-    <div class="shell" style="margin-top:1.4rem;">
-        <button type="button" class="btn btn-ghost btn-sm" id="belt-toggle" aria-pressed="false" aria-controls="belts">
-            <span class="material-symbols-outlined" style="font-size:16px" aria-hidden="true">pause</span><span id="belt-toggle-label">Pause moving photos</span>
-        </button>
-    </div>
-    <div class="belts fade" id="belts" style="--d:240ms">
-        <div class="belt" data-belt>
-            <div class="belt-track" data-marquee style="--dur:{{ 52 }}s;">
-                {% for pass in [1, 2] %}
-                {% for shot in gallery[:half] %}
-                <button class="shot" data-lightbox data-src="{{ shot.src }}" data-cap="{{ shot.alt }}"
-                        {% if pass == 2 %}aria-hidden="true" tabindex="-1"{% endif %}
-                        aria-label="View photo">
-                    {# Not lazy: inside a transformed marquee the viewport test
-                       never fires for off-screen frames, so they stay blank. #}
-                    <img src="{{ shot.src }}" decoding="async" loading="lazy" alt="{{ shot.alt }}"/>
-                </button>
-                {% endfor %}
-                {% endfor %}
+    <div class="belts" id="belts">
+        {% for row, secs, rev in [(gallery[:half], 52, ''), (gallery[half:], 61, ' belt-rev')] %}
+        <div class="belt">
+            <div class="belt-track{{ rev }}" style="--dur:{{ secs }}s">
+                {% for pass in [1, 2] %}{% for shot in row %}
+                <button type="button" class="shot" data-shot="{{ shot.src }}" data-cap="{{ shot.alt }}" aria-label="View photo"{% if pass == 2 %} aria-hidden="true" tabindex="-1"{% endif %}><img data-src="{{ shot.src }}" alt="{{ shot.alt if pass == 1 else '' }}" decoding="async"/></button>
+                {% endfor %}{% endfor %}
             </div>
         </div>
-        <div class="belt" data-belt>
-            <div class="belt-track belt-rev" data-marquee style="--dur:{{ 61 }}s;">
-                {% for pass in [1, 2] %}
-                {% for shot in gallery[half:] %}
-                <button class="shot" data-lightbox data-src="{{ shot.src }}" data-cap="{{ shot.alt }}"
-                        {% if pass == 2 %}aria-hidden="true" tabindex="-1"{% endif %}
-                        aria-label="View photo">
-                    {# Not lazy: inside a transformed marquee the viewport test
-                       never fires for off-screen frames, so they stay blank. #}
-                    <img src="{{ shot.src }}" decoding="async" loading="lazy" alt="{{ shot.alt }}"/>
-                </button>
-                {% endfor %}
-                {% endfor %}
-            </div>
-        </div>
+        {% endfor %}
     </div>
-    {% else %}
-    <div class="shell"><div class="empty fade"><p class="t-body">Photos from our gatherings will appear here.</p></div></div>
+    <dialog class="viewer" id="viewer" aria-label="Photo viewer">
+        <button type="button" class="viewer-x" id="viewer-close">Close</button>
+        <button type="button" class="viewer-nav" id="viewer-prev" aria-label="Previous photo"><i></i></button>
+        <img id="viewer-img" alt=""/>
+        <button type="button" class="viewer-nav viewer-next" id="viewer-next" aria-label="Next photo"><i></i></button>
+    </dialog>
     {% endif %}
+    <div class="wrap">
+        <p class="units-lead reveal">Twelve units. One family. There is a place for you.</p>
+        <ul class="units reveal">
+            {% for name, role in [
+                ('Herald', 'Ushers'), ('The Follow-up Team', 'Discipleship'), ('The Still Waters', 'Choir'),
+                ('The Vineyard Keepers', 'Sanitation'), ('Kings and Priests', "Children's church"), ('The Technical Department', 'Sound and stage'),
+                ('The Epaphras Company', 'Prayer team'), ('The Armor Bearer', 'Protocol'), ('The Joseph Ministry', 'Welfare'),
+                ('Media and ICT', 'Communications'), ('Dance and Drama', 'Creative arts'), ('Host and Hostess', 'Hospitality')
+            ] %}
+            <li><a href="{{ url_for('get_involved') }}"><b>{{ '%02d'|format(loop.index) }}</b><strong>{{ name }}</strong><span>{{ role }}</span></a></li>
+            {% endfor %}
+        </ul>
+        <a class="btn btn-dark reveal" href="{{ url_for('get_involved') }}">Join a team today</a>
+    </div>
 </section>
 
-{# ═══ 07 · BEYOND THE WALLS ═══════════════════════════════════════════════ #}
-<section class="frame" id="f-casom" data-frame>
-    <div class="shell split">
-        {# Admin-managed slideshow (Photos → Outreach), cross-fading with captions. #}
-        <div class="split-media has-shots wipe">
-            {% if outreach %}
-            <div class="shots" data-shots>
-                {% for shot in outreach %}
-                <figure class="{{ 'on' if loop.first else '' }}" data-shot>
-                    <img src="{{ shot.src }}" alt="{{ shot.alt }}" {{ 'loading=lazy'|safe if not loop.first else '' }} decoding="async"/>
+{# ═══ LOVE: outside the walls ══════════════════════════════════════════════ #}
+<section class="love">
+    <div class="wrap love-grid">
+        <div class="love-copy reveal">
+            <p class="tag tag-soft">Love in action</p>
+            <h2>Love doesn't stay inside the walls.</h2>
+            <ul class="love-links">
+                <li><a href="{{ url_for('outreach_detail', kind='prison') }}">Annual Prison Outreach</a></li>
+                <li><a href="{{ url_for('outreach_detail', kind='medical') }}">Annual Free Medical &amp; Community Outreach</a></li>
+            </ul>
+        </div>
+        {% set love_photos = outreach or [
+            {'src': '/static/home/serve-2.jpg', 'alt': 'Free medical care at a community outreach', 'caption': None},
+            {'src': '/static/home/serve-3.jpg', 'alt': 'Children at a community outreach', 'caption': None},
+            {'src': '/static/home/serve-5.jpg', 'alt': 'Unloading supplies for an outreach', 'caption': None}
+        ] %}
+        <div class="car reveal" id="car" role="group" aria-roledescription="carousel" aria-label="Outreach photos">
+            <div class="car-track" id="car-track" tabindex="0" aria-label="Outreach photos, scroll sideways">
+                {% for shot in love_photos %}
+                <figure class="car-slide" aria-roledescription="slide" aria-label="{{ loop.index }} of {{ love_photos|length }}">
+                    <img src="{{ shot.src }}" alt="{{ shot.alt }}" {% if not loop.first %}loading="lazy"{% endif %} decoding="async"/>
                     {% if shot.caption %}<figcaption>{{ shot.caption }}</figcaption>{% endif %}
                 </figure>
                 {% endfor %}
-                <div class="shots-dots" aria-hidden="true">
-                    {% for shot in outreach %}<i class="{{ 'on' if loop.first else '' }}" data-shot-dot></i>{% endfor %}
-                </div>
             </div>
-            {% else %}
-            <img src="/images/general-page-header.jpg" alt="Community outreach" loading="lazy" decoding="async"/>
+            {% if love_photos|length > 1 %}
+            <div class="car-bar">
+                <button type="button" class="icon-btn icon-dark" id="car-pause" aria-pressed="false" aria-label="Pause slideshow" title="Pause slideshow"><i aria-hidden="true"></i></button>
+                <span id="car-count" aria-hidden="true">1 / {{ love_photos|length }}</span>
+                <button type="button" class="icon-btn icon-dark icon-arrow" id="car-prev" aria-label="Previous photo"><b aria-hidden="true"></b></button>
+                <button type="button" class="icon-btn icon-dark icon-arrow icon-next" id="car-next" aria-label="Next photo"><b aria-hidden="true"></b></button>
+            </div>
             {% endif %}
         </div>
-        <div>
-            <p class="mono eyebrow"><span class="rule"></span>Beyond the walls</p>
-            <h2 class="t-h2" style="margin-top:1.1rem;max-width:16ch;">
-                <span class="rise"><span>Water carried to dry ground</span></span>
-            </h2>
-            <p class="t-body fade" style="--d:240ms;margin-top:1.2rem;">
-                Our altar does not end at the church hall. We take the same message of
-                restoration to those the world has written off.
-            </p>
-            <ul class="rows" style="margin-top:1.5rem;">
-                <li class="row row-link fade" style="--d:330ms">
-                    <a href="{{ url_for('outreach_detail', kind='prison') }}">
-                        <span class="mono faint row-i">01</span>
-                        <span class="row-main">
-                            <span class="t-h3">Annual Prison Outreach</span>
-                            <span class="t-sm row-sub">At the remand home beside our headquarters.</span>
-                        </span>
-                        <span class="row-go material-symbols-outlined">arrow_outward</span>
-                    </a>
-                </li>
-                <li class="row row-link fade" style="--d:410ms">
-                    <a href="{{ url_for('outreach_detail', kind='medical') }}">
-                        <span class="mono faint row-i">02</span>
-                        <span class="row-main">
-                            <span class="t-h3">Free Medical Outreach</span>
-                            <span class="t-sm row-sub">Annual no-cost medical and community care for Abakaliki.</span>
-                        </span>
-                        <span class="row-go material-symbols-outlined">arrow_outward</span>
-                    </a>
-                </li>
-            </ul>
-        </div>
     </div>
-</section>
-
-{# ═══ 08 · SENIOR PASTOR ══════════════════════════════════════════════════ #}
-<section class="frame" id="f-pastor" data-frame style="background:var(--ink);">
-    <div class="shell split split-rev">
-        <div>
-            <p class="mono eyebrow"><span class="rule"></span>Leadership</p>
-            <h2 class="t-h2" style="margin-top:1.1rem;max-width:14ch;">
-                <span class="rise"><span>Meet our senior pastor</span></span>
-            </h2>
-            <p class="t-body fade" style="--d:240ms;margin-top:1.2rem;">{{ pastorBio }}</p>
-            <blockquote class="pq fade" style="--d:340ms">
-                We believe every dead dream can live again.
-            </blockquote>
-            <a href="{{ url_for('our_pastor') }}" class="lnk fade" style="--d:430ms;margin-top:1.5rem;">More about our senior pastor</a>
-        </div>
-        <div class="split-media portrait wipe" style="--d:120ms">
-            <img src="{{ pastorPhoto if pastorPhoto.startswith('/') else '/' ~ pastorPhoto }}"
-                 alt="{{ pastorName }}" loading="lazy" decoding="async"/>
-            <div class="plate">
-                <p class="t-h3">{{ pastorName }}</p>
-                <p class="mono faint" style="margin-top:0.3rem;">{{ pastorTitle }}</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-{# ═══ 09 · STORIES ════════════════════════════════════════════════════════ #}
-<section class="frame" id="f-stories" data-frame>
-    <div class="shell">
-        <div class="head">
-            <div>
-                <p class="mono eyebrow"><span class="rule"></span>Stories</p>
-                <h2 class="t-h2" style="margin-top:1.1rem;">
-                    <span class="rise"><span>From the house</span></span>
-                </h2>
-            </div>
-            <a href="{{ url_for('stories') }}" class="lnk fade" style="--d:180ms">All stories</a>
-        </div>
-
-        {% if featuredStories %}
-        <div class="blog-grid">
+    {% if featuredStories %}
+    <div class="wrap stories">
+        <h3 class="programs-title">Stories from the family</h3>
+        <ul>
             {% for story in featuredStories %}
-            <article class="blog fade" style="--d:{{ 200 + loop.index0 * 110 }}ms">
-                <div class="blog-bg">
-                    {% if story.featured_image %}
-                    <img src="{{ story.featured_image if story.featured_image.startswith('/') else '/' ~ story.featured_image }}"
-                         alt="" loading="lazy" decoding="async"/>
-                    {% elif gallery %}
-                    {# No cover set: borrow a gallery frame so the card still reads as a card. #}
-                    <img src="{{ gallery[loop.index0 % gallery|length].src }}" alt="" loading="lazy" decoding="async"/>
-                    {% endif %}
-                </div>
-                {% if story.category %}<span class="mono blog-cat">{{ story.category }}</span>{% endif %}
-                <h3 class="t-h3">{{ story.title }}</h3>
-                {% if story.excerpt %}
-                <p>{{ story.excerpt[:104] }}{{ '…' if story.excerpt|length > 104 else '' }}</p>
-                {% endif %}
-                <span class="blog-cta">Learn more</span>
-                <a class="blog-link" href="{{ url_for('story_detail', slug=story.slug) }}">
-                    <span class="sr-only">Read {{ story.title }}</span>
-                </a>
-            </article>
+            <li class="reveal"><a href="{{ url_for('story_detail', slug=story.slug) }}"><strong>{{ story.title }}</strong>{% if story.excerpt %}<span>{{ story.excerpt[:120] }}{{ '…' if story.excerpt|length > 120 else '' }}</span>{% endif %}</a></li>
             {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</section>
+
+{# ═══ PASTOR ═══════════════════════════════════════════════════════════════ #}
+<section class="pastor">
+    <div class="wrap pastor-grid">
+        <figure class="arch reveal">
+            <img src="{{ pastorPhoto if pastorPhoto.startswith('/') else '/' ~ pastorPhoto }}" alt="{{ pastorName }}" loading="lazy" decoding="async"/>
+        </figure>
+        <div class="reveal" style="--d:.1s">
+            <p class="tag tag-soft">Meet our senior pastor</p>
+            <h2>{{ pastorName }}</h2>
+            <p class="creed">Author. Mentor. Revivalist. Builder of men.</p>
+            <p class="big">A dynamic teacher and prophetic voice, called to raise leaders and restore order in lives, families, and systems. Married to Pastor Mary and blessed with five children, they reside in Abakaliki, Nigeria.</p>
+            <a class="btn btn-line" href="{{ url_for('our_pastor') }}">More about our pastor</a>
         </div>
-        {% else %}
-        <div class="empty fade" style="--d:240ms">
-            <p class="t-body">Testimonies from our community will be shared here.</p>
-            <a href="{{ url_for('stories') }}" class="btn btn-ghost" style="margin-top:1.2rem;">Visit the stories page</a>
+    </div>
+</section>
+
+{# ═══ FIND US + NEXT STEPS ═════════════════════════════════════════════════ #}
+<section class="find">
+    <div class="wrap find-grid">
+        <div class="reveal">
+            <h2>Find a place near you.</h2>
+            {% if services %}
+            <table class="week">
+                <caption class="sr">Weekly services</caption>
+                <tbody>
+                    {% for svc in services %}<tr><th scope="row">{{ svc.day }}</th><td>{{ svc.name }}</td><td class="time">{{ svc.time }}</td></tr>{% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
         </div>
+        <ul class="places reveal" style="--d:.1s">
+            {% for b in branches %}
+            <li>
+                <p class="tag tag-soft">{{ 'Headquarters' if b.is_hq else 'Branch' }}</p>
+                <h3>{{ b.name }}</h3>
+                <p>{{ b.address or b.place or siteHeadquartersAddress }}</p>
+                {% if b.phone %}<p><a href="tel:{{ b.phone|replace(' ', '') }}">{{ b.phone }}</a></p>{% endif %}
+                {% if b.directions %}<a class="link" href="{{ b.directions }}" target="_blank" rel="noopener">Get directions<span class="sr">(opens in a new tab)</span></a>{% endif %}
+                {% if not b.is_hq %}<a class="link" href="{{ url_for('branch_detail', slug=b.slug) }}">Service times</a>{% endif %}
+            </li>
+            {% else %}
+            <li><p class="tag tag-soft">Headquarters</p><h3>{{ siteName }}</h3><p>{{ siteHeadquartersAddress }}</p></li>
+            {% endfor %}
+            <li>
+                <p class="tag tag-soft">Campus expression</p>
+                <h3>Oasis Fellowship (OFEL)</h3>
+                <p>Ebonyi State University, CAS Campus</p>
+            </li>
+        </ul>
+    </div>
+</section>
+
+<section class="steps">
+    <div class="wrap">
+        <h2 class="reveal">Your best days are ahead.</h2>
+        <ul class="step-links reveal">
+            <li><a href="{{ url_for('visit') }}">Plan your visit</a></li>
+            <li><a href="{{ url_for('prayer') }}">Request prayer</a></li>
+            <li><a href="{{ url_for('give') }}">Give online</a></li>
+            <li><a href="{{ url_for('messages') }}">Watch or listen</a></li>
+            <li><a href="{{ url_for('get_involved') }}">Volunteer or serve</a></li>
+        </ul>
+        {% if counsellingPhone %}
+        <p class="counsel">Need to talk to someone? <a href="tel:{{ counsellingPhone|replace(' ', '') }}">{{ counsellingPhone }}</a>{% if counsellingHours %} · {{ counsellingHours }}{% endif %}</p>
         {% endif %}
-    </div>
-</section>
-
-{# ═══ 10 · DEVOTIONAL ═════════════════════════════════════════════════════ #}
-<section class="frame" id="f-devotional" data-frame style="background:var(--ink);">
-    <div class="shell split">
-        <div class="split-media dev wipe">
-            <img src="/images/devotional/scent-daily-devotional.png" alt="Scent Daily Devotional" loading="lazy" decoding="async"/>
-        </div>
-        <div>
-            <p class="mono eyebrow"><span class="rule"></span>Daily inspiration</p>
-            <h2 class="t-h2" style="margin-top:1.1rem;max-width:15ch;">
-                <span class="rise"><span>Scent Daily Devotional</span></span>
-            </h2>
-            <p class="t-body fade" style="--d:240ms;margin-top:1.2rem;">
-                Daily nuggets of wisdom, prayer points and scriptural insight — a companion
-                for a deeper walk with God, and clarity for every day of the year.
-            </p>
-            <div class="flex flex-wrap items-center gap-3 fade" style="--d:360ms;margin-top:1.7rem;">
-                <button class="btn btn-gold" disabled title="Coming soon">Order now</button>
-                <span class="mono faint">Coming soon</span>
-            </div>
-        </div>
-    </div>
-</section>
-
-{# ═══ 11 · VISIT ══════════════════════════════════════════════════════════ #}
-<section class="frame" id="f-visit" data-frame>
-    <div class="shell">
-        <div class="head">
-            <div>
-                <p class="mono eyebrow"><span class="rule"></span>Locations</p>
-                <h2 class="t-h2" style="margin-top:1.1rem;">
-                    <span class="rise"><span>Visit us</span></span>
-                </h2>
-            </div>
-            <p class="t-sm fade" style="--d:180ms;text-align:right;">
-                {{ branches|length if branches else 1 }} location{{ 's' if branches and branches|length != 1 else '' }}
-                &middot; <a class="lnk-inline" href="{{ url_for('branches') }}">Find a branch</a>
-            </p>
-        </div>
-
-        <div class="branch-rail no-scrollbar fade" style="--d:240ms">
-            {% for branch in branches %}
-            <article class="branch">
-                <p class="mono {{ 'gold' if branch.is_hq else 'faint' }}">{{ 'Headquarters' if branch.is_hq else 'Branch' }}</p>
-                <h3 class="t-h3" style="margin-top:0.7rem;">{{ branch.name }}</h3>
-                <p class="t-sm" style="margin-top:0.5rem;">{{ branch.address or branch.place or 'Address not available' }}</p>
-                {% if branch.phone %}<p class="mono faint" style="margin-top:0.5rem;">{{ branch.phone }}</p>{% endif %}
-                {% if branch.directions %}
-                <a class="lnk" style="margin-top:0.9rem;" target="_blank" rel="noopener" href="{{ branch.directions }}">Directions<span class="sr-only"> (opens in a new tab)</span></a>
-                {% endif %}
-                {% if not branch.is_hq %}<a class="lnk" style="margin-top:0.5rem;" href="{{ url_for('branch_detail', slug=branch.slug) }}">Service times</a>{% endif %}
-            </article>
-            {% else %}
-            <article class="branch">
-                <p class="mono gold">Headquarters</p>
-                <h3 class="t-h3" style="margin-top:0.7rem;">{{ siteName }}</h3>
-                <p class="t-sm" style="margin-top:0.5rem;">{{ siteHeadquartersAddress }}</p>
-            </article>
-            {% endfor %}
-        </div>
-
-        <div class="map fade" style="--d:340ms">
-            {% if mapEmbedUrl %}
-            <iframe src="{{ mapEmbedUrl }}" title="{{ siteName }} headquarters" loading="lazy"
-                    referrerpolicy="no-referrer-when-downgrade" allowfullscreen=""></iframe>
-            {% else %}
-            <div class="map-empty t-sm">Map unavailable — set a headquarters address in Settings.</div>
-            {% endif %}
-        </div>
-    </div>
-</section>
-
-{# ═══ 12 · NEXT STEP + FOOTER ═════════════════════════════════════════════ #}
-<section class="frame frame-last" id="f-next" data-frame style="background:var(--ink);">
-    <div class="shell">
-        <p class="mono eyebrow"><span class="rule"></span>Take a next step</p>
-        <h2 class="t-h2" style="margin-top:1.1rem;max-width:18ch;">
-            <span class="rise"><span>Come as you are.</span></span>
-        </h2>
-        <p class="t-body fade" style="--d:200ms;margin-top:1.1rem;">
-            Whatever season you are in, there is a place for you here.
-        </p>
-
-        <div class="next-split">
-            {% set steps = [
-                ('calendar',     'Plan a visit'),
-                ('prayer',       'Request prayer'),
-                ('give',         'Give'),
-                ('watch',        'Watch live'),
-                ('get_involved', 'Volunteer')
-            ] %}
-            <ul class="rows steps fade" style="--d:280ms;">
-                {% for route, label in steps %}
-                <li class="row row-link">
-                    <a href="{{ url_for(route) }}">
-                        <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
-                        <span class="row-main t-h3">{{ label }}</span>
-                        <span class="row-go material-symbols-outlined">arrow_outward</span>
-                    </a>
-                </li>
-                {% endfor %}
-            </ul>
-
-            {% if counsellingPhone %}
-            <aside class="counsel fade" style="--d:400ms">
-                <p class="mono gold">Need to talk to someone?</p>
-                <p class="t-h3" style="margin-top:0.7rem;">Counselling</p>
-                <p class="t-sm" style="margin-top:0.5rem;">
-                    A pastor is available to listen, pray with you, and walk through
-                    whatever you are carrying — in confidence.
-                </p>
-                <a class="counsel-tel" href="tel:{{ counsellingPhone|replace(' ', '') }}">
-                    <span class="material-symbols-outlined" style="font-size:19px">call</span>
-                    {{ counsellingPhone }}
-                </a>
-                {% if counsellingHours %}
-                <p class="mono faint" style="margin-top:0.7rem;">{{ counsellingHours }}</p>
-                {% endif %}
-            </aside>
-            {% endif %}
-        </div>
-
-        {% set socials = [
-            (socialFacebook,  'Facebook'),
-            (socialInstagram, 'Instagram'),
-            (socialX,         'X'),
-            (socialYouTube,   'YouTube'),
-            (socialTelegram,  'Telegram')
-        ] %}
-        <div class="foot fade" style="--d:460ms">
-            <form class="foot-news" method="POST" action="{{ url_for('newsletter_subscribe') }}" style="display:flex;flex-wrap:wrap;align-items:center;gap:0.7rem 1rem;margin-bottom:1.6rem;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <label class="mono gold" for="foot-news-email">Newsletter</label>
-                <input id="foot-news-email" type="email" name="email" required autocomplete="email" placeholder="Your email address" aria-label="Email address for the newsletter" style="flex:1 1 16rem;max-width:24rem;min-width:0;"/>
-                <button type="submit" class="btn btn-gold">Subscribe</button>
-            </form>
-            <div class="foot-in">
-                <span class="t-sm">© {{ now().year }} {{ siteName }}</span>
-                <nav class="foot-links t-sm">
-                    {% for href, label in socials %}{% if href %}
-                    <a href="{{ href }}" target="_blank" rel="noopener">{{ label }}<span class="sr-only"> (opens in a new tab)</span></a>
-                    {% endif %}{% endfor %}
-                    {% if whatsappChat %}<a href="{{ whatsappChat }}" target="_blank" rel="noopener">WhatsApp<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
-                    {% if whatsappChannel %}<a href="{{ whatsappChannel }}" target="_blank" rel="noopener">WhatsApp channel<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
-                    {% if telegramJoin and telegramJoin != socialTelegram %}<a href="{{ telegramJoin }}" target="_blank" rel="noopener">Join on Telegram<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
-                    <a href="{{ url_for('branches') }}">Branches</a>
-                    <a href="{{ url_for('privacy_policy') }}">Privacy</a>
-                    <a href="{{ url_for('terms_of_service') }}">Terms</a>
-                </nav>
-            </div>
-        </div>
     </div>
 </section>
 
 </main>
 
-{% include "partials/public-flash.html" %}
-{# ═══ LIGHTBOX ════════════════════════════════════════════════════════════ #}
-<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Photo viewer" hidden>
-    <button class="lb-close" id="lb-close" aria-label="Close photo viewer">
-        <span class="material-symbols-outlined" style="font-size:24px">close</span>
-    </button>
-    <button class="lb-nav lb-prev" id="lb-prev" aria-label="Previous photo">
-        <span class="material-symbols-outlined" style="font-size:24px">chevron_left</span>
-    </button>
-    <figure class="lb-fig"><img id="lb-img" alt=""/></figure>
-    <button class="lb-nav lb-next" id="lb-next" aria-label="Next photo">
-        <span class="material-symbols-outlined" style="font-size:24px">chevron_right</span>
-    </button>
+{% include "partials/site-footer.html" %}
+
+<div class="now" id="now" hidden>
+    <button class="play is-on" type="button" id="now-toggle" aria-label="Pause"><i aria-hidden="true"></i></button>
+    <span id="now-title"></span>
+    <button class="now-x" type="button" id="now-close" aria-label="Stop listening">Close</button>
 </div>
 
-<button class="totop" id="totop" type="button" aria-label="Back to top" title="Back to top">
-    <span class="material-symbols-outlined" style="font-size:21px">arrow_upward</span>
-</button>
-
-{% include "partials/theme-styles.html" %}
-{% include "partials/theme-scripts.html" %}
+{% include "partials/public-flash.html" %}
+<script src="{{ url_for('static', path='site/site.js') }}?v=20" defer></script>
+<script src="{{ url_for('static', path='site/home.js') }}?v=20" defer></script>
 </body>
 </html>

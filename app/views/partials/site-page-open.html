@@ -1,0 +1,30 @@
+{# Opening of every interior page: document head, site header and page banner. A page sets `pageTitle`,
+   `pageEyebrow`, optional `pageLede`, `pageMeta` and `pageKey` (the banner uploaded under Settings -> Page Hero
+   Images), then writes <section class="band"> blocks and closes with site-page-close.html.
+   Banner order: explicit `pageHeroImage`, this page's upload, the admin default, the shipped photograph. #}
+{% set _heroKey = 'pageHero_' ~ (pageKey or '') %}
+{# Chosen for THIS page, as opposed to the site-wide fallback: social cards use only this, so a pasted link
+   falls back to the branded share card rather than a generic crop. #}
+{% set _heroOwn = pageHeroImage or settings.get(_heroKey) %}
+{% set _heroRaw = _heroOwn or defaultPageHero or '/static/home/interlude.jpg' %}
+{% set _hero = _heroRaw if _heroRaw.startswith(('/', 'http')) else '/' ~ _heroRaw %}
+<!DOCTYPE html>
+<html lang="en" class="no-js"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>{{ metaTitle or pageTitle }} — {{ siteName }}</title>
+{% include "partials/site-meta.html" %}
+{% include "partials/site-head.html" %}
+</head>
+<body class="inner">
+{% include "partials/site-header.html" %}
+
+<main id="main" tabindex="-1">
+<header class="page-hero">
+    <img class="page-hero-img" src="{{ _hero }}" alt=""/>
+    <div class="wrap">
+        {% if pageEyebrow %}<p class="tag">{{ pageEyebrow }}</p>{% endif %}
+        <h1>{{ pageTitle }}</h1>
+        {% if pageLede %}<p class="page-lede">{{ pageLede }}</p>{% endif %}
+    </div>
+</header>

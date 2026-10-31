@@ -1,4 +1,4 @@
-/* The Job 14 world behind /home-v2: dry ground, a cut stump, a drop of water, a tree.
+/* The Job 14 world on the home page: dry ground, a cut stump, a drop of water, a tree.
  *
  * Everything is generated here, there are no model or texture files. The page passes scroll
  * progress through the pinned story chapter (setProgress); that picks a point on the KEYS timeline.
@@ -6,8 +6,8 @@
  *
  * Build (three is bundled, tree-shaken, so nothing is fetched from a CDN):
  *   npm i three@0.187.0 --prefix <scratch dir>
- *   NODE_PATH=<scratch dir>/node_modules node_modules/.bin/esbuild app/static/home-v2/src/world.js \
- *     --bundle --minify --format=esm --target=es2020 --outfile=app/static/home-v2/world.min.js
+ *   NODE_PATH=<scratch dir>/node_modules node_modules/.bin/esbuild app/static/site/src/world.js \
+ *     --bundle --minify --format=esm --target=es2020 --outfile=app/static/site/world.min.js
  */
 import {
   BackSide, BufferAttribute, BufferGeometry, DoubleSide, InstancedBufferAttribute, InstancedMesh,

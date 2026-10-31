@@ -3,7 +3,7 @@
 {% set pageTitle = 'The Word, kept and shared.' %}
 {% set metaTitle = 'Audio messages' %}
 {% set pageLede = 'Every message preached in this house, archived so you can return to it — or hear what you missed.' %}
-{% include "partials/theme-page-open.html" %}
+{% include "partials/site-page-open.html" %}
 
 {% if featured_sermon %}
 <section class="band band-dark">
@@ -138,9 +138,9 @@
         aspect-ratio: 4 / 3;
         max-height: 44svh;
         border: 1px solid var(--line);
-        background: linear-gradient(150deg, var(--surface), var(--ink));
+        background: linear-gradient(150deg, #F4E7C4, var(--brand-gold));
     }
-    .feat-art .material-symbols-outlined { font-size: 78px; color: var(--gold); opacity: 0.55; }
+    .feat-art .material-symbols-outlined { font-size: 78px; color: var(--ink); opacity: .6; }
     .feat-meta { display: flex; flex-wrap: wrap; gap: 1.2rem; margin-top: 1.4rem; }
     .search-row { display: flex; align-items: flex-end; gap: 0.7rem; }
     .search-row input {
@@ -164,4 +164,4 @@
     .pager { display: flex; align-items: center; gap: 1.2rem; margin-top: 2.2rem; flex-wrap: wrap; }
 </style>
 
-{% include "partials/theme-page-close.html" %}
+{% include "partials/site-page-close.html" %}

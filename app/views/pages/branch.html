@@ -4,7 +4,7 @@
 {% set pageLede = b.place or b.address %}
 {% set metaTitle = b.name %}
 {% set metaDescription = pageMetaDescription %}
-{% include "partials/theme-page-open.html" %}
+{% include "partials/site-page-open.html" %}
 
 <section class="band band-light">
     <div class="shell br-split">
@@ -59,4 +59,4 @@
     @media (min-width: 940px) { .br-split { grid-template-columns: 1.35fr 0.65fr; } }
 </style>
 
-{% include "partials/theme-page-close.html" %}
+{% include "partials/site-page-close.html" %}

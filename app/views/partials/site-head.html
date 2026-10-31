@@ -1,0 +1,12 @@
+{# Fonts, stylesheet and icon font for every public page. #}
+<script>document.documentElement.className = 'js';</script>
+<link rel="icon" href="/static/brand/swm-logo-128.png" type="image/png"/>
+<link rel="apple-touch-icon" href="/static/brand/swm-logo-180.png"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400..800&display=swap"/>
+<style>
+    @font-face { font-family: 'Material Symbols Outlined'; font-style: normal; font-weight: 100 700; font-display: block;
+        src: url("{{ url_for('static', path='fonts/material-symbols-outlined.woff2') }}") format('woff2'); }
+</style>
+<link rel="stylesheet" href="{{ url_for('static', path='site/site.css') }}?v=20"/>

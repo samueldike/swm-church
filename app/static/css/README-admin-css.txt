@@ -7,4 +7,4 @@ Rebuild after changing any admin template's classes:
 
 Do not hand-edit app/static/css/admin.css directly — edit admin-src.css and
 rebuild. Public site pages are unaffected: they use a separate hand-written
-CSS system (theme-styles.html etc.), not Tailwind.
+CSS system (static/site/site.css), not Tailwind.

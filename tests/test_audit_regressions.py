@@ -144,11 +144,10 @@ def test_prayer_newsletter_and_donations_are_reachable_from_the_admin_and_public
     side = _read("app/views/partials/admin-sidebar.html")
     for name in ("admin_prayer_requests", "admin_subscribers", "admin_donations"):
         assert f"url_for('{name}')" in side
-    assert "newsletter_subscribe" in _read("app/views/partials/theme-page-close.html")
-    assert "newsletter_subscribe" in _read("app/views/pages/home.html")
-    for page in ("theme-page-close", "home"):
-        src = _read("app/views/partials/theme-page-close.html" if page == "theme-page-close" else "app/views/pages/home.html")
-        assert "public-flash.html" in src
+    assert "newsletter_subscribe" in _read("app/views/partials/site-footer.html")
+    for shell in ("app/views/partials/site-page-close.html", "app/views/pages/home.html"):
+        src = _read(shell)
+        assert "site-footer.html" in src and "public-flash.html" in src
 
 
 def test_public_pages_no_longer_hide_error_notices():
