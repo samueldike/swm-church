@@ -292,6 +292,66 @@
     setInterval(function () { if (carSeen && !carHeld && !carStopped && !doc.hidden) carGo(carI + 1); }, 5000);
   }
 
+  /* ─── Find us: fixed HQ with one upward-rotating branch card ─── */
+  var branchRotation = $("branch-rotation"), branchStage = $("branch-stage");
+  if (branchRotation && branchStage) {
+    var branchSlides = all("[data-branch-slide]", branchStage), branchIndex = 0;
+    var branchBusy = false, branchHeld = false, branchStopped = reduce, branchSeen = true;
+    var branchPause = $("branch-pause"), branchCount = $("branch-count");
+    var sizeBranches = function () {
+      var maxHeight = 0;
+      branchSlides.forEach(function (slide) {
+        var wasHidden = slide.hidden;
+        slide.style.visibility = "hidden"; slide.hidden = false;
+        maxHeight = Math.max(maxHeight, slide.offsetHeight);
+        slide.hidden = wasHidden; slide.style.visibility = "";
+      });
+      branchStage.style.height = maxHeight + "px";
+    };
+    var branchGo = function (index) {
+      if (branchBusy || branchSlides.length < 2) return;
+      var nextIndex = (index + branchSlides.length) % branchSlides.length;
+      var outgoing = branchSlides[branchIndex], incoming = branchSlides[nextIndex];
+      if (incoming === outgoing) return;
+      branchBusy = true;
+      incoming.hidden = false; outgoing.inert = true;
+      branchIndex = nextIndex;
+      branchCount.textContent = (branchIndex + 1) + " / " + branchSlides.length;
+      var finish = function () {
+        outgoing.hidden = true; outgoing.inert = false;
+        outgoing.classList.remove("branch-leave"); incoming.classList.remove("branch-enter");
+        branchBusy = false;
+      };
+      if (reduce) { finish(); return; }
+      outgoing.classList.add("branch-leave"); incoming.classList.add("branch-enter");
+      setTimeout(finish, 650);
+    };
+    sizeBranches(); branchStage.dataset.ready = "true";
+    if (branchSlides.length > 1) {
+      $("branch-controls").hidden = false;
+      $("branch-prev").addEventListener("click", function () { branchGo(branchIndex - 1); });
+      $("branch-next").addEventListener("click", function () { branchGo(branchIndex + 1); });
+      var updateBranchPause = function () {
+        branchPause.textContent = branchStopped ? "Play" : "Pause";
+        branchPause.setAttribute("aria-pressed", String(branchStopped));
+        branchPause.setAttribute("aria-label", branchStopped ? "Play branch rotation" : "Pause branch rotation");
+      };
+      branchPause.addEventListener("click", function () { branchStopped = !branchStopped; updateBranchPause(); });
+      updateBranchPause();
+      branchRotation.addEventListener("pointerenter", function () { branchHeld = true; });
+      branchRotation.addEventListener("pointerleave", function () { branchHeld = false; });
+      if ("IntersectionObserver" in window) new IntersectionObserver(function (entries) { branchSeen = entries[0].isIntersecting; }).observe(branchRotation);
+      setInterval(function () {
+        if (branchSeen && !branchHeld && !branchStopped && !doc.hidden && !branchRotation.contains(doc.activeElement)) branchGo(branchIndex + 1);
+      }, 5500);
+    }
+    var branchWidth = branchStage.clientWidth;
+    if ("ResizeObserver" in window) new ResizeObserver(function () {
+      if (branchStage.clientWidth !== branchWidth) { branchWidth = branchStage.clientWidth; sizeBranches(); }
+    }).observe(branchStage);
+    if (doc.fonts && doc.fonts.ready) doc.fonts.ready.then(sizeBranches);
+  }
+
   /* ─── Listening on the page ─── */
   var audio = null, active = null;
   var now = $("now"), nowTitle = $("now-title"), nowToggle = $("now-toggle");

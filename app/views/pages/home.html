@@ -429,25 +429,38 @@
             </table>
             {% endif %}
         </div>
-        <ul class="places reveal" style="--d:.1s">
-            {% for b in branches %}
-            <li>
-                <p class="tag tag-soft">{{ 'Headquarters' if b.is_hq else 'Branch' }}</p>
-                <h3>{{ b.name }}</h3>
-                <p>{{ b.address or b.place or siteHeadquartersAddress }}</p>
-                {% if b.phone %}<p><a href="tel:{{ b.phone|replace(' ', '') }}">{{ b.phone }}</a></p>{% endif %}
-                {% if b.directions %}<a class="link" href="{{ b.directions }}" target="_blank" rel="noopener">Get directions<span class="sr">(opens in a new tab)</span></a>{% endif %}
-                {% if not b.is_hq %}<a class="link" href="{{ url_for('branch_detail', slug=b.slug) }}">Service times</a>{% endif %}
-            </li>
-            {% else %}
-            <li><p class="tag tag-soft">Headquarters</p><h3>{{ siteName }}</h3><p>{{ siteHeadquartersAddress }}</p></li>
-            {% endfor %}
-            <li>
-                <p class="tag tag-soft">Campus expression</p>
-                <h3>Oasis Fellowship (OFEL)</h3>
-                <p>Ebonyi State University, CAS Campus</p>
-            </li>
-        </ul>
+        {% macro place_card(b) %}
+            <p class="tag tag-soft">{{ 'Headquarters' if b.is_hq else 'Branch' }}</p>
+            <h3>{{ b.name }}</h3>
+            <p>{{ b.address or b.place or (siteHeadquartersAddress if b.is_hq else '') }}</p>
+            {% if b.phone %}<p><a href="tel:{{ b.phone|replace(' ', '') }}">{{ b.phone }}</a></p>{% endif %}
+            {% if b.directions %}<a class="link" href="{{ b.directions }}" target="_blank" rel="noopener">Get directions<span class="sr">(opens in a new tab)</span></a>{% endif %}
+            {% if not b.is_hq %}<a class="link" href="{{ url_for('branch_detail', slug=b.slug) }}">Service times</a>{% endif %}
+        {% endmacro %}
+        {% set other_branches = branches|rejectattr('is_hq')|list %}
+        <div class="places reveal" style="--d:.1s">
+            <div class="place-card place-hq">
+                {% for b in branches if b.is_hq %}{{ place_card(b) }}
+                {% else %}<p class="tag tag-soft">Headquarters</p><h3>{{ siteName }}</h3><p>{{ siteHeadquartersAddress }}</p>{% endfor %}
+            </div>
+            <section class="branch-rotation" id="branch-rotation" aria-label="Our branches" aria-roledescription="carousel">
+                <div class="branch-stage" id="branch-stage">
+                    {% for b in other_branches %}
+                    <article class="place-card branch-slide" data-branch-slide {{ 'hidden' if not loop.first else '' }} aria-label="{{ b.name }}">{{ place_card(b) }}</article>
+                    {% endfor %}
+                    <article class="place-card branch-slide" data-branch-slide {{ 'hidden' if other_branches else '' }} aria-label="Oasis Fellowship">
+                        <p class="tag tag-soft">Campus expression</p><h3>Oasis Fellowship (OFEL)</h3><p>Ebonyi State University, CAS Campus</p>
+                    </article>
+                </div>
+                <div class="branch-controls" id="branch-controls" hidden>
+                    <span id="branch-count" class="mono faint" role="status">1 / {{ other_branches|length + 1 }}</span>
+                    <button type="button" id="branch-prev" aria-label="Previous branch">↑</button>
+                    <button type="button" id="branch-next" aria-label="Next branch">↓</button>
+                    <button type="button" id="branch-pause" aria-label="Pause branch rotation" aria-pressed="false">Pause</button>
+                </div>
+            </section>
+            <a class="link" href="{{ url_for('branches') }}">Explore all branches ↗</a>
+        </div>
     </div>
 </section>
 
@@ -479,6 +492,6 @@
 
 {% include "partials/public-flash.html" %}
 <script src="{{ url_for('static', path='site/site.js') }}?v=21" defer></script>
-<script src="{{ url_for('static', path='site/home.js') }}?v=21" defer></script>
+<script src="{{ url_for('static', path='site/home.js') }}?v=27" defer></script>
 </body>
 </html>
