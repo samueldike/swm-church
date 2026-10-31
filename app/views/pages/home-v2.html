@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400..800&display=swap"/>
-<link rel="stylesheet" href="{{ url_for('static', path='home-v2/home-v2.css') }}?v=6"/>
+<link rel="stylesheet" href="{{ url_for('static', path='home-v2/home-v2.css') }}?v=7"/>
 {% set third_slide = ('/' ~ sliders[0].image_path) if sliders else '/static/home/worship.jpg' %}
 {% set slides = [
     ('/static/home/interlude.jpg', 'Every dead dream can live again.', "At Scent of Water, we believe in second chances, fresh starts, and the God who breathes life into dry places.", 'Join us Sunday', url_for('visit')),
@@ -334,11 +334,27 @@
         </div>
     </div>
     {% if gallery %}
-    <div class="halo-stage" id="halo-stage" aria-hidden="true">
-        <div class="halo" id="halo">
-            {% for shot in gallery[:12] %}<img data-src="{{ shot.src }}" alt="" style="--i:{{ loop.index0 }}"/>{% endfor %}
-        </div>
+    {% set half = (gallery|length / 2)|round(0, 'ceil')|int %}
+    <div class="wrap belts-bar">
+        <button type="button" class="btn btn-line btn-small" id="belts-toggle" aria-pressed="false" aria-controls="belts">Pause moving photos</button>
     </div>
+    <div class="belts" id="belts">
+        {% for row, secs, rev in [(gallery[:half], 52, ''), (gallery[half:], 61, ' belt-rev')] %}
+        <div class="belt">
+            <div class="belt-track{{ rev }}" style="--dur:{{ secs }}s">
+                {% for pass in [1, 2] %}{% for shot in row %}
+                <button type="button" class="shot" data-shot="{{ shot.src }}" data-cap="{{ shot.alt }}" aria-label="View photo"{% if pass == 2 %} aria-hidden="true" tabindex="-1"{% endif %}><img data-src="{{ shot.src }}" alt="{{ shot.alt if pass == 1 else '' }}" decoding="async"/></button>
+                {% endfor %}{% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <dialog class="viewer" id="viewer" aria-label="Photo viewer">
+        <button type="button" class="viewer-x" id="viewer-close">Close</button>
+        <button type="button" class="viewer-nav" id="viewer-prev" aria-label="Previous photo"><i></i></button>
+        <img id="viewer-img" alt=""/>
+        <button type="button" class="viewer-nav viewer-next" id="viewer-next" aria-label="Next photo"><i></i></button>
+    </dialog>
     {% endif %}
     <div class="wrap">
         <p class="units-lead reveal">Twelve units. One family. There is a place for you.</p>
@@ -513,6 +529,6 @@
 </div>
 
 {% include "partials/public-flash.html" %}
-<script src="{{ url_for('static', path='home-v2/home-v2.js') }}?v=6" defer></script>
+<script src="{{ url_for('static', path='home-v2/home-v2.js') }}?v=7" defer></script>
 </body>
 </html>

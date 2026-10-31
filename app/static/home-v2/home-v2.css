@@ -235,11 +235,25 @@ section { position: relative; }
 .values { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .45rem; }
 .values li { background: var(--gold-lt); color: var(--ink); padding: .25rem .75rem; border-radius: 99px; font-weight: 700; font-size: .9rem; line-height: 1.25; }
 
-/* ─── Family ring: real CSS 3D ─── */
+/* ─── Family: two counter-moving belts of equal frames ─── */
 .family { padding: clamp(2.8rem, 6.5vh, 4.4rem) 0; overflow: hidden; }
-.halo-stage { --w: clamp(140px, 15vw, 220px); --r: calc(var(--w) * 2.05); height: calc(var(--w) * 1.72); perspective: 1600px; margin: .3rem 0 1.4rem; display: grid; place-items: center; }
-.halo { position: relative; width: var(--w); height: calc(var(--w) * 1.33); transform-style: preserve-3d; will-change: transform; transform: translateZ(calc(var(--r) * -1)); }
-.halo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 20px; background: var(--paper); transform: rotateY(calc(var(--i) * 30deg)) translateZ(var(--r)); }
+.belts-bar { margin-bottom: .7rem; }
+.belts { display: grid; gap: .6rem; margin-bottom: 1.4rem; }
+.belt { overflow: hidden; }
+.belt-track { display: flex; gap: .6rem; width: max-content; animation: belt var(--dur, 55s) linear infinite; will-change: transform; }
+.belt-rev { animation-direction: reverse; }
+.belts.is-paused .belt-track { animation-play-state: paused; }
+@keyframes belt { to { transform: translateX(calc(-50% - .3rem)); } }
+.shot { flex: none; width: clamp(200px, 22vw, 300px); aspect-ratio: 3/2; padding: 0; border: 0; border-radius: 10px; overflow: hidden; background: var(--paper); cursor: zoom-in; }
+.shot img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 18%; transition: transform .5s var(--ease); }
+.shot:hover img { transform: scale(1.05); }
+.viewer { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; border: 0; padding: 0; background: rgba(22,22,22,.94); }
+.viewer[open] { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .5rem; padding: 3.8rem .6rem 1rem; }
+.viewer img { justify-self: center; max-width: 100%; max-height: calc(100dvh - 5rem); object-fit: contain; border-radius: 8px; }
+.viewer-x { position: absolute; top: .7rem; right: .8rem; min-height: 44px; padding: 0 1.1rem; border: 0; border-radius: 99px; background: var(--gold-lt); color: var(--ink); font-weight: 700; cursor: pointer; }
+.viewer-nav { width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgba(255,255,255,.14); color: #fff; cursor: pointer; display: grid; place-items: center; }
+.viewer-nav i { width: 11px; height: 11px; border-left: 3px solid; border-bottom: 3px solid; rotate: 45deg; margin-left: 4px; }
+.viewer-next i { rotate: 225deg; margin: 0 4px 0 0; }
 .units-lead { font: 800 clamp(1.25rem, 1.8vw, 1.6rem)/1.05 var(--display); letter-spacing: -.02em; margin-bottom: .7rem; }
 .units { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .3rem; }
 .units li { background: var(--paper); border-radius: 99px; padding: .3rem .8rem; font-weight: 700; font-size: .92rem; line-height: 1.25; }
@@ -364,6 +378,8 @@ section { position: relative; }
   html { scroll-behavior: auto; }
   .hero-photo.on, .slide.on { animation: none; }
   .words div { animation: none; }
+  .belt-track { animation: none; }
+  .belt { overflow-x: auto; }
   .js .reveal { opacity: 1; translate: none; transition: none; }
   .worship-frame { clip-path: none; }
   .worship-in { opacity: 1; translate: none; }

@@ -172,7 +172,7 @@
 
   /* ─── Scroll-linked: worship opening, parallax, the ring, the 3D story ─── */
   var worship = $("worship"), frameEl = $("worship-frame"), inWorship = worship && worship.querySelector(".worship-in");
-  var drift = all("[data-speed]"), halo = $("halo"), stage = $("halo-stage");
+  var drift = all("[data-speed]"), stage = $("belts");
   var story = $("story"), lines = all("[data-line]"), world = null, ticking = false, lineOn = 0;
 
   function pinned(el) {
@@ -192,10 +192,6 @@
         var b = el.getBoundingClientRect();
         if (b.bottom > -80 && b.top < h + 80) el.style.transform = "translateY(" + ((b.top + b.height / 2 - h / 2) * parseFloat(el.dataset.speed)).toFixed(1) + "px)";
       });
-      if (halo) {
-        var r = stage.getBoundingClientRect();
-        if (r.bottom > -100 && r.top < h + 100) halo.style.transform = "translateZ(calc(var(--r) * -1)) rotateY(" + (-(r.top / h) * 110).toFixed(2) + "deg)";
-      }
     }
     if (story && lines.length) {
       var p = pinned(story);
@@ -239,6 +235,37 @@
     } else { loadWorld(); if (stage) all("img[data-src]", stage).forEach(function (im) { im.src = im.dataset.src; }); }
   }
   if (doc.readyState === "complete") setTimeout(ready, 60); else addEventListener("load", function () { setTimeout(ready, 60); });
+
+  /* ─── Family photos: pause the belts, or open any photo ─── */
+  var beltBtn = $("belts-toggle"), viewer = $("viewer");
+  if (beltBtn) {
+    var viewerImg = $("viewer-img"), shots = all('.shot:not([aria-hidden="true"])'), shotIx = 0;
+    var setPaused = function (on) {
+      stage.classList.toggle("is-paused", on);
+      beltBtn.setAttribute("aria-pressed", String(on));
+      beltBtn.textContent = on ? "Play moving photos" : "Pause moving photos";
+    };
+    if (reduce) beltBtn.hidden = true;
+    beltBtn.addEventListener("click", function () { setPaused(!stage.classList.contains("is-paused")); });
+    var open = function (i) {
+      shotIx = (i + shots.length) % shots.length;
+      viewerImg.src = shots[shotIx].dataset.shot;
+      viewerImg.alt = shots[shotIx].dataset.cap || "";
+      if (!viewer.open) viewer.showModal();
+    };
+    stage.addEventListener("click", function (e) {
+      var b = e.target.closest(".shot");
+      if (b) open(Math.max(0, shots.findIndex(function (s) { return s.dataset.shot === b.dataset.shot; })));
+    });
+    $("viewer-close").addEventListener("click", function () { viewer.close(); });
+    $("viewer-prev").addEventListener("click", function () { open(shotIx - 1); });
+    $("viewer-next").addEventListener("click", function () { open(shotIx + 1); });
+    viewer.addEventListener("keydown", function (e) {
+      if (e.key === "ArrowLeft") open(shotIx - 1);
+      if (e.key === "ArrowRight") open(shotIx + 1);
+    });
+    viewer.addEventListener("click", function (e) { if (e.target === viewer) viewer.close(); });
+  }
 
   /* ─── Listening on the page ─── */
   var audio = null, active = null;
