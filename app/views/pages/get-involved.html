@@ -1,107 +1,37 @@
 {% set pageKey = 'get-involved' %}
+{% set pagePhoto = '/static/home/serve-1.jpg' %}
 {% set pageEyebrow = 'Get involved' %}
 {% set pageTitle = 'Find your place to serve.' %}
 {% set metaTitle = 'Get involved and serve' %}
-{% set pageLede = 'Twelve units carry the work of this house. Each one is a door into the life of the ministry — and a place where what you carry is put to use.' %}
+{% set pageLede = 'Find your place. Use your gifts. Grow in community.' %}
 {% include "partials/site-page-open.html" %}
 
-<section class="band band-light">
+<section class="band">
     <div class="shell">
-        <div class="head">
-            <div>
-                <p class="mono eyebrow"><span class="rule"></span>The units</p>
-                <h2 class="t-h2" style="margin-top:1rem;">Where you can serve</h2>
-            </div>
-            <a href="{{ url_for('contact') }}" class="lnk">Talk to us first</a>
-        </div>
-
-        {% set units = [
-            ('The Still Waters',     'Choir',              'Lead the house in worship — voices and instruments.'),
-            ('The Epaphras Company', 'Prayer team',        'Stand in the gap. Intercession before, during and after every service.'),
-            ('Herald',               'Ushers',             'The first face a visitor meets. Order, welcome, seating.'),
-            ('The Vineyard Keepers', 'Sanitation',         'Keep the house of God clean and ready.'),
-            ('Kings and Priests',    "Children's church",  'Teach and shepherd the youngest members of the house.'),
-            ('The Armor Bearer',     'Protocol',           'Security, order and care for ministers and guests.'),
-            ('The Joseph Ministry',  'Welfare',            'Practical care for members and outreach to those in need.'),
-            ('The Follow-up Team',   'Discipleship',       'Walk new members from a first visit into belonging.'),
-            ('Media and ICT',        'Communications',     'Cameras, streaming, design and the ministry’s online voice.'),
-            ('The Technical Team',   'Sound and stage',    'Audio, lighting and everything that makes a service run.'),
-            ('Dance and Drama',      'Creative arts',      'Communicate the message through movement and story.'),
-            ('Host and Hostess',     'Hospitality',        'Receive guests and make the house feel like home.')
-        ] %}
-        <ul class="rows" style="margin-top:2rem;">
-            {% for name, role, blurb in units %}
-            <li class="row">
-                <span class="row-in">
-                    <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
-                    <span class="row-main">
-                        <span class="t-h3">{{ name }}</span>
-                        <span class="t-sm row-sub">{{ blurb }}</span>
-                    </span>
-                    <span class="row-meta mono faint">{{ role }}</span>
-                </span>
-            </li>
+        <h2 class="sec-title">Three simple steps</h2>
+        <div class="cards">
+            {% for title, text in [
+                ('Come and worship', 'Serving flows out of belonging. Start on a Sunday.'),
+                ('Tell us where you lean', 'Speak to a unit head, or send us a message.'),
+                ('Be trained, then sent', 'Every unit trains its own. You are never left unprepared.')
+            ] %}
+            <div class="card"><span class="ico">{{ loop.index }}</span><h3 class="t-h3">{{ title }}</h3><p>{{ text }}</p></div>
             {% endfor %}
-        </ul>
-    </div>
-</section>
-
-<section class="band band-dark">
-    <div class="shell">
-        <p class="mono eyebrow"><span class="rule"></span>How to join</p>
-        <h2 class="t-h2" style="margin-top:1rem;max-width:20ch;">Three steps, no forms to chase.</h2>
-
-        <div class="mandate" style="margin-top:2rem;">
-            <div>
-                <p class="mono faint">01</p>
-                <p class="t-h3" style="margin-top:0.7rem;">Come and worship</p>
-                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">Serving flows out of belonging. Start by being in the room on a Sunday.</p>
-            </div>
-            <div>
-                <p class="mono faint">02</p>
-                <p class="t-h3" style="margin-top:0.7rem;">Tell us where you lean</p>
-                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">Speak to a unit head, or send us a message and we will point you to the right team.</p>
-            </div>
-            <div>
-                <p class="mono faint">03</p>
-                <p class="t-h3" style="margin-top:0.7rem;">Be trained, then sent</p>
-                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">Every unit trains its own. You are never dropped into a role unprepared.</p>
-            </div>
         </div>
-
-        <div class="flex flex-wrap items-center gap-3" style="margin-top:2.4rem;">
+        <div class="actions-row">
             <a href="{{ url_for('contact') }}" class="btn btn-gold">Tell us you are interested</a>
-            <a href="{{ url_for('departments') }}" class="btn btn-ghost">See all departments</a>
+            <a href="{{ url_for('departments') }}" class="btn btn-ghost">See the twelve units</a>
         </div>
     </div>
 </section>
 
 <section class="band band-light">
     <div class="shell">
-        <p class="mono eyebrow"><span class="rule"></span>Beyond the walls</p>
-        <h2 class="t-h2" style="margin-top:1rem;max-width:20ch;">Serve outside the building</h2>
-        <ul class="rows" style="margin-top:1.8rem;">
-            <li class="row row-link">
-                <a href="{{ url_for('outreach_detail', kind='prison') }}">
-                    <span class="mono faint row-i">01</span>
-                    <span class="row-main">
-                        <span class="t-h3">Annual Prison Outreach</span>
-                        <span class="t-sm row-sub">At the remand home beside our headquarters.</span>
-                    </span>
-                    <span class="row-go material-symbols-outlined">arrow_outward</span>
-                </a>
-            </li>
-            <li class="row row-link">
-                <a href="{{ url_for('outreach_detail', kind='medical') }}">
-                    <span class="mono faint row-i">02</span>
-                    <span class="row-main">
-                        <span class="t-h3">Free Medical Outreach</span>
-                        <span class="t-sm row-sub">Annual no-cost medical and community care for Abakaliki.</span>
-                    </span>
-                    <span class="row-go material-symbols-outlined">arrow_outward</span>
-                </a>
-            </li>
-        </ul>
+        <h2 class="sec-title">Serve outside the building</h2>
+        <div class="cards">
+            <a class="card" href="{{ url_for('outreach_detail', kind='prison') }}"><h3 class="t-h3">Annual Prison Outreach</h3><p>At the remand home beside our headquarters.</p></a>
+            <a class="card" href="{{ url_for('outreach_detail', kind='medical') }}"><h3 class="t-h3">Free Medical Outreach</h3><p>No-cost medical and community care.</p></a>
+        </div>
     </div>
 </section>
 

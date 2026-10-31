@@ -1,92 +1,49 @@
 {% set pageKey = 'stories' %}
+{% set pagePhoto = '/static/images/gallery/swm-10.jpg' %}
 {% set pageEyebrow = 'Stories' %}
 {% set pageTitle = 'Trees that budded again.' %}
 {% set metaTitle = 'Stories' %}
-{% set pageLede = 'What God has done in this house, told by the people it happened to.' %}
+{% set pageLede = 'What God has done, told by the people it happened to.' %}
 {% include "partials/site-page-open.html" %}
 
 <section class="band band-light">
     <div class="shell">
-        <div class="head">
-            <div>
-                <p class="mono eyebrow"><span class="rule"></span>From the house</p>
-                <h2 class="t-h2" style="margin-top:1rem;">
-                    {% if search %}Results for “{{ search }}”{% else %}All stories{% endif %}
-                </h2>
-            </div>
-            <form method="GET" action="{{ url_for('stories') }}" class="search-row" role="search">
-                <label class="sr-only" for="story-search">Search stories</label>
-                <input id="story-search" type="search" name="search" value="{{ search or '' }}" placeholder="Search stories"/>
-                <button class="btn btn-gold" type="submit">Search</button>
-            </form>
-        </div>
-
+        {% if stories or search %}
+        <form method="GET" action="{{ url_for('stories') }}" class="filters" role="search" style="margin:0 0 .8rem;">
+            <label class="sr-only" for="story-search">Search stories</label>
+            <input id="story-search" type="search" name="search" value="{{ search or '' }}" placeholder="Search stories" style="flex:1 1 13rem;"/>
+            <button class="btn btn-gold btn-sm" type="submit">Search</button>
+        </form>
+        {% endif %}
         {% if stories %}
-        <div class="blog-grid">
+        <div class="blog-grid" style="margin-top:0;">
             {% for story in stories %}
             <article class="blog">
-                <div class="blog-bg">
-                    {% if story.featured_image %}
-                    <img src="{{ story.featured_image if story.featured_image.startswith('/') else '/' ~ story.featured_image }}"
-                         alt="" loading="lazy" decoding="async"/>
-                    {% endif %}
-                </div>
+                <div class="blog-bg">{% if story.featured_image %}<img src="{{ story.featured_image if story.featured_image.startswith('/') else '/' ~ story.featured_image }}" alt="" loading="lazy" decoding="async"/>{% endif %}</div>
                 {% if story.category %}<span class="mono blog-cat">{{ story.category }}</span>{% endif %}
                 <h3 class="t-h3">{{ story.title }}</h3>
-                {% if story.excerpt %}
-                <p>{{ story.excerpt[:118] }}{{ '…' if story.excerpt|length > 118 else '' }}</p>
-                {% endif %}
-                <span class="blog-cta">Learn more</span>
-                <a class="blog-link" href="{{ url_for('story_detail', slug=story.slug) }}">
-                    <span class="sr-only">Read {{ story.title }}</span>
-                </a>
+                {% if story.excerpt %}<p>{{ story.excerpt[:90] }}{{ '…' if story.excerpt|length > 90 else '' }}</p>{% endif %}
+                <a class="blog-link" href="{{ url_for('story_detail', slug=story.slug) }}"><span class="sr-only">Read {{ story.title }}</span></a>
             </article>
             {% endfor %}
         </div>
-
         {% if pagination and (pagination.prev_url or pagination.next_url) %}
         <nav class="pager" aria-label="Pagination">
-            {% if pagination.prev_url %}<a class="btn btn-ghost" href="{{ pagination.prev_url }}">Previous</a>{% endif %}
+            {% if pagination.prev_url %}<a class="btn btn-ghost btn-sm" href="{{ pagination.prev_url }}">Previous</a>{% endif %}
             <span class="mono faint">Page {{ pagination.page }}{% if pagination.pages %} of {{ pagination.pages }}{% endif %}</span>
-            {% if pagination.next_url %}<a class="btn btn-ghost" href="{{ pagination.next_url }}">Next</a>{% endif %}
+            {% if pagination.next_url %}<a class="btn btn-ghost btn-sm" href="{{ pagination.next_url }}">Next</a>{% endif %}
         </nav>
         {% endif %}
-
         {% elif search %}
-        <div class="empty" style="margin-top:2rem;">
-            <p class="t-body">Nothing matched “{{ search }}”.</p>
-            <a href="{{ url_for('stories') }}" class="btn btn-ghost" style="margin-top:1.2rem;">Clear search</a>
-        </div>
+        <p class="t-body">Nothing matched “{{ search }}”. <a class="lnk-inline" href="{{ url_for('stories') }}">Clear search</a></p>
         {% else %}
-        <div class="empty" style="margin-top:2rem;">
-            <p class="t-body">Testimonies from our community will be shared here.</p>
-            <a href="{{ url_for('contact') }}" class="btn btn-ghost" style="margin-top:1.2rem;">Share your story</a>
-        </div>
+        <p class="t-body">Testimonies from our community will be shared here.</p>
         {% endif %}
-    </div>
-</section>
-
-<section class="band band-dark">
-    <div class="shell" style="text-align:center;">
-        <h2 class="t-h2" style="max-width:24ch;margin-inline:auto;">Has God done something in your life?</h2>
-        <p class="t-body" style="margin:1.1rem auto 0;max-width:50ch;">
-            Tell us. Someone in a dry season needs to hear that a cut-down tree can sprout again.
-        </p>
-        <div class="flex flex-wrap items-center justify-center gap-3" style="margin-top:1.8rem;">
-            <a href="{{ url_for('contact') }}" class="btn btn-gold">Share your testimony</a>
+        <div class="next-strip" style="margin-top:1rem;">
+            <p>Has God done something in your life?</p>
+            <a href="{{ url_for('contact') }}" class="btn btn-dark" style="margin-top:0;">Share your testimony</a>
         </div>
     </div>
 </section>
-
-<style>
-    .search-row { display: flex; align-items: flex-end; gap: 0.7rem; }
-    .search-row input {
-        background: transparent; border: 0; border-bottom: 1px solid var(--line-2);
-        color: var(--fg); font: inherit; font-size: 0.92rem; padding: 0.55rem 0;
-        min-width: min(15rem, 52vw);
-    }
-    .search-row input:focus { outline: none; border-bottom-color: var(--gold); }
-    .pager { display: flex; align-items: center; gap: 1.2rem; margin-top: 2.2rem; flex-wrap: wrap; }
-</style>
 
 {% include "partials/site-page-close.html" %}

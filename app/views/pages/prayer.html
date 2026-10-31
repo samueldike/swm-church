@@ -1,103 +1,49 @@
 {% set pageKey = 'prayer' %}
+{% set pagePhoto = '/static/home/worship.jpg' %}
 {% set pageEyebrow = 'Prayer' %}
 {% set pageTitle = 'Let us carry it with you.' %}
 {% set metaTitle = 'Send a prayer request' %}
-{% set pageLede = 'The Epaphras Company — our prayer team — receives every request. Nothing is too small, and nothing leaves this room.' %}
+{% set pageLede = 'Nothing is too small.' %}
 {% include "partials/site-page-open.html" %}
 
 <section class="band band-light">
-    <div class="shell prayer-split">
-        <div>
-            <p class="mono eyebrow"><span class="rule"></span>Send a request</p>
-            <h2 class="t-h2" style="margin-top:1rem;max-width:18ch;">Tell us what to pray.</h2>
-
-            {% if errors %}
-            <div class="alert alert-bad" role="alert" style="margin-top:1.6rem;">
-                {% for error in errors %}<p>{{ error }}</p>{% endfor %}
+    <div class="formbox">
+        <h2 class="sec-title">Tell us what to pray.</h2>
+        {% if errors %}<div class="alert alert-bad" role="alert">{% for error in errors %}<p>{{ error }}</p>{% endfor %}</div>{% endif %}
+        <form class="form-grid" method="POST" action="{{ url_for('prayer_store') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
+            <div class="hp" aria-hidden="true"><label>Leave this empty<input type="text" name="website" tabindex="-1" autocomplete="off"/></label></div>
+            <label class="field span-2"><span>Your request</span>
+                <textarea name="request" rows="5" required placeholder="Write as much or as little as you want."></textarea>
+            </label>
+            <label class="field"><span>Your name</span><input type="text" name="name" autocomplete="name"/></label>
+            <label class="field"><span>Email (optional)</span><input type="email" name="email" autocomplete="email"/></label>
+            <div class="span-2">
+                <label class="check"><input type="checkbox" name="anonymous" value="1"/> Submit this anonymously</label>
             </div>
-            {% endif %}
-
-            <form class="form-grid" method="POST" action="{{ url_for('prayer_store') }}" style="margin-top:1.8rem;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}"/>
-                <div class="hp" aria-hidden="true"><label>Leave this empty<input type="text" name="website" tabindex="-1" autocomplete="off"/></label></div>
-                <label class="field"><span>Your name</span>
-                    <input type="text" name="name" placeholder="Full name"/>
-                </label>
-                <label class="field"><span>Email <span style="text-transform:none;letter-spacing:0">(optional)</span></span>
-                    <input type="email" name="email" placeholder="you@example.com"/>
-                </label>
-                <label class="field span-2"><span>Phone <span style="text-transform:none;letter-spacing:0">(optional)</span></span>
-                    <input type="tel" name="phone" placeholder="{{ phone_code(platformCountry) }}…"/>
-                </label>
-                {% if branches and branches|length > 1 %}
-                <label class="field span-2"><span>Which branch should pray with you?</span>
-                    <select name="branch_id">
-                        {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if request.form.get('branch_id', '') == b.id|string else '' }}>{{ b.name }}{{ ' (Headquarters)' if b.is_hq else '' }}</option>{% endfor %}
-                    </select>
-                </label>
-                {% endif %}
-                <label class="field span-2"><span>Your request</span>
-                    <textarea name="request" rows="6" required placeholder="Write as much or as little as you want."></textarea>
-                </label>
-                <div class="span-2" style="display:flex;flex-direction:column;gap:0.7rem;">
-                    <label class="check"><input type="checkbox" name="anonymous" value="1"/> Submit this anonymously</label>
-                    <label class="check"><input type="checkbox" name="notify_me" value="1"/> Email me an update when it has been prayed over (needs your email)</label>
-                    <p class="t-sm">You can expect to hear from us within {{ prayerResponse }}. We never publish your request. See our <a class="lnk-inline" href="{{ url_for('privacy_policy') }}">privacy policy</a>.</p>
+            <details class="fold span-2">
+                <summary>More options</summary>
+                <div class="fold-in form-grid">
+                    <label class="field span-2"><span>Phone</span><input type="tel" name="phone" autocomplete="tel" placeholder="{{ phone_code(platformCountry) }}…"/></label>
+                    {% if branches and branches|length > 1 %}
+                    <label class="field span-2"><span>Which branch should pray with you?</span>
+                        <select name="branch_id">
+                            {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if request.form.get('branch_id', '') == b.id|string else '' }}>{{ b.name }}{{ ' (Headquarters)' if b.is_hq else '' }}</option>{% endfor %}
+                        </select>
+                    </label>
+                    {% endif %}
+                    <label class="check span-2"><input type="checkbox" name="notify_me" value="1"/> Email me an update when it has been prayed over</label>
                 </div>
-                <div class="span-2">
-                    <button type="submit" class="btn btn-gold">Send request</button>
-                </div>
-            </form>
-        </div>
-
-        <aside>
-            <div class="note">
-                <p class="t-h3">When we pray together</p>
-                <table class="sched" style="margin-top:0.9rem;">
-                    <tbody>
-                        {% for svc in services if 'pray' in svc.name|lower or 'vigil' in svc.name|lower %}
-                        <tr><td class="s-day mono">{{ svc.day }}</td><td class="s-name">{{ svc.name }}</td><td class="s-time mono">{{ svc.time }}</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            </details>
+            <div class="span-2">
+                <button type="submit" class="btn btn-gold">Send request</button>
+                <p class="form-note" style="margin-top:.5rem;">You can expect to hear from us within {{ prayerResponse }}. We never publish your request. <a class="lnk-inline" href="{{ url_for('privacy_policy') }}">Privacy policy</a></p>
             </div>
-
-            {% if counsellingPhone %}
-            <div class="note" style="margin-top:1.7rem;">
-                <p class="t-h3">Need to speak to someone?</p>
-                <p class="t-sm" style="margin-top:0.5rem;">A pastor is available for confidential counselling.</p>
-                <a class="counsel-tel" href="tel:{{ counsellingPhone|replace(' ', '') }}">
-                    <span class="material-symbols-outlined" style="font-size:19px">call</span>{{ counsellingPhone }}
-                </a>
-            </div>
-            {% endif %}
-
-            <div class="note" style="margin-top:1.7rem;">
-                <p class="t-h3">Job 14 : 7-9</p>
-                <p class="t-sm" style="margin-top:0.5rem;">
-                    “There is hope for a tree, if it is cut down, that it will sprout again…
-                    yet at the scent of water it will bud.”
-                </p>
-            </div>
-        </aside>
+        </form>
     </div>
+    {% if counsellingPhone %}
+    <p class="t-sm" style="text-align:center;margin-top:.8rem;">Need to speak to someone now? <a class="counsel-tel" href="tel:{{ counsellingPhone|replace(' ', '') }}">{{ counsellingPhone }}</a></p>
+    {% endif %}
 </section>
-
-<section class="band band-dark">
-    <div class="shell" style="text-align:center;">
-        <h2 class="t-h2" style="max-width:24ch;margin-inline:auto;">You do not have to carry it alone.</h2>
-        <div class="flex flex-wrap items-center justify-center gap-3" style="margin-top:1.8rem;">
-            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan a visit</a>
-            <a href="{{ url_for('get_involved') }}" class="btn btn-ghost">Join a unit</a>
-        </div>
-    </div>
-</section>
-
-<style>
-    .prayer-split { display: grid; gap: clamp(2.2rem, 5vw, 4.5rem); grid-template-columns: 1fr; align-items: start; }
-    @media (min-width: 940px) { .prayer-split { grid-template-columns: 1.35fr 0.65fr; } }
-    .prayer-split .sched td { padding-block: 0.55rem; font-size: 0.82rem; }
-    .prayer-split .sched .s-day { width: 5.6rem; }
-</style>
 
 {% include "partials/site-page-close.html" %}

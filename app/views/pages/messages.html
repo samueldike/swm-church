@@ -1,60 +1,29 @@
 {% set pageKey = 'messages' %}
+{% set pagePhoto = '/static/images/sliders/slide-0e9f3d70-78df-4877-9ba3-f50f6c50fcd7.jpg' %}
 {% set pageEyebrow = 'Audio messages' %}
-{% set pageTitle = 'The Word, kept and shared.' %}
+{% set pageTitle = 'A word for where you are today.' %}
 {% set metaTitle = 'Audio messages' %}
-{% set pageLede = 'Every message preached in this house, archived so you can return to it — or hear what you missed.' %}
+{% set pageLede = 'Listen, download and share.' %}
 {% include "partials/site-page-open.html" %}
 
-{% if featured_sermon %}
-<section class="band band-dark">
-    <div class="shell split">
-        <div>
-            <p class="mono eyebrow"><span class="rule"></span>Featured</p>
-            <h2 class="t-h2" style="margin-top:1rem;max-width:18ch;">{{ featured_sermon.title }}</h2>
-            {% if featured_sermon.caption %}
-            <p class="t-body" style="margin-top:1.2rem;">{{ featured_sermon.caption }}</p>
-            {% endif %}
-            <div class="feat-meta">
-                {% if featured_sermon.preacher %}<span class="mono faint">{{ featured_sermon.preacher }}</span>{% endif %}
-                {% if featured_sermon.published_at %}
-                <span class="mono faint">{{ featured_sermon.published_at.strftime('%d %b %Y') }}</span>
-                {% endif %}
+<section class="band">
+    <div class="shell">
+        {% if featured_sermon and not filtered %}
+        <div class="next-strip" style="margin-bottom:1rem;">
+            <div>
+                <p>{{ featured_sermon.title }}</p>
+                <span class="t-sm" style="color:var(--ink);">Latest{% if featured_sermon.preacher %} · {{ featured_sermon.preacher }}{% endif %}</span>
             </div>
-            <div class="flex flex-wrap items-center gap-3" style="margin-top:1.8rem;">
-                <a href="{{ url_for('messages_show', slug=featured_sermon.slug) }}" class="btn btn-gold">
-                    <span class="material-symbols-outlined" style="font-size:18px">play_arrow</span>
-                    Listen now
-                </a>
+            <div class="actions-row">
+                <a href="{{ url_for('messages_show', slug=featured_sermon.slug) }}" class="btn btn-dark" style="margin-top:0;">Listen now</a>
                 <a href="{{ url_for('watch') }}" class="btn btn-ghost">Watch live</a>
             </div>
         </div>
-        <div class="feat-art" aria-hidden="true">
-            <span class="material-symbols-outlined">graphic_eq</span>
-        </div>
-    </div>
-</section>
-{% endif %}
+        {% endif %}
 
-<section class="band band-light">
-    <div class="shell">
-        <div class="head">
-            <div>
-                <p class="mono eyebrow"><span class="rule"></span>The archive</p>
-                <h2 class="t-h2" style="margin-top:1rem;">
-                    {% if search %}Results for “{{ search }}”{% elif filtered %}Filtered messages{% else %}All messages{% endif %}
-                </h2>
-            </div>
-            <form method="GET" action="{{ url_for('messages') }}" class="search-row" role="search">
-                <label class="sr-only" for="msg-search">Search messages</label>
-                <input id="msg-search" type="search" name="search" value="{{ search or '' }}"
-                       placeholder="Title, preacher, series or scripture"/>
-                <button class="btn btn-gold" type="submit">Search</button>
-            </form>
-        </div>
-
-        {% if series_opts or preacher_opts|length > 1 or year_opts|length > 1 %}
-        <form method="GET" action="{{ url_for('messages') }}" class="msg-filters" aria-label="Filter messages">
-            {% if search %}<input type="hidden" name="search" value="{{ search }}"/>{% endif %}
+        <form method="GET" action="{{ url_for('messages') }}" class="filters" role="search" aria-label="Search and filter messages">
+            <label class="sr-only" for="msg-search">Search messages</label>
+            <input id="msg-search" type="search" name="search" value="{{ search or '' }}" placeholder="Search messages" style="flex:1 1 13rem;"/>
             {% if series_opts %}
             <label class="sr-only" for="f-series">Series</label>
             <select id="f-series" name="series" onchange="this.form.submit()"><option value="">All series</option>{% for s in series_opts %}<option value="{{ s }}" {{ 'selected' if f_series == s else '' }}>{{ s }}</option>{% endfor %}</select>
@@ -67,101 +36,41 @@
             <label class="sr-only" for="f-year">Year</label>
             <select id="f-year" name="year" onchange="this.form.submit()"><option value="">Any year</option>{% for y in year_opts %}<option value="{{ y }}" {{ 'selected' if f_year == y|string else '' }}>{{ y }}</option>{% endfor %}</select>
             {% endif %}
-            <noscript><button class="btn btn-ghost btn-sm" type="submit">Apply</button></noscript>
+            <button class="btn btn-gold btn-sm" type="submit">Search</button>
             {% if filtered %}<a class="lnk-inline" href="{{ url_for('messages') }}">Clear all</a>{% endif %}
         </form>
-        {% endif %}
 
         {% if sermons %}
-        <ul class="rows rows-play" style="margin-top:2rem;">
+        <ul class="tracks" style="margin-top:.8rem;">
             {% for sermon in sermons %}
-            <li class="row row-link">
+            <li>
+                <a class="play" href="{{ url_for('messages_show', slug=sermon.slug) }}" aria-hidden="true" tabindex="-1"><i></i></a>
                 <a href="{{ url_for('messages_show', slug=sermon.slug) }}">
-                    <span class="mono faint row-i">{{ '%02d'|format(loop.index + (((pagination.page if pagination else 1) - 1) * 12)) }}</span>
-                    <span class="row-play material-symbols-outlined" aria-hidden="true">play_arrow</span>
-                    <span class="row-main">
-                        <span class="t-h3">{{ sermon.title }}</span>
-                        {% if sermon.caption %}<span class="t-sm row-sub">{{ sermon.caption }}</span>{% endif %}
-                        {% if sermon.series or sermon.scripture %}<span class="t-sm row-sub">{{ [sermon.series, sermon.scripture]|select|join(' · ') }}</span>{% endif %}
-                    </span>
-                    <span class="row-meta mono faint">
-                        {{ sermon.preacher or '' }}
-                        {% if sermon.published_at %}<br/>{{ sermon.published_at.strftime('%d %b %Y') }}{% endif %}
-                    </span>
-                    <span class="row-go material-symbols-outlined">arrow_outward</span>
+                    <strong>{{ sermon.title }}</strong>
+                    <span>{{ [sermon.preacher, sermon.published_at.strftime('%d %b %Y') if sermon.published_at else '', sermon.series, sermon.scripture]|select|join(' · ') }}</span>
                 </a>
             </li>
             {% endfor %}
         </ul>
-
         {% if pagination and (pagination.prev_url or pagination.next_url) %}
         <nav class="pager" aria-label="Pagination">
-            {% if pagination.prev_url %}
-            <a class="btn btn-ghost" href="{{ pagination.prev_url }}">Previous</a>
-            {% endif %}
+            {% if pagination.prev_url %}<a class="btn btn-ghost btn-sm" href="{{ pagination.prev_url }}">Previous</a>{% endif %}
             <span class="mono faint">Page {{ pagination.page }}{% if pagination.pages %} of {{ pagination.pages }}{% endif %}</span>
-            {% if pagination.next_url %}
-            <a class="btn btn-ghost" href="{{ pagination.next_url }}">Next</a>
-            {% endif %}
+            {% if pagination.next_url %}<a class="btn btn-ghost btn-sm" href="{{ pagination.next_url }}">Next</a>{% endif %}
         </nav>
         {% endif %}
-
         {% elif filtered %}
-        <div class="empty" style="margin-top:2rem;">
+        <div class="empty">
             <p class="t-body">Nothing matched{% if search %} “{{ search }}”{% endif %}. Try fewer words or clear the filters.</p>
-            <a href="{{ url_for('messages') }}" class="btn btn-ghost" style="margin-top:1.2rem;">Clear search and filters</a>
+            <a href="{{ url_for('messages') }}" class="btn btn-ghost btn-sm" style="margin-top:.6rem;">Clear search and filters</a>
         </div>
         {% else %}
-        <div class="empty" style="margin-top:2rem;">
+        <div class="empty">
             <p class="t-body">Messages are published here after each service.</p>
-            <a href="{{ url_for('calendar') }}" class="btn btn-ghost" style="margin-top:1.2rem;">See service times</a>
+            <a href="{{ url_for('calendar') }}" class="btn btn-ghost btn-sm" style="margin-top:.6rem;">See service times</a>
         </div>
         {% endif %}
     </div>
 </section>
-
-<section class="band band-dark">
-    <div class="shell" style="text-align:center;">
-        <h2 class="t-h2" style="max-width:24ch;margin-inline:auto;">Hear it live, in the room.</h2>
-        <div class="flex flex-wrap items-center justify-center gap-3" style="margin-top:1.8rem;">
-            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan your visit</a>
-            <a href="{{ url_for('watch') }}" class="btn btn-ghost">Watch online</a>
-        </div>
-    </div>
-</section>
-
-<style>
-    .feat-art {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        aspect-ratio: 4 / 3;
-        max-height: 44svh;
-        border: 1px solid var(--line);
-        background: linear-gradient(150deg, #F4E7C4, var(--brand-gold));
-    }
-    .feat-art .material-symbols-outlined { font-size: 78px; color: var(--ink); opacity: .6; }
-    .feat-meta { display: flex; flex-wrap: wrap; gap: 1.2rem; margin-top: 1.4rem; }
-    .search-row { display: flex; align-items: flex-end; gap: 0.7rem; }
-    .search-row input {
-        background: transparent;
-        border: 0;
-        border-bottom: 1px solid var(--line-2);
-        color: var(--fg);
-        font: inherit;
-        font-size: 0.92rem;
-        padding: 0.55rem 0;
-        min-width: min(15rem, 52vw);
-    }
-    .search-row input:focus { outline: none; border-bottom-color: var(--gold); }
-    .msg-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem 1.4rem; margin-top: 1.6rem; }
-    .msg-filters select {
-        background: transparent; border: 0; border-bottom: 1px solid var(--line-2); color: var(--fg);
-        font: inherit; font-size: 0.88rem; padding: 0.5rem 1.4rem 0.5rem 0; max-width: 100%;
-    }
-    .msg-filters select option { background: #fff; color: #111; }
-    .msg-filters select:focus { outline: none; border-bottom-color: var(--gold); }
-    .pager { display: flex; align-items: center; gap: 1.2rem; margin-top: 2.2rem; flex-wrap: wrap; }
-</style>
 
 {% include "partials/site-page-close.html" %}

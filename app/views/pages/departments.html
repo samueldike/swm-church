@@ -1,67 +1,37 @@
 {% set pageKey = 'departments' %}
+{% set pagePhoto = '/static/images/gallery/swm-11.jpg' %}
 {% set pageEyebrow = 'Departments' %}
-{% set pageTitle = 'The units that carry this house.' %}
+{% set pageTitle = 'Twelve units. One family.' %}
 {% set metaTitle = 'Departments' %}
-{% set pageLede = 'Every department is a working part of the body — trained, sent, and answerable for a piece of the ministry.' %}
+{% set pageLede = 'There is a place for you.' %}
 {% include "partials/site-page-open.html" %}
 
-<section class="band band-light">
+<section class="band">
     <div class="shell">
-        <div class="head">
-            <div>
-                <p class="mono eyebrow"><span class="rule"></span>Departments</p>
-                <h2 class="t-h2" style="margin-top:1rem;">Where the work is done</h2>
-            </div>
-            <a href="{{ url_for('get_involved') }}" class="lnk">How to join</a>
-        </div>
-
-        {% if departments_list %}
-        <ul class="rows" style="margin-top:2rem;">
-            {% for dept in departments_list %}
-            <li class="row">
-                <span class="row-in">
-                    <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
-                    <span class="row-main">
-                        <span class="t-h3">{{ dept.name }}</span>
-                        {% if dept.description %}<span class="t-sm row-sub">{{ dept.description }}</span>{% endif %}
-                    </span>
-                </span>
-            </li>
+        <ul class="units units-blurb">
+            {% for name, role, blurb in [
+                ('Herald', 'Ushers', 'Order, welcome, seating.'),
+                ('The Follow-up Team', 'Discipleship', 'Walking new members into belonging.'),
+                ('The Still Waters', 'Choir', 'Leading the house in worship.'),
+                ('The Vineyard Keepers', 'Sanitation', 'Keeping the house clean and ready.'),
+                ('Kings and Priests', "Children's church", 'Shepherding our youngest members.'),
+                ('The Technical Department', 'Sound and stage', 'Everything that makes a service run.'),
+                ('The Epaphras Company', 'Prayer team', 'Standing in the gap.'),
+                ('The Armor Bearer', 'Protocol', 'Care for ministers and guests.'),
+                ('The Joseph Ministry', 'Welfare', 'Practical care for those in need.'),
+                ('Media and ICT', 'Communications', 'Cameras, streaming and design.'),
+                ('Dance and Drama', 'Creative arts', 'The message in movement and story.'),
+                ('Host and Hostess', 'Hospitality', 'Making the house feel like home.')
+            ] %}
+            <li><a href="{{ url_for('get_involved') }}"><b>{{ '%02d'|format(loop.index) }}</b><strong>{{ name }}</strong><span>{{ role }}</span><em>{{ blurb }}</em></a></li>
             {% endfor %}
         </ul>
-        {% else %}
-        <div class="empty" style="margin-top:2rem;">
-            <p class="t-body">Departments will be listed here once they are published from the admin.</p>
-            <a href="{{ url_for('get_involved') }}" class="btn btn-ghost" style="margin-top:1.2rem;">See the twelve units</a>
-        </div>
-        {% endif %}
-    </div>
-</section>
-
-<section class="band band-dark">
-    <div class="shell">
-        <p class="mono eyebrow"><span class="rule"></span>How a unit works</p>
-        <h2 class="t-h2" style="margin-top:1rem;max-width:20ch;">Trained, then trusted</h2>
-        <div class="mandate" style="margin-top:2rem;">
-            <div>
-                <p class="mono faint">01</p>
-                <p class="t-h3" style="margin-top:0.7rem;">A head who answers</p>
-                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">Each unit has a head of department accountable for its people and its standard.</p>
+        <div class="next-strip" style="margin-top:1rem;">
+            <p>Ready to serve?</p>
+            <div class="actions-row">
+                <a href="{{ url_for('get_involved') }}" class="btn btn-dark" style="margin-top:0;">Join a team</a>
+                <a href="{{ url_for('contact') }}" class="btn btn-ghost">Ask about a unit</a>
             </div>
-            <div>
-                <p class="mono faint">02</p>
-                <p class="t-h3" style="margin-top:0.7rem;">Its own training</p>
-                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">Nobody serves untrained. Every unit brings its new members up to the standard of the house.</p>
-            </div>
-            <div>
-                <p class="mono faint">03</p>
-                <p class="t-h3" style="margin-top:0.7rem;">Reported, not assumed</p>
-                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">Units report on their work, so the whole house can see what is actually happening.</p>
-            </div>
-        </div>
-        <div class="flex flex-wrap items-center gap-3" style="margin-top:2.4rem;">
-            <a href="{{ url_for('get_involved') }}" class="btn btn-gold">Find your place to serve</a>
-            <a href="{{ url_for('contact') }}" class="btn btn-ghost">Ask about a unit</a>
         </div>
     </div>
 </section>

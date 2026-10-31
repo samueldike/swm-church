@@ -1,122 +1,53 @@
 {% set pageKey = 'our-pastor' %}
-{% set pageEyebrow = 'Leadership' %}
+{% set pagePhoto = '/static/images/sliders/slide-0e9f3d70-78df-4877-9ba3-f50f6c50fcd7.jpg' %}
+{% set pageEyebrow = 'Our Pastor' %}
 {% set pageTitle = pastorName %}
-{% set pageLede = pastorTitle ~ ', ' ~ siteName %}
-{% set pageHeroImage = pastorPhoto if pastorPhoto.startswith('/') else '/' ~ pastorPhoto %}
+{% set pageLede = 'Author. Mentor. Revivalist. Builder of men.' %}
 {% set pageMeta = pastorBio[:150] %}
 {% include "partials/site-page-open.html" %}
 
-<section class="band band-light">
-    <div class="shell pastor-split">
-        <div class="pastor-portrait">
-            <img src="{{ pageHeroImage }}" alt="{{ pastorName }}" decoding="async"/>
-        </div>
+<section class="band">
+    <div class="shell duo">
+        <figure class="duo-photo duo-portrait"><img src="{{ pastorPhoto if pastorPhoto.startswith('/') else '/' ~ pastorPhoto }}" alt="{{ pastorName }}" decoding="async"/></figure>
         <div>
-            <p class="mono eyebrow"><span class="rule"></span>The man and the mandate</p>
-            <h2 class="t-h2" style="margin-top:1.1rem;max-width:18ch;">A teacher of grace, sent to reposition men.</h2>
-            <p class="t-body" style="margin-top:1.3rem;">{{ pastorBio }}</p>
-            <blockquote class="pq" style="margin-top:1.6rem;">
-                We believe every dead dream can live again.
-            </blockquote>
+            <p class="eyebrow">{{ pastorTitle }}</p>
+            <h2 class="sec-title" style="margin-top:.5rem;">Repositioning men for God’s best.</h2>
+            <p class="say">{{ pastorBio|truncate(260, True, '…') }}</p>
+            <div class="actions-row">
+                <a href="{{ url_for('messages') }}" class="btn btn-gold">Hear him teach</a>
+                <a href="{{ url_for('visit') }}" class="btn btn-ghost">Plan your visit</a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="band band-light">
+    <div class="shell">
+        <h2 class="sec-title">What he leads</h2>
+        <div class="cards">
+            {% for title, text in [
+                ('Singles Point Blank', 'Equipping singles for God’s ordained relationship.'),
+                ('Built to Last', 'Marriage prayer network across the nations.'),
+                ('Corpers Transition Network', 'Leadership skills for youth corpers.'),
+                ('The Alpha Team', 'A conclave for CEOs, ministers and leaders.'),
+                ('Doxa Connect', 'Radio podcast airing across Nigeria.'),
+                ('Scent Daily Devotional', 'The highly sought after daily companion.')
+            ] %}
+            <div class="card"><h3 class="t-h3">{{ title }}</h3><p>{{ text }}</p></div>
+            {% endfor %}
         </div>
     </div>
 </section>
 
 {% if pastorStory %}
-<section class="band band-dark" id="story">
-    <div class="shell" style="max-width:78ch;">
-        <p class="mono eyebrow"><span class="rule"></span>His story</p>
-        <h2 class="t-h2" style="margin-top:1.1rem;max-width:22ch;">How the call came</h2>
-        <div class="t-body story-text" style="margin-top:1.6rem;">{% for para in pastorStory.replace('\r\n', '\n').split('\n\n') if para.strip() %}<p>{{ para.strip() }}</p>{% endfor %}</div>
+<section class="band" id="story">
+    <div class="shell narrow-col">
+        <details class="fold">
+            <summary>His story</summary>
+            <div class="fold-in">{% for para in pastorStory.replace('\r\n', '\n').split('\n\n') if para.strip() %}<p>{{ para.strip() }}</p>{% endfor %}</div>
+        </details>
     </div>
 </section>
 {% endif %}
-
-<section class="band band-{{ 'light' if pastorStory else 'dark' }}">
-    <div class="shell">
-        <p class="mono eyebrow"><span class="rule"></span>What he carries</p>
-        <h2 class="t-h2" style="margin-top:1.1rem;max-width:20ch;">The burden of the house</h2>
-
-        <div class="mandate" style="margin-top:2rem;">
-            <div>
-                <p class="mono faint">Vision</p>
-                <p class="t-h3 vision">Repositioning men for God’s very best.</p>
-            </div>
-            <div>
-                <p class="mono faint">Emphasis</p>
-                <ul class="rows" style="margin-top:0.9rem;">
-                    {% for m in [
-                        'The teaching of the Word of Faith.',
-                        'The demonstration of the Spirit and power.',
-                        'Grace as the only ground we stand on.',
-                        'Excellence as an act of worship.'
-                    ] %}
-                    <li class="row"><span class="row-in">
-                        <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
-                        <span class="row-main">{{ m }}</span>
-                    </span></li>
-                    {% endfor %}
-                </ul>
-            </div>
-            <div>
-                <p class="mono faint">Where to find him</p>
-                <ul class="rows" style="margin-top:0.9rem;">
-                    {% for svc in services[:4] %}
-                    <li class="row"><span class="row-in">
-                        <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
-                        <span class="row-main"><span>{{ svc.name }}</span><span class="t-sm row-sub">{{ svc.day }}{% if svc.time %}, {{ svc.time }}{% endif %}</span></span>
-                    </span></li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
-    </div>
-</section>
-
-{% if sermons %}
-<section class="band band-light">
-    <div class="shell">
-        <div class="head">
-            <div>
-                <p class="mono eyebrow"><span class="rule"></span>Listen</p>
-                <h2 class="t-h2" style="margin-top:1.1rem;">Recent messages</h2>
-            </div>
-            <a href="{{ url_for('messages') }}" class="lnk">All messages</a>
-        </div>
-        <ul class="rows rows-play" style="margin-top:2rem;">
-            {% for sermon in sermons %}
-            <li class="row row-link">
-                <a href="{{ url_for('messages_show', slug=sermon.slug) }}">
-                    <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
-                    <span class="row-play material-symbols-outlined" aria-hidden="true">play_arrow</span>
-                    <span class="row-main">
-                        <span class="t-h3">{{ sermon.title }}</span>
-                        {% if sermon.caption %}<span class="t-sm row-sub">{{ sermon.caption }}</span>{% endif %}
-                    </span>
-                    <span class="row-go material-symbols-outlined">arrow_outward</span>
-                </a>
-            </li>
-            {% endfor %}
-        </ul>
-    </div>
-</section>
-{% endif %}
-
-<section class="band band-dark">
-    <div class="shell" style="text-align:center;">
-        <h2 class="t-h2" style="max-width:22ch;margin-inline:auto;">Come and sit under the teaching.</h2>
-        <div class="flex flex-wrap items-center justify-center gap-3" style="margin-top:1.8rem;">
-            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan your visit</a>
-            <a href="{{ url_for('prayer') }}" class="btn btn-ghost">Request prayer</a>
-        </div>
-    </div>
-</section>
-
-<style>
-    .pastor-split { display: grid; gap: clamp(2rem, 5vw, 4rem); grid-template-columns: 1fr; align-items: center; }
-    @media (min-width: 900px) { .pastor-split { grid-template-columns: 0.85fr 1.15fr; } }
-    .pastor-portrait { overflow: hidden; background: var(--paper-2); }
-    .pastor-portrait img { width: 100%; aspect-ratio: 4 / 5; object-fit: cover; object-position: top center; display: block; }
-</style>
 
 {% include "partials/site-page-close.html" %}

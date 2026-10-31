@@ -103,6 +103,8 @@ FastAPI + async SQLAlchemy + Postgres (asyncpg) + Jinja2 + Celery/Redis. Python 
 ## Public site design
 - One design for every public page: logo black, grey and gold on a light page, Bricolage Grotesque + Figtree. Styles: `app/static/site/site.css`. Scripts: `site.js` (all pages), `home.js` (home).
 - Interior pages include `partials/site-page-open.html` (head, header, photo banner), write `<section class="band">` blocks, and close with `partials/site-page-close.html`. Header and footer are `partials/site-header.html` and `site-footer.html`.
+- Interior pages stay short: one purpose, cards (`.cards`), folded detail (`details.fold`), one next step (`.next-strip`). A page's default banner is its `pagePhoto`.
+- `static/fonts/material-symbols-outlined.woff2` is a 30-icon subset: a name outside it shows as raw text. Check the font before using a new icon.
 - Home: church first, countdown and month calendar (`app/core/church_week.py`, from Settings services and published events). The one 3D chapter is `app/static/site/src/world.js`, bundled to `world.min.js` (three is bundled, never a CDN): **rebuild after editing**, command at the top of the file. Never name a section class `.on`: slides and lines use it as their state.
 
 ## Reliability rules learned from the promise audit (`PROMISE_AUDIT.md`)

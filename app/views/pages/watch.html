@@ -1,82 +1,40 @@
 {% set pageKey = 'watch' %}
+{% set pagePhoto = '/static/home/interlude.jpg' %}
 {% set pageEyebrow = 'Watch' %}
-{% set pageTitle = 'Join the service from wherever you are.' %}
+{% set pageTitle = 'Join us from wherever you are.' %}
 {% set metaTitle = 'Watch online' %}
-{% set pageLede = 'If you cannot be in the room at Mile 50, be in the room online.' %}
+{% set pageLede = 'Live services and messages, on your phone.' %}
 {% include "partials/site-page-open.html" %}
 
-<section class="band band-dark">
+<section class="band">
     <div class="shell">
-        <div class="head">
-            <div>
-                <p class="mono eyebrow"><span class="rule"></span>Live and on demand</p>
-                <h2 class="t-h2" style="margin-top:1rem;max-width:18ch;">Where to watch</h2>
-            </div>
-            <a href="{{ url_for('calendar') }}" class="lnk">Service times</a>
-        </div>
-
-        {% set channels = [
-            (socialYouTube,   'YouTube',   'Live services and full message replays.', 'smart_display'),
-            (socialFacebook,  'Facebook',  'Live streams and clips from recent services.', 'groups'),
-            (socialInstagram, 'Instagram', 'Short clips, highlights and daily encouragement.', 'photo_camera'),
-            (socialTelegram,  'Telegram',  'Audio messages delivered straight to your phone.', 'send')
-        ] %}
-        <ul class="rows" style="margin-top:2rem;">
-            {% for href, label, blurb, icon in channels %}{% if href %}
-            <li class="row row-link">
-                <a href="{{ href }}" target="_blank" rel="noopener">
-                    <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
-                    <span class="row-main">
-                        <span class="t-h3">{{ label }}</span>
-                        <span class="t-sm row-sub">{{ blurb }}</span>
-                    </span>
-                    <span class="row-go material-symbols-outlined">arrow_outward</span>
-                </a>
-            </li>
+        <div class="cards">
+            {% for href, label, blurb in [
+                (socialYouTube, 'YouTube', 'Live services and full replays.'),
+                (socialFacebook, 'Facebook', 'Live streams and clips.'),
+                (socialInstagram, 'Instagram', 'Clips and daily encouragement.'),
+                (socialTelegram, 'Telegram', 'Audio messages to your phone.')
+            ] %}{% if href %}
+            <a class="card" href="{{ href }}" target="_blank" rel="noopener"><h3 class="t-h3">{{ label }}</h3><p>{{ blurb }}</p><span class="sr-only">(opens in a new tab)</span></a>
             {% endif %}{% endfor %}
-        </ul>
-
-        {% if not (socialYouTube or socialFacebook or socialInstagram or socialTelegram) %}
-        <div class="empty" style="margin-top:2rem;">
-            <p class="t-body">Our online channels will be listed here soon. Until then, every message is in the <a class="lnk" href="{{ url_for('messages') }}">audio archive</a>.</p>
+            <a class="card" href="{{ url_for('messages') }}"><h3 class="t-h3">Audio messages</h3><p>Listen right here on the site.</p></a>
         </div>
-        {% endif %}
     </div>
 </section>
 
+{% if services %}
 <section class="band band-light">
-    <div class="shell">
-        <div class="head">
-            <div>
-                <p class="mono eyebrow"><span class="rule"></span>When we are live</p>
-                <h2 class="t-h2" style="margin-top:1rem;">Set your reminder</h2>
-            </div>
-            <a href="{{ url_for('messages') }}" class="lnk">Listen to the archive</a>
-        </div>
-        {% if services %}
-        <table class="sched" style="margin-top:2rem;">
+    <div class="shell narrow-col">
+        <h2 class="sec-title">When we are live</h2>
+        <table class="sched">
             <caption class="sr-only">Weekly service times</caption>
             <tbody>
-            {% for svc in services %}
-                <tr class="{{ 'lead' if svc.lead else '' }}"><td class="s-day mono">{{ svc.day }}</td><td class="s-name t-h3">{{ svc.name }}</td><td class="s-time mono">{{ svc.time }}</td></tr>
-            {% endfor %}
+                {% for svc in services %}<tr class="{{ 'lead' if svc.lead else '' }}"><td class="s-day mono">{{ svc.day }}</td><td class="s-name t-h3">{{ svc.name }}</td><td class="s-time mono">{{ svc.time }}</td></tr>{% endfor %}
             </tbody>
         </table>
-        {% else %}
-        <div class="empty" style="margin-top:2rem;"><p class="t-body">Our service times will be published here soon.</p></div>
-        {% endif %}
-        <p class="mono faint" style="margin-top:1.4rem;">All times are {{ platformTzLabel|default('local time') }}.</p>
+        <p class="form-note" style="margin-top:.5rem;">All times are {{ platformTzLabel|default('local time') }}.</p>
     </div>
 </section>
-
-<section class="band band-dark">
-    <div class="shell" style="text-align:center;">
-        <h2 class="t-h2" style="max-width:24ch;margin-inline:auto;">Watching is good. Being here is better.</h2>
-        <div class="flex flex-wrap items-center justify-center gap-3" style="margin-top:1.8rem;">
-            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan your visit</a>
-            <a href="{{ url_for('prayer') }}" class="btn btn-ghost">Request prayer</a>
-        </div>
-    </div>
-</section>
+{% endif %}
 
 {% include "partials/site-page-close.html" %}

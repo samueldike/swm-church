@@ -1,114 +1,41 @@
 {% set pageKey = 'events' %}
+{% set pagePhoto = '/static/home/interlude.jpg' %}
 {% set pageEyebrow = 'Events' %}
-{% set pageTitle = 'What is coming up.' %}
+{% set pageTitle = 'What’s coming up.' %}
 {% set metaTitle = 'Events' %}
-{% set pageLede = 'Services, programmes and gatherings at Mile 50 and across our branches.' %}
+{% set pageLede = 'There’s always a seat for you.' %}
 {% include "partials/site-page-open.html" %}
-
-{% if featured_event %}
-<section class="band band-dark">
-    <div class="shell split">
-        <div>
-            <p class="mono eyebrow"><span class="rule"></span>Next major programme</p>
-            <h2 class="t-h2" style="margin-top:1rem;max-width:18ch;">{{ featured_event.title }}</h2>
-            <div class="feat-meta">
-                <span class="mono gold">{{ featured_event.starts_at.strftime('%A, %d %B %Y') }}</span>
-                <span class="mono faint">{{ featured_event.starts_at.strftime('%I:%M %p')|replace(' 0', ' ') }}</span>
-            </div>
-            {% if featured_event.description %}
-            <p class="t-body" style="margin-top:1.2rem;">{{ featured_event.description }}</p>
-            {% endif %}
-            {% if featured_event.location %}
-            <p class="t-sm" style="margin-top:0.9rem;">{{ featured_event.location }}</p>
-            {% endif %}
-            <div class="flex flex-wrap items-center gap-3" style="margin-top:1.8rem;">
-                <a href="{{ url_for('event_detail', event_id=featured_event.id) }}" class="btn btn-gold">Details &amp; reminder</a>
-                <a href="{{ url_for('calendar') }}" class="btn btn-ghost">See the calendar</a>
-                <a href="{{ url_for('visit') }}" class="btn btn-ghost">Plan your visit</a>
-            </div>
-        </div>
-        <div class="split-media">
-            {% if featured_event.cover_image %}
-            <img src="{{ featured_event.cover_image if featured_event.cover_image.startswith('/') else '/' ~ featured_event.cover_image }}"
-                 alt="{{ featured_event.title }}" loading="lazy" decoding="async"/>
-            {% else %}
-            <div class="feat-art" aria-hidden="true"><span class="material-symbols-outlined">calendar_month</span></div>
-            {% endif %}
-        </div>
-    </div>
-</section>
-{% endif %}
 
 <section class="band band-light">
     <div class="shell">
-        <div class="head">
+        {% if featured_event %}
+        <div class="next-strip" style="margin-bottom:.8rem;">
             <div>
-                <p class="mono eyebrow"><span class="rule"></span>Upcoming</p>
-                <h2 class="t-h2" style="margin-top:1rem;">On the calendar</h2>
+                <p>{{ featured_event.title }}</p>
+                <span class="t-sm" style="color:var(--ink);">{{ featured_event.starts_at.strftime('%A, %d %B') }} · {{ featured_event.starts_at|clock }}{% if featured_event.location %} · {{ featured_event.location }}{% endif %}</span>
             </div>
-            <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
-                <a href="{{ url_for('calendar_ics') }}" class="lnk">Subscribe in your calendar app</a>
-                <a href="{{ url_for('calendar') }}" class="lnk">Full calendar</a>
-            </div>
+            <a href="{{ url_for('event_detail', event_id=featured_event.id) }}" class="btn btn-dark" style="margin-top:0;">Details &amp; reminder</a>
         </div>
+        {% endif %}
 
         {% if upcoming_events %}
-        <ul class="rows" style="margin-top:2rem;">
+        <ul class="ev-list">
             {% for ev in upcoming_events %}
-            <li class="row row-link">
-                <a href="{{ url_for('event_detail', event_id=ev.id) }}">
-                    <span class="mono faint row-i">{{ ev.starts_at.strftime('%d %b')|upper }}</span>
-                    <span class="row-main">
-                        <span class="t-h3">{{ ev.title }}</span>
-                        {% if ev.location or (ev.branch and not ev.branch.is_hq) %}<span class="t-sm row-sub">{{ [ev.location, (ev.branch.name if ev.branch and not ev.branch.is_hq else '')]|select|join(' · ') }}</span>{% endif %}
-                    </span>
-                    <span class="row-meta mono faint">{{ ev.starts_at|clock }}</span>
-                    <span class="row-go material-symbols-outlined" aria-hidden="true">arrow_outward</span>
-                </a>
-            </li>
+            <li><a class="ev-card" href="{{ url_for('event_detail', event_id=ev.id) }}">
+                <span class="date"><b>{{ ev.starts_at.day }}</b>{{ ev.starts_at.strftime('%b') }}</span>
+                <span><strong>{{ ev.title }}</strong><small>{{ ev.starts_at.strftime('%A') }}, {{ ev.starts_at|clock }}{% if ev.branch and not ev.branch.is_hq %} · {{ ev.branch.name }}{% endif %}</small></span>
+            </a></li>
             {% endfor %}
         </ul>
         {% else %}
-        <div class="empty" style="margin-top:2rem;">
-            <p class="t-body">No programmes are scheduled right now. Our weekly services continue as normal.</p>
-            <a href="{{ url_for('calendar') }}" class="btn btn-ghost" style="margin-top:1.2rem;">See service times</a>
-        </div>
+        <p class="t-body">No programmes are scheduled right now. Our weekly services continue as normal.</p>
         {% endif %}
+
+        <div class="actions-row">
+            <a href="{{ url_for('calendar') }}" class="btn btn-gold">Full calendar</a>
+            <a href="{{ url_for('calendar_ics') }}" class="btn btn-ghost">Subscribe in your calendar app</a>
+        </div>
     </div>
 </section>
-
-{% if recent_events %}
-<section class="band band-dark">
-    <div class="shell">
-        <p class="mono eyebrow"><span class="rule"></span>Recently</p>
-        <h2 class="t-h2" style="margin-top:1rem;">What we have just come through</h2>
-        <ul class="rows" style="margin-top:2rem;">
-            {% for ev in recent_events %}
-            <li class="row">
-                <span class="row-in">
-                    <span class="mono faint row-i">{{ ev.starts_at.strftime('%d %b')|upper }}</span>
-                    <span class="row-main">
-                        <span class="t-h3">{{ ev.title }}</span>
-                        {% if ev.location %}<span class="t-sm row-sub">{{ ev.location }}</span>{% endif %}
-                    </span>
-                    <span class="row-meta mono faint">{{ ev.starts_at.strftime('%Y') }}</span>
-                </span>
-            </li>
-            {% endfor %}
-        </ul>
-    </div>
-</section>
-{% endif %}
-
-<style>
-    .feat-meta { display: flex; flex-wrap: wrap; gap: 1.2rem; margin-top: 1.2rem; }
-    .feat-art {
-        display: flex; align-items: center; justify-content: center;
-        aspect-ratio: 4 / 3; max-height: 44svh;
-        border: 1px solid var(--line);
-        background: linear-gradient(150deg, #F4E7C4, var(--brand-gold));
-    }
-    .feat-art .material-symbols-outlined { font-size: 74px; color: var(--ink); opacity: .6; }
-</style>
 
 {% include "partials/site-page-close.html" %}

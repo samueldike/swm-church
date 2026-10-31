@@ -1,107 +1,70 @@
 {% set pageKey = 'branches' %}
+{% set pagePhoto = '/static/home/gather.jpg' %}
 {% set pageEyebrow = 'Find a branch' %}
 {% set pageTitle = 'A church near you.' %}
-{% set pageLede = 'Scent of Water Ministry meets in more than one place. Find the gathering closest to you, see when it meets, and plan your visit.' %}
+{% set pageLede = 'Find a gathering close to you.' %}
 {% set metaTitle = 'Find a branch' %}
 {% set metaDescription = 'Branches of Scent of Water Ministry — addresses, service times and contacts, with directions.' %}
 {% include "partials/site-page-open.html" %}
 
-{% if hq %}
-<section class="band band-dark">
-    <div class="shell bx-hq">
-        <div>
-            <p class="mono eyebrow"><span class="rule"></span>Headquarters</p>
-            <h2 class="t-h2" style="margin-top:1rem;max-width:18ch;">{{ hq.name }}</h2>
-            {% if hq.address %}<p class="t-body" style="margin-top:1rem;max-width:44ch;">{{ hq.address }}</p>{% endif %}
-        </div>
-        <div class="flex flex-wrap items-center gap-3">
-            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan your visit</a>
-            {% if hq.directions %}<a href="{{ hq.directions }}" class="btn btn-ghost" target="_blank" rel="noopener">Directions<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
-        </div>
-    </div>
-</section>
-{% endif %}
-
 <section class="band band-light">
     <div class="shell">
-        <div class="head">
-            <div>
-                <p class="mono eyebrow"><span class="rule"></span>Our branches</p>
-                <h2 class="t-h2" style="margin-top:1rem;">{% if q or state or country %}{{ shown|length }} found{% else %}{{ total }} branch{{ '' if total == 1 else 'es' }}{% endif %}</h2>
-            </div>
-            {% if total > 3 %}
-            <form method="GET" action="{{ url_for('branches') }}" class="bx-filter" role="search">
-                <label class="sr-only" for="bx-q">Search branches</label>
-                <input id="bx-q" type="search" name="q" value="{{ q }}" placeholder="Search by town or pastor"/>
-                {% if countries|length > 1 %}
-                <label class="sr-only" for="bx-country">Country</label>
-                <select id="bx-country" name="country" onchange="this.form.state && (this.form.state.value=''); this.form.submit()">
-                    <option value="">All countries</option>
-                    {% for code, name in countries %}<option value="{{ code }}" {{ 'selected' if country == code else '' }}>{{ name }}</option>{% endfor %}
-                </select>
-                {% endif %}
-                {% if states|length > 1 %}
-                <label class="sr-only" for="bx-state">State / region</label>
-                <select id="bx-state" name="state" onchange="this.form.submit()">
-                    <option value="">All states / regions</option>
-                    {% for code, name in states %}<option value="{{ code }}" {{ 'selected' if state == code else '' }}>{{ name }}</option>{% endfor %}
-                </select>
-                {% endif %}
-                <button class="btn btn-gold" type="submit">Search</button>
-            </form>
+        {% if total > 3 %}
+        <form method="GET" action="{{ url_for('branches') }}" class="filters" role="search" style="margin:0 0 .8rem;">
+            <label class="sr-only" for="bx-q">Search branches</label>
+            <input id="bx-q" type="search" name="q" value="{{ q }}" placeholder="Search by town or pastor" style="flex:1 1 13rem;"/>
+            {% if countries|length > 1 %}
+            <label class="sr-only" for="bx-country">Country</label>
+            <select id="bx-country" name="country" onchange="this.form.state && (this.form.state.value=''); this.form.submit()">
+                <option value="">All countries</option>
+                {% for code, name in countries %}<option value="{{ code }}" {{ 'selected' if country == code else '' }}>{{ name }}</option>{% endfor %}
+            </select>
             {% endif %}
-        </div>
-
-        {% if shown %}
-        <ul class="rows rows-play" style="margin-top:2rem;">
-            {% for b in shown %}
-            {% if countries|length > 1 and (loop.first or b.country != loop.previtem.country) %}
-            <li class="mono eyebrow" style="padding:1.6rem 0 0.4rem;list-style:none;">{{ b.country or 'Other' }}</li>
+            {% if states|length > 1 %}
+            <label class="sr-only" for="bx-state">State / region</label>
+            <select id="bx-state" name="state" onchange="this.form.submit()">
+                <option value="">All states / regions</option>
+                {% for code, name in states %}<option value="{{ code }}" {{ 'selected' if state == code else '' }}>{{ name }}</option>{% endfor %}
+            </select>
             {% endif %}
-            <li class="row row-link">
-                <a href="{{ url_for('branch_detail', slug=b.slug) }}">
-                    <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
-                    <span class="row-main">
-                        <span class="t-h3">{{ b.name }}</span>
-                        <span class="t-sm row-sub">{{ b.place or b.address }}{% if b.services %} · {{ b.services[0] }}{% endif %}</span>
-                    </span>
-                    <span class="row-meta mono faint">{{ b.pastor }}</span>
-                    <span class="row-go material-symbols-outlined" aria-hidden="true">arrow_outward</span>
-                </a>
-            </li>
-            {% endfor %}
-        </ul>
-        {% elif total %}
-        <div class="empty"><p class="t-body">No branch matched. <a class="lnk-inline" href="{{ url_for('branches') }}">Show all branches</a>.</p></div>
-        {% else %}
-        <div class="empty">
-            <p class="t-body">Our branch directory is being prepared. In the meantime you are welcome at headquarters, or send us a message and we will point you to the nearest gathering.</p>
-            <a href="{{ url_for('contact') }}" class="btn btn-ghost" style="margin-top:1.2rem;">Contact us</a>
-        </div>
+            <button class="btn btn-gold btn-sm" type="submit">Search</button>
+        </form>
         {% endif %}
-    </div>
-</section>
 
-<section class="band band-dark">
-    <div class="shell" style="text-align:center;">
-        <h2 class="t-h2" style="max-width:24ch;margin-inline:auto;">Do not see your town?</h2>
-        <p class="t-body" style="max-width:52ch;margin:1.2rem auto 0;">Tell us where you are and we will help you find a gathering, or pray with you from wherever you are.</p>
-        <div class="flex flex-wrap items-center justify-center gap-3" style="margin-top:1.8rem;">
-            <a href="{{ url_for('contact') }}" class="btn btn-gold">Contact us</a>
-            <a href="{{ url_for('prayer') }}" class="btn btn-ghost">Send a prayer request</a>
+        <div class="cards">
+            {% if hq %}
+            <div class="card card-ink">
+                <p style="color:var(--brand-gold);font-weight:700;">Headquarters</p>
+                <h3 class="t-h3">{{ hq.name }}</h3>
+                {% if hq.address %}<p>{{ hq.address }}</p>{% endif %}
+                <div class="actions-row" style="margin-top:.5rem;">
+                    <a href="{{ url_for('visit') }}" class="btn btn-gold btn-sm" style="margin:0;align-self:center;">Plan your visit</a>
+                    {% if hq.directions %}<a href="{{ hq.directions }}" class="lnk" style="color:#fff;margin:0;align-self:center;" target="_blank" rel="noopener">Directions<span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
+                </div>
+            </div>
+            {% endif %}
+            {% for b in shown %}
+            <a class="card" href="{{ url_for('branch_detail', slug=b.slug) }}">
+                {% if countries|length > 1 and b.country %}<p style="font-weight:700;">{{ b.country }}</p>{% endif %}
+                <h3 class="t-h3">{{ b.name }}</h3>
+                <p>{{ b.place or b.address }}</p>
+                {% if b.services %}<p>{{ b.services[0] }}</p>{% endif %}
+                {% if b.pastor %}<p>{{ b.pastor }}</p>{% endif %}
+            </a>
+            {% endfor %}
+            <div class="card">
+                <p style="color:var(--gold-deep);font-weight:700;">Campus expression</p>
+                <h3 class="t-h3">Oasis Fellowship (OFEL)</h3>
+                <p>Ebonyi State University, CAS Campus</p>
+            </div>
         </div>
+
+        {% if total and not shown %}
+        <p class="t-body" style="margin-top:.7rem;">No branch matched. <a class="lnk-inline" href="{{ url_for('branches') }}">Show all branches</a>.</p>
+        {% endif %}
+        {% if not total %}<p class="t-body" style="margin-top:.7rem;">Our branch directory is being prepared.</p>{% endif %}
+        <p class="t-body" style="margin-top:.9rem;">Do not see your town? <a class="lnk-inline" href="{{ url_for('contact') }}">Tell us where you are</a> and we will help you find a gathering.</p>
     </div>
 </section>
-
-<style>
-    .bx-hq { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 1.6rem 2rem; }
-    .bx-filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.7rem; }
-    .bx-filter input, .bx-filter select {
-        background: transparent; border: 0; border-bottom: 1px solid var(--line-2); color: var(--fg);
-        font: inherit; font-size: 0.92rem; padding: 0.55rem 0; min-width: min(14rem, 52vw);
-    }
-    .bx-filter select option { background: #fff; color: #111; }
-    .bx-filter input:focus, .bx-filter select:focus { outline: none; border-bottom-color: var(--gold); }
-</style>
 
 {% include "partials/site-page-close.html" %}

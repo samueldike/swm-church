@@ -1,11 +1,12 @@
 {% set pageKey = 'prayer' %}
+{% set pagePhoto = '/static/home/worship.jpg' %}
 {% set pageEyebrow = 'Prayer' %}
 {% set pageTitle = 'We are standing with you.' %}
-{% set pageLede = 'Your request has reached the prayer team. You do not have to carry this alone.' %}
+{% set pageLede = 'Your request has reached the prayer team.' %}
 {% include "partials/site-page-open.html" %}
 
 <section class="band band-light">
-    <div class="shell pt-split">
+    <div class="shell narrow-col">
         <div>
             <p class="mono eyebrow"><span class="rule"></span>What happens next</p>
             <ul class="rows" style="margin-top:1.6rem;">
@@ -22,25 +23,7 @@
                 <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan your visit</a>
             </div>
         </div>
-        <aside>
-            {% if counsellingPhone %}
-            <div class="note">
-                <p class="t-h3">Speak to a pastor</p>
-                <a class="counsel-tel" href="tel:{{ counsellingPhone|replace(' ', '') }}"><span class="material-symbols-outlined" style="font-size:19px" aria-hidden="true">call</span>{{ counsellingPhone }}</a>
-                {% if counsellingHours %}<p class="mono faint" style="margin-top:0.6rem;">{{ counsellingHours }}</p>{% endif %}
-            </div>
-            {% endif %}
-            {% if whatsappChat %}
-            <div class="note" style="margin-top:1.6rem;">
-                <p class="t-h3">Message us on WhatsApp</p>
-                <a class="lnk" style="margin-top:0.7rem;" href="{{ whatsappChat }}" target="_blank" rel="noopener">Open WhatsApp<span class="sr-only"> (opens in a new tab)</span></a>
-            </div>
-            {% endif %}
-            <div class="note" style="margin-top:1.6rem;">
-                <p class="t-h3">Job 14 : 7-9</p>
-                <p class="t-sm" style="margin-top:0.5rem;">“There is hope for a tree, if it is cut down, that it will sprout again… yet at the scent of water it will bud.”</p>
-            </div>
-        </aside>
+        
     </div>
 </section>
 

@@ -1,75 +1,39 @@
 {% set pageKey = 'outreach' %}
+{% set pagePhoto = '/static/images/outreach/outreach-07.jpg' %}
 {% set pageEyebrow = page.eyebrow %}
 {% set pageTitle = page.title %}
-{% set pageLede = page.lede %}
+{% set pageLede = '' %}
 {% set pageMeta = page.lede[:150] %}
 {% include "partials/site-page-open.html" %}
 
-<section class="band band-light">
+<section class="band">
     <div class="shell">
-        <p class="mono eyebrow"><span class="rule"></span>What this is</p>
-        <ul class="rows" style="margin-top:1.6rem;">
-            {% for label, text in page.points %}
-            <li class="row">
-                <span class="row-in">
-                    <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
-                    <span class="row-main">
-                        <span class="t-h3">{{ label }}</span>
-                        <span class="t-sm row-sub">{{ text }}</span>
-                    </span>
-                </span>
-            </li>
-            {% endfor %}
-        </ul>
+        <div class="cards">
+            {% for label, text in page.points %}<div class="card"><h3 class="t-h3">{{ label }}</h3><p>{{ text }}</p></div>{% endfor %}
+        </div>
     </div>
 </section>
 
 {% if photos %}
-<section class="band band-dark">
+<section class="band band-light">
     <div class="shell">
-        <div class="head">
-            <div>
-                <p class="mono eyebrow"><span class="rule"></span>From the field</p>
-                <h2 class="t-h2" style="margin-top:1rem;">On the ground</h2>
-            </div>
-            <p class="t-sm" style="max-width:26ch;text-align:right;">{{ photos|length }} photographs from the outreach.</p>
-        </div>
-        {# No per-tile caption: every frame is from the event named above, so
-           repeating it under each photo would be noise. #}
-        <div class="out-grid">
-            {% for shot in photos %}
-            <figure class="out-shot">
-                <img src="{{ shot.src }}" alt="{{ shot.alt }}" loading="lazy" decoding="async"/>
-            </figure>
-            {% endfor %}
+        <div class="photo-grid">
+            {% for shot in photos[:8] %}<img src="{{ shot.src }}" alt="{{ shot.alt }}" loading="lazy" decoding="async"/>{% endfor %}
         </div>
     </div>
 </section>
 {% endif %}
 
-<section class="band band-light">
-    <div class="shell" style="text-align:center;">
-        <h2 class="t-h2" style="max-width:24ch;margin-inline:auto;">Water carried to dry ground.</h2>
-        <p class="t-body" style="margin:1.1rem auto 0;max-width:50ch;">
-            This work runs on people who show up and gifts that make it possible.
-        </p>
-        <div class="flex flex-wrap items-center justify-center gap-3" style="margin-top:1.9rem;">
-            <a href="{{ url_for('give') }}" class="btn btn-gold">Support this outreach</a>
-            <a href="{{ url_for('get_involved') }}" class="btn btn-ghost">Volunteer</a>
-        </div>
-        <div style="margin-top:1.6rem;">
-            {% if kind == 'medical' %}
-            <a href="{{ url_for('outreach_detail', kind='prison') }}" class="lnk">See the Annual Prison Outreach</a>
-            {% else %}
-            <a href="{{ url_for('outreach_detail', kind='medical') }}" class="lnk">See the Free Medical Outreach</a>
-            {% endif %}
+<section class="band">
+    <div class="shell">
+        <div class="next-strip">
+            <p>Water carried to dry ground.</p>
+            <div class="actions-row">
+                <a href="{{ url_for('give') }}" class="btn btn-dark" style="margin-top:0;">Support this outreach</a>
+                <a href="{{ url_for('get_involved') }}" class="btn btn-ghost">Volunteer</a>
+            </div>
         </div>
     </div>
 </section>
-
-<style>
-    .out-grid { display: grid; gap: 0.8rem; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); margin-top: 2rem; }
-    .out-shot img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: var(--surface); }
-</style>
 
 {% include "partials/site-page-close.html" %}

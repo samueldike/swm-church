@@ -1,8 +1,9 @@
 {% set pageKey = 'calendar' %}
+{% set pagePhoto = '/static/home/interlude.jpg' %}
 {% set pageEyebrow = 'Calendar' %}
 {% set pageTitle = 'The church calendar.' %}
 {% set metaTitle = 'Church calendar' %}
-{% set pageLede = 'Every service and programme an admin has published — browse the year, not just this week.' %}
+{% set pageLede = 'Every service and programme, month by month.' %}
 {% include "partials/site-page-open.html" %}
 
 <section class="band band-dark" id="cal-section" data-month="{{ currentMonth.strftime('%Y-%m') }}">
@@ -109,67 +110,15 @@
     </div>
 </section>
 
-<section class="band band-dark">
-    <div class="shell">
-        <div class="head">
-            <div>
-                <p class="mono eyebrow"><span class="rule"></span>Every week</p>
-                <h2 class="t-h2" style="margin-top:1rem;">The weekly rhythm</h2>
+<section class="band">
+    <div class="shell narrow-col">
+        <details class="fold">
+            <summary>Our weekly services</summary>
+            <div class="fold-in">
+                <table class="sched"><tbody>{% for svc in services %}<tr class="{{ 'lead' if svc.lead else '' }}"><td class="s-day mono">{{ svc.day }}</td><td class="s-name t-h3">{{ svc.name }}</td><td class="s-time mono">{{ svc.time }}</td></tr>{% endfor %}</tbody></table>
+                <p class="form-note" style="margin-top:.5rem;">HQ times are {{ platformTzLabel|default('local time') }}; branch events are in that church's local time.</p>
             </div>
-        </div>
-
-        <ul class="rows" style="margin-top:2rem;">
-            {% for svc in services %}{% set day, name, time, lead = svc.day, svc.name, svc.time, svc.lead %}
-            <li class="row">
-                <span class="row-in">
-                    <span class="mono row-i {{ 'gold' if lead else 'faint' }}" style="min-width:6.5rem;">{{ day }}</span>
-                    <span class="row-main">
-                        <span class="t-h3">{{ name }}</span>
-                    </span>
-                    <span class="row-meta mono {{ 'gold' if lead else 'faint' }}">{{ time }}</span>
-                </span>
-            </li>
-            {% endfor %}
-        </ul>
-
-        <p class="t-sm" style="margin-top:1.7rem;">
-            {% if siteHeadquartersAddress %}{{ siteHeadquartersAddress }}
-            &nbsp;·&nbsp; {% endif %}HQ times are {{ platformTzLabel|default('local time') }}; branch events are in that church's local time.
-        </p>
-    </div>
-</section>
-
-<section class="band band-light">
-    <div class="shell">
-        <p class="mono eyebrow"><span class="rule"></span>Through the year</p>
-        <h2 class="t-h2" style="margin-top:1rem;max-width:20ch;">Annual outreaches</h2>
-        <ul class="rows" style="margin-top:2rem;">
-            <li class="row row-link">
-                <a href="{{ url_for('outreach_detail', kind='prison') }}">
-                    <span class="mono faint row-i">01</span>
-                    <span class="row-main">
-                        <span class="t-h3">Annual Prison Outreach</span>
-                        <span class="t-sm row-sub">At the remand home beside our headquarters.</span>
-                    </span>
-                    <span class="row-go material-symbols-outlined">arrow_outward</span>
-                </a>
-            </li>
-            <li class="row row-link">
-                <a href="{{ url_for('outreach_detail', kind='medical') }}">
-                    <span class="mono faint row-i">02</span>
-                    <span class="row-main">
-                        <span class="t-h3">Free Medical Outreach</span>
-                        <span class="t-sm row-sub">No-cost medical and community care for Abakaliki.</span>
-                    </span>
-                    <span class="row-go material-symbols-outlined">arrow_outward</span>
-                </a>
-            </li>
-        </ul>
-
-        <div class="flex flex-wrap items-center gap-3" style="margin-top:2.4rem;">
-            <a href="{{ url_for('visit') }}" class="btn btn-gold">Plan your first visit</a>
-            <a href="{{ url_for('watch') }}" class="btn btn-ghost">Watch online instead</a>
-        </div>
+        </details>
     </div>
 </section>
 

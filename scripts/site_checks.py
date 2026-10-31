@@ -427,10 +427,10 @@ with TestClient(app, raise_server_exceptions=False, base_url="https://testserver
     ss = dict(Q("select key, value from site_settings"))
     rec("service times, visit list and teaching are saved as JSON from the rows", json.loads(ss["serviceTimes"])[1] == {"day": "Thursday", "name": "Miracle Night", "time": "6:00 — 8:00 pm", "lead": False} and json.loads(ss["visitExpect"]) == [{"title": "Parking", "text": "Free parking on site."}] and json.loads(ss["beliefs"])[0]["title"] == "We believe in grace")
     rec("an unsafe channel link is dropped and the Plausible domain is cleaned", ss.get("whatsappChannelUrl", "") == "" and ss["plausibleDomain"] == "scentofwater.orgx")
-    rec("the public site follows: visit, home, about, contact", "Miracle Night" in V.get("/visit").text and "Miracle Night" in V.get("/").text and "Miracle Night" in V.get("/about").text and "Thursday" in V.get("/contact").text)
+    rec("the public site follows: visit, home, watch, calendar", "Miracle Night" in V.get("/visit").text and "Miracle Night" in V.get("/").text and "Miracle Night" in V.get("/watch").text and "Miracle Night" in V.get("/calendar").text)
     rec("visit details appear only when filled", "Ample parking" in V.get("/visit").text and "What to wear" not in V.get("/visit").text)
     ab = V.get("/about").text
-    rec("About shows the saved teaching and story (paragraphs), not the defaults", "We believe in grace" in ab and "The ground we stand on" in ab and "It began in 1999." in ab and "Then it grew." in ab and "The grace of God" not in ab)
+    rec("About shows the saved teaching and story (paragraphs), not the defaults", "We believe in grace" in ab and "What we teach" in ab and "It began in 1999." in ab and "Then it grew." in ab and "The grace of God" not in ab)
     rec("the story section is hidden while empty", "It began in 1999." in ab and (setting(ourStory="") or True) and "How this house began" not in V.get("/about").text)
     rec("Plausible script is added when a domain is set", 'data-domain="scentofwater.orgx"' in V.get("/").text)
     rec("the prayer promise follows the setting", "within 48 hours" in V.get("/prayer").text)

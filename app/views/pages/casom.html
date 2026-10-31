@@ -1,163 +1,58 @@
 {% set pageKey = 'casom' %}
-{% set pageEyebrow = 'CASOM · School of Ministry' %}
+{% set pagePhoto = '/static/images/gallery/swm-01.jpg' %}
+{% set pageEyebrow = 'School of Ministry' %}
 {% set pageTitle = 'Cave of Adullam School of Ministry' %}
-{% set pageLede = 'Raising a genuine breed of ministers for the harvest. Four months of intensive ministerial training — a spiritual furnace, not an academic exercise.' %}
+{% set pageLede = 'Four months of intensive ministerial training.' %}
 {% include "partials/site-page-open.html" %}
 
-<section class="band band-light">
+<section class="band">
     <div class="shell">
-        <p class="mono eyebrow"><span class="rule"></span>A training ground for spiritual excellence</p>
-        <h2 class="t-h2" style="margin-top:1rem;max-width:22ch;">Four months that reshape a minister.</h2>
-        <p class="t-body" style="margin-top:1.3rem;">
-            CASOM is an intensive four-month ministerial training programme designed to equip
-            the saints for the work of the ministry. It is more than an academic pursuit; it
-            is a spiritual furnace where hearts are forged and spirits are sharpened.
-        </p>
-
-        {% set pillars = [
-            ('Life in the Spirit',   'Deep cultivation of intimacy with the Holy Ghost.'),
-            ('Practical Ministry',   'Hands-on exposure to ministerial operations.'),
-            ('Intensive Curriculum', 'Structured learning across two focused semesters.'),
-            ('Mentorship',           'Direct access to seasoned ministerial leaders.')
-        ] %}
-        <ul class="rows" style="margin-top:2.2rem;">
-            {% for name, blurb in pillars %}
-            <li class="row"><span class="row-in">
-                <span class="mono faint row-i">{{ '%02d'|format(loop.index) }}</span>
-                <span class="row-main">
-                    <span class="t-h3">{{ name }}</span>
-                    <span class="t-sm row-sub">{{ blurb }}</span>
-                </span>
-            </span></li>
+        <h2 class="sec-title">Four months that reshape a minister.</h2>
+        <div class="cards">
+            {% for title, text in [
+                ('Life in the Spirit', 'Deep intimacy with the Holy Ghost.'),
+                ('Practical Ministry', 'Hands-on ministerial exposure.'),
+                ('Intensive Curriculum', 'Two focused semesters.'),
+                ('Mentorship', 'Direct access to seasoned leaders.')
+            ] %}
+            <div class="card"><h3 class="t-h3">{{ title }}</h3><p>{{ text }}</p></div>
             {% endfor %}
-        </ul>
-    </div>
-</section>
-
-<section class="band band-dark has-crest">
-    <div class="crest" aria-hidden="true"></div>
-    <div class="shell scripture-wrap">
-        <p class="mono eyebrow"><span class="rule"></span>The guiding vision</p>
-        <blockquote class="scripture">
-            “And he gave some, apostles; and some, prophets; and some, evangelists; and some,
-            pastors and teachers; for the perfecting of the saints, for the work of the
-            ministry, for the edifying of the body of Christ…”
-        </blockquote>
-        <p class="mono gold" style="margin-top:1.6rem;">Ephesians 4 : 11-13</p>
-    </div>
-</section>
-
-<section class="band band-light">
-    <div class="shell">
-        <p class="mono eyebrow"><span class="rule"></span>Programme structure</p>
-        <h2 class="t-h2" style="margin-top:1rem;max-width:24ch;">Two rigorous phases</h2>
-        <p class="t-body" style="margin-top:1.2rem;">
-            A comprehensive and balanced approach to ministerial education, divided into two
-            phases of spiritual and intellectual growth.
-        </p>
-
-        <div class="mandate" style="margin-top:2.2rem;">
-            <div>
-                <p class="mono gold">First Semester</p>
-                <p class="t-h3" style="margin-top:0.7rem;">6 weeks of foundations</p>
-                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">
-                    The internal architecture of the minister — character formation and the
-                    fundamentals of the faith.
-                </p>
-                <ul class="rows" style="margin-top:1rem;">
-                    {% for c in ['Biblical Hermeneutics', 'Character & Ethics', 'Spiritual Disciplines'] %}
-                    <li class="row"><span class="row-in"><span class="row-main">{{ c }}</span></span></li>
-                    {% endfor %}
-                </ul>
-            </div>
-            <div>
-                <p class="mono gold">Second Semester</p>
-                <p class="t-h3" style="margin-top:0.7rem;">6 weeks of core mastery</p>
-                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">
-                    Specialised training in the life and ministry areas required for holistic
-                    success in the vineyard.
-                </p>
-                <ul class="rows" style="margin-top:1rem;">
-                    {% for c in ['Ministerial Conduct', 'Family & Ministry', 'Kingdom Finance'] %}
-                    <li class="row"><span class="row-in"><span class="row-main">{{ c }}</span></span></li>
-                    {% endfor %}
-                </ul>
-            </div>
-            <div>
-                <p class="mono gold">Assessment</p>
-                <p class="t-h3" style="margin-top:0.7rem;">Examination &amp; evaluation</p>
-                <p class="t-sm" style="margin-top:0.5rem;max-width:34ch;">
-                    Rigorous assessments at the end of each semester to ensure mastery.
-                </p>
-                <ul class="rows" style="margin-top:1rem;">
-                    {% for c in ['Written Tests', 'Practical Projects'] %}
-                    <li class="row"><span class="row-in"><span class="row-main">{{ c }}</span></span></li>
-                    {% endfor %}
-                </ul>
-            </div>
         </div>
     </div>
 </section>
 
-<section class="band band-dark">
-    <div class="shell">
-        <p class="mono eyebrow"><span class="rule"></span>Advanced track</p>
-        <h2 class="t-h2" style="margin-top:1rem;max-width:20ch;">Advanced class for ordained ministers</h2>
-        <p class="t-body" style="margin-top:1.2rem;">
-            High-level leadership training for seasoned and ordained ministers — church
-            administration, global missions, and the deeper mysteries of ecclesiastical authority.
-        </p>
-        <ul class="rows" style="margin-top:2rem;">
-            <li class="row"><span class="row-in">
-                <span class="mono faint row-i">01</span>
-                <span class="row-main">
-                    <span class="t-h3">Higher Leadership Dynamics</span>
-                    <span class="t-sm row-sub">Managing multi-level organisations and diverse teams.</span>
-                </span>
-            </span></li>
-            <li class="row"><span class="row-in">
-                <span class="mono faint row-i">02</span>
-                <span class="row-main">
-                    <span class="t-h3">Ecclesiastical Protocol</span>
-                    <span class="t-sm row-sub">Mastering the order and structure of global ministry.</span>
-                </span>
-            </span></li>
-        </ul>
+<section class="band band-light">
+    <div class="shell narrow-col">
+        <h2 class="sec-title">The programme</h2>
+        <details class="fold" open>
+            <summary>First semester: 6 weeks of foundations</summary>
+            <div class="fold-in"><ul class="pills pale"><li>Biblical Hermeneutics</li><li>Character &amp; Ethics</li><li>Spiritual Disciplines</li></ul></div>
+        </details>
+        <details class="fold">
+            <summary>Second semester: 6 weeks of core mastery</summary>
+            <div class="fold-in"><ul class="pills pale"><li>Ministerial Conduct</li><li>Family &amp; Ministry</li><li>Kingdom Finance</li></ul></div>
+        </details>
+        <details class="fold">
+            <summary>Assessment</summary>
+            <div class="fold-in"><ul class="pills pale"><li>Written Tests</li><li>Practical Projects</li></ul></div>
+        </details>
+        <details class="fold">
+            <summary>Advanced class for ordained ministers</summary>
+            <div class="fold-in"><ul class="pills pale"><li>Higher Leadership Dynamics</li><li>Ecclesiastical Protocol</li></ul></div>
+        </details>
     </div>
 </section>
 
-<section class="band band-light">
+<section class="band">
     <div class="shell">
-        <p class="mono eyebrow"><span class="rule"></span>Take your next step</p>
-        <h2 class="t-h2" style="margin-top:1rem;max-width:22ch;">How to apply</h2>
-        <p class="t-body" style="margin-top:1.2rem;">
-            Applications for the next session are currently being processed.
-        </p>
-        <ul class="rows" style="margin-top:2rem;">
-            <li class="row"><span class="row-in">
-                <span class="mono faint row-i">01</span>
-                <span class="row-main">
-                    <span class="t-h3">Obtain an application form</span>
-                    <span class="t-sm row-sub">
-                        Visit the church office{% if siteHeadquartersAddress %} at {{ siteHeadquartersAddress }}{% endif %}
-                        to pick up your application package.
-                    </span>
-                </span>
-            </span></li>
-            <li class="row"><span class="row-in">
-                <span class="mono faint row-i">02</span>
-                <span class="row-main">
-                    <span class="t-h3">Inquiries and call-backs</span>
-                    <span class="t-sm row-sub">Send us a message and the school will get back to you.</span>
-                </span>
-            </span></li>
-        </ul>
-        <div class="flex flex-wrap items-center gap-3" style="margin-top:2.2rem;">
-            <a href="{{ url_for('contact') }}" class="btn btn-gold">Inquire about CASOM</a>
-            {% if counsellingPhone %}
-            <a href="tel:{{ counsellingPhone|replace(' ', '') }}" class="btn btn-ghost">Call the office</a>
-            {% endif %}
+        <div class="next-strip">
+            <p>Applications are being processed.</p>
+            <div class="actions-row">
+                <a href="{{ url_for('contact') }}" class="btn btn-dark" style="margin-top:0;">Inquire about CASOM</a>
+                {% if counsellingPhone %}<a href="tel:{{ counsellingPhone|replace(' ', '') }}" class="btn btn-ghost">Call the office</a>{% endif %}
+            </div>
         </div>
+        {% if siteHeadquartersAddress %}<p class="form-note" style="margin-top:.6rem;">Pick up an application form at the church office: {{ siteHeadquartersAddress }}</p>{% endif %}
     </div>
 </section>
 

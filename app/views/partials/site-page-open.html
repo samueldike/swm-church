@@ -1,12 +1,12 @@
 {# Opening of every interior page: document head, site header and page banner. A page sets `pageTitle`,
    `pageEyebrow`, optional `pageLede`, `pageMeta` and `pageKey` (the banner uploaded under Settings -> Page Hero
    Images), then writes <section class="band"> blocks and closes with site-page-close.html.
-   Banner order: explicit `pageHeroImage`, this page's upload, the admin default, the shipped photograph. #}
+   Banner order: explicit `pageHeroImage`, this page's upload, the page's own `pagePhoto`, the admin default. #}
 {% set _heroKey = 'pageHero_' ~ (pageKey or '') %}
 {# Chosen for THIS page, as opposed to the site-wide fallback: social cards use only this, so a pasted link
    falls back to the branded share card rather than a generic crop. #}
 {% set _heroOwn = pageHeroImage or settings.get(_heroKey) %}
-{% set _heroRaw = _heroOwn or defaultPageHero or '/static/home/interlude.jpg' %}
+{% set _heroRaw = _heroOwn or pagePhoto or defaultPageHero or '/static/home/interlude.jpg' %}
 {% set _hero = _heroRaw if _heroRaw.startswith(('/', 'http')) else '/' ~ _heroRaw %}
 <!DOCTYPE html>
 <html lang="en" class="no-js"><head>

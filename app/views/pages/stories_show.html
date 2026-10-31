@@ -1,84 +1,27 @@
 {% set pageKey = 'stories' %}
+{% set pagePhoto = '/static/images/gallery/swm-10.jpg' %}
 {% set pageEyebrow = story.category or 'Story' %}
 {% set pageTitle = story.title %}
-{% set pageLede = story.excerpt or '' %}
+{% set pageLede = '' %}
 {% set pageMeta = (story.excerpt or story.title)[:150] %}
 {% set metaType = 'article' %}
 {% set pageHeroImage = (story.featured_image if story.featured_image and story.featured_image.startswith('/') else ('/' ~ story.featured_image if story.featured_image else None)) %}
 {% include "partials/site-page-open.html" %}
 
-<section class="band band-light">
-    <div class="shell story-wrap">
-        <div class="story-meta">
-            {% if story.author_name %}<span class="mono faint">{{ story.author_name }}</span>{% endif %}
-            {% if story.published_at %}<span class="mono faint">{{ story.published_at.strftime('%d %B %Y') }}</span>{% endif %}
+<section class="band">
+    <div class="shell narrow-col">
+        <div class="meta-line">
+            {% if story.author_name %}<span>{{ story.author_name }}</span>{% endif %}
+            {% if story.published_at %}<span>{{ story.published_at.strftime('%d %B %Y') }}</span>{% endif %}
         </div>
-
         <article class="prose">
-            {% if story.content %}
-            {{ story.content | safe }}
-            {% elif story.excerpt %}
-            <p>{{ story.excerpt }}</p>
-            {% else %}
-            <p>This story is being written up. Check back soon.</p>
-            {% endif %}
+            {% if story.content %}{{ story.content | safe }}{% elif story.excerpt %}<p>{{ story.excerpt }}</p>{% else %}<p>This story is being written up. Check back soon.</p>{% endif %}
         </article>
-
-        <div class="flex flex-wrap items-center gap-3" style="margin-top:2.4rem;">
-            <a href="{{ url_for('stories') }}" class="btn btn-ghost">All stories</a>
+        <div class="actions-row">
             <a href="{{ url_for('contact') }}" class="btn btn-gold">Share your own</a>
+            <a href="{{ url_for('stories') }}" class="btn btn-ghost">All stories</a>
         </div>
     </div>
 </section>
-
-{% if related %}
-<section class="band band-dark">
-    <div class="shell">
-        <div class="head">
-            <div>
-                <p class="mono eyebrow"><span class="rule"></span>Keep reading</p>
-                <h2 class="t-h2" style="margin-top:1rem;">More from the house</h2>
-            </div>
-            <a href="{{ url_for('stories') }}" class="lnk">All stories</a>
-        </div>
-        <div class="blog-grid">
-            {% for item in related %}
-            <article class="blog">
-                <div class="blog-bg">
-                    {% if item.featured_image %}
-                    <img src="{{ item.featured_image if item.featured_image.startswith('/') else '/' ~ item.featured_image }}"
-                         alt="" loading="lazy" decoding="async"/>
-                    {% endif %}
-                </div>
-                {% if item.category %}<span class="mono blog-cat">{{ item.category }}</span>{% endif %}
-                <h3 class="t-h3">{{ item.title }}</h3>
-                {% if item.excerpt %}
-                <p>{{ item.excerpt[:104] }}{{ '…' if item.excerpt|length > 104 else '' }}</p>
-                {% endif %}
-                <span class="blog-cta">Learn more</span>
-                <a class="blog-link" href="{{ url_for('story_detail', slug=item.slug) }}">
-                    <span class="sr-only">Read {{ item.title }}</span>
-                </a>
-            </article>
-            {% endfor %}
-        </div>
-    </div>
-</section>
-{% endif %}
-
-<style>
-    .story-wrap { max-width: 74ch; }
-    .story-meta { display: flex; flex-wrap: wrap; gap: 1.2rem; }
-    .prose { margin-top: 1.8rem; font-size: 1.02rem; line-height: 1.75; color: var(--fg-dim); }
-    .prose > * + * { margin-top: 1.1rem; }
-    .prose h2, .prose h3 { color: var(--fg); font-weight: 500; letter-spacing: -0.02em; margin-top: 2rem; }
-    .prose h2 { font-size: 1.5rem; }
-    .prose h3 { font-size: 1.2rem; }
-    .prose a { color: var(--gold-deep); text-decoration: underline; text-underline-offset: 3px; }
-    .prose blockquote { border-left: 2px solid var(--gold); padding-left: 1.1rem; color: var(--fg); }
-    .prose img { max-width: 100%; height: auto; display: block; }
-    .prose ul, .prose ol { padding-left: 1.2rem; }
-    .prose li + li { margin-top: 0.4rem; }
-</style>
 
 {% include "partials/site-page-close.html" %}
