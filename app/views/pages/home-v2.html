@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400..800&display=swap"/>
-<link rel="stylesheet" href="{{ url_for('static', path='home-v2/home-v2.css') }}?v=7"/>
+<link rel="stylesheet" href="{{ url_for('static', path='home-v2/home-v2.css') }}?v=9"/>
 {% set third_slide = ('/' ~ sliders[0].image_path) if sliders else '/static/home/worship.jpg' %}
 {% set slides = [
     ('/static/home/interlude.jpg', 'Every dead dream can live again.', "At Scent of Water, we believe in second chances, fresh starts, and the God who breathes life into dry places.", 'Join us Sunday', url_for('visit')),
@@ -360,12 +360,12 @@
         <p class="units-lead reveal">Twelve units. One family. There is a place for you.</p>
         <ul class="units reveal">
             {% for name, role in [
-                ('Herald', 'Ushers'), ('The Follow-up Team', ''), ('The Still Waters', 'Choir'),
-                ('The Vineyard Keepers', 'Sanitation'), ('Kings and Priests', "Children's church"), ('The Technical Department', ''),
+                ('Herald', 'Ushers'), ('The Follow-up Team', 'Discipleship'), ('The Still Waters', 'Choir'),
+                ('The Vineyard Keepers', 'Sanitation'), ('Kings and Priests', "Children's church"), ('The Technical Department', 'Sound and stage'),
                 ('The Epaphras Company', 'Prayer team'), ('The Armor Bearer', 'Protocol'), ('The Joseph Ministry', 'Welfare'),
-                ('Media and ICT', ''), ('Dance and Drama', ''), ('Host and Hostess', '')
+                ('Media and ICT', 'Communications'), ('Dance and Drama', 'Creative arts'), ('Host and Hostess', 'Hospitality')
             ] %}
-            <li>{{ name }}{% if role %} <span>{{ role }}</span>{% endif %}</li>
+            <li><a href="{{ url_for('get_involved') }}"><b>{{ '%02d'|format(loop.index) }}</b><strong>{{ name }}</strong><span>{{ role }}</span></a></li>
             {% endfor %}
         </ul>
         <a class="btn btn-dark reveal" href="{{ url_for('get_involved') }}">Join a team today</a>
