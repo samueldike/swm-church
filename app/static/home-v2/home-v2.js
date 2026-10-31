@@ -243,7 +243,8 @@
     var setPaused = function (on) {
       stage.classList.toggle("is-paused", on);
       beltBtn.setAttribute("aria-pressed", String(on));
-      beltBtn.textContent = on ? "Play moving photos" : "Pause moving photos";
+      beltBtn.setAttribute("aria-label", on ? "Play moving photos" : "Pause moving photos");
+      beltBtn.title = beltBtn.getAttribute("aria-label");
     };
     if (reduce) beltBtn.hidden = true;
     beltBtn.addEventListener("click", function () { setPaused(!stage.classList.contains("is-paused")); });
@@ -265,6 +266,35 @@
       if (e.key === "ArrowRight") open(shotIx + 1);
     });
     viewer.addEventListener("click", function (e) { if (e.target === viewer) viewer.close(); });
+  }
+
+  /* ─── Love in action: swipe, step, or let it run ─── */
+  var track = $("car-track"), carPause = $("car-pause");
+  if (track && carPause) {
+    var car = $("car"), carN = track.children.length, carI = 0, carHeld = false, carSeen = false, carStopped = reduce;
+    var count = $("car-count");
+    var setStopped = function (on) {
+      carStopped = on;
+      carPause.setAttribute("aria-pressed", String(on));
+      carPause.setAttribute("aria-label", on ? "Play slideshow" : "Pause slideshow");
+      carPause.title = carPause.getAttribute("aria-label");
+    };
+    var carGo = function (i) {
+      carI = (i + carN) % carN;
+      track.scrollTo({ left: carI * track.clientWidth, behavior: reduce ? "auto" : "smooth" });
+    };
+    track.addEventListener("scroll", function () {
+      carI = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+      count.textContent = (carI + 1) + " / " + carN;
+    }, { passive: true });
+    $("car-prev").addEventListener("click", function () { carGo(carI - 1); });
+    $("car-next").addEventListener("click", function () { carGo(carI + 1); });
+    carPause.addEventListener("click", function () { setStopped(!carStopped); });
+    ["pointerenter", "focusin"].forEach(function (ev) { car.addEventListener(ev, function () { carHeld = true; }); });
+    ["pointerleave", "focusout"].forEach(function (ev) { car.addEventListener(ev, function () { carHeld = false; }); });
+    if (reduce) setStopped(true);
+    if ("IntersectionObserver" in window) new IntersectionObserver(function (es) { carSeen = es[0].isIntersecting; }, { threshold: .5 }).observe(car);
+    setInterval(function () { if (carSeen && !carHeld && !carStopped && !doc.hidden) carGo(carI + 1); }, 5000);
   }
 
   /* ─── Listening on the page ─── */

@@ -157,6 +157,19 @@ section { position: relative; }
 .now span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 700; font-size: .94rem; }
 .now-x { background: none; border: 0; min-height: 44px; padding: 0 .6rem; cursor: pointer; font-weight: 600; font-size: .88rem; }
 
+/* ─── Daily devotional ─── */
+.devo { padding: clamp(2.8rem, 6.5vh, 4.4rem) 0; background: var(--gold-lt); overflow: hidden; }
+.devo-grid { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1fr); gap: clamp(1.4rem, 4vw, 3.5rem); align-items: center; }
+.devo-book { justify-self: center; }
+.devo-book img { width: auto; height: clamp(300px, 52vh, 440px); filter: drop-shadow(0 18px 22px rgba(22,22,22,.32)); }
+.js .devo-book.in img { animation: float 7s ease-in-out infinite; }
+@keyframes float { 50% { transform: translateY(-9px) rotate(1deg); } }
+.devo .big { color: var(--ink); }
+.devo .tag { background: var(--ink); color: #fff; }
+.devo-points { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .8rem; }
+.devo-points li { padding: .25rem .75rem; border-radius: 99px; background: #fff; font-weight: 700; font-size: .92rem; line-height: 1.25; }
+.devo-by { margin-top: .7rem; font-weight: 700; font-size: .96rem; }
+
 /* ─── What's on ─── */
 .whats-on { padding: clamp(2.8rem, 6.5vh, 4.4rem) 0; background: var(--grey); }
 .on-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: clamp(1rem, 2vw, 1.6rem); align-items: start; }
@@ -237,14 +250,24 @@ section { position: relative; }
 
 /* ─── Family: two counter-moving belts of equal frames ─── */
 .family { padding: clamp(2.8rem, 6.5vh, 4.4rem) 0; overflow: hidden; }
-.belts-bar { margin-bottom: .7rem; }
+.title-row { display: flex; align-items: center; gap: .8rem; }
+.title-row h2 { margin: 0; text-wrap: wrap; }
+.section-head:has(.title-row) { max-width: none; }
+.icon-btn { flex: none; position: relative; width: 44px; height: 44px; border: 2px solid var(--ink); border-radius: 50%; background: none; color: var(--ink); cursor: pointer; display: grid; place-items: center; transition: background .2s, color .2s; }
+.icon-btn:hover { background: var(--ink); color: #fff; }
+.icon-btn i { width: 12px; height: 14px; border-inline: 4px solid currentColor; }
+.icon-btn[aria-pressed="true"] i { width: 0; height: 0; margin-left: 3px; border-inline: 0; border-left: 12px solid currentColor; border-block: 7px solid transparent; }
+.icon-dark { border: 0; background: rgba(22,22,22,.72); color: #fff; }
+.icon-dark:hover { background: var(--gold-lt); color: var(--ink); }
+.icon-arrow b { width: 10px; height: 10px; border-left: 3px solid; border-bottom: 3px solid; rotate: 45deg; margin-left: 4px; }
+.icon-next b { rotate: 225deg; margin: 0 4px 0 0; }
 .belts { display: grid; gap: .6rem; margin-bottom: 1.4rem; }
 .belt { overflow: hidden; }
 .belt-track { display: flex; gap: .6rem; width: max-content; animation: belt var(--dur, 55s) linear infinite; will-change: transform; }
 .belt-rev { animation-direction: reverse; }
 .belts.is-paused .belt-track { animation-play-state: paused; }
 @keyframes belt { to { transform: translateX(calc(-50% - .3rem)); } }
-.shot { flex: none; width: clamp(200px, 22vw, 300px); aspect-ratio: 3/2; padding: 0; border: 0; border-radius: 10px; overflow: hidden; background: var(--paper); cursor: zoom-in; }
+.shot { flex: none; width: clamp(200px, 22vw, 300px); aspect-ratio: 3/2; padding: 0; border: 0; border-radius: 0; overflow: hidden; background: var(--paper); cursor: zoom-in; }
 .shot img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 18%; transition: transform .5s var(--ease); }
 .shot:hover img { transform: scale(1.05); }
 .viewer { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; border: 0; padding: 0; background: rgba(22,22,22,.94); }
@@ -267,8 +290,14 @@ section { position: relative; }
 .love { padding: clamp(2.8rem, 6.5vh, 4.4rem) 0; background: var(--paper); }
 .love-grid { display: grid; grid-template-columns: 1fr 1.6fr; gap: clamp(1.4rem, 3.5vw, 3rem); align-items: center; }
 .love-links a { display: block; padding: .6rem 0; border-top: 2px solid var(--line); font-weight: 700; font-size: 1.04rem; line-height: 1.25; color: var(--gold-deep); }
-.love-photos { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; }
-.love-photos img { width: 100%; height: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: 14px; }
+.car { position: relative; min-width: 0; border-radius: 14px; overflow: hidden; background: var(--grey); }
+.car-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; aspect-ratio: 3/2; }
+.car-track::-webkit-scrollbar { display: none; }
+.car-slide { position: relative; flex: 0 0 100%; scroll-snap-align: start; scroll-snap-stop: always; }
+.car-slide img { width: 100%; height: 100%; object-fit: cover; }
+.car-slide figcaption { position: absolute; left: 0; right: 0; top: 0; padding: .55rem .9rem 1.6rem; color: #fff; font-size: .9rem; font-weight: 600; line-height: 1.3; background: linear-gradient(180deg, rgba(14,12,8,.68), rgba(14,12,8,0)); }
+.car-bar { position: absolute; right: .55rem; bottom: .55rem; display: flex; align-items: center; gap: .3rem; }
+.car-bar span { min-width: 3.4rem; padding: .25rem .5rem; border-radius: 99px; background: rgba(22,22,22,.72); color: #fff; text-align: center; font-size: .84rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .stories { margin-top: 2rem; }
 .stories ul { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(19rem, 100%), 1fr)); gap: 1rem; }
 .stories a { display: block; height: 100%; padding: 1rem 1.1rem; background: #fff; border-radius: 16px; text-decoration: none; }
@@ -330,7 +359,7 @@ section { position: relative; }
 @media (max-width: 1180px) { .bar-links { display: none; } }
 @media (max-width: 1000px) {
   .units { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .belong-grid, .word-grid, .on-grid, .stand-grid, .love-grid, .pastor-grid, .find-grid { grid-template-columns: minmax(0, 1fr); }
+  .belong-grid, .word-grid, .devo-grid, .on-grid, .stand-grid, .love-grid, .pastor-grid, .find-grid { grid-template-columns: minmax(0, 1fr); }
   .word-photo { aspect-ratio: 4/3; }
   .foot-cols { grid-template-columns: 1fr 1fr; }
   .news { flex-basis: 100%; }
@@ -345,8 +374,8 @@ section { position: relative; }
   .clock { justify-content: space-between; }
   .step-links a { width: 100%; justify-content: center; }
   .cal, .soon { border-radius: 22px; }
-  .love-photos { grid-template-columns: repeat(2, 1fr); }
-  .love-photos img { aspect-ratio: 4/3; }
+  .car-track { aspect-ratio: 4/3; }
+  .devo-book img { height: 270px; }
   .news-row { flex-direction: column; }
   .week th, .week td { display: block; border: 0; padding: 0; text-align: left; }
   .week tr { display: block; padding: .4rem 0; border-top: 2px solid var(--line); }
@@ -386,6 +415,7 @@ section { position: relative; }
   .hero-photo.on, .slide.on { animation: none; }
   .words div { animation: none; }
   .belt-track { animation: none; }
+  .js .devo-book.in img { animation: none; }
   .belt { overflow-x: auto; }
   .js .reveal { opacity: 1; translate: none; transition: none; }
   .worship-frame { clip-path: none; }
