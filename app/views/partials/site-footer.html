@@ -36,7 +36,7 @@
             </div>
             <div>
                 <h3>Service times</h3>
-                {% for svc in services %}<p>{{ svc.day }}: {{ svc.time }}</p>{% endfor %}
+                {% for svc in services %}<p><strong>{{ svc.day }}{% if svc.day|lower != 'sunday' %} ({{ svc.name|replace('Midweek ', '')|replace('Preservice', 'Pre-service')|replace('Monthly ', '')|replace('Prayers', 'Prayer') }}){% endif %}: {{ svc.time }}</strong></p>{% endfor %}
             </div>
             <nav aria-label="Follow us online">
                 <h3>Follow us</h3>
