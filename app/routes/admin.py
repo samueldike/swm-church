@@ -192,6 +192,12 @@ def _admin_theme_css(settings: dict) -> str:
         decls += [f"--color-gold-hi: {colors['primary_light']};", f"--color-primary-light: {colors['primary_light']};"]
     if "sidebar" in colors:
         decls += [f"--color-chrome: {colors['sidebar']};", f"--color-sidebar-bg: {colors['sidebar']};"]
+        # The sidebar's text follows its ground: light text on a dark sidebar, dark text on a light one.
+        r, g, b = (int(colors["sidebar"][i:i + 2], 16) for i in (1, 3, 5))
+        if 0.2126 * r + 0.7152 * g + 0.0722 * b < 140:
+            decls += ["--color-chrome-ink: #ffffff;", "--color-chrome-text: #c9c4ba;",
+                      f"--color-chrome-2: color-mix(in srgb, {colors['sidebar']} 82%, white);",
+                      f"--color-chrome-line: color-mix(in srgb, {colors['sidebar']} 80%, white);"]
     return " ".join(decls)
 
 

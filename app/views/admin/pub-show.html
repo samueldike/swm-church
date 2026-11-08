@@ -70,7 +70,7 @@
   <section class="panel">
     {% if g.busy %}
       <div class="flex flex-wrap items-center gap-3 rounded-md bg-gold-tint border border-[#ebdfc0] px-3.5 py-3 mb-4">
-        <i class="ri-loader-4-line animate-spin text-lg text-gold"></i>
+        <i class="ri-loader-4-line animate-spin text-lg text-gold-text"></i>
         <p class="text-[12.5px] text-gold-text flex-grow min-w-0">
           AI is working
           {%- if g.topics_busy %} · topics for {{ g.topics_busy }} message{{ 's' if g.topics_busy != 1 else '' }}{% endif -%}

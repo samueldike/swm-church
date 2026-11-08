@@ -40,19 +40,19 @@
           {% else %}
           <div class="sm:hidden flex flex-col items-center pt-0.5">
           {% endif %}
-            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full font-mono text-[11px] {{ 'bg-gold text-[#121110] font-bold' if isToday else ('text-ink-2 font-medium' if inMonth else 'text-ink-3') }}">{{ day.day }}</span>
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full font-mono text-[11px] {{ 'bg-gold text-on-gold font-bold' if isToday else ('text-ink-2 font-medium' if inMonth else 'text-ink-3') }}">{{ day.day }}</span>
             {% if dayPrograms %}<span class="flex gap-0.5" aria-hidden="true">{% for ev in dayPrograms[:3] %}<span class="w-1.5 h-1.5 rounded-full {{ 'bg-gold' if ev.is_major else 'bg-ink-3' }}"></span>{% endfor %}</span>{% endif %}
           {% if dayPrograms %}</button>{% else %}</div>{% endif %}
           <div class="hidden sm:block">
-            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full font-mono text-[11px] {{ 'bg-gold text-[#121110] font-bold' if isToday else ('text-ink-2 font-medium' if inMonth else 'text-ink-3') }}">{{ day.day }}</span>
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full font-mono text-[11px] {{ 'bg-gold text-on-gold font-bold' if isToday else ('text-ink-2 font-medium' if inMonth else 'text-ink-3') }}">{{ day.day }}</span>
             <div class="mt-1 flex flex-col gap-1">
               {% for ev in dayPrograms[:2] %}
                 {% if ev.id in editable_event_ids %}
                 <a href="{{ url_for('admin_events_edit_page', event_id=ev.id) }}"
-                   class="block truncate rounded-sm px-1.5 py-0.5 font-mono text-[9.5px] font-semibold no-underline {{ 'bg-gold text-[#121110]' if ev.is_major else 'bg-neut-bg text-neut' }}"
+                   class="block truncate rounded-sm px-1.5 py-0.5 font-mono text-[9.5px] font-semibold no-underline {{ 'bg-gold text-on-gold' if ev.is_major else 'bg-neut-bg text-neut' }}"
                    title="{{ ev.title }}">{{ ev.title }}</a>
                 {% else %}
-                <span class="block truncate rounded-sm px-1.5 py-0.5 font-mono text-[9.5px] font-semibold {{ 'bg-gold text-[#121110]' if ev.is_major else 'bg-neut-bg text-neut' }}" title="{{ ev.title }} (HQ programme)">HQ · {{ ev.title }}</span>
+                <span class="block truncate rounded-sm px-1.5 py-0.5 font-mono text-[9.5px] font-semibold {{ 'bg-gold text-on-gold' if ev.is_major else 'bg-neut-bg text-neut' }}" title="{{ ev.title }} (HQ programme)">HQ · {{ ev.title }}</span>
                 {% endif %}
               {% endfor %}
               {% if dayPrograms|length > 2 %}<span class="font-mono text-[9.5px] text-ink-3">+{{ dayPrograms|length - 2 }} more</span>{% endif %}

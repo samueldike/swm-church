@@ -2,53 +2,60 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  /* Same type and palette as the public site: Figtree for text, Bricolage Grotesque for headings,
+     the logo's black, grey and gold on a light page. --font-mono is the label voice (Figtree);
+     --font-code is the real monospace for keys, code and references. */
+  --font-sans: "Figtree", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Bricolage Grotesque", "Figtree", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Figtree", ui-sans-serif, system-ui, sans-serif;
+  --font-code: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
 
   /* Ground */
-  --color-paper: #fafaf9;
+  --color-paper: #f7f5f0;
   --color-surface: #ffffff;
-  --color-sunken: #f4f3f0;
+  --color-sunken: #f4f1ea;
 
   /* Ink */
-  --color-ink: #0a0a0a;
-  --color-ink-2: #52504b;
-  --color-ink-3: #6b6862;
+  --color-ink: #161616;
+  --color-ink-2: #4d4d4d;
+  --color-ink-3: #5e5e5e;
 
   /* Hairlines */
-  --color-line: #e5e3de;
-  --color-line-2: #d1cec7;
+  --color-line: #e9e5dc;
+  --color-line-2: #d6d1c6;
 
-  /* Gold accent */
-  --color-gold: #b8891f;
-  --color-gold-text: #8a6414;
-  --color-gold-tint: #f7f1e3;
-  --color-gold-hi: #e8c870;
+  /* Gold: the logo's highlight for fills, the deep gold for text on light grounds */
+  --color-gold: #e8c870;
+  --color-gold-text: #80600f;
+  --color-gold-tint: #f4e7c4;
+  --color-gold-hi: #f0d68e;
 
-  /* Chrome (sidebar / topbar ground) */
-  --color-chrome: #121110;
-  --color-chrome-2: #1c1a17;
-  --color-chrome-line: #2a2723;
-  --color-chrome-text: #b5b0a6;
+  /* Chrome (sidebar ground): light, like the site header */
+  --color-chrome: #ffffff;
+  --color-chrome-2: #f4f1ea;
+  --color-chrome-line: #e9e5dc;
+  --color-chrome-text: #4d4d4d;
+  --color-chrome-ink: #161616;
+  --color-on-gold: #161616;
 
   /* Status */
   --color-ok: #1e6b45;
   --color-ok-bg: #e8f1ec;
-  --color-warn: #8a6414;
-  --color-warn-bg: #f7f1e3;
+  --color-warn: #80600f;
+  --color-warn-bg: #f4e7c4;
   --color-bad: #a32a1e;
   --color-bad-bg: #f8ebe9;
-  --color-neut: #52504b;
-  --color-neut-bg: #f0efec;
+  --color-neut: #4d4d4d;
+  --color-neut-bg: #efece6;
 
   /* Back-compat with the pre-redesign token names (kept live, retinted) */
-  --color-primary: #b8891f;
-  --color-primary-dark: #8a6414;
-  --color-primary-light: #e8c870;
-  --color-secondary: #121110;
-  --color-secondary-light: #1c1a17;
-  --color-background-light: #fafaf9;
-  --color-sidebar-bg: #121110;
+  --color-primary: #e8c870;
+  --color-primary-dark: #80600f;
+  --color-primary-light: #f0d68e;
+  --color-secondary: #161616;
+  --color-secondary-light: #2a2a2a;
+  --color-background-light: #f7f5f0;
+  --color-sidebar-bg: #ffffff;
 }
 
 @layer components {
@@ -56,48 +63,48 @@
      (class="btn btn-primary") — Tailwind v4 @apply cannot reference
      another @layer components class, so each rule is self-contained. ── */
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-md border px-3.5 py-2 text-[13px] font-semibold whitespace-nowrap transition-colors;
-    min-height: 36px;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-full border px-4 py-2 text-[13.5px] font-bold whitespace-nowrap transition-colors;
+    min-height: 38px;
   }
-  .btn-primary { @apply bg-gold border-gold text-[#121110]; }
-  .btn-primary:hover { @apply bg-gold-hi; }
-  .btn-secondary { @apply bg-surface border-line-2 text-ink; }
-  .btn-secondary:hover { @apply bg-sunken; }
-  .btn-dark { @apply bg-chrome border-chrome text-white; }
-  .btn-dark:hover { @apply bg-chrome-2; }
+  .btn-primary { @apply bg-gold border-gold text-on-gold; }
+  .btn-primary:hover { @apply bg-gold-text border-gold-text text-white; }
+  .btn-secondary { @apply bg-surface border-ink text-ink; }
+  .btn-secondary:hover { @apply bg-ink text-white; }
+  .btn-dark { @apply bg-ink border-ink text-white; }
+  .btn-dark:hover { @apply bg-gold border-gold text-on-gold; }
   .btn-danger { @apply bg-surface border-[#e6c9c5] text-bad; }
   .btn-danger:hover { @apply bg-bad-bg; }
   .btn-ghost { @apply border-transparent bg-transparent text-ink-2; }
   .btn-ghost:hover { @apply bg-sunken; }
-  .btn-sm { @apply px-2.5 py-1.5 text-xs; min-height: 30px; }
-  .btn-lg { @apply px-4.5 py-3 text-sm; min-height: 44px; }
+  .btn-sm { @apply px-3 py-1.5 text-xs; min-height: 32px; }
+  .btn-lg { @apply px-5 py-3 text-sm; min-height: 46px; }
   .icon-btn {
-    @apply inline-flex h-8 w-8 items-center justify-center rounded-md border border-line bg-surface text-ink-2 transition-colors;
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-ink-2 transition-colors;
   }
   .icon-btn:hover { @apply bg-sunken; }
 
   /* ── Cards / surfaces ────────────────────────────────────────── */
-  .panel { @apply rounded-md border border-line bg-surface p-4 sm:p-5; }
-  .panel-flush { @apply rounded-md border border-line bg-surface overflow-hidden; }
+  .panel { @apply rounded-2xl border border-line bg-surface p-4 sm:p-5; }
+  .panel-flush { @apply rounded-2xl border border-line bg-surface overflow-hidden; }
 
   /* ── Form fields ─────────────────────────────────────────────── */
   .field-label {
-    @apply mb-1.5 block font-mono text-[11px] font-semibold tracking-wider text-ink-3 uppercase;
+    @apply mb-1.5 block text-[13px] font-bold text-ink;
   }
   .field-input {
-    @apply w-full block rounded-md border border-line-2 bg-surface px-3 py-2 text-[13px] text-ink outline-none transition-colors;
-    min-height: 38px;
+    @apply w-full block rounded-xl border-2 border-line-2 bg-surface px-3 py-2 text-[14px] text-ink outline-none transition-colors;
+    min-height: 42px;
   }
   .field-input:focus { @apply border-gold ring-2 ring-gold/20; }
   .field-input::placeholder { @apply text-ink-3; }
-  .field-mono { @apply font-mono; }
+  .field-mono { font-variant-numeric: tabular-nums; }
   .field-textarea {
-    @apply w-full block rounded-md border border-line-2 bg-surface px-3 py-2 text-[13px] text-ink outline-none transition-colors resize-none leading-relaxed;
+    @apply w-full block rounded-xl border-2 border-line-2 bg-surface px-3 py-2 text-[14px] text-ink outline-none transition-colors resize-none leading-relaxed;
   }
   .field-textarea:focus { @apply border-gold ring-2 ring-gold/20; }
   .field-select {
-    @apply w-full block rounded-md border border-line-2 bg-surface px-3 py-2 pr-8 text-[13px] text-ink outline-none transition-colors appearance-none cursor-pointer;
-    min-height: 38px;
+    @apply w-full block rounded-xl border-2 border-line-2 bg-surface px-3 py-2 pr-8 text-[14px] text-ink outline-none transition-colors appearance-none cursor-pointer;
+    min-height: 42px;
   }
   .field-select:focus { @apply border-gold ring-2 ring-gold/20; }
   .field-select {
@@ -106,12 +113,12 @@
     background-position: right 10px center;
     background-size: 14px 14px;
   }
-  .field-hint { @apply mt-1 font-sans text-[11px] text-ink-3; }
+  .field-hint { @apply mt-1 font-sans text-[12.5px] text-ink-3; }
   .field-checkbox { @apply h-4 w-4 rounded accent-gold; }
 
   /* ── Badges ──────────────────────────────────────────────────── */
   .badge {
-    @apply inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 font-mono text-[11px] font-semibold tracking-wide whitespace-nowrap;
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11.5px] font-bold whitespace-nowrap;
   }
   .badge::before { content: ""; width: 5px; height: 5px; border-radius: 999px; background: currentColor; flex-shrink: 0; }
   .badge-ok { @apply bg-ok-bg text-ok; }
@@ -123,15 +130,15 @@
   /* ── Table ───────────────────────────────────────────────────── */
   .dtable { @apply w-full border-collapse text-left; }
   .dtable th {
-    @apply border-b border-line-2 px-3.5 py-2.5 font-mono text-[10px] font-semibold tracking-wider text-ink-3 uppercase whitespace-nowrap;
+    @apply border-b-2 border-line px-3.5 py-2.5 text-[12px] font-bold text-ink-2 whitespace-nowrap;
   }
   .dtable td {
-    @apply border-b border-line px-3.5 py-2.5 align-middle text-[13px] text-ink;
+    @apply border-b border-line px-3.5 py-3 align-middle text-[13.5px] text-ink;
   }
   .dtable tr:last-child td { @apply border-b-0; }
 
   /* ── Setup guides (Settings) ─────────────────────────────────── */
-  .guide { @apply rounded-md border border-line bg-sunken text-[12.5px] text-ink-2; }
+  .guide { @apply rounded-xl border border-line bg-sunken text-[13px] text-ink-2; }
   .guide > summary {
     @apply flex cursor-pointer list-none items-center gap-2 px-3.5 py-2.5 font-semibold text-ink;
     min-height: 44px;
@@ -143,7 +150,7 @@
   .guide > ol { @apply list-decimal space-y-2.5 px-3.5 pb-3.5 pl-8 leading-relaxed; }
   .guide ul { @apply mt-1.5 mb-1.5 list-disc space-y-1 pl-5; }
   .guide a:not(.btn) { @apply text-gold-text underline underline-offset-2; }
-  .guide code { @apply rounded bg-surface px-1 py-px font-mono text-[11.5px] text-ink; }
+  .guide code { @apply rounded bg-surface px-1 py-px text-[11.5px] text-ink; font-family: var(--font-code); }
   .guide-links { @apply flex flex-wrap gap-2 px-3.5 pb-3; }
   .guide-note { @apply mx-3.5 mb-3.5 rounded-md border border-line bg-surface px-3 py-2.5 text-[12px] leading-relaxed; }
   .tg-steps { @apply flex flex-wrap gap-x-5 gap-y-1.5 text-[12px] text-ink-3; }
@@ -153,17 +160,17 @@
 
   /* ── Mono / label utilities ──────────────────────────────────── */
   .mono-label {
-    @apply font-mono text-[10px] font-semibold tracking-wider text-ink-3 uppercase;
+    @apply text-[12px] font-bold text-ink-3;
   }
-  .kpi-value { @apply font-mono text-[26px] sm:text-[28px] font-semibold text-ink tabular-nums leading-none; }
+  .kpi-value { @apply text-[30px] sm:text-[34px] font-extrabold text-ink tabular-nums leading-none tracking-tight; font-family: var(--font-display); }
 
   /* ── Sidebar nav link ────────────────────────────────────────── */
   .nav-link {
-    @apply flex items-center gap-2.5 rounded-md border-l-2 border-transparent px-2.5 py-2 text-[12.5px] font-medium text-chrome-text transition-colors;
-    min-height: 38px;
+    @apply flex items-center gap-2.5 rounded-full px-3 py-2 text-[13.5px] font-semibold text-chrome-text transition-colors;
+    min-height: 40px;
   }
-  .nav-link:hover { @apply bg-white/7 text-white; }
-  .nav-link-active { @apply bg-gold/15 border-gold text-gold-hi font-semibold; }
+  .nav-link:hover { @apply bg-chrome-2 text-chrome-ink; }
+  .nav-link-active, .nav-link-active:hover { @apply bg-gold text-on-gold font-bold; }
 }
 
 @layer utilities {
@@ -186,11 +193,8 @@
     }
     .dtable-responsive td[data-label]::before {
       content: attr(data-label);
-      font-family: var(--font-mono);
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.09em;
-      text-transform: uppercase;
+      font-size: 12px;
+      font-weight: 700;
       color: var(--color-ink-3);
       text-align: left;
       margin-right: auto;
@@ -206,8 +210,9 @@
    as wide as a letter, so "29 Aug 2026 02:35" reads as spaced-out words. Halve the gap between
    words; letters and digits keep their even widths, so columns still line up. ── */
 @layer base {
-  .font-mono, .field-mono, .field-label, .badge, .dtable th, .mono-label, .kpi-value,
-  .dtable-responsive td[data-label]::before, code, kbd, samp, pre { word-spacing: -0.3em; }
+  code, kbd, samp, pre { font-family: var(--font-code); word-spacing: -0.3em; }
+  .font-mono { font-variant-numeric: tabular-nums; }
+  h1, h2, .font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
 }
 
 /* ── Cursors: Tailwind v4's reset gives buttons the arrow; everything clickable shows the hand. ── */
@@ -234,6 +239,11 @@
     --color-line-2: #363c49;
     --color-gold-tint: #2a2417;
     --color-gold-text: #e8c870;
+    --color-chrome: #121110;
+    --color-chrome-2: #1f1d1a;
+    --color-chrome-line: #2a2723;
+    --color-chrome-text: #b5b0a6;
+    --color-chrome-ink: #ffffff;
     --color-ok: #6fcf9a;
     --color-ok-bg: #16281f;
     --color-warn: #e8c870;
@@ -250,7 +260,7 @@
 
 /* ── Rich-text editor (markup is generated at runtime by admin-richtext.js) ── */
 @layer components {
-  .admin-richtext { width: 100%; overflow: hidden; border-radius: 6px; border: 1px solid var(--color-line-2); background: var(--color-surface); transition: border-color 150ms; }
+  .admin-richtext { width: 100%; overflow: hidden; border-radius: 12px; border: 1px solid var(--color-line-2); background: var(--color-surface); transition: border-color 150ms; }
   .admin-richtext:focus-within { border-color: var(--color-gold); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-gold) 20%, transparent); }
   .admin-richtext-topbar, .admin-richtext-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--color-line); background: var(--color-sunken); }
   .admin-richtext-topbar { justify-content: space-between; gap: 8px; }
@@ -288,10 +298,9 @@
 /* Consistent subtle focus for text fields across the console. */
 input:not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=button]):focus,
 textarea:focus,select:focus,[contenteditable=true]:focus {
-  outline: 1px solid #8b8c87 !important;
-  outline-offset: 1px !important;
-  box-shadow: none !important;
-  border-color: #8b8c87 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px var(--color-gold-tint) !important;
+  border-color: var(--color-gold-text) !important;
 }
 
 /* Hide scrollbar chrome while preserving native scrolling and scroll snapping. */

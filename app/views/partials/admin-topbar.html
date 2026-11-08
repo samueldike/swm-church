@@ -31,7 +31,7 @@
         <label for="admin-topbar-search" class="sr-only">Search members</label>
         <input id="admin-topbar-search" name="q" type="search" placeholder="Search members…"
                value="{{ request.query_params.get('q', '') }}"
-               class="pl-9 pr-3 py-1.5 bg-sunken border border-line rounded-md text-[12.5px] text-ink placeholder-ink-3 outline-none focus:border-gold focus:bg-surface w-44 lg:w-56 transition-colors font-mono"/>
+               class="pl-9 pr-3 py-1.5 bg-sunken border border-line rounded-full text-[13px] text-ink placeholder-ink-3 outline-none focus:border-gold focus:bg-surface w-44 lg:w-56 transition-colors font-mono"/>
       </form>
 
       <button id="admin-theme-toggle" type="button" class="icon-btn relative" aria-label="Switch theme" aria-pressed="false">
@@ -73,7 +73,7 @@
 
       <div class="relative">
         <button id="admin-profile-toggle" type="button" class="flex items-center gap-2 pl-1.5 sm:pl-2.5 sm:border-l sm:border-line cursor-pointer">
-          <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gold text-[#121110] font-mono text-[11px] font-bold">{{ admin_initials|default('AD') }}</span>
+          <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gold text-on-gold text-[11px] font-bold">{{ admin_initials|default('AD') }}</span>
           <span class="hidden sm:block text-left">
             <span class="block text-xs font-semibold text-ink leading-tight truncate max-w-[120px]">{{ admin_name }}</span>
             <span class="block text-[10px] text-ink-3 font-mono">{{ role_label }}</span>
@@ -82,7 +82,7 @@
         </button>
         <div id="admin-profile-panel" class="hidden absolute right-0 mt-2 w-64 max-w-[90vw] rounded-md border border-line bg-surface shadow-lg z-50 overflow-hidden">
           <div class="px-4 py-3 border-b border-line">
-            <p class="text-[11px] font-mono font-semibold uppercase tracking-wide text-gold-text">{{ admin_branch_name }}</p>
+            <p class="text-[12px] font-bold text-gold-text">{{ admin_branch_name }}</p>
             <p class="text-xs text-ink-3 mt-1 truncate">{{ admin_name }}</p>
           </div>
           <div class="p-1">

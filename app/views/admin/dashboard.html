@@ -21,7 +21,7 @@
   {% if site_todo %}
     <section class="panel" aria-label="Website checklist">
       <div class="flex items-center justify-between mb-2">
-        <h2 class="text-[14px] font-semibold text-ink"><i class="ri-checkbox-multiple-line text-gold" aria-hidden="true"></i> {{ site_todo|length }} thing{{ '' if site_todo|length == 1 else 's' }} to finish on the public website</h2>
+        <h2 class="text-[14px] font-semibold text-ink"><i class="ri-checkbox-multiple-line text-gold-text" aria-hidden="true"></i> {{ site_todo|length }} thing{{ '' if site_todo|length == 1 else 's' }} to finish on the public website</h2>
         <a href="{{ url_for('admin_settings') }}#website" class="text-xs font-semibold text-ink-2">Open checklist &rarr;</a>
       </div>
       <ul class="flex flex-col gap-1.5">
@@ -34,12 +34,12 @@
   {% if announcements %}
     <section class="panel" aria-label="Announcements from HQ">
       <div class="flex items-center justify-between mb-2.5">
-        <h2 class="text-[14px] font-semibold text-ink"><i class="ri-megaphone-line text-gold"></i> From HQ</h2>
+        <h2 class="text-[14px] font-semibold text-ink"><i class="ri-megaphone-line text-gold-text"></i> From HQ</h2>
         <a href="{{ url_for('admin_announcements') }}" class="text-xs font-semibold text-ink-2">All announcements &rarr;</a>
       </div>
       <ul class="flex flex-col gap-3">
         {% for a in announcements %}
-          <li><p class="text-[13px] font-semibold text-ink">{% if a.is_pinned %}<i class="ri-pushpin-fill text-gold"></i> {% endif %}{{ a.title }} <span class="font-normal text-[11px] text-ink-3">· {{ a.created_at.strftime('%d %b') }}</span></p>
+          <li><p class="text-[13px] font-semibold text-ink">{% if a.is_pinned %}<i class="ri-pushpin-fill text-gold-text"></i> {% endif %}{{ a.title }} <span class="font-normal text-[11px] text-ink-3">· {{ a.created_at.strftime('%d %b') }}</span></p>
             <p class="text-[12.5px] text-ink-2 mt-0.5 leading-relaxed">{{ a.body|truncate(220) }}</p></li>
         {% endfor %}
       </ul>
