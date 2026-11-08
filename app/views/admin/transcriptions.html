@@ -31,7 +31,7 @@
             <tr>
               <td data-label="Message">
                 <a href="{{ url_for('admin_transcriptions_show', sermon_id=sm.id) }}" class="font-semibold text-ink">{{ sm.title }}</a>
-                <p class="text-[11px] text-ink-3">{{ sm.preacher or '' }}</p>
+                <p class="text-[12px] text-ink-3">{{ sm.preacher or '' }}</p>
               </td>
               <td data-label="Status">
                 {% if ts in ['none', 'failed'] and not (sm.audio_file_path or sm.telegram_file_id) %}
@@ -39,7 +39,7 @@
                 {% else %}
                   {{ badge({'completed': 'Completed', 'processing': 'Transcribing…', 'queued': 'Queued', 'failed': 'Failed', 'none': 'Not started'}.get(ts, ts|capitalize),
                            'ok' if ts == 'completed' else ('bad' if ts == 'failed' else ('warn' if ts in ['processing', 'queued'] else 'neut'))) }}
-                  {% if ts == 'failed' and sm.transcription_error %}<p class="text-[11px] text-bad mt-1 max-w-xs">{{ sm.transcription_error }}</p>{% endif %}
+                  {% if ts == 'failed' and sm.transcription_error %}<p class="text-[12px] text-bad mt-1 max-w-xs">{{ sm.transcription_error }}</p>{% endif %}
                 {% endif %}
               </td>
               <td data-label="Length" class="font-mono text-xs text-ink-2">{{ (sm.transcript.split()|length) ~ ' words' if sm.transcript else '—' }}</td>

@@ -220,6 +220,8 @@
     editor.dataset.placeholder = textarea.getAttribute('placeholder') || '';
     editor.setAttribute('role', 'textbox');
     editor.setAttribute('aria-multiline', 'true');
+    const fieldLabel = (textarea.id && document.querySelector(`label[for="${CSS.escape(textarea.id)}"]`)) || textarea.closest('label');
+    editor.setAttribute('aria-label', (fieldLabel && fieldLabel.textContent.replace(/\*/g, '').trim()) || textarea.getAttribute('aria-label') || textarea.getAttribute('placeholder') || textarea.name || 'Text');
 
     const rows = Number(textarea.getAttribute('rows') || 3);
     editor.style.minHeight = `${Math.max(120, rows * 38)}px`;

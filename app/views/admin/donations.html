@@ -80,9 +80,9 @@
       <option value="flutterwave" {{ 'selected' if filters.gateway == 'flutterwave' else '' }}>Flutterwave</option>
       <option value="bachs" {{ 'selected' if filters.gateway == 'bachs' else '' }}>Bachs</option>
     </select>
-    <label class="flex flex-col text-[10.5px] font-mono text-ink-3 uppercase tracking-wider">From
+    <label class="flex flex-col text-[12px] font-mono text-ink-3 uppercase tracking-wider">From
       <input type="date" name="start" value="{{ filters.start }}" class="rounded-md border border-line-2 bg-surface px-2 py-1.5 text-xs text-ink normal-case"></label>
-    <label class="flex flex-col text-[10.5px] font-mono text-ink-3 uppercase tracking-wider">To
+    <label class="flex flex-col text-[12px] font-mono text-ink-3 uppercase tracking-wider">To
       <input type="date" name="end" value="{{ filters.end }}" class="rounded-md border border-line-2 bg-surface px-2 py-1.5 text-xs text-ink normal-case"></label>
     <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
     {% if filters.q or filters.status or filters.gateway or filters.start or filters.end or filters.branch_id or filters.method %}<a href="{{ url_for('admin_donations') }}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
@@ -100,10 +100,10 @@
                 <td data-label="Date" class="font-mono text-xs text-ink-3 whitespace-nowrap">{{ g.created_at.strftime('%d %b %Y %H:%M') }}</td>
                 <td data-label="Donor">
                   <p class="text-[13px] font-medium text-ink">{{ 'Anonymous' if g.is_anonymous else (g.full_name or '—') }}</p>
-                  <p class="font-mono text-[11px] text-ink-3">{{ g.email }}</p>
+                  <p class="font-mono text-[12px] text-ink-3">{{ g.email }}</p>
                 </td>
-                <td data-label="Purpose">{{ g.giving_type }}{% if g.dedication %}<p class="text-[11px] text-ink-3">“{{ g.dedication }}”</p>{% endif %}{% if g.note %}<p class="text-[11px] text-ink-3">{{ g.note }}</p>{% endif %}</td>
-                {% if sees_all %}<td data-label="Branch" class="text-xs">{{ branch_names.get(g.branch_id, 'HQ') }}{% if g.gateway_owner == 'hq' and g.branch_id and not branch_names.get(g.branch_id, '') == 'HQ' %}<p class="text-[10.5px] text-ink-3">held by HQ</p>{% endif %}</td>{% endif %}
+                <td data-label="Purpose">{{ g.giving_type }}{% if g.dedication %}<p class="text-[12px] text-ink-3">“{{ g.dedication }}”</p>{% endif %}{% if g.note %}<p class="text-[12px] text-ink-3">{{ g.note }}</p>{% endif %}</td>
+                {% if sees_all %}<td data-label="Branch" class="text-xs">{{ branch_names.get(g.branch_id, 'HQ') }}{% if g.gateway_owner == 'hq' and g.branch_id and not branch_names.get(g.branch_id, '') == 'HQ' %}<p class="text-[12px] text-ink-3">held by HQ</p>{% endif %}</td>{% endif %}
                 <td data-label="Amount" class="text-right font-mono text-[13px] font-semibold text-ink whitespace-nowrap">{{ g.amount|money(g.currency) }}</td>
                 <td data-label="Received via" class="text-xs">{{ (g.payment_gateway|capitalize) if g.method == 'online' else (g.method|capitalize) }}</td>
                 <td data-label="Status">
@@ -128,7 +128,7 @@
                     </div>
                   {% endif %}
                 </td>
-                <td data-label="Reference" class="font-mono text-[10.5px] text-ink-3 break-all max-w-[190px]">{{ g.reference }}</td>
+                <td data-label="Reference" class="font-mono text-[12px] text-ink-3 break-all max-w-[190px]">{{ g.reference }}</td>
               </tr>
             {% endfor %}
           </tbody>

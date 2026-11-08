@@ -37,7 +37,7 @@
       {% if recent_messages %}
         <ul class="flex flex-col gap-1.5">
           {% for m in recent_messages %}
-            <li><a href="{{ url_for('admin_campaigns_create') }}?message_id={{ m.id }}" class="text-[12.5px] text-ink-2 hover:text-ink hover:underline">{{ m.title }}</a><span class="block font-mono text-[10.5px] text-ink-3">{{ m.preacher or '' }}{% if m.published_at %} · {{ m.published_at.strftime('%d %b %Y') }}{% endif %}</span></li>
+            <li><a href="{{ url_for('admin_campaigns_create') }}?message_id={{ m.id }}" class="text-[12.5px] text-ink-2 hover:text-ink hover:underline">{{ m.title }}</a><span class="block font-mono text-[12px] text-ink-3">{{ m.preacher or '' }}{% if m.published_at %} · {{ m.published_at.strftime('%d %b %Y') }}{% endif %}</span></li>
           {% endfor %}
         </ul>
       {% else %}<p class="text-[12px] text-ink-3">No published messages yet.</p>{% endif %}

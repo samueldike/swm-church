@@ -52,7 +52,7 @@
     {% set pct = ((job.get('bytes_done', 0) / job.get('bytes_total')) * 100) if job.get('bytes_total') else (((job.get('done', 0) / job.get('total')) * 100) if job.get('total') else (100 if job.get('state') == 'done' else 0)) %}
     <div data-live-bar>{{ progress_bar(pct|round(1), 'bad' if job.get('state') == 'failed' else ('ok' if job.get('state') == 'done' else 'gold')) }}</div>
     <p class="text-[12.5px] {{ 'text-bad' if job.get('state') == 'failed' else 'text-ink-2' }}" data-live-message>{{ job.get('message') or '' }}</p>
-    {% if not busy and job_when %}<p class="text-[11px] text-ink-3">{{ 'Stopped' if job.get('state') == 'failed' else ('Paused' if job.get('state') == 'paused' else 'Finished') }} {{ job_when }}</p>{% endif %}
+    {% if not busy and job_when %}<p class="text-[12px] text-ink-3">{{ 'Stopped' if job.get('state') == 'failed' else ('Paused' if job.get('state') == 'paused' else 'Finished') }} {{ job_when }}</p>{% endif %}
     {% if not busy and job.get('state') == 'failed' and job.get('action') in ['scan', 'download', 'import'] %}
       <form method="POST" action="{{ url_for('admin_telegram_archive_run') }}" data-turbo="false">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="action" value="{{ job.get('action') }}">
@@ -60,8 +60,8 @@
         <button type="submit" class="btn btn-secondary btn-sm" {{ '' if ready else 'disabled' }}><i class="ri-refresh-line"></i>Try again</button>
       </form>
     {% endif %}
-    {% if job.get('bytes_total') %}<p class="font-mono text-[11.5px] text-ink-3" data-live-bytes>{{ job.get('bytes_done', 0)|filesizeformat }} of {{ job.get('bytes_total')|filesizeformat }}</p>{% endif %}
-    {% if busy %}<p class="text-[11.5px] text-ink-3">You can close this page; the work continues on the server.</p>{% endif %}
+    {% if job.get('bytes_total') %}<p class="font-mono text-[12px] text-ink-3" data-live-bytes>{{ job.get('bytes_done', 0)|filesizeformat }} of {{ job.get('bytes_total')|filesizeformat }}</p>{% endif %}
+    {% if busy %}<p class="text-[12px] text-ink-3">You can close this page; the work continues on the server.</p>{% endif %}
   </section>
 
   <ol class="flex flex-col gap-4">
@@ -128,8 +128,8 @@
       {% if total_n %}
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           <div class="rounded-md border border-line px-3 py-2"><p class="mono-label">Audio found</p><p class="kpi-value text-[20px] mt-1">{{ total_n }}</p></div>
-          <div class="rounded-md border border-line px-3 py-2"><p class="mono-label">To back up</p><p class="kpi-value text-[20px] mt-1">{{ to_get_n }}</p><p class="text-[11px] text-ink-3 mt-1">{{ to_get_bytes|filesizeformat }}</p></div>
-          <div class="rounded-md border border-line px-3 py-2"><p class="mono-label">Backed up</p><p class="kpi-value text-[20px] mt-1">{{ saved.n }}</p><p class="text-[11px] text-ink-3 mt-1">{{ saved.bytes|filesizeformat }}</p></div>
+          <div class="rounded-md border border-line px-3 py-2"><p class="mono-label">To back up</p><p class="kpi-value text-[20px] mt-1">{{ to_get_n }}</p><p class="text-[12px] text-ink-3 mt-1">{{ to_get_bytes|filesizeformat }}</p></div>
+          <div class="rounded-md border border-line px-3 py-2"><p class="mono-label">Backed up</p><p class="kpi-value text-[20px] mt-1">{{ saved.n }}</p><p class="text-[12px] text-ink-3 mt-1">{{ saved.bytes|filesizeformat }}</p></div>
           <div class="rounded-md border border-line px-3 py-2"><p class="mono-label">Already on website</p><p class="kpi-value text-[20px] mt-1">{{ on_site.n }}</p></div>
         </div>
       {% endif %}
@@ -154,12 +154,12 @@
               <div class="flex items-center gap-2"><input id="batch-n" name="limit" type="number" min="1" max="{{ [to_get_n, 10000]|min if to_get_n else 1 }}" value="{{ [10, to_get_n]|min if to_get_n else 1 }}" required class="field-input field-mono w-24"><span class="text-[12.5px] text-ink-2">files</span></div></div>
             <button type="submit" class="btn btn-secondary" data-batch-submit {{ '' if ready and to_get_n and not busy else 'disabled' }}><i class="ri-download-2-line"></i>Back up</button>
           </div>
-          <p class="text-[11.5px] text-ink-3" id="batch-estimate" data-sizes="{{ queue_sizes|tojson }}" data-usable="{{ usable if usable is not none else '' }}" aria-live="polite"></p>
+          <p class="text-[12px] text-ink-3" id="batch-estimate" data-sizes="{{ queue_sizes|tojson }}" data-usable="{{ usable if usable is not none else '' }}" aria-live="polite"></p>
         </form>
 
         <div class="rounded-md border border-line p-3.5 flex flex-col gap-2.5">
           <h3 class="text-[13px] font-semibold text-ink"><i class="ri-repeat-line text-ink-3"></i> Continuous</h3>
-          <p class="text-[11.5px] text-ink-3">Backs up everything left, one file after another. <b>Pause</b> stops after the file in progress; <b>Start</b> picks up where it stopped. It pauses by itself if the server is about to run out of space.</p>
+          <p class="text-[12px] text-ink-3">Backs up everything left, one file after another. <b>Pause</b> stops after the file in progress; <b>Start</b> picks up where it stopped. It pauses by itself if the server is about to run out of space.</p>
           {% if downloading %}
             <form method="POST" action="{{ url_for('admin_telegram_archive_pause') }}" data-turbo="false">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -194,8 +194,8 @@
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-[14px] font-semibold text-ink"><span class="font-mono text-ink-3 mr-1.5">5</span>Keep a second copy</h2>
         <div class="flex flex-wrap gap-2">
-          <a href="{{ url_for('admin_telegram_archive_index') }}" class="btn btn-secondary btn-sm {{ '' if total_n else 'pointer-events-none opacity-50' }}" data-turbo="false"><i class="ri-file-list-3-line"></i>Index (CSV)</a>
-          <a href="{{ url_for('admin_telegram_archive_zip') }}" class="btn btn-primary btn-sm {{ '' if saved.n else 'pointer-events-none opacity-50' }}" data-turbo="false"><i class="ri-folder-zip-line"></i>Download all ({{ saved.bytes|filesizeformat }})</a>
+          <a href="{{ url_for('admin_telegram_archive_index') }}" class="btn btn-secondary btn-sm {{ '' if total_n else 'is-unavailable' }}" {{ '' if total_n else 'aria-disabled=true tabindex=-1' }} data-turbo="false"><i class="ri-file-list-3-line"></i>Index (CSV)</a>
+          <a href="{{ url_for('admin_telegram_archive_zip') }}" class="btn btn-primary btn-sm {{ '' if saved.n else 'is-unavailable' }}" {{ '' if saved.n else 'aria-disabled=true tabindex=-1' }} data-turbo="false"><i class="ri-folder-zip-line"></i>Download all ({{ saved.bytes|filesizeformat }})</a>
         </div>
       </div>
       <p class="text-[12.5px] text-ink-2">A backup that lives only on one server is not safe. Download everything as one ZIP and keep it on a computer or external drive. The ZIP includes <span class="font-mono">index.csv</span> (date, title, caption, Telegram link, checksum for every file), so it makes sense without this website. Large archives take a while; keep the tab open until it finishes.</p>
@@ -214,8 +214,8 @@
               <td data-label="Posted" class="font-mono text-xs whitespace-nowrap">{{ it.posted_at.strftime('%d %b %Y') }}</td>
               <td data-label="Audio">
                 <p class="font-medium text-ink">{{ it.audio_title or ((it.caption or '').strip().splitlines()[0] if (it.caption or '').strip() else (it.file_name or 'Audio')) }}</p>
-                {% if it.performer %}<p class="text-[11px] text-ink-3">{{ it.performer }}</p>{% endif %}
-                {% if it.error %}<p class="text-[11px] text-bad">{{ it.error }}</p>{% endif %}
+                {% if it.performer %}<p class="text-[12px] text-ink-3">{{ it.performer }}</p>{% endif %}
+                {% if it.error %}<p class="text-[12px] text-bad">{{ it.error }}</p>{% endif %}
               </td>
               <td data-label="Size" class="font-mono text-xs whitespace-nowrap">{{ it.size|filesizeformat }}{% if it.duration %} · {{ (it.duration // 60) }}m{% endif %}</td>
               <td data-label="Status">{{ badge({'found': 'To back up', 'saved': 'Backed up', 'failed': 'Failed', 'on_website': 'On website'}.get(it.status, it.status),

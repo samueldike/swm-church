@@ -22,7 +22,7 @@
         </div>
         <div class="p-3.5 flex flex-col gap-1 flex-grow">
           <p class="text-[13px] font-semibold text-ink truncate">{{ sl.title or 'Untitled slider' }}</p>
-          <p class="font-mono text-[10.5px] text-ink-3">Position {{ sl.sort_order }}{% if sl.cta_label %} · CTA: {{ sl.cta_label }}{% endif %}</p>
+          <p class="font-mono text-[12px] text-ink-3">Position {{ sl.sort_order }}{% if sl.cta_label %} · CTA: {{ sl.cta_label }}{% endif %}</p>
         </div>
         <div class="flex items-center gap-2 px-3.5 pb-3.5">
           <a href="{{ url_for('admin_sliders_edit_page', slider_id=sl.id) }}" class="btn btn-secondary btn-sm"><i class="ri-edit-line"></i>Edit</a>

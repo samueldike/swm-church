@@ -33,15 +33,15 @@
             {% set c = branch_counts.get(b.id, {}) %}
             {% if b.country_code != ns.cc %}{% set ns.cc = b.country_code %}
             <tr class="bg-sunken"><td colspan="8" class="!py-2"><span class="mono-label">{{ country_name(b.country_code) or 'Country not set' }}</span>
-              <span class="text-[11px] text-ink-3 ml-1.5">{{ branches|selectattr('country_code', 'equalto', b.country_code)|list|length }} branch{{ '' if (branches|selectattr('country_code', 'equalto', b.country_code)|list|length) == 1 else 'es' }}</span></td></tr>
+              <span class="text-[12px] text-ink-3 ml-1.5">{{ branches|selectattr('country_code', 'equalto', b.country_code)|list|length }} branch{{ '' if (branches|selectattr('country_code', 'equalto', b.country_code)|list|length) == 1 else 'es' }}</span></td></tr>
             {% endif %}
             <tr>
               <td data-label="Branch">
                 <a href="{{ url_for('admin_branch', branch_id=b.id) }}" class="font-semibold text-ink">{{ b.name }}</a>
-                <p class="font-mono text-[10.5px] text-ink-3">{{ b.slug }}</p>
+                <p class="font-mono text-[12px] text-ink-3">{{ b.slug }}</p>
               </td>
               <td data-label="Location" class="text-ink-2">{{ [b.city, region_name(b.region_code) or b.state]|select|join(', ') or '—' }}
-                {% if not b.region_code %}<span class="block text-[11px] text-warn">Region not set: edit the branch</span>{% endif %}</td>
+                {% if not b.region_code %}<span class="block text-[12px] text-warn">Region not set: edit the branch</span>{% endif %}</td>
               <td data-label="Time zone" class="font-mono text-xs text-ink-2">{{ (b.timezone or '—')|replace('_', ' ') }}{% if b.is_hq and b.currency %} <span class="text-ink-3">· platform {{ b.currency }}</span>{% endif %}</td>
               <td data-label="Members" class="text-right font-mono">{{ c.get('members', 0) }}</td>
               <td data-label="Events" class="text-right font-mono">{{ c.get('events', 0) }}</td>

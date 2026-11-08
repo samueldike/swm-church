@@ -81,7 +81,7 @@
     <div class="row">
       <a href="{{ url_for('admin_pubs_show', kind=kind, pub_id=pub.id) }}" class="btn btn-secondary btn-sm" id="ed-back"><i class="ri-arrow-left-line"></i>Project</a>
       <span class="text-[13px] font-semibold text-ink truncate max-w-[34ch]" title="{{ pub.title }}">{{ pub.title }}</span>
-      <span id="ed-save-state" class="font-mono text-[11px] ml-1" role="status" aria-live="polite">Loaded</span>
+      <span id="ed-save-state" class="font-mono text-[12px] ml-1" role="status" aria-live="polite">Loaded</span>
       <span class="flex-grow"></span>
       <button type="button" class="btn btn-primary btn-sm" id="ed-save"><i class="ri-save-line"></i>Save</button>
       <div class="rc" style="position:relative">
@@ -140,7 +140,7 @@
         <button type="button" class="rb" id="ed-table-btn" title="Insert table" aria-label="Insert table" aria-haspopup="true"><i class="ri-table-line"></i></button>
         <div class="ed-pop" id="ed-table-pop" style="left:0;top:34px">
           <div class="tblgrid" id="ed-tblgrid"></div>
-          <p class="font-mono text-[11px] text-ink-3 mt-2" id="ed-tbllabel">Choose size</p>
+          <p class="font-mono text-[12px] text-ink-3 mt-2" id="ed-tbllabel">Choose size</p>
         </div>
       </div>
       <button type="button" class="rb" data-table="row" title="Add row below" aria-label="Add table row" hidden><i class="ri-insert-row-bottom"></i></button>
@@ -151,7 +151,7 @@
       <span class="sep"></span>
       <button type="button" class="rb" id="ed-find-btn" title="Find and replace (Ctrl+H)" aria-label="Find and replace"><i class="ri-search-line"></i></button>
       <span class="flex-grow"></span>
-      <label id="ed-zoom-label" class="text-[11.5px] text-ink-3 flex items-center gap-1.5">Zoom
+      <label id="ed-zoom-label" class="text-[12px] text-ink-3 flex items-center gap-1.5">Zoom
         <select class="rs w-sm" id="ed-zoom-sel" aria-label="Zoom">
           <option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option>
         </select>
@@ -164,7 +164,7 @@
       <button type="button" class="btn btn-secondary btn-sm" id="ed-find-next">Find next</button>
       <button type="button" class="btn btn-secondary btn-sm" id="ed-replace">Replace</button>
       <button type="button" class="btn btn-secondary btn-sm" id="ed-replace-all">Replace all</button>
-      <span class="font-mono text-[11px] text-ink-3" id="ed-find-msg"></span>
+      <span class="font-mono text-[12px] text-ink-3" id="ed-find-msg"></span>
       <button type="button" class="rb" id="ed-find-close" aria-label="Close find"><i class="ri-close-line"></i></button>
     </div>
   </div>
@@ -204,7 +204,7 @@
   /* ── State: dirty tracking, save, autosave ── */
   let dirty = false, saving = false;
   const state = $('ed-save-state');
-  const setState = (text, cls) => { state.textContent = text; state.className = 'font-mono text-[11px] ml-1 ' + (cls || ''); };
+  const setState = (text, cls) => { state.textContent = text; state.className = 'font-mono text-[12px] ml-1 ' + (cls || ''); };
   const markDirty = () => { if (!dirty) { dirty = true; setState('Unsaved changes', 'dirty'); } };
 
   function cleanForSave() {

@@ -36,7 +36,7 @@
                     {% if st.featured_image %}<img src="{{ url_for('static', path=st.featured_image) }}" alt="" class="w-12 h-9 rounded object-cover bg-sunken flex-shrink-0" loading="lazy">{% endif %}
                     <div class="min-w-0">
                       <a href="{{ url_for('admin_stories_edit_page', story_id=st.id) }}" class="font-semibold text-ink block truncate">{{ st.title }}</a>
-                      {% if st.is_featured %}<span class="font-mono text-[10px] text-gold-text">FEATURED</span>{% endif %}
+                      {% if st.is_featured %}<span class="font-mono text-[12px] text-gold-text">FEATURED</span>{% endif %}
                     </div>
                   </div>
                 </td>

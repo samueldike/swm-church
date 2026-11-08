@@ -34,7 +34,7 @@
               <tr>
                 <td data-label="Project" class="min-w-[220px]">
                   <a href="{{ url_for('admin_pubs_show', kind=kind, pub_id=p.id) }}" class="font-semibold text-ink block">{{ p.title }}</a>
-                  <span class="font-mono text-[11px] text-ink-3">{{ row.period or kmeta.label }}{% if p.author_name %} · {{ p.author_name }}{% endif %}</span>
+                  <span class="font-mono text-[12px] text-ink-3">{{ row.period or kmeta.label }}{% if p.author_name %} · {{ p.author_name }}{% endif %}</span>
                 </td>
                 <td data-label="Messages" class="font-mono text-xs">{{ g.messages }}{% if g.no_transcript %} <span class="text-warn">({{ g.no_transcript }} without transcript)</span>{% endif %}</td>
                 <td data-label="{{ 'Days written' if kind == 'devotionals' else 'Sections written' }}" class="min-w-[170px]">

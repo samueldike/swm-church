@@ -25,7 +25,7 @@
     </div>
     <div class="flex flex-wrap items-center gap-3 pt-3 border-t border-line">
       <button type="submit" form="tg-test" class="btn btn-secondary btn-sm"><i class="ri-plug-line"></i>Test saved Telegram settings</button>
-      <span class="text-[11.5px] text-ink-3">Tests what is already saved, so save first.</span>
+      <span class="text-[12px] text-ink-3">Tests what is already saved, so save first.</span>
     </div>
   </section>
 
@@ -119,7 +119,7 @@
     </div>
     {% if as_hq %}
       <input type="hidden" name="public_present" value="1">
-      <label class="flex items-start gap-2.5 text-[13px] text-ink"><input type="checkbox" name="listed_publicly" value="1" {{ 'checked' if values.get('listed_publicly') == '1' else '' }} class="field-checkbox mt-0.5"><span><b>List this branch on the public website</b><span class="block text-[11.5px] text-ink-3">Tick only when its details below are correct and ready for visitors.</span></span></label>
+      <label class="flex items-start gap-2.5 text-[13px] text-ink"><input type="checkbox" name="listed_publicly" value="1" {{ 'checked' if values.get('listed_publicly') == '1' else '' }} class="field-checkbox mt-0.5"><span><b>List this branch on the public website</b><span class="block text-[12px] text-ink-3">Tick only when its details below are correct and ready for visitors.</span></span></label>
     {% else %}
       <p class="text-[12.5px] {{ 'text-ok' if values.get('listed_publicly') == '1' else 'text-ink-3' }}"><i class="{{ 'ri-checkbox-circle-fill' if values.get('listed_publicly') == '1' else 'ri-time-line' }}" aria-hidden="true"></i> {{ 'Listed on the public website.' if values.get('listed_publicly') == '1' else 'Not listed yet. Fill in the details, then ask HQ to approve the listing.' }}</p>
     {% endif %}

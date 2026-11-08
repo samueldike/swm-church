@@ -39,7 +39,7 @@
   {% endif %}
 
   {% if ai_ready %}
-    <p class="text-[11.5px] text-ink-3 -mb-2"><i class="ri-magic-line"></i> AI drafting uses <b class="text-ink-2">{{ ai_cfg.label }}</b> · <span class="font-mono">{{ ai_cfg.model }}</span> · <a href="{{ url_for('admin_settings') }}#ai" class="text-gold-text hover:underline">change</a></p>
+    <p class="text-[12px] text-ink-3 -mb-2"><i class="ri-magic-line"></i> AI drafting uses <b class="text-ink-2">{{ ai_cfg.label }}</b> · <span class="font-mono">{{ ai_cfg.model }}</span> · <a href="{{ url_for('admin_settings') }}#ai" class="text-gold-text hover:underline">change</a></p>
   {% endif %}
 
   {# ───── Coverage ───── #}
@@ -51,7 +51,7 @@
           <p class="text-[15px] font-semibold text-ink mt-1">{{ g.with_content }} of {{ g.days_total }} days written
             <span class="font-normal text-ink-3">· {{ g.days_missing }} missing</span></p>
         </div>
-        <p class="font-mono text-[11px] text-ink-3">{{ period }} · {{ pub.start_date.strftime('%d %b %Y') }} – {{ pub.end_date.strftime('%d %b %Y') }} · {{ '{:,}'.format(g.words) }} words</p>
+        <p class="font-mono text-[12px] text-ink-3">{{ period }} · {{ pub.start_date.strftime('%d %b %Y') }} – {{ pub.end_date.strftime('%d %b %Y') }} · {{ '{:,}'.format(g.words) }} words</p>
       </div>
       {{ progress_bar(((g.days_filled / g.days_total) * 100)|round|int, 'gold') }}
       {% if g.overflow %}
@@ -123,7 +123,7 @@
           </button>
         </form>
         {% if g.has_document %}
-          <details class="text-[11.5px] text-ink-3">
+          <details class="text-[12px] text-ink-3">
             <summary class="cursor-pointer hover:text-ink">More options</summary>
             <div class="mt-2 flex flex-col gap-1.5">
               <p>Update keeps your editor changes and renumbers the {{ 'days' if dev else 'chapters' }}. Rebuild starts over from the topics below.</p>
@@ -161,7 +161,7 @@
           <article id="source-{{ src.id }}" class="panel-flush scroll-mt-4" data-drag="source" data-id="{{ src.id }}">
             <header class="flex flex-wrap items-start gap-3 px-4 py-3.5 border-b border-line">
               <button type="button" class="drag-handle icon-btn cursor-grab hidden sm:inline-flex" aria-label="Drag to reorder" tabindex="-1"><i class="ri-draggable"></i></button>
-              <span class="font-mono text-[11px] font-semibold text-gold-text bg-gold-tint border border-[#ebdfc0] rounded px-1.5 py-0.5 mt-0.5" data-num>{{ loop.index }}</span>
+              <span class="font-mono text-[12px] font-semibold text-gold-text bg-gold-tint border border-[#ebdfc0] rounded px-1.5 py-0.5 mt-0.5" data-num>{{ loop.index }}</span>
               <div class="min-w-0 flex-grow basis-64">
                 <details class="group">
                   <summary class="list-none cursor-pointer [&::-webkit-details-marker]:hidden flex items-center gap-2">
@@ -175,7 +175,7 @@
                     <button type="submit" class="btn btn-secondary btn-sm">Save</button>
                   </form>
                 </details>
-                <p class="mt-1 text-[11.5px] text-ink-3 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <p class="mt-1 text-[12px] text-ink-3 flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span>From “{{ src.sermon.title if src.sermon else '—' }}”</span>
                   {% if has_tr %}
                     {{ badge('Transcript · ' ~ '{:,}'.format(tr_words) ~ ' words', 'ok') }}
@@ -225,19 +225,19 @@
                       <button type="button" class="drag-handle icon-btn cursor-grab hidden sm:inline-flex" aria-label="Drag to reorder" tabindex="-1"><i class="ri-draggable"></i></button>
                       <div class="min-w-0 flex-grow basis-56">
                         <p class="text-[13px] font-medium text-ink">
-                          {% if dev and day_of.get(t.id) %}<span class="font-mono text-[11px] text-gold-text mr-1.5">Day {{ day_of[t.id] }}
+                          {% if dev and day_of.get(t.id) %}<span class="font-mono text-[12px] text-gold-text mr-1.5">Day {{ day_of[t.id] }}
                             {%- if pub.start_date %} · {{ (pub.start_date + timedelta(days=day_of[t.id] - 1)).strftime('%d %b') }}{% endif %}</span>{% endif %}
                           {{ t.title }}
                         </p>
                         {% if t.points %}
-                          <p class="mt-0.5 text-[11.5px] text-ink-3 leading-relaxed">{{ t.points|join(' · ') }}</p>
+                          <p class="mt-0.5 text-[12px] text-ink-3 leading-relaxed">{{ t.points|join(' · ') }}</p>
                         {% endif %}
                         {% if t.content_status == 'failed' and t.content_error %}
-                          <p class="mt-1 text-[11.5px] text-bad">{{ t.content_error }}</p>
+                          <p class="mt-1 text-[12px] text-bad">{{ t.content_error }}</p>
                         {% endif %}
                         {% if t.has_content %}
                           <details class="mt-1.5">
-                            <summary class="cursor-pointer text-[11.5px] font-medium text-gold-text hover:underline">Preview</summary>
+                            <summary class="cursor-pointer text-[12px] font-medium text-gold-text hover:underline">Preview</summary>
                             <div class="mt-2 rounded-md bg-sunken p-3 text-[12.5px] text-ink-2 leading-relaxed flex flex-col gap-2">
                               {% if t.scripture %}<p class="italic">{{ t.scripture }}</p>{% endif %}
                               {% for para in t.body.split('\n\n') %}<p>{{ para }}</p>{% endfor %}

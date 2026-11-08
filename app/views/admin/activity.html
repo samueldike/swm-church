@@ -30,7 +30,7 @@
               {% set who = people.get(r.admin_id) %}
               <tr>
                 <td data-label="When" class="font-mono text-xs whitespace-nowrap">{{ r.created_at.strftime('%d %b %Y %H:%M') if r.created_at else '—' }}</td>
-                <td data-label="Who">{{ who.full_name if who else '—' }}<span class="block text-[11px] text-ink-3">{{ role_name(who.role) if who else '' }}</span></td>
+                <td data-label="Who">{{ who.full_name if who else '—' }}<span class="block text-[12px] text-ink-3">{{ role_name(who.role) if who else '' }}</span></td>
                 <td data-label="Action" class="font-mono text-xs">{{ r.action }}{% if r.target_type %} <span class="text-ink-3">· {{ r.target_type }}{{ ' #' ~ r.target_id if r.target_id else '' }}</span>{% endif %}</td>
               </tr>
             {% endfor %}

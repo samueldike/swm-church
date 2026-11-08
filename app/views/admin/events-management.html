@@ -40,22 +40,22 @@
           {% else %}
           <div class="sm:hidden flex flex-col items-center pt-0.5">
           {% endif %}
-            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full font-mono text-[11px] {{ 'bg-gold text-on-gold font-bold' if isToday else ('text-ink-2 font-medium' if inMonth else 'text-ink-3') }}">{{ day.day }}</span>
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full font-mono text-[12px] {{ 'bg-gold text-on-gold font-bold' if isToday else ('text-ink-2 font-medium' if inMonth else 'text-ink-3') }}">{{ day.day }}</span>
             {% if dayPrograms %}<span class="flex gap-0.5" aria-hidden="true">{% for ev in dayPrograms[:3] %}<span class="w-1.5 h-1.5 rounded-full {{ 'bg-gold' if ev.is_major else 'bg-ink-3' }}"></span>{% endfor %}</span>{% endif %}
           {% if dayPrograms %}</button>{% else %}</div>{% endif %}
           <div class="hidden sm:block">
-            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full font-mono text-[11px] {{ 'bg-gold text-on-gold font-bold' if isToday else ('text-ink-2 font-medium' if inMonth else 'text-ink-3') }}">{{ day.day }}</span>
+            <span class="inline-flex items-center justify-center w-6 h-6 rounded-full font-mono text-[12px] {{ 'bg-gold text-on-gold font-bold' if isToday else ('text-ink-2 font-medium' if inMonth else 'text-ink-3') }}">{{ day.day }}</span>
             <div class="mt-1 flex flex-col gap-1">
               {% for ev in dayPrograms[:2] %}
                 {% if ev.id in editable_event_ids %}
                 <a href="{{ url_for('admin_events_edit_page', event_id=ev.id) }}"
-                   class="block truncate rounded-sm px-1.5 py-0.5 font-mono text-[9.5px] font-semibold no-underline {{ 'bg-gold text-on-gold' if ev.is_major else 'bg-neut-bg text-neut' }}"
+                   class="block truncate rounded-sm px-1.5 py-0.5 font-mono text-[12px] font-semibold no-underline {{ 'bg-gold text-on-gold' if ev.is_major else 'bg-neut-bg text-neut' }}"
                    title="{{ ev.title }}">{{ ev.title }}</a>
                 {% else %}
-                <span class="block truncate rounded-sm px-1.5 py-0.5 font-mono text-[9.5px] font-semibold {{ 'bg-gold text-on-gold' if ev.is_major else 'bg-neut-bg text-neut' }}" title="{{ ev.title }} (HQ programme)">HQ · {{ ev.title }}</span>
+                <span class="block truncate rounded-sm px-1.5 py-0.5 font-mono text-[12px] font-semibold {{ 'bg-gold text-on-gold' if ev.is_major else 'bg-neut-bg text-neut' }}" title="{{ ev.title }} (HQ programme)">HQ · {{ ev.title }}</span>
                 {% endif %}
               {% endfor %}
-              {% if dayPrograms|length > 2 %}<span class="font-mono text-[9.5px] text-ink-3">+{{ dayPrograms|length - 2 }} more</span>{% endif %}
+              {% if dayPrograms|length > 2 %}<span class="font-mono text-[12px] text-ink-3">+{{ dayPrograms|length - 2 }} more</span>{% endif %}
             </div>
           </div>
         </div>
@@ -72,7 +72,7 @@
           <li class="flex items-center justify-between gap-3">
             <span class="min-w-0">
               <span class="block text-[13px] text-ink truncate">{{ ev.title if ev.id in editable_event_ids else 'HQ · ' ~ ev.title }}</span>
-              <span class="block font-mono text-[11px] text-ink-3">{{ ev.starts_at.strftime('%H:%M') if ev.starts_at else '' }}{% if ev.location %} · {{ ev.location }}{% endif %}</span>
+              <span class="block font-mono text-[12px] text-ink-3">{{ ev.starts_at.strftime('%H:%M') if ev.starts_at else '' }}{% if ev.location %} · {{ ev.location }}{% endif %}</span>
             </span>
             {% if ev.id in editable_event_ids %}<a href="{{ url_for('admin_events_edit_page', event_id=ev.id) }}" class="btn btn-secondary btn-sm shrink-0"><i class="ri-edit-line"></i>Edit</a>{% endif %}
           </li>
@@ -86,7 +86,7 @@
   <div class="panel-flush">
     <div class="px-4 pt-4 pb-1">
       <h2 class="text-[14px] font-semibold text-ink">Upcoming programs</h2>
-      <p class="text-[11.5px] text-ink-3 mt-0.5">Next scheduled programs across the calendar</p>
+      <p class="text-[12px] text-ink-3 mt-0.5">Next scheduled programs across the calendar</p>
     </div>
     {% if upcomingPrograms %}
       <div class="overflow-x-auto">
@@ -95,7 +95,7 @@
           <tbody>
             {% for ev in upcomingPrograms %}
               <tr>
-                <td data-label="Program"><p class="font-semibold text-ink">{{ ev.title }}</p><p class="text-[11px] text-ink-3">{{ ev.location or 'No location' }}</p></td>
+                <td data-label="Program"><p class="font-semibold text-ink">{{ ev.title }}</p><p class="text-[12px] text-ink-3">{{ ev.location or 'No location' }}</p></td>
                 <td data-label="Type">{{ badge('Major' if ev.is_major else 'Minor', 'gold' if ev.is_major else 'neut') }}</td>
                 <td data-label="Date" class="font-mono text-xs">{{ ev.starts_at.strftime('%b %d, %Y') if ev.starts_at else '—' }}{% if ev.ends_at and ev.ends_at.date() != ev.starts_at.date() %} &ndash; {{ ev.ends_at.strftime('%b %d') }}{% endif %}</td>
                 <td data-label="Time" class="font-mono text-xs">{{ ev.starts_at.strftime('%H:%M') if ev.starts_at else '—' }}</td>
@@ -107,7 +107,7 @@
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit" class="icon-btn text-bad" aria-label="Delete {{ ev.title }}"><i class="ri-delete-bin-line"></i></button>
                   </form>
-                  {% else %}<span class="text-[11px] text-ink-3">HQ programme</span>{% endif %}
+                  {% else %}<span class="text-[12px] text-ink-3">HQ programme</span>{% endif %}
                 </td>
               </tr>
             {% endfor %}

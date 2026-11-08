@@ -52,8 +52,8 @@
     {% for inv in invitations %}
       <div class="flex flex-col sm:flex-row sm:items-center gap-2 py-2.5 {{ 'border-b border-line' if not loop.last }}">
         <div class="min-w-0 flex-grow">
-          <p class="text-[13px] font-medium text-ink truncate">{{ inv.name or inv.email }} <span class="font-mono text-[11px] text-ink-3">{{ inv.email }}</span></p>
-          <p class="text-[11px] text-ink-3 truncate">{{ inv.department.name if inv.department else '—' }} &middot; {{ inv.branch.name if inv.branch else '—' }}</p>
+          <p class="text-[13px] font-medium text-ink truncate">{{ inv.name or inv.email }} <span class="font-mono text-[12px] text-ink-3">{{ inv.email }}</span></p>
+          <p class="text-[12px] text-ink-3 truncate">{{ inv.department.name if inv.department else '—' }} &middot; {{ inv.branch.name if inv.branch else '—' }}</p>
         </div>
         {{ badge('Accepted' if inv.accepted_at else 'Pending', 'ok' if inv.accepted_at else 'warn') }}
         {% if not inv.accepted_at %}

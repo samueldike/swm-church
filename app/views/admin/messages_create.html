@@ -26,7 +26,7 @@
         <label for="audio_file" class="flex flex-col items-center gap-2 rounded-md border-2 border-dashed border-line-2 bg-sunken px-4 py-8 text-center cursor-pointer">
           <i class="ri-upload-cloud-2-line text-3xl text-ink-3"></i>
           <span id="audio-file-name" class="text-[13px] font-semibold text-ink">Choose an audio file</span>
-          <span class="text-[11.5px] text-ink-3">MP3, WAV, M4A, OGG, FLAC, AAC, WMA &middot; large files are supported</span>
+          <span class="text-[12px] text-ink-3">MP3, WAV, M4A, OGG, FLAC, AAC, WMA &middot; large files are supported</span>
           <input id="audio_file" type="file" name="audio_file" accept="audio/*" required class="sr-only">
         </label>
       </div>
@@ -66,7 +66,7 @@
     <div class="panel flex flex-col gap-4">
       <h2 class="text-[14px] font-semibold text-ink">Publishing</h2>
       {% if editing and sermon.transcript %}
-      <label class="flex items-start gap-2.5 text-[12.5px] text-ink"><input type="checkbox" name="transcript_public" value="1" {{ 'checked' if sermon.transcript_public else '' }} class="field-checkbox mt-0.5"><span><b>Use this teaching in ScentAI and message search</b><span class="block text-[11.5px] text-ink-3">Review the written recording first. It remains internal; visitors receive AI explanations and links to the audio.</span></span></label>
+      <label class="flex items-start gap-2.5 text-[12.5px] text-ink"><input type="checkbox" name="transcript_public" value="1" {{ 'checked' if sermon.transcript_public else '' }} class="field-checkbox mt-0.5"><span><b>Use this teaching in ScentAI and message search</b><span class="block text-[12px] text-ink-3">Review the written recording first. It remains internal; visitors receive AI explanations and links to the audio.</span></span></label>
       {% endif %}
       {% if is_branch_owner %}<input type="hidden" name="status" value="published">{% else %}
       <div>
@@ -108,18 +108,18 @@
         {% endfor %}
       </div>
       {% if not telegram_ready %}
-        <p class="text-[11.5px] text-warn mt-3 leading-relaxed"><i class="ri-alert-line"></i> {{ 'Your branch has no Telegram bot and channel saved yet' if is_branch_owner else 'No HQ Telegram channel is saved' }} — audio will be stored and transcribed but not sent to Telegram.
+        <p class="text-[12px] text-warn mt-3 leading-relaxed"><i class="ri-alert-line"></i> {{ 'Your branch has no Telegram bot and channel saved yet' if is_branch_owner else 'No HQ Telegram channel is saved' }} — audio will be stored and transcribed but not sent to Telegram.
           {% if is_branch_owner and can('branch_settings') %}<a href="{{ url_for('admin_branch_settings') }}" class="text-gold-text underline">Add it in Branch settings</a>.{% endif %}</p>
       {% endif %}
       {% if not editing %}
         {% if telegram_ready %}
-          <p class="text-[11px] text-ink-3 mt-3 leading-relaxed">
+          <p class="text-[12px] text-ink-3 mt-3 leading-relaxed">
             Telegram gets the file exactly as uploaded, up to <b>{{ '2 GB' if telegram_large_files else '50 MB' }}</b>{% if not telegram_large_files %}
             {%- if is_super %} · <a href="{{ url_for('admin_settings') }}#distribution" class="text-gold-text underline">raise to 2 GB</a>{% else %} (HQ can raise this to 2 GB){% endif %}{% endif %}.
             It is sent in the background after saving; transcription starts automatically afterwards.</p>
-          <p id="tg-size-warning" class="hidden text-[11.5px] text-warn mt-2 leading-relaxed" data-limit="{{ telegram_limit_bytes }}" role="status"></p>
+          <p id="tg-size-warning" class="hidden text-[12px] text-warn mt-2 leading-relaxed" data-limit="{{ telegram_limit_bytes }}" role="status"></p>
         {% else %}
-          <p class="text-[11px] text-ink-3 mt-3 leading-relaxed">Transcription starts automatically after saving.</p>
+          <p class="text-[12px] text-ink-3 mt-3 leading-relaxed">Transcription starts automatically after saving.</p>
         {% endif %}
       {% endif %}
     </div>
@@ -137,7 +137,7 @@
       <i class="ri-loader-4-line animate-spin text-3xl text-gold-text"></i>
       <p class="mt-3 text-[14px] font-semibold text-ink">Uploading audio…</p>
       <p id="upload-overlay-size" class="mt-1 font-mono text-[12px] text-ink-3"></p>
-      <p class="mt-3 text-[11.5px] text-ink-3 leading-relaxed">Large files can take several minutes. Please keep this page open until the upload finishes.</p>
+      <p class="mt-3 text-[12px] text-ink-3 leading-relaxed">Large files can take several minutes. Please keep this page open until the upload finishes.</p>
     </div>
   </div>
   <script>

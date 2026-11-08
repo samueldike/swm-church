@@ -14,9 +14,9 @@
     <img src="/static/brand/swm-logo-128.png" alt="" width="40" height="40" class="w-10 h-10 rounded-full object-contain bg-white flex-shrink-0">
     <span class="min-w-0 flex-1">
       <span class="block text-chrome-ink font-display font-extrabold text-[14px] leading-tight whitespace-nowrap truncate">{{ siteName }}</span>
-      <span class="block text-gold-text text-[11.5px] font-bold mt-0.5">{{ role_label }}</span>
+      <span class="block text-gold-text text-[12px] font-bold mt-0.5">{{ role_label }}</span>
     </span>
-    <button id="admin-sidebar-close" type="button" class="lg:hidden ml-auto w-7 h-7 flex items-center justify-center text-chrome-text hover:text-chrome-ink flex-shrink-0" aria-label="Close menu">
+    <button id="admin-sidebar-close" type="button" class="lg:hidden ml-auto w-10 h-10 tap-44 rounded-full flex items-center justify-center text-chrome-text hover:text-chrome-ink flex-shrink-0" aria-label="Close menu">
       <i class="ri-close-line text-base"></i>
     </button>
   </a>
@@ -26,11 +26,11 @@
     <a href="{{ url }}" class="nav-link {{ 'nav-link-active' if active_page == page else '' }}">
       <i class="{{ icon }} text-base w-5 text-center flex-shrink-0"></i>
       <span class="flex-1 whitespace-nowrap">{{ label }}</span>
-      {% if count and count > 0 %}{% set what = hint|replace('{n}', count|string) if hint else count|string %}<span class="text-[10.5px] font-bold text-on-gold bg-gold rounded-full px-1.5 py-0.5 min-w-[18px] text-center" title="{{ what }}" aria-label="{{ what }}">{{ count }}</span>{% endif %}
+      {% if count and count > 0 %}{% set what = hint|replace('{n}', count|string) if hint else count|string %}<span class="text-[12px] font-bold text-on-gold bg-gold rounded-full px-1.5 py-0.5 min-w-[18px] text-center" title="{{ what }}" aria-label="{{ what }}">{{ count }}</span>{% endif %}
     </a>
   {%- endmacro %}
   {% macro nav_heading(text) -%}
-    <p class="text-chrome-text text-[11.5px] font-bold px-3 pt-3 pb-1.5">{{ text }}</p>
+    <p class="text-chrome-text text-[12px] font-bold px-3 pt-3 pb-1.5">{{ text }}</p>
   {%- endmacro %}
 
   <nav class="admin-sidebar-scroll flex-1 overflow-y-auto py-3 px-2">
@@ -127,11 +127,11 @@
       <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gold text-on-gold text-xs font-bold flex-shrink-0">{{ admin_initials }}</span>
       <div class="flex-1 overflow-hidden">
         <p class="text-chrome-ink text-[13px] font-bold truncate">{{ admin.full_name if admin else '' }}</p>
-        <p class="text-chrome-text text-[11.5px] truncate">{{ admin.email if admin else '' }}</p>
+        <p class="text-chrome-text text-[12px] truncate">{{ admin.email if admin else '' }}</p>
       </div>
       <form action="{{ url_for('admin_logout') }}" method="POST" class="ml-auto">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button class="w-7 h-7 flex items-center justify-center rounded-full border border-chrome-line text-chrome-text hover:bg-ink hover:text-white transition-colors" type="submit" title="Sign out" aria-label="Sign out">
+        <button class="w-9 h-9 tap-44 flex items-center justify-center rounded-full border border-chrome-line text-chrome-text hover:bg-ink hover:text-white transition-colors" type="submit" title="Sign out" aria-label="Sign out">
           <i class="ri-logout-box-r-line text-sm"></i>
         </button>
       </form>

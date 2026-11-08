@@ -82,6 +82,7 @@
     @apply inline-flex h-9 w-9 items-center justify-center rounded-full border border-line bg-surface text-ink-2 transition-colors;
   }
   .icon-btn:hover { @apply bg-sunken; }
+  .btn.is-unavailable, .btn[aria-disabled="true"] { @apply pointer-events-none border-line-2 bg-sunken text-ink-3; }
 
   /* ── Cards / surfaces ────────────────────────────────────────── */
   .panel { @apply rounded-2xl border border-line bg-surface p-4 sm:p-5; }
@@ -118,7 +119,7 @@
 
   /* ── Badges ──────────────────────────────────────────────────── */
   .badge {
-    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11.5px] font-bold whitespace-nowrap;
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[12px] font-bold whitespace-nowrap;
   }
   .badge::before { content: ""; width: 5px; height: 5px; border-radius: 999px; background: currentColor; flex-shrink: 0; }
   .badge-ok { @apply bg-ok-bg text-ok; }
@@ -281,18 +282,18 @@
   .admin-richtext:focus-within { border-color: var(--color-gold); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-gold) 20%, transparent); }
   .admin-richtext-topbar, .admin-richtext-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--color-line); background: var(--color-sunken); }
   .admin-richtext-topbar { justify-content: space-between; gap: 8px; }
-  .admin-richtext-btn { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 6px; color: var(--color-ink-2); }
+  .admin-richtext-btn { display: inline-flex; width: 32px; height: 32px; align-items: center; justify-content: center; border-radius: 6px; color: var(--color-ink-2); }
   .admin-richtext-btn:hover { background: var(--color-line); color: var(--color-ink); }
   .admin-richtext-select { height: 32px; border-radius: 6px; border: 1px solid var(--color-line-2); background: var(--color-surface); padding: 0 8px; font-size: 12px; font-weight: 600; color: var(--color-ink-2); outline: none; }
   .admin-richtext-select:focus { border-color: var(--color-gold); }
   .admin-richtext-modes { margin-left: auto; display: inline-flex; border-radius: 6px; border: 1px solid var(--color-line-2); background: var(--color-surface); padding: 2px; }
-  .admin-richtext-mode { height: 26px; border-radius: 4px; padding: 0 8px; font-size: 11px; font-weight: 700; color: var(--color-ink-3); }
+  .admin-richtext-mode { height: 30px; border-radius: 999px; padding: 0 10px; font-size: 12px; font-weight: 700; color: var(--color-ink-3); }
   .admin-richtext-mode:hover { color: var(--color-ink); }
   .admin-richtext-mode.active { background: var(--color-gold-tint); color: var(--color-gold-text); }
   .admin-richtext-separator { margin: 0 4px; height: 20px; width: 1px; background: var(--color-line-2); }
   .admin-richtext-colors { margin-left: 4px; display: flex; align-items: center; gap: 4px; border-radius: 6px; border: 1px solid var(--color-line-2); background: var(--color-surface); padding: 3px 8px; }
   .admin-richtext-color { height: 20px; width: 20px; border-radius: 4px; border: 1px solid var(--color-line-2); background: transparent; padding: 0; }
-  .admin-richtext-color-label { display: none; font-size: 11px; font-weight: 700; color: var(--color-ink-3); }
+  .admin-richtext-color-label { display: none; font-size: 12px; font-weight: 700; color: var(--color-ink-3); }
   @media (min-width: 640px) { .admin-richtext-color-label { display: inline; } }
   .admin-richtext-editor { max-height: 288px; overflow-y: auto; padding: 12px 16px; font-size: 14px; line-height: 1.7; color: var(--color-ink-2); background: var(--color-surface); outline: none; }
   .admin-richtext-source { display: block; min-height: 128px; width: 100%; border: 0; border-radius: 0; background: var(--color-sunken); padding: 12px 16px; font-family: var(--font-mono); font-size: 12px; line-height: 1.7; color: var(--color-ink-2); outline: none; }
@@ -323,3 +324,20 @@ textarea:focus,select:focus,[contenteditable=true]:focus {
 /* Hide scrollbar chrome while preserving native scrolling and scroll snapping. */
 html, body, * { scrollbar-width: none !important; -ms-overflow-style: none; }
 *::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+
+/* Touch screens: every control is at least 44px (WCAG 2.5.5 and the platforms' own guidelines). */
+@media (pointer: coarse), (max-width: 767px) {
+  .btn, .btn-sm, .icon-btn, .nav-link, .field-input, .field-select,
+  main select, main input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not(.sr-only) { min-height: 44px; }
+  .icon-btn { min-width: 44px; }
+  .tap-44 { min-width: 44px !important; min-height: 44px !important; }
+}
+@media (pointer: coarse), (max-width: 767px) {
+  /* Stand-alone text links and fold-out headers get a full-height tap area; links inside sentences stay inline. */
+  main summary { min-height: 44px; display: flex; align-items: center; }
+  main a:not(.btn):not(.nav-link):not(p a):not(td a):not(li a) { display: inline-flex; align-items: center; min-height: 44px; }
+}
+@media (pointer: coarse), (max-width: 767px) {
+  .admin-richtext-btn { width: 44px; height: 44px; }
+  .admin-richtext-mode, .admin-richtext-select { height: 44px; }
+}

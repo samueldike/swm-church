@@ -31,7 +31,7 @@
       {% for a in admins %}
         <div class="flex items-center gap-2.5 py-2.5 {{ 'border-b border-line' if not loop.last }}">
           <div class="flex-grow min-w-0">{{ person(a.name, a.email, (a.name[0] if a.name else 'A')) }}</div>
-          <span class="text-[11px] text-ink-3 hidden sm:inline">{{ 'Department HOD' if a.role == 'hod' else 'Branch Admin' }}{% if a.department %} · {{ a.department.name }}{% endif %}</span>
+          <span class="text-[12px] text-ink-3 hidden sm:inline">{{ 'Department HOD' if a.role == 'hod' else 'Branch Admin' }}{% if a.department %} · {{ a.department.name }}{% endif %}</span>
           {{ badge('Active' if a.is_active else 'Disabled', 'ok' if a.is_active else 'neut') }}
         </div>
       {% else %}
@@ -45,7 +45,7 @@
         <div class="flex flex-wrap items-center gap-2 py-2.5 {{ 'border-b border-line' if not loop.last }}">
           <div class="flex-grow min-w-0">
             <p class="text-[13px] font-medium text-ink truncate">{{ inv.name }}</p>
-            <p class="font-mono text-[11px] text-ink-3 truncate">{{ inv.email }}</p>
+            <p class="font-mono text-[12px] text-ink-3 truncate">{{ inv.email }}</p>
           </div>
           {{ badge('Accepted' if inv.accepted_at else 'Pending', 'ok' if inv.accepted_at else 'warn') }}
           {% if not inv.accepted_at %}
@@ -66,14 +66,14 @@
     <div class="panel">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-[14px] font-semibold text-ink">Upcoming programs</h2>
-        <a href="{{ url_for('admin_events') }}" class="text-[11.5px] font-semibold text-gold-text">Calendar &rarr;</a>
+        <a href="{{ url_for('admin_events') }}" class="text-[12px] font-semibold text-gold-text">Calendar &rarr;</a>
       </div>
       {% for e in upcomingEvents[:5] %}
         <div class="flex items-center gap-2.5 py-2 {{ 'border-b border-line' if not loop.last }}">
           <span class="w-0.5 h-7 rounded-full bg-gold flex-shrink-0"></span>
           <div class="min-w-0">
             <p class="text-[12.5px] font-medium text-ink truncate">{{ e.title }}</p>
-            <p class="font-mono text-[10.5px] text-ink-3">{{ e.starts_at.strftime('%b %d, %I:%M %p') if e.starts_at else '' }}</p>
+            <p class="font-mono text-[12px] text-ink-3">{{ e.starts_at.strftime('%b %d, %I:%M %p') if e.starts_at else '' }}</p>
           </div>
         </div>
       {% else %}
@@ -84,7 +84,7 @@
     <div class="panel">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-[14px] font-semibold text-ink">Latest inquiries</h2>
-        <a href="{{ url_for('admin_inquiries') }}" class="text-[11.5px] font-semibold text-gold-text">All &rarr;</a>
+        <a href="{{ url_for('admin_inquiries') }}" class="text-[12px] font-semibold text-gold-text">All &rarr;</a>
       </div>
       {% for q in recent_inquiries %}
         <div class="py-2 {{ 'border-b border-line' if not loop.last }}">
@@ -92,7 +92,7 @@
             <span class="text-[12.5px] font-medium text-ink flex-grow truncate">{{ q.name }}</span>
             {{ badge(q.status|replace('_', ' ')|capitalize, 'bad' if q.status == 'new' else ('warn' if q.status == 'in_progress' else 'ok')) }}
           </div>
-          <p class="text-[11px] text-ink-3 truncate">{{ q.subject }}</p>
+          <p class="text-[12px] text-ink-3 truncate">{{ q.subject }}</p>
         </div>
       {% else %}
         <p class="text-[13px] text-ink-3">No inquiries for this branch.</p>
@@ -103,13 +103,13 @@
     <div class="panel">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-[14px] font-semibold text-ink">Latest unit reports</h2>
-        <a href="{{ url_for('admin_unit_reports') }}" class="text-[11.5px] font-semibold text-gold-text">All &rarr;</a>
+        <a href="{{ url_for('admin_unit_reports') }}" class="text-[12px] font-semibold text-gold-text">All &rarr;</a>
       </div>
       {% for r in recent_reports %}
         <a href="{{ url_for('admin_unit_reports_show', report_id=r.id) }}" class="flex items-center gap-2 py-2 no-underline {{ 'border-b border-line' if not loop.last }}">
           <div class="min-w-0 flex-grow">
             <p class="text-[12.5px] font-medium text-ink truncate">{{ r.department.name if r.department else 'Department' }}</p>
-            <p class="font-mono text-[10.5px] text-ink-3">{{ (r.report_month|month_label) or (r.created_at.strftime('%B %Y') if r.created_at else '') }}</p>
+            <p class="font-mono text-[12px] text-ink-3">{{ (r.report_month|month_label) or (r.created_at.strftime('%B %Y') if r.created_at else '') }}</p>
           </div>
           {{ badge(r.status|capitalize, 'ok' if r.status == 'reviewed' else 'neut') }}
         </a>
@@ -121,9 +121,9 @@
     <div class="panel">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-[14px] font-semibold text-ink">Reports to HQ</h2>
-        <a href="{{ url_for('admin_branch_reports') }}?branch_id={{ branch.id }}" class="text-[11.5px] font-semibold text-gold-text">All &rarr;</a>
+        <a href="{{ url_for('admin_branch_reports') }}?branch_id={{ branch.id }}" class="text-[12px] font-semibold text-gold-text">All &rarr;</a>
       </div>
-      <p class="text-[11.5px] text-ink-3 mb-3">This branch's department reports are read by its own admin. HQ receives the branch admin's monthly report.</p>
+      <p class="text-[12px] text-ink-3 mb-3">This branch's department reports are read by its own admin. HQ receives the branch admin's monthly report.</p>
       {% for r in recent_branch_reports %}
         <a href="{{ url_for('admin_branch_reports_show', report_id=r.id) }}" class="flex items-center gap-2 py-2 no-underline {{ 'border-b border-line' if not loop.last }}">
           <div class="min-w-0 flex-grow"><p class="text-[12.5px] font-medium text-ink">{{ r.report_month|month_label }}</p></div>

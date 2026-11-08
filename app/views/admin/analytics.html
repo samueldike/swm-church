@@ -32,7 +32,7 @@
           <div class="flex-1 min-w-[2px] bg-gold" style="height:{{ [ (p.views / peak * 100)|round(1), 1 ]|max }}%" title="{{ p.day.strftime('%d %b') }}: {{ p.views }} views, {{ p.visitors }} visitors"></div>
         {% endfor %}
       </div>
-      <div class="flex justify-between font-mono text-[10.5px] text-ink-3 mt-1.5"><span>{{ data.series[0].day.strftime('%d %b') }}</span><span>{{ data.series[-1].day.strftime('%d %b') }}</span></div>
+      <div class="flex justify-between font-mono text-[12px] text-ink-3 mt-1.5"><span>{{ data.series[0].day.strftime('%d %b') }}</span><span>{{ data.series[-1].day.strftime('%d %b') }}</span></div>
     {% else %}
       {{ empty_state("ri-bar-chart-2-line", "No visits recorded yet", "Counts appear here as people open the public pages. They are saved every few seconds.") }}
     {% endif %}

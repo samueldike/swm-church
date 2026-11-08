@@ -75,7 +75,7 @@
               <tr>
                 <td data-label="Select"><input type="checkbox" name="log_ids[]" value="{{ log.id }}" form="bulk-review-form" class="log-checkbox field-checkbox" aria-label="Select log {{ log.id }}" {{ 'disabled' if log.reviewed_at else '' }}></td>
                 <td data-label="Severity">{{ badge({'critical': 'Critical', 'warn': 'Warning', 'info': 'Info'}[sev], 'bad' if sev == 'critical' else ('warn' if sev == 'warn' else 'neut')) }}</td>
-                <td data-label="Event" class="font-mono text-xs">{{ log.action }}{% if log.target_type %}<span class="block text-[10.5px] text-ink-3">{{ log.target_type }}{% if log.target_id %} #{{ log.target_id }}{% endif %}</span>{% endif %}</td>
+                <td data-label="Event" class="font-mono text-xs">{{ log.action }}{% if log.target_type %}<span class="block text-[12px] text-ink-3">{{ log.target_type }}{% if log.target_id %} #{{ log.target_id }}{% endif %}</span>{% endif %}</td>
                 <td data-label="Actor" class="text-[12.5px]">{{ admin_names.get(log.admin_id, 'Unknown') if log.admin_id else 'System' }}</td>
                 <td data-label="IP address" class="font-mono text-xs text-ink-2">{{ log.ip_address or '—' }}</td>
                 <td data-label="Time" class="font-mono text-xs text-ink-3 whitespace-nowrap">{{ log.created_at.strftime('%Y-%m-%d %H:%M') if log.created_at else '' }}</td>
@@ -83,7 +83,7 @@
                   <form method="POST" action="{{ url_for('admin_security_logs_assign', log_id=log.id) }}" class="flex items-center gap-1.5 justify-end md:justify-start">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <select name="assigned_to_admin_id" aria-label="Assign log {{ log.id }}" onchange="this.form.requestSubmit()"
-                            class="rounded-md border border-line-2 bg-surface px-2 py-1 text-[11.5px] max-w-[140px]">
+                            class="rounded-md border border-line-2 bg-surface px-2 py-1 text-[12px] max-w-[140px]">
                       <option value="" disabled {{ 'selected' if not log.assigned_to_id else '' }}>Unassigned</option>
                       {% for a in admins %}<option value="{{ a.id }}" {{ 'selected' if log.assigned_to_id == a.id else '' }}>{{ a.name }}</option>{% endfor %}
                     </select>
@@ -106,7 +106,7 @@
       </div>
       <div class="px-4 pb-3.5">
         <div class="flex items-center gap-3 sm:gap-4 pt-3.5 border-t border-line flex-wrap">
-          <span class="font-mono text-[11.5px] text-ink-3">
+          <span class="font-mono text-[12px] text-ink-3">
             Showing <b class="text-ink font-semibold">{{ (pagination.page - 1) * pagination.per_page + 1 }}&ndash;{{ [pagination.page * pagination.per_page, pagination.total]|min }}</b>
             of <b class="text-ink font-semibold">{{ pagination.total }}</b>
           </span>

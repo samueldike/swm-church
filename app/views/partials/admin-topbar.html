@@ -7,7 +7,7 @@
   document.documentElement.classList.toggle('dark', storedTheme ? storedTheme === 'dark' : prefersDark);
 })();
 </script>
-<script src="{{ url_for('static', path='js/admin-richtext.js') }}" defer></script>
+<script src="{{ url_for('static', path='js/admin-richtext.js') }}?v=2" defer></script>
 <script src="{{ url_for('static', path='js/site-confirm.js') }}" defer></script>
 <script src="{{ url_for('static', path='js/turbo.es2017-umd.js') }}" defer></script>
 <script src="{{ url_for('static', path='js/live-actions.js') }}?v=2" defer></script>
@@ -15,13 +15,13 @@
 <header class="bg-surface border-b border-line flex-shrink-0 z-20">
   <div class="flex items-center justify-between px-4 md:px-6 h-14 gap-3">
     <div class="flex items-center gap-2.5 min-w-0">
-      <button id="admin-sidebar-open" type="button" class="lg:hidden p-1.5 rounded-md text-ink-2 hover:text-gold-text hover:bg-sunken flex-shrink-0" aria-label="Open menu">
+      <button id="admin-sidebar-open" type="button" class="lg:hidden tap-44 inline-flex items-center justify-center rounded-full text-ink-2 hover:text-gold-text hover:bg-sunken flex-shrink-0" aria-label="Open menu">
         <i class="ri-menu-line text-lg"></i>
       </button>
       <i class="{{ headerIcon|default('ri-dashboard-3-line') }} text-gold-text text-base hidden sm:inline-block flex-shrink-0"></i>
       <div class="min-w-0">
         <h1 class="text-[14px] font-semibold text-ink leading-tight truncate">{{ title|default('Admin Portal') }}</h1>
-        {% if subtitle %}<p class="text-[11px] text-ink-3 truncate">{{ subtitle }}</p>{% endif %}
+        {% if subtitle %}<p class="text-[12px] text-ink-3 truncate">{{ subtitle }}</p>{% endif %}
       </div>
     </div>
 
@@ -58,9 +58,9 @@
                   <article class="rounded-md border border-[#ebdfc0] bg-gold-tint px-3 py-2">
                     <div class="flex items-center justify-between gap-3">
                       <p class="font-semibold text-gold-text text-xs">{{ incident.action }}</p>
-                      <p class="text-[11px] font-mono text-ink-3">{{ incident.created_at.strftime('%b %d, %I:%M %p') if incident.created_at else '' }}</p>
+                      <p class="text-[12px] font-mono text-ink-3">{{ incident.created_at.strftime('%b %d, %I:%M %p') if incident.created_at else '' }}</p>
                     </div>
-                    <p class="text-[11px] font-mono text-ink-3 mt-1">IP: {{ incident.ip_address or 'N/A' }}{% if incident.assigned_to %} &middot; Assigned: {{ incident.assigned_to.name }}{% endif %}</p>
+                    <p class="text-[12px] font-mono text-ink-3 mt-1">IP: {{ incident.ip_address or 'N/A' }}{% if incident.assigned_to %} &middot; Assigned: {{ incident.assigned_to.name }}{% endif %}</p>
                   </article>
                 {% endfor %}
               </div>
@@ -72,11 +72,11 @@
       {% endif %}
 
       <div class="relative">
-        <button id="admin-profile-toggle" type="button" class="flex items-center gap-2 pl-1.5 sm:pl-2.5 sm:border-l sm:border-line cursor-pointer">
-          <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gold text-on-gold text-[11px] font-bold">{{ admin_initials|default('AD') }}</span>
+        <button id="admin-profile-toggle" type="button" class="flex items-center gap-2 min-h-11 pl-1.5 sm:pl-2.5 sm:border-l sm:border-line cursor-pointer">
+          <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gold text-on-gold text-[12px] font-bold">{{ admin_initials|default('AD') }}</span>
           <span class="hidden sm:block text-left">
             <span class="block text-xs font-semibold text-ink leading-tight truncate max-w-[120px]">{{ admin_name }}</span>
-            <span class="block text-[10px] text-ink-3 font-mono">{{ role_label }}</span>
+            <span class="block text-[12px] text-ink-3 font-mono">{{ role_label }}</span>
           </span>
           <i class="ri-arrow-down-s-line text-ink-3 text-xs hidden sm:inline-block"></i>
         </button>

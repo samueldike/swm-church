@@ -23,7 +23,7 @@
     {{ textarea('Scripture', 'scripture', value=(sub.scripture or '') if editing else '', rows=2, hint='With the version in brackets, e.g. Habakkuk 2:4 (NKJV).') }}
     <div>
       {{ textarea('Content', 'body', value=(sub.body or '') if editing else '', rows=14, hint='Separate paragraphs with a blank line.', id='sub-body') }}
-      <p class="font-mono text-[11px] text-ink-3 mt-1.5"><span id="sub-words">0</span> words{% if kind == 'devotionals' %} · aim for about 200{% endif %}</p>
+      <p class="font-mono text-[12px] text-ink-3 mt-1.5"><span id="sub-words">0</span> words{% if kind == 'devotionals' %} · aim for about 200{% endif %}</p>
     </div>
     {% if kind == 'devotionals' %}
       {{ textarea('Action plan', 'action_plan', value=(sub.action_plan or '') if editing else '', rows=2, hint='One sentence for the reader.') }}

@@ -52,7 +52,7 @@
     {% if rollup.expected %}
       <p class="font-mono text-[22px] font-semibold text-ink">{{ rollup.submitted }} <span class="text-ink-3 text-[14px]">of {{ rollup.expected }}</span></p>
       {% if rollup.missing %}
-        <p class="mt-3 text-[11.5px] font-semibold text-warn">Still to report</p>
+        <p class="mt-3 text-[12px] font-semibold text-warn">Still to report</p>
         <ul class="mt-1 text-[12px] text-ink-2 list-disc pl-4">{% for n in rollup.missing %}<li>{{ n }}</li>{% endfor %}</ul>
       {% else %}
         <p class="mt-2 text-[12px] text-ok"><i class="ri-checkbox-circle-line"></i> Every department has reported.</p>

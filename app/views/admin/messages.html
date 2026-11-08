@@ -46,7 +46,7 @@
               <tr>
                 <td data-label="Message">
                   <p class="font-semibold text-ink">{{ sm.title }}</p>
-                  <p class="text-[11px] text-ink-3">{{ sm.preacher or 'No speaker' }}{% if sm.original_file_size %} · <span class="font-mono">{{ (sm.original_file_size / 1048576)|round(1) }} MB</span>{% endif %}</p>
+                  <p class="text-[12px] text-ink-3">{{ sm.preacher or 'No speaker' }}{% if sm.original_file_size %} · <span class="font-mono">{{ (sm.original_file_size / 1048576)|round(1) }} MB</span>{% endif %}</p>
                 </td>
                 <td data-label="Branch">{{ sm.branch.name if sm.branch else '—' }}</td>
                 <td data-label="Distribution">
@@ -56,10 +56,10 @@
                       {% set st = tg.get('state') %}
                       {{ badge('Telegram: ' ~ ((st or 'queued')|capitalize), 'ok' if st == 'sent' else ('bad' if st == 'failed' else 'warn')) }}
                       {% if st in ('failed', 'retrying', 'skipped') and tg.get('error') %}
-                        <p class="basis-full text-[11px] {{ 'text-bad' if st == 'failed' else 'text-ink-3' }}">{{ tg.get('error') }}{% if st == 'retrying' %} · retrying automatically{% endif %}</p>
+                        <p class="basis-full text-[12px] {{ 'text-bad' if st == 'failed' else 'text-ink-3' }}">{{ tg.get('error') }}{% if st == 'retrying' %} · retrying automatically{% endif %}</p>
                       {% endif %}
                     {% else %}
-                      <span class="text-[11px] text-ink-3">Website only</span>
+                      <span class="text-[12px] text-ink-3">Website only</span>
                     {% endif %}
                     {% if sm.status == 'published' %}{{ badge('Podcast feed', 'gold') }}{% endif %}
                   </div>
@@ -68,7 +68,7 @@
                   {{ badge((sm.status or 'draft')|capitalize, 'ok' if sm.status == 'published' else ('neut' if sm.status == 'archived' else 'warn')) }}
                   {% set ts = sm.transcription_status or 'none' %}
                   {% if sm.audio_file_path or sm.telegram_file_id %}
-                    <a href="{{ url_for('admin_transcriptions_show', sermon_id=sm.id) }}" class="mt-1 flex items-center gap-1 text-[11px] no-underline {{ 'text-ok' if ts == 'completed' else ('text-bad' if ts == 'failed' else ('text-warn' if ts in ['queued', 'processing'] else 'text-ink-3')) }}"
+                    <a href="{{ url_for('admin_transcriptions_show', sermon_id=sm.id) }}" class="mt-1 flex items-center gap-1 text-[12px] no-underline {{ 'text-ok' if ts == 'completed' else ('text-bad' if ts == 'failed' else ('text-warn' if ts in ['queued', 'processing'] else 'text-ink-3')) }}"
                        title="{{ sm.transcription_error if ts == 'failed' and sm.transcription_error else 'Open the transcript' }}">
                       <i class="{{ {'completed': 'ri-file-text-line', 'processing': 'ri-loader-4-line animate-spin', 'queued': 'ri-time-line', 'failed': 'ri-error-warning-line'}.get(ts, 'ri-file-unknow-line') }}"></i>
                       Transcript: {{ {'completed': 'ready', 'processing': 'transcribing…', 'queued': 'queued', 'failed': 'failed', 'none': 'not started'}.get(ts, ts) }}
@@ -105,7 +105,7 @@
     <i class="ri-rss-line text-lg text-gold-text"></i>
     <div class="min-w-0 flex-grow">
       <p class="text-[12.5px] font-semibold text-ink">Podcast feed</p>
-      <p class="font-mono text-[11px] text-ink-3 truncate">{{ feed_url }}</p>
+      <p class="font-mono text-[12px] text-ink-3 truncate">{{ feed_url }}</p>
     </div>
     <a href="{{ feed_url }}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm" data-turbo="false">Open feed</a>
   </div>

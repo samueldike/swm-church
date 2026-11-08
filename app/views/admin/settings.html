@@ -72,7 +72,7 @@
 
         <div class="pt-4 border-t border-line">
           <h3 class="text-[13px] font-semibold text-ink mb-1">Social links</h3>
-          <p class="text-[11.5px] text-ink-3 mb-3">Shown in the site footer and contact page. Leave blank to hide an icon.</p>
+          <p class="text-[12px] text-ink-3 mb-3">Shown in the site footer and contact page. Leave blank to hide an icon.</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {{ field('Facebook', 'socialFacebook', value=S.get('socialFacebook') or '', mono=True) }}
             {{ field('Instagram', 'socialInstagram', value=S.get('socialInstagram') or '', mono=True) }}
@@ -104,13 +104,13 @@
         <div class="rounded-md border border-line">
           <div class="px-3.5 py-2.5 border-b border-line flex items-center justify-between">
             <p class="text-[12.5px] font-semibold text-ink">Website checklist</p>
-            <p class="font-mono text-[11px] text-ink-3">{{ readiness|selectattr('ok')|list|length }} of {{ readiness|length }} done</p>
+            <p class="font-mono text-[12px] text-ink-3">{{ readiness|selectattr('ok')|list|length }} of {{ readiness|length }} done</p>
           </div>
           <ul class="divide-y divide-line">
             {% for it in readiness %}
               <li class="px-3.5 py-2.5 flex gap-2.5 items-start">
                 <i class="{{ 'ri-checkbox-circle-fill text-ok' if it.ok else 'ri-error-warning-line text-warn' }} text-base mt-0.5" aria-hidden="true"></i>
-                <div class="min-w-0"><p class="text-[12.5px] font-medium text-ink">{{ it.label }}</p><p class="text-[11.5px] text-ink-3">{{ it.detail }}</p></div>
+                <div class="min-w-0"><p class="text-[12.5px] font-medium text-ink">{{ it.label }}</p><p class="text-[12px] text-ink-3">{{ it.detail }}</p></div>
               </li>
             {% endfor %}
           </ul>
@@ -120,14 +120,14 @@
         {# Service times #}
         <div class="pt-2 border-t border-line">
           <h3 class="text-[13px] font-semibold text-ink">Service times</h3>
-          <p class="text-[11.5px] text-ink-3 mt-1 mb-3">Used on the home, about, visit, contact and prayer pages, in search results and in the “add to calendar” file. Write times like <span class="font-mono">7:00 — 9:30 am</span> so calendars and Google can read them. Tick <b>Main</b> for the highlighted services.</p>
+          <p class="text-[12px] text-ink-3 mt-1 mb-3">Used on the home, about, visit, contact and prayer pages, in search results and in the “add to calendar” file. Write times like <span class="font-mono">7:00 — 9:30 am</span> so calendars and Google can read them. Tick <b>Main</b> for the highlighted services.</p>
           <div id="svc-rows" class="flex flex-col gap-2">
             {% for r in svc_rows %}
               <div class="grid grid-cols-[1fr_1.4fr_1.2fr_auto_auto] gap-2 items-center max-sm:grid-cols-2" data-row>
                 <input name="svc_day" value="{{ r.day }}" placeholder="Sunday" aria-label="Day" class="field-input">
                 <input name="svc_name" value="{{ r.name }}" placeholder="First Service" aria-label="Service name" class="field-input">
                 <input name="svc_time" value="{{ r.time }}" placeholder="7:00 — 9:30 am" aria-label="Time" class="field-input field-mono">
-                <label class="flex items-center gap-1.5 text-[11.5px] text-ink-2"><input type="checkbox" class="field-checkbox" data-lead {{ 'checked' if r.lead else '' }}>Main<input type="hidden" name="svc_lead" value="{{ '1' if r.lead else '0' }}"></label>
+                <label class="flex items-center gap-1.5 text-[12px] text-ink-2"><input type="checkbox" class="field-checkbox" data-lead {{ 'checked' if r.lead else '' }}>Main<input type="hidden" name="svc_lead" value="{{ '1' if r.lead else '0' }}"></label>
                 <button type="button" class="icon-btn text-bad" data-remove-row aria-label="Remove this service"><i class="ri-close-line"></i></button>
               </div>
             {% endfor %}
@@ -138,7 +138,7 @@
               <input name="svc_day" placeholder="Sunday" aria-label="Day" class="field-input">
               <input name="svc_name" placeholder="Service name" aria-label="Service name" class="field-input">
               <input name="svc_time" placeholder="7:00 — 9:30 am" aria-label="Time" class="field-input field-mono">
-              <label class="flex items-center gap-1.5 text-[11.5px] text-ink-2"><input type="checkbox" class="field-checkbox" data-lead>Main<input type="hidden" name="svc_lead" value="0"></label>
+              <label class="flex items-center gap-1.5 text-[12px] text-ink-2"><input type="checkbox" class="field-checkbox" data-lead>Main<input type="hidden" name="svc_lead" value="0"></label>
               <button type="button" class="icon-btn text-bad" data-remove-row aria-label="Remove this service"><i class="ri-close-line"></i></button>
             </div>
           </template>
@@ -147,7 +147,7 @@
         {# Visit page #}
         <div class="pt-4 border-t border-line">
           <h3 class="text-[13px] font-semibold text-ink">Plan your visit page</h3>
-          <p class="text-[11.5px] text-ink-3 mt-1 mb-3">“What to expect” is a short list of headings with a sentence each. The details below appear only when you fill them in.</p>
+          <p class="text-[12px] text-ink-3 mt-1 mb-3">“What to expect” is a short list of headings with a sentence each. The details below appear only when you fill them in.</p>
           <div id="exp-rows" class="flex flex-col gap-3">
             {% for title, text in expect_rows %}
               <div class="grid grid-cols-[1fr_2fr_auto] gap-2 items-start max-sm:grid-cols-1" data-row>
@@ -177,7 +177,7 @@
         {# Teaching + stories #}
         <div class="pt-4 border-t border-line">
           <h3 class="text-[13px] font-semibold text-ink">What we teach <span class="font-normal text-ink-3">— shown on About</span></h3>
-          <p class="text-[11.5px] text-ink-3 mt-1 mb-3">Until you save your own, the About page shows short statements taken from the ministry’s existing wording. Replace them with your statement of faith when it is ready.</p>
+          <p class="text-[12px] text-ink-3 mt-1 mb-3">Until you save your own, the About page shows short statements taken from the ministry’s existing wording. Replace them with your statement of faith when it is ready.</p>
           <div id="bel-rows" class="flex flex-col gap-3">
             {% for title, text in teach_rows %}
               <div class="grid grid-cols-[1fr_2fr_auto] gap-2 items-start max-sm:grid-cols-1" data-row>
@@ -224,7 +224,7 @@
         {# Analytics #}
         <div class="pt-4 border-t border-line">
           <h3 class="text-[13px] font-semibold text-ink">Visitor statistics</h3>
-          <p class="text-[11.5px] text-ink-3 mt-1 mb-3">Built-in counts are always on (no cookies, no IP addresses — see <a href="{{ url_for('admin_analytics') }}" class="text-gold-text hover:underline">Site traffic</a>). If you also use Plausible, add its domain here to load its script.</p>
+          <p class="text-[12px] text-ink-3 mt-1 mb-3">Built-in counts are always on (no cookies, no IP addresses — see <a href="{{ url_for('admin_analytics') }}" class="text-gold-text hover:underline">Site traffic</a>). If you also use Plausible, add its domain here to load its script.</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {{ field('Plausible domain (optional)', 'plausibleDomain', value=S.get('plausibleDomain') or '', mono=True, placeholder='scentofwater.org') }}
             {{ field('Plausible script URL (optional)', 'plausibleSrc', value=S.get('plausibleSrc') or '', type='url', mono=True, placeholder='https://plausible.io/js/script.js', hint='Only for a self-hosted Plausible.') }}
@@ -251,7 +251,7 @@
                 <span class="w-5 h-5 rounded-sm border border-line" style="background:{{ preset.primary_light }}"></span>
                 <span class="w-5 h-5 rounded-sm border border-line" style="background:{{ preset.sidebar }}"></span>
               </span>
-              <span class="text-[11px] text-ink-3">{{ preset.description }}</span>
+              <span class="text-[12px] text-ink-3">{{ preset.description }}</span>
             </label>
           {% endfor %}
           <label class="flex flex-col gap-2 rounded-md border p-3 cursor-pointer {{ 'border-gold bg-gold-tint' if cur_preset == 'custom' else 'border-line' }}">
@@ -259,7 +259,7 @@
               <input type="radio" name="admin_theme_preset" value="custom" {{ 'checked' if cur_preset == 'custom' else '' }} class="accent-gold">
               <span class="text-[12.5px] font-semibold text-ink">Custom</span>
             </span>
-            <span class="text-[11px] text-ink-3">Choose your own colours below.</span>
+            <span class="text-[12px] text-ink-3">Choose your own colours below.</span>
           </label>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -270,7 +270,7 @@
             </div>
           {% endfor %}
         </div>
-        <p class="text-[11px] text-ink-3">Custom colours apply only when “Custom” is selected. Changes take effect after saving.</p>
+        <p class="text-[12px] text-ink-3">Custom colours apply only when “Custom” is selected. Changes take effect after saving.</p>
       </section>
 
       {# ───── Giving ───── #}
@@ -281,10 +281,10 @@
           {% set gm = S.get('giving_model') or 'central' %}
           <label class="flex items-start gap-2.5 cursor-pointer"><input type="radio" name="giving_model" value="central" {{ 'checked' if gm == 'central' else '' }} class="accent-gold mt-1">
             <span><span class="text-[12.5px] font-semibold text-ink">Central — everything through HQ</span>
-              <span class="block text-[11.5px] text-ink-3">All online gifts use HQ's gateway and bank accounts. The Give page shows only HQ's details.</span></span></label>
+              <span class="block text-[12px] text-ink-3">All online gifts use HQ's gateway and bank accounts. The Give page shows only HQ's details.</span></span></label>
           <label class="flex items-start gap-2.5 cursor-pointer"><input type="radio" name="giving_model" value="branch" {{ 'checked' if gm == 'branch' else '' }} class="accent-gold mt-1">
             <span><span class="text-[12.5px] font-semibold text-ink">Each branch collects — and remits to HQ</span>
-              <span class="block text-[11.5px] text-ink-3">Donors choose HQ or a branch. Each branch shows its own bank accounts and can use its own payment account (Branch settings). Gifts taken through HQ's gateway are tracked as held for that branch. See Remittances for who owes whom.</span></span></label>
+              <span class="block text-[12px] text-ink-3">Donors choose HQ or a branch. Each branch shows its own bank accounts and can use its own payment account (Branch settings). Gifts taken through HQ's gateway are tracked as held for that branch. See Remittances for who owes whom.</span></span></label>
           <p class="field-hint">You can switch at any time. Existing gifts keep the branch and account they were recorded with.</p>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -336,7 +336,7 @@
                 <img src="{{ ('/static/' ~ acct.get('bank_logo')) if acct.get('bank_logo') else '' }}" alt="" class="bank-logo-preview h-8 w-auto max-w-[96px] object-contain rounded border border-line bg-surface {{ '' if acct.get('bank_logo') else 'hidden' }}">
                 <label class="btn btn-secondary btn-sm cursor-pointer"><i class="ri-upload-2-line"></i>Upload logo<input type="file" accept="image/*" class="sr-only bank-logo-file"></label>
                 {% if bank_logos %}<button type="button" class="btn btn-ghost btn-sm bank-logo-reuse">Choose existing</button>{% endif %}
-                <span class="bank-logo-status text-[11px] text-ink-3"></span>
+                <span class="bank-logo-status text-[12px] text-ink-3"></span>
                 <span class="flex-grow"></span>
                 <button type="button" class="btn btn-danger btn-sm remove-account"><i class="ri-delete-bin-line"></i>Remove</button>
               </div>
@@ -363,7 +363,7 @@
         </div>
         <div class="rounded-md border border-line bg-sunken p-3.5">
           <p class="mono-label mb-2">Not yet enforced</p>
-          <p class="text-[11.5px] text-ink-3 mb-3">These controls are stored for future use but the console does not enforce them yet, so they are read-only.</p>
+          <p class="text-[12px] text-ink-3 mb-3">These controls are stored for future use but the console does not enforce them yet, so they are read-only.</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 opacity-70">
             <div><label class="field-label">Audit log retention (days)</label><input value="{{ S.get('audit_log_retention_days') or '365' }}" disabled class="field-input field-mono"></div>
             <div class="flex flex-col gap-2 justify-end text-[12.5px] text-ink-2">
@@ -386,7 +386,7 @@
 
         <div class="pt-4 border-t border-line">
           <h3 class="text-[13px] font-semibold text-ink mb-1">Send a test email</h3>
-          <p class="text-[11.5px] text-ink-3 mb-3">Uses the saved key, so save first. If it fails, the provider’s reason is shown (most often the sender domain is not verified in Resend).</p>
+          <p class="text-[12px] text-ink-3 mb-3">Uses the saved key, so save first. If it fails, the provider’s reason is shown (most often the sender domain is not verified in Resend).</p>
           <div class="flex flex-wrap items-end gap-2">
             <div class="min-w-[16rem] flex-1"><label for="test_to" class="field-label">Send to</label><input id="test_to" name="test_to" form="email-test-form" type="email" value="{{ admin.email }}" class="field-input field-mono"></div>
             <button type="submit" form="email-test-form" class="btn btn-secondary btn-sm"><i class="ri-send-plane-line"></i>Send test</button>
@@ -403,7 +403,7 @@
                   <td data-label="When" class="font-mono text-xs whitespace-nowrap">{{ m.created_at.strftime('%d %b %H:%M') }}</td>
                   <td data-label="To" class="font-mono text-xs">{{ m.to_email }}</td>
                   <td data-label="What" class="text-[12.5px]">{{ m.kind }} · {{ m.subject }}</td>
-                  <td data-label="Result">{{ badge(m.status, 'ok' if m.status == 'sent' else ('bad' if m.status == 'failed' else 'neut')) }}{% if m.error %}<span class="block text-[11px] text-ink-3 mt-0.5">{{ m.error }}</span>{% endif %}</td>
+                  <td data-label="Result">{{ badge(m.status, 'ok' if m.status == 'sent' else ('bad' if m.status == 'failed' else 'neut')) }}{% if m.error %}<span class="block text-[12px] text-ink-3 mt-0.5">{{ m.error }}</span>{% endif %}</td>
                 </tr>
               {% endfor %}
             </tbody>
@@ -429,7 +429,7 @@
                   <input type="radio" name="ai_default_provider" value="{{ pkey }}" {{ 'checked' if ai_default == pkey else '' }} class="accent-gold">
                   <span class="text-[12.5px] font-semibold text-ink">{{ pm.label }}</span>
                 </span>
-                <span class="text-[11px] {{ 'text-ok' if st.state == 'set' or env_fallback.get(pm.key_setting) else 'text-ink-3' }}">
+                <span class="text-[12px] {{ 'text-ok' if st.state == 'set' or env_fallback.get(pm.key_setting) else 'text-ink-3' }}">
                   {{ 'Key saved' if st.state == 'set' else ('Key from server .env' if env_fallback.get(pm.key_setting) else ('Key unreadable' if st.state == 'unreadable' else 'No key yet')) }}
                 </span>
               </label>
@@ -442,7 +442,7 @@
           <div class="pt-4 border-t border-line">
             <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
               <h3 class="text-[13px] font-semibold text-ink">{{ pm.label }} {% if ai_default == pkey %}<span class="badge badge-ok ml-1">Default</span>{% endif %}</h3>
-              <span class="text-[11px] text-ink-3">Get a key at <span class="font-mono">{{ pm.docs }}</span></span>
+              <span class="text-[12px] text-ink-3">Get a key at <span class="font-mono">{{ pm.docs }}</span></span>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {{ secret_field(pm.label ~ ' API key', pm.key_setting, secret_status[pm.key_setting], env_fallback.get(pm.key_setting, False), placeholder=pm.key_hint) }}
@@ -470,7 +470,7 @@
             </div>
           </div>
         {% endfor %}
-        <p class="text-[11.5px] text-ink-3">Test and Refresh use the key that is already saved, so save your changes first. Free tiers (notably Groq) have small per-minute token limits; long sermons may need a paid plan or a different provider.</p>
+        <p class="text-[12px] text-ink-3">Test and Refresh use the key that is already saved, so save your changes first. Free tiers (notably Groq) have small per-minute token limits; long sermons may need a paid plan or a different provider.</p>
       </section>
 
       {# ───── Distribution ───── #}
@@ -564,14 +564,14 @@
               <button type="submit" form="tg-large-off-form" class="btn btn-secondary btn-sm"><i class="ri-toggle-line"></i>Turn off</button>
             {% else %}
               <button type="submit" form="tg-large-form" name="action" value="on" class="btn btn-primary btn-sm" {{ '' if tg_large.keys_saved and tg_large.bot_saved and tg_large.installed else 'disabled' }}><i class="ri-rocket-line"></i>Turn on large files</button>
-              <span class="text-[11.5px] text-ink-3">{% if not tg_large.bot_saved %}Save the bot token first.{% elif not tg_large.keys_saved %}Save the App api_id and App api_hash first.{% elif not tg_large.installed %}Waiting for the service to be installed.{% else %}Checks the keys with Telegram first (up to 30 seconds).{% endif %}</span>
+              <span class="text-[12px] text-ink-3">{% if not tg_large.bot_saved %}Save the bot token first.{% elif not tg_large.keys_saved %}Save the App api_id and App api_hash first.{% elif not tg_large.installed %}Waiting for the service to be installed.{% else %}Checks the keys with Telegram first (up to 30 seconds).{% endif %}</span>
             {% endif %}
           </div>
         </div>
 
         <div class="pt-4 border-t border-line">
           <h3 class="text-[13px] font-semibold text-ink mb-1">Public listen links <span class="font-normal text-ink-3">(optional)</span></h3>
-          <p class="text-[11.5px] text-ink-3 mb-3">Podcast feed: <span class="font-mono">{{ feed_url }}</span></p>
+          <p class="text-[12px] text-ink-3 mb-3">Podcast feed: <span class="font-mono">{{ feed_url }}</span></p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {{ field('Spotify show URL', 'spotify_rss_url', value=S.get('spotify_rss_url') or '', type='url', mono=True) }}
             {{ field('Apple Podcasts URL', 'apple_podcasts_url', value=S.get('apple_podcasts_url') or '', type='url', mono=True) }}
@@ -605,7 +605,7 @@
       </section>
 
       <div id="settings-save-bar" class="sticky bottom-0 -mx-1 px-1 py-3 bg-paper/95 backdrop-blur border-t border-line flex items-center justify-end gap-3">
-        <span class="text-[11.5px] text-ink-3 hidden sm:inline">Saves the changes on every tab.</span>
+        <span class="text-[12px] text-ink-3 hidden sm:inline">Saves the changes on every tab.</span>
         <button type="submit" class="btn btn-primary btn-lg"><i class="ri-save-line"></i>Save all settings</button>
       </div>
     </form>
@@ -646,7 +646,7 @@
         <img src="{{ ('/' ~ S.get('pastorPhoto').lstrip('/')) if S.get('pastorPhoto') else '/images/pastor-samuel-inyeneabasi.png' }}" alt="Pastor photo" class="w-16 h-16 rounded-full object-cover border border-line bg-sunken">
         <div class="flex-grow min-w-[200px]">
           <p class="text-[13px] font-semibold text-ink">Pastor photo</p>
-          <p class="text-[11.5px] text-ink-3">Shown on Home &amp; About. JPG, PNG, WebP or GIF up to 5 MB.</p>
+          <p class="text-[12px] text-ink-3">Shown on Home &amp; About. JPG, PNG, WebP or GIF up to 5 MB.</p>
         </div>
         <label class="btn btn-secondary cursor-pointer"><i class="ri-upload-2-line"></i>Choose photo
           <input type="file" name="photo" accept="image/*" class="sr-only" onchange="this.form.requestSubmit()" required>
@@ -655,7 +655,7 @@
 
       <div class="pt-4 border-t border-line">
         <h3 class="text-[13px] font-semibold text-ink mb-1">Page headers</h3>
-        <p class="text-[11.5px] text-ink-3 mb-4">Hero background for each public page. Choose an image to replace it; the default applies wherever a page has no image of its own.</p>
+        <p class="text-[12px] text-ink-3 mb-4">Hero background for each public page. Choose an image to replace it; the default applies wherever a page has no image of its own.</p>
         <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
           {% for key, label in hero_pages %}
             {% set setting_key = 'defaultPageHero' if key == 'default' else 'pageHero_' ~ key %}
@@ -665,7 +665,7 @@
               <input type="hidden" name="page_key" value="{{ key }}">
               <img src="/{{ img.lstrip('/') }}" alt="{{ label }} header" class="w-full h-20 rounded object-cover border border-line bg-surface" loading="lazy" onerror="this.style.visibility='hidden'">
               <p class="text-[12px] font-semibold text-ink truncate">{{ label }}</p>
-              <p class="text-[10px] text-ink-3">{{ 'Applies to every page by default' if key == 'default' else ('Custom image set' if S.get(setting_key) else 'Uses default') }}</p>
+              <p class="text-[12px] text-ink-3">{{ 'Applies to every page by default' if key == 'default' else ('Custom image set' if S.get(setting_key) else 'Uses default') }}</p>
               <label class="btn btn-secondary btn-sm cursor-pointer w-full"><i class="ri-upload-2-line"></i>Replace
                 <input type="file" name="image" accept="image/*" class="sr-only" onchange="this.form.requestSubmit()" required>
               </label>
@@ -689,7 +689,7 @@
       <img src="" alt="" class="bank-logo-preview hidden h-8 w-auto max-w-[96px] object-contain rounded border border-line bg-surface">
       <label class="btn btn-secondary btn-sm cursor-pointer"><i class="ri-upload-2-line"></i>Upload logo<input type="file" accept="image/*" class="sr-only bank-logo-file"></label>
       {% if bank_logos %}<button type="button" class="btn btn-ghost btn-sm bank-logo-reuse">Choose existing</button>{% endif %}
-      <span class="bank-logo-status text-[11px] text-ink-3"></span>
+      <span class="bank-logo-status text-[12px] text-ink-3"></span>
       <span class="flex-grow"></span>
       <button type="button" class="btn btn-danger btn-sm remove-account"><i class="ri-delete-bin-line"></i>Remove</button>
     </div>

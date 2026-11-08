@@ -93,7 +93,7 @@
             <input type="checkbox" name="sermon_ids" value="{{ s.id }}" class="field-checkbox mt-0.5" {{ 'checked' if s.id in selected_ids else '' }}>
             <span class="min-w-0 flex-grow">
               <span class="block text-[12.5px] font-medium text-ink truncate">{{ s.title }}</span>
-              <span class="block font-mono text-[10.5px] text-ink-3">{{ s.preacher or 'Unknown speaker' }}{% if s.published_at %} · {{ s.published_at.strftime('%d %b %Y') }}{% endif %}</span>
+              <span class="block font-mono text-[12px] text-ink-3">{{ s.preacher or 'Unknown speaker' }}{% if s.published_at %} · {{ s.published_at.strftime('%d %b %Y') }}{% endif %}</span>
             </span>
             {% if s.transcript %}{{ badge('Transcript', 'ok') }}
             {% elif s.transcription_status in ['queued', 'processing'] %}{{ badge('Transcribing', 'warn') }}
@@ -103,7 +103,7 @@
           <p class="px-3 py-6 text-center text-[12.5px] text-ink-3">No messages yet. You can upload audio or a transcript after creating the project.</p>
         {% endfor %}
       </div>
-      <p class="font-mono text-[11px] text-ink-3"><span id="pub-msg-count">{{ selected_ids|length }}</span> selected</p>
+      <p class="font-mono text-[12px] text-ink-3"><span id="pub-msg-count">{{ selected_ids|length }}</span> selected</p>
     </section>
   {% endif %}
 </form>

@@ -34,7 +34,7 @@
           <header class="flex flex-wrap items-start justify-between gap-2">
             <div class="min-w-0">
               <p class="text-[14px] font-semibold text-ink">{{ r.full_name }}</p>
-              <p class="font-mono text-[11px] text-ink-3 flex flex-wrap gap-x-3">
+              <p class="font-mono text-[12px] text-ink-3 flex flex-wrap gap-x-3">
                 <span>{{ r.created_at|timesince }}</span>
                 {% if r.email %}<a href="mailto:{{ r.email }}" class="text-gold-text hover:underline">{{ r.email }}</a>{% endif %}
                 {% if r.phone %}<a href="tel:{{ r.phone }}" class="text-gold-text hover:underline">{{ r.phone }}</a>{% endif %}

@@ -22,11 +22,11 @@
     <section class="panel" aria-label="Website checklist">
       <div class="flex items-center justify-between mb-2">
         <h2 class="text-[14px] font-semibold text-ink"><i class="ri-checkbox-multiple-line text-gold-text" aria-hidden="true"></i> {{ site_todo|length }} thing{{ '' if site_todo|length == 1 else 's' }} to finish on the public website</h2>
-        <a href="{{ url_for('admin_settings') }}#website" class="text-xs font-semibold text-ink-2">Open checklist &rarr;</a>
+        <a href="{{ url_for('admin_settings') }}#website" class="text-[13px] font-bold text-gold-text whitespace-nowrap flex-shrink-0">Open checklist &rarr;</a>
       </div>
       <ul class="flex flex-col gap-1.5">
         {% for it in site_todo[:4] %}<li class="text-[12.5px] text-ink-2"><i class="ri-error-warning-line text-warn" aria-hidden="true"></i> {{ it.label }}</li>{% endfor %}
-        {% if site_todo|length > 4 %}<li class="text-[11.5px] text-ink-3">and {{ site_todo|length - 4 }} more…</li>{% endif %}
+        {% if site_todo|length > 4 %}<li class="text-[12px] text-ink-3">and {{ site_todo|length - 4 }} more…</li>{% endif %}
       </ul>
     </section>
   {% endif %}
@@ -39,7 +39,7 @@
       </div>
       <ul class="flex flex-col gap-3">
         {% for a in announcements %}
-          <li><p class="text-[13px] font-semibold text-ink">{% if a.is_pinned %}<i class="ri-pushpin-fill text-gold-text"></i> {% endif %}{{ a.title }} <span class="font-normal text-[11px] text-ink-3">· {{ a.created_at.strftime('%d %b') }}</span></p>
+          <li><p class="text-[13px] font-semibold text-ink">{% if a.is_pinned %}<i class="ri-pushpin-fill text-gold-text"></i> {% endif %}{{ a.title }} <span class="font-normal text-[12px] text-ink-3">· {{ a.created_at.strftime('%d %b') }}</span></p>
             <p class="text-[12.5px] text-ink-2 mt-0.5 leading-relaxed">{{ a.body|truncate(220) }}</p></li>
         {% endfor %}
       </ul>
@@ -51,7 +51,7 @@
       <i class="ri-alert-line text-lg text-bad flex-shrink-0 mt-0.5 sm:mt-0"></i>
       <div class="flex-grow min-w-0">
         <p class="text-[12.5px] font-semibold text-ink">{{ critical_alerts|length }} critical security event{{ 's' if critical_alerts|length != 1 else '' }} awaiting review</p>
-        <p class="text-[11.5px] text-ink-2 mt-0.5 font-mono">{{ critical_alerts[0].action }}{% if critical_alerts|length > 1 %} and {{ critical_alerts|length - 1 }} more{% endif %} · last 24 hours</p>
+        <p class="text-[12px] text-ink-2 mt-0.5 font-mono">{{ critical_alerts[0].action }}{% if critical_alerts|length > 1 %} and {{ critical_alerts|length - 1 }} more{% endif %} · last 24 hours</p>
       </div>
       <a href="{{ url_for('admin_security_logs') }}?reviewed=no&amp;severity=critical" class="text-xs font-semibold text-bad whitespace-nowrap flex-shrink-0">Review &rarr;</a>
     </div>
@@ -69,7 +69,7 @@
       <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
           <h2 class="text-[14px] font-semibold text-ink">Giving trend <span class="font-normal text-ink-3">· {{ givingMoney.currency }}</span></h2>
-          <p class="text-[11.5px] text-ink-3 mt-0.5">Six-month rolling total, by purpose. Each currency is shown on its own.</p>
+          <p class="text-[12px] text-ink-3 mt-0.5">Six-month rolling total, by purpose. Each currency is shown on its own.</p>
         </div>
         <div class="flex items-center gap-1.5 flex-wrap justify-end">
           {% for cur, amt in givingMoney.this_month %}{{ badge(amt|money(cur, False), "gold" if cur == givingMoney.currency else "neut") }}{% endfor %}
@@ -93,14 +93,14 @@
                 <div class="w-full bg-gold-hi" style="height:{{ (period.offering / maxGiving * 110)|round|int }}px;"></div>
                 <div class="w-full bg-gold" style="height:{{ (period.tithe / maxGiving * 110)|round|int }}px;"></div>
               </div>
-              <span class="font-mono text-[9.5px] text-ink-3 truncate">{{ period.label }}</span>
+              <span class="font-mono text-[12px] text-ink-3 truncate">{{ period.label }}</span>
             </div>
           {% endfor %}
         </div>
         <div class="flex items-center gap-4 mt-4 pt-3 border-t border-line flex-wrap">
-          <span class="inline-flex items-center gap-1.5 text-[11px] text-ink-2"><span class="w-2 h-2 rounded-sm bg-gold"></span>Tithe</span>
-          <span class="inline-flex items-center gap-1.5 text-[11px] text-ink-2"><span class="w-2 h-2 rounded-sm bg-gold-hi"></span>Offering</span>
-          <span class="inline-flex items-center gap-1.5 text-[11px] text-ink-2"><span class="w-2 h-2 rounded-sm bg-line-2"></span>Special</span>
+          <span class="inline-flex items-center gap-1.5 text-[12px] text-ink-2"><span class="w-2 h-2 rounded-sm bg-gold"></span>Tithe</span>
+          <span class="inline-flex items-center gap-1.5 text-[12px] text-ink-2"><span class="w-2 h-2 rounded-sm bg-gold-hi"></span>Offering</span>
+          <span class="inline-flex items-center gap-1.5 text-[12px] text-ink-2"><span class="w-2 h-2 rounded-sm bg-line-2"></span>Special</span>
         </div>
       {% else %}
         {{ empty_state("ri-line-chart-line", "No giving recorded yet", "Giving totals will appear here once payments are recorded.") }}
@@ -109,7 +109,7 @@
 
     <div class="panel">
       <h2 class="text-[14px] font-semibold text-ink mb-1">{{ distributionTitle }}</h2>
-      <p class="text-[11.5px] text-ink-3 mb-4">{{ distributionSubtitle }}</p>
+      <p class="text-[12px] text-ink-3 mb-4">{{ distributionSubtitle }}</p>
       {% if departmentDistribution %}
         <div class="flex flex-col gap-2.5">
           {% for i, d in departmentDistribution.items() %}
@@ -117,7 +117,7 @@
               <div>
                 <div class="flex items-center justify-between mb-1">
                   <span class="text-[12px] text-ink-2 truncate">{{ d.name or 'Unassigned' }}</span>
-                  <span class="font-mono text-[11px] font-semibold text-ink">{{ d.members_count }}</span>
+                  <span class="font-mono text-[12px] font-semibold text-ink">{{ d.members_count }}</span>
                 </div>
                 <div class="w-full h-1.5 bg-sunken rounded-full overflow-hidden">
                   <div class="h-full bg-gold rounded-full" style="width:{{ d.pct }}%;"></div>
@@ -136,7 +136,7 @@
     <div class="panel">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-[14px] font-semibold text-ink">Recent members</h2>
-        <a href="{{ url_for('admin_members') }}" class="text-[11.5px] font-semibold text-gold-text">View all &rarr;</a>
+        <a href="{{ url_for('admin_members') }}" class="text-[12px] font-semibold text-gold-text">View all &rarr;</a>
       </div>
       {% if recentMembers %}
         <div class="flex flex-col">
@@ -145,9 +145,9 @@
               {{ avatar((m.first_name[0] if m.first_name else 'M') ~ (m.last_name[0] if m.last_name else ''), 26) }}
               <div class="min-w-0 flex-grow">
                 <p class="text-[12.5px] font-medium text-ink truncate">{{ m.first_name }} {{ m.last_name }}</p>
-                <p class="text-[10.5px] text-ink-3 truncate">{{ m.branch.name if m.branch else 'No branch' }}</p>
+                <p class="text-[12px] text-ink-3 truncate">{{ m.branch.name if m.branch else 'No branch' }}</p>
               </div>
-              <span class="font-mono text-[10px] text-ink-3 whitespace-nowrap flex-shrink-0">{{ m.created_at|timesince }}</span>
+              <span class="font-mono text-[12px] text-ink-3 whitespace-nowrap flex-shrink-0">{{ m.created_at|timesince }}</span>
             </div>
           {% endfor %}
         </div>
@@ -159,7 +159,7 @@
     <div class="panel">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-[14px] font-semibold text-ink">Upcoming events</h2>
-        <a href="{{ url_for('admin_events') }}" class="text-[11.5px] font-semibold text-gold-text">View all &rarr;</a>
+        <a href="{{ url_for('admin_events') }}" class="text-[12px] font-semibold text-gold-text">View all &rarr;</a>
       </div>
       {% if upcomingEvents %}
         <div class="flex flex-col">
@@ -168,7 +168,7 @@
               <span class="w-0.5 h-7 rounded-full bg-gold flex-shrink-0"></span>
               <div class="min-w-0 flex-grow">
                 <p class="text-[12.5px] font-medium text-ink truncate">{{ e.title }}</p>
-                <p class="font-mono text-[10.5px] text-ink-3">{{ e.starts_at.strftime('%b %d, %I:%M %p') if e.starts_at else '' }}</p>
+                <p class="font-mono text-[12px] text-ink-3">{{ e.starts_at.strftime('%b %d, %I:%M %p') if e.starts_at else '' }}</p>
               </div>
             </div>
           {% endfor %}
@@ -181,15 +181,15 @@
     <div class="panel">
       <div class="flex items-center justify-between mb-3">
         <h2 class="text-[14px] font-semibold text-ink">Recent activity</h2>
-        {% if is_super %}<a href="{{ url_for('admin_security_logs') }}" class="text-[11.5px] font-semibold text-gold-text">Full log &rarr;</a>{% endif %}
+        {% if is_super %}<a href="{{ url_for('admin_security_logs') }}" class="text-[12px] font-semibold text-gold-text">Full log &rarr;</a>{% endif %}
       </div>
       {% if activityFeed %}
         <div class="flex flex-col">
           {% for log in activityFeed[:6] %}
             <div class="flex items-center gap-2.5 py-2 {{ 'border-b border-line' if not loop.last }}">
               <span class="w-1.5 h-1.5 rounded-full bg-gold flex-shrink-0"></span>
-              <span class="flex-grow min-w-0 font-mono text-[11.5px] text-ink-2 truncate">{{ log.action }}</span>
-              <span class="font-mono text-[10px] text-ink-3 whitespace-nowrap flex-shrink-0">{{ log.created_at|timesince }}</span>
+              <span class="flex-grow min-w-0 font-mono text-[12px] text-ink-2 truncate">{{ log.action }}</span>
+              <span class="font-mono text-[12px] text-ink-3 whitespace-nowrap flex-shrink-0">{{ log.created_at|timesince }}</span>
             </div>
           {% endfor %}
         </div>
@@ -202,10 +202,10 @@
   {% if countrySummary and is_super %}
     <div class="panel">
       <h2 class="text-[14px] font-semibold text-ink mb-1">Churches by country</h2>
-      <p class="text-[11.5px] text-ink-3 mb-4">Branches, members and this month's confirmed giving ({{ givingMoney.currency }}), per country</p>
+      <p class="text-[12px] text-ink-3 mb-4">Branches, members and this month's confirmed giving ({{ givingMoney.currency }}), per country</p>
       <div class="overflow-x-auto">
         <table class="dtable dtable-responsive">
-          <thead><tr><th>Country</th><th class="text-right">Branches</th><th class="text-right">Members</th><th class="text-right">Giving this month</th><th class="text-right"></th></tr></thead>
+          <thead><tr><th>Country</th><th class="text-right">Branches</th><th class="text-right">Members</th><th class="text-right">Giving this month</th><th class="text-right"><span class="sr-only">Actions</span></th></tr></thead>
           <tbody>
             {% for c in countrySummary %}
               <tr>
@@ -225,14 +225,14 @@
   {% if branchPerformance and is_super %}
     <div class="panel">
       <h2 class="text-[14px] font-semibold text-ink mb-1">Branch performance</h2>
-      <p class="text-[11.5px] text-ink-3 mb-4">Member count by branch</p>
+      <p class="text-[12px] text-ink-3 mb-4">Member count by branch</p>
       <div class="overflow-x-auto">
         <table class="dtable dtable-responsive">
           <thead><tr><th>Branch</th><th class="text-right">Members</th><th>Share</th></tr></thead>
           <tbody>
             {% for b in branchPerformance %}
               <tr>
-                <td data-label="Branch" class="font-medium">{{ b.name }}{% if b.country %} <span class="font-mono text-[10.5px] text-ink-3">{{ b.country }}</span>{% endif %}</td>
+                <td data-label="Branch" class="font-medium">{{ b.name }}{% if b.country %} <span class="font-mono text-[12px] text-ink-3">{{ b.country }}</span>{% endif %}</td>
                 <td data-label="Members" class="text-right font-mono">{{ b.members_count }}</td>
                 <td data-label="Share">
                   <div class="w-full sm:w-40 h-1.5 bg-sunken rounded-full overflow-hidden ml-auto sm:ml-0">
