@@ -171,6 +171,23 @@
   }
   .nav-link:hover { @apply bg-chrome-2 text-chrome-ink; }
   .nav-link-active, .nav-link-active:hover { @apply bg-gold text-on-gold font-bold; }
+  /* The active link is a tab: rounded on the left, running into the sidebar's edge, with the
+     corners above and below curving out into it. -12px undoes the nav (px-2) and row (px-1) padding. */
+  .nav-link-active {
+    position: relative;
+    margin-right: -12px;
+    border-radius: 999px 0 0 999px;
+  }
+  .nav-link-active::before, .nav-link-active::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    width: 12px;
+    height: 12px;
+    pointer-events: none;
+  }
+  .nav-link-active::before { top: -12px; background: radial-gradient(circle at 0 0, transparent 11.5px, var(--color-gold) 12px); }
+  .nav-link-active::after { bottom: -12px; background: radial-gradient(circle at 0 100%, transparent 11.5px, var(--color-gold) 12px); }
 }
 
 @layer utilities {
