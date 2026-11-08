@@ -11,9 +11,9 @@
   --font-code: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
 
   /* Ground */
-  --color-paper: #f7f5f0;
+  --color-paper: #ffffff;
   --color-surface: #ffffff;
-  --color-sunken: #f4f1ea;
+  --color-sunken: #faf9f6;
 
   /* Ink */
   --color-ink: #161616;
@@ -21,7 +21,7 @@
   --color-ink-3: #5e5e5e;
 
   /* Hairlines */
-  --color-line: #e9e5dc;
+  --color-line: #ebe8e1;
   --color-line-2: #d6d1c6;
 
   /* Gold: the logo's highlight for fills, the deep gold for text on light grounds */
@@ -32,8 +32,8 @@
 
   /* Chrome (sidebar ground): light, like the site header */
   --color-chrome: #ffffff;
-  --color-chrome-2: #f4f1ea;
-  --color-chrome-line: #e9e5dc;
+  --color-chrome-2: #f8f6f1;
+  --color-chrome-line: #ebe8e1;
   --color-chrome-text: #4d4d4d;
   --color-chrome-ink: #161616;
   --color-on-gold: #161616;
@@ -46,7 +46,7 @@
   --color-bad: #a32a1e;
   --color-bad-bg: #f8ebe9;
   --color-neut: #4d4d4d;
-  --color-neut-bg: #efece6;
+  --color-neut-bg: #f4f2ee;
 
   /* Back-compat with the pre-redesign token names (kept live, retinted) */
   --color-primary: #e8c870;
@@ -54,7 +54,7 @@
   --color-primary-light: #f0d68e;
   --color-secondary: #161616;
   --color-secondary-light: #2a2a2a;
-  --color-background-light: #f7f5f0;
+  --color-background-light: #ffffff;
   --color-sidebar-bg: #ffffff;
 }
 
