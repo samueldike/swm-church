@@ -265,20 +265,59 @@
 
 {#- Real pagination bar — only render this where a genuine `pagination` dict
    from app.core.pagination.paginate() exists. Never fabricate page counts. -#}
-{% macro pagination_bar(pagination, base_path) -%}
-  <div class="flex items-center gap-3 sm:gap-4 pt-3.5 mt-1 border-t border-line flex-wrap">
-    <span class="font-mono text-[12px] text-ink-3">
-      Showing <b class="text-ink font-semibold">{{ ((pagination.page - 1) * pagination.per_page + 1) if pagination.total else 0 }}&ndash;{{ [pagination.page * pagination.per_page, pagination.total]|min }}</b>
-      of <b class="text-ink font-semibold">{{ pagination.total }}</b>
+{#- One paginator for every list: numbered pages with First/Last and a "Go to page" box.
+   Every link keeps the page's current search and filters (only `page` changes). -#}
+{% macro pager(pagination) -%}
+  {% set cur, last = pagination.page, pagination.pages %}
+  {% macro _href(n) %}{% set u = request.url.include_query_params(page=n) %}{{ u.path }}?{{ u.query }}{% endmacro %}
+  <nav class="pager flex items-center gap-x-3 gap-y-2.5 pt-3.5 mt-1 border-t border-line flex-wrap" aria-label="Pages">
+    <span class="text-[13px] text-ink-3">
+      {% if pagination.total %}Showing <b class="text-ink">{{ (cur - 1) * pagination.per_page + 1 }}&ndash;{{ [cur * pagination.per_page, pagination.total]|min }}</b> of <b class="text-ink">{{ '{:,}'.format(pagination.total) }}</b>{% else %}No results{% endif %}
     </span>
+    {% if last > 1 %}
     <span class="flex-grow"></span>
-    <a href="{{ base_path }}?page={{ pagination.page - 1 }}"
-       class="icon-btn {{ 'pointer-events-none opacity-40' if not pagination.has_prev else '' }}" aria-label="Previous page"><i class="ri-arrow-left-s-line"></i></a>
-    <span class="font-mono text-xs text-ink-2 px-1">Page {{ pagination.page }} of {{ pagination.pages }}</span>
-    <a href="{{ base_path }}?page={{ pagination.page + 1 }}"
-       class="icon-btn {{ 'pointer-events-none opacity-40' if not pagination.has_next else '' }}" aria-label="Next page"><i class="ri-arrow-right-s-line"></i></a>
-  </div>
+    <div class="flex items-center gap-1 flex-wrap">
+      {% if cur > 1 %}
+        <a href="{{ _href(1) }}" class="pager-btn" aria-label="First page" title="First page"><i class="ri-skip-left-line"></i></a>
+        <a href="{{ _href(cur - 1) }}" class="pager-btn" aria-label="Previous page" title="Previous page" rel="prev"><i class="ri-arrow-left-s-line"></i></a>
+      {% else %}
+        <span class="pager-btn is-off" aria-hidden="true"><i class="ri-skip-left-line"></i></span>
+        <span class="pager-btn is-off" aria-hidden="true"><i class="ri-arrow-left-s-line"></i></span>
+      {% endif %}
+      {#- Always 1 and the last page; the two pages either side of this one; "…" for the gaps.
+          On phones only the neighbours next to this page show (.pager-far is hidden). -#}
+      {% set ns = namespace(prev=0) %}
+      {% for n in range(1, last + 1) if n == 1 or n == last or (n - cur)|abs <= 2 %}
+        {% if n - ns.prev > 1 %}<span class="pager-gap" aria-hidden="true">&hellip;</span>{% endif %}
+        {% if n == cur %}
+          <span class="pager-btn is-cur" aria-current="page">{{ n }}</span>
+        {% else %}
+          <a href="{{ _href(n) }}" class="pager-btn {{ 'pager-far' if (n - cur)|abs == 2 else '' }}" aria-label="Page {{ n }}">{{ n }}</a>
+        {% endif %}
+        {% set ns.prev = n %}
+      {% endfor %}
+      {% if cur < last %}
+        <a href="{{ _href(cur + 1) }}" class="pager-btn" aria-label="Next page" title="Next page" rel="next"><i class="ri-arrow-right-s-line"></i></a>
+        <a href="{{ _href(last) }}" class="pager-btn" aria-label="Last page" title="Last page"><i class="ri-skip-right-line"></i></a>
+      {% else %}
+        <span class="pager-btn is-off" aria-hidden="true"><i class="ri-arrow-right-s-line"></i></span>
+        <span class="pager-btn is-off" aria-hidden="true"><i class="ri-skip-right-line"></i></span>
+      {% endif %}
+    </div>
+    {% if last > 7 %}
+    <form method="get" action="{{ request.url.path }}" class="flex items-center gap-1.5" data-turbo-action="advance">
+      {% for k, v in request.query_params.multi_items() if k != 'page' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+      <label for="pager-go-{{ caller_id|default('p') }}" class="text-[13px] text-ink-3 whitespace-nowrap">Go to page</label>
+      <input id="pager-go-{{ caller_id|default('p') }}" name="page" type="number" inputmode="numeric" min="1" max="{{ last }}" value="{{ cur }}" required
+             class="pager-input" aria-label="Page number, 1 to {{ last }}">
+      <button type="submit" class="btn btn-secondary btn-sm">Go</button>
+    </form>
+    {% endif %}
+    {% endif %}
+  </nav>
 {%- endmacro %}
+
+{% macro pagination_bar(pagination, base_path='') -%}{{ pager(pagination) }}{%- endmacro %}
 
 {% macro empty_state(icon, title, subtitle, action='') -%}
   <div class="flex flex-col items-center justify-center text-center py-16 px-6">
@@ -298,14 +337,4 @@
 {%- endmacro %}
 
 {#- Pager that keeps the active filters: uses the prev_url/next_url the route built (with its query string). -#}
-{% macro filter_pager(pagination) -%}
-  <div class="flex items-center gap-3 sm:gap-4 pt-3.5 mt-1 border-t border-line flex-wrap">
-    <span class="font-mono text-[12px] text-ink-3">
-      {{ pagination.total }} result{{ '' if pagination.total == 1 else 's' }}
-    </span>
-    <span class="flex-grow"></span>
-    <a href="{{ pagination.prev_url or '#' }}" class="icon-btn {{ 'pointer-events-none opacity-40' if not pagination.has_prev else '' }}" aria-label="Previous page"><i class="ri-arrow-left-s-line"></i></a>
-    <span class="font-mono text-xs text-ink-2 px-1">Page {{ pagination.page }} of {{ pagination.pages }}</span>
-    <a href="{{ pagination.next_url or '#' }}" class="icon-btn {{ 'pointer-events-none opacity-40' if not pagination.has_next else '' }}" aria-label="Next page"><i class="ri-arrow-right-s-line"></i></a>
-  </div>
-{%- endmacro %}
+{% macro filter_pager(pagination) -%}{{ pager(pagination) }}{%- endmacro %}

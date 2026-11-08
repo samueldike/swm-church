@@ -1,5 +1,5 @@
 {% extends "layouts/admin_base.html" %}
-{% from "macros/admin.html" import page_header, badge, person, empty_state, pagination_bar with context %}
+{% from "macros/admin.html" import page_header, badge, person, empty_state, pagination_bar, pager with context %}
 {% block title %}Members | {{ siteName }}{% endblock %}
 {% block topbar_title %}Members{% endblock %}
 {% block topbar_subtitle %}Congregation registry{% endblock %}
@@ -68,17 +68,7 @@
       </table>
     </div>
     <div class="px-4 pb-3.5">
-      {% set qs = ('q=' ~ search ~ '&') if search else '' %}
-      <div class="flex items-center gap-3 sm:gap-4 pt-3.5 border-t border-line flex-wrap">
-        <span class="font-mono text-[12px] text-ink-3">
-          Showing <b class="text-ink font-semibold">{{ (pagination.page - 1) * pagination.per_page + 1 }}&ndash;{{ [pagination.page * pagination.per_page, pagination.total]|min }}</b>
-          of <b class="text-ink font-semibold">{{ pagination.total }}</b>
-        </span>
-        <span class="flex-grow"></span>
-        {% if pagination.has_prev %}<a href="{{ pagination.prev_url }}" class="icon-btn" aria-label="Previous page"><i class="ri-arrow-left-s-line"></i></a>{% else %}<span class="icon-btn opacity-40" aria-hidden="true"><i class="ri-arrow-left-s-line"></i></span>{% endif %}
-        <span class="font-mono text-xs text-ink-2 px-1">Page {{ pagination.page }} of {{ pagination.pages }}</span>
-        {% if pagination.has_next %}<a href="{{ pagination.next_url }}" class="icon-btn" aria-label="Next page"><i class="ri-arrow-right-s-line"></i></a>{% else %}<span class="icon-btn opacity-40" aria-hidden="true"><i class="ri-arrow-right-s-line"></i></span>{% endif %}
-      </div>
+      {{ pager(pagination) }}
     </div>
   {% else %}
     {{ empty_state("ri-team-line", "No members found" if search else "No members yet",
