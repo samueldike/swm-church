@@ -113,7 +113,8 @@ function createOptions(id, phoneNumber) {
       const s = String(status).toLowerCase();
       if (s === 'qr') return void registry.patch(id, { status: 'qr' });
       if (s.includes('autoclose') || s === 'browserclose') return void handleBrowserClosed(id, s);
-      if (s === 'islogged') {
+      if (s === 'islogged' || s === 'qrreadsuccess' || s === 'inchat') {
+        // may fire before setupClient registers the client; probeLogin() catches that case
         setTimeout(() => { const e = sessions.get(id); if (e?.client) void markConnected(id, e.client); }, 500);
       }
       // 'notLogged' fires during normal phone pairing: never treat it as a disconnect.
@@ -186,7 +187,30 @@ async function setupClient(id, client) {
   });
   client.onAnyMessage(() => bump(id));
   client.onAck?.(() => bump(id));
+  // A saved login reports "isLogged" (and CONNECTED / MAIN) while create() is still running, before this
+  // client is registered, so those events are missed. Ask the page directly until it is linked.
+  client.onInterfaceChange?.(st => {
+    if (String(st?.mode || st || '').toUpperCase() === 'MAIN') void markConnected(id, client);
+  });
+  probeLogin(id, client);
   log.info({ id }, 'client ready, waiting for state confirmation');
+}
+
+function probeLogin(id, client) {
+  let tries = 0;
+  const tick = async () => {
+    const e = sessions.get(id);
+    if (!e || e.client !== client || e.wasConnected || ++tries > LOGIN_WINDOW_MS / 5000) return;
+    let linked = false;
+    try { linked = (await client.isLoggedIn?.()) === true; } catch { /* page busy */ }
+    if (!linked) {
+      try { const host = await client.getHostDevice(); linked = Boolean(host?.wid || host?.id); } catch { /* not yet */ }
+    }
+    if (linked) await markConnected(id, client);
+    const now = sessions.get(id);
+    if (now && now.client === client && !now.wasConnected) setTimeout(tick, 5000).unref?.();
+  };
+  setTimeout(tick, 2000).unref?.();
 }
 
 async function markConnected(id, client) {

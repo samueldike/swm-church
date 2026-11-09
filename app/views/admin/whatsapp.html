@@ -45,7 +45,7 @@
       </ol>
       <p id="wa-connect-error" class="wa-error" hidden></p>
       <div class="flex flex-wrap gap-2 mt-3">
-        <button type="button" class="btn btn-primary" id="wa-start"><i class="ri-qr-code-line"></i>Show the QR code</button>
+        <button type="button" class="btn btn-primary" id="wa-start" hidden><i class="ri-refresh-line"></i>Try again</button>
         <button type="button" class="btn btn-secondary" id="wa-phone-toggle"><i class="ri-smartphone-line"></i>Link with phone number instead</button>
       </div>
       <form id="wa-phone-form" class="mt-3 flex flex-wrap gap-2 items-end" hidden>
@@ -57,7 +57,7 @@
     <div class="wa-qr-box" aria-live="polite">
       <img id="wa-qr" alt="WhatsApp QR code to scan with the phone" hidden>
       <div id="wa-code" class="wa-code" hidden></div>
-      <p id="wa-qr-wait" class="wa-muted">The code appears here.</p>
+      <p id="wa-qr-wait" class="wa-muted">Loading the QR code…</p>
     </div>
   </section>
 
@@ -317,7 +317,15 @@
   async function refreshState() {
     try { state = await getJSON('/state.json'); } catch (e) { showConnect(e.message); return; }
     if (state.status === 'connected') { showApp(); if (state.activity !== lastActivity) { lastActivity = state.activity; onActivity(); } }
-    else showConnect(state.lastError);
+    else { showConnect(state.lastError); autoStart(); }
+  }
+  // Like WhatsApp Web: the QR code loads by itself. A new start at most once a minute, and only while the page is visible.
+  let lastAuto = 0;
+  async function autoStart() {
+    if (state.status !== 'disconnected' && state.status) return;
+    if (document.hidden || Date.now() - lastAuto < 60000 || !$('wa-phone-form').hidden) return;
+    lastAuto = Date.now();
+    try { await post('/connect', {}); state.status = 'connecting'; state.lastError = null; showConnect(); } catch (e) { showConnect(e.message); }
   }
   function showConnect(err) {
     if (mode !== 'connect') { mode = 'connect'; $('wa-app').hidden = true; $('wa-connect').hidden = false; }
@@ -325,7 +333,8 @@
     const qr = $('wa-qr'), code = $('wa-code'), wait = $('wa-qr-wait');
     if (state.linkCode) { code.textContent = state.linkCode; code.hidden = false; qr.hidden = true; wait.textContent = 'On the phone: Linked devices, Link a device, Link with phone number instead, then enter this code.'; }
     else if (state.status === 'qr' && state.qr) { if (qr.src !== state.qr) qr.src = state.qr; qr.hidden = false; code.hidden = true; wait.textContent = 'Scan with WhatsApp on the phone. The code refreshes by itself.'; }
-    else { qr.hidden = true; code.hidden = true; wait.textContent = state.status === 'connecting' ? 'Starting WhatsApp… this can take up to a minute.' : 'The code appears here.'; }
+    else { qr.hidden = true; code.hidden = true; wait.textContent = state.status === 'connecting' ? 'Loading the QR code… (up to a minute the first time)' : (err ? 'The code could not load.' : 'Loading the QR code…'); }
+    $('wa-start').hidden = !err;
   }
   function showApp() {
     if (mode === 'app') return;
