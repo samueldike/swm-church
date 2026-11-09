@@ -239,6 +239,65 @@ async def complete(
     raise AIError(last_error)
 
 
+async def stream(system: str, messages: list[dict], *, max_tokens: int = 1500, provider: str | None = None):
+    """Yield the reply as it is written (text chunks), for chat interfaces.
+
+    ``messages`` is a real multi-turn conversation: [{"role": "user"|"assistant", "text": "..."}], ending with
+    the user's turn. Output is free text (no JSON mode), streamed over each provider's SSE API.
+    """
+    cfg = await get_config(provider)
+    if not cfg.api_key:
+        raise AIError(f"No {cfg.label} API key is saved. Add it under Settings → AI drafting.")
+    turns = [m for m in messages if m.get("text")]
+    if cfg.provider == "anthropic":
+        url = f"{settings.ANTHROPIC_API_BASE.rstrip('/')}/v1/messages"
+        headers = {"x-api-key": cfg.api_key, "anthropic-version": ANTHROPIC_VERSION, "content-type": "application/json"}
+        payload = {"model": cfg.model, "max_tokens": max_tokens, "system": system, "stream": True,
+                   "messages": [{"role": m["role"], "content": m["text"]} for m in turns]}
+        pick = lambda d: (d.get("delta") or {}).get("text") if d.get("type") == "content_block_delta" else None  # noqa: E731
+    elif cfg.provider in ("openrouter", "groq"):
+        url = f"{GROQ_BASE if cfg.provider == 'groq' else OPENROUTER_BASE}/chat/completions"
+        headers = {"Authorization": f"Bearer {cfg.api_key}", "content-type": "application/json"}
+        if cfg.provider == "openrouter":
+            headers.update({"HTTP-Referer": settings.APP_URL, "X-Title": settings.APP_NAME})
+        payload = {"model": cfg.model, "max_tokens": max_tokens, "stream": True,
+                   "messages": [{"role": "system", "content": system}] + [{"role": m["role"], "content": m["text"]} for m in turns]}
+        pick = lambda d: ((d.get("choices") or [{}])[0].get("delta") or {}).get("content")  # noqa: E731
+    elif cfg.provider == "gemini":
+        url = f"{GEMINI_BASE}/models/{quote(cfg.model, safe='')}:streamGenerateContent?alt=sse"
+        headers = {"x-goog-api-key": cfg.api_key, "content-type": "application/json"}
+        payload = {"systemInstruction": {"parts": [{"text": system}]}, "generationConfig": {"maxOutputTokens": max_tokens * 3},
+                   "contents": [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["text"]}]} for m in turns]}
+        pick = lambda d: "".join(p.get("text", "") for p in (((d.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []) if not p.get("thought")) or None  # noqa: E731
+    else:
+        raise AIError(f"Unknown AI provider: {cfg.provider}")
+
+    async with _http_client() as client:
+        try:
+            async with client.stream("POST", url, headers=headers, json=payload) as resp:
+                if resp.status_code != 200:
+                    await resp.aread()
+                    raise AIError(_describe_error(cfg, resp))
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    raw = line[5:].strip()
+                    if not raw or raw == "[DONE]":
+                        continue
+                    try:
+                        data = json.loads(raw)
+                    except ValueError:
+                        continue
+                    if data.get("type") == "error" or ("error" in data and not data.get("choices")):
+                        err = data.get("error")
+                        raise AIError(f"{cfg.label}: {(err or {}).get('message') if isinstance(err, dict) else err}")
+                    piece = pick(data)
+                    if piece:
+                        yield piece
+        except httpx.HTTPError as exc:
+            raise AIError(f"network error: {exc}") from exc
+
+
 def _describe_error(cfg: AIConfig, resp: httpx.Response) -> str:
     try:
         err = resp.json().get("error", {})

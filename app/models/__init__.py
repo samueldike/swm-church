@@ -75,4 +75,4 @@ __all__ = [
     "Giving",
 ]
 
-from app.models.ai_knowledge import AIKnowledge
+from app.models.ai_knowledge import AIKnowledge, ScentAIFeedback

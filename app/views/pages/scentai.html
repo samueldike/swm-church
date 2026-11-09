@@ -1,26 +1,91 @@
 <!DOCTYPE html>
 <html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <title>ScentAI — {{ siteName }}</title>
-{% include "partials/site-head.html" %}
-</head><body class="scentai-app">
-<a class="skip-link" href="#main">Skip to conversation</a>
-<aside class="ai-sidebar">
- <a class="ai-brand" href="{{ url_for('scentai') }}"><img src="/static/brand/swm-logo-128.png" width="34" height="34" alt="">ScentAI<span>✦</span></a>
- <button class="ai-new" type="button" data-new-chat>＋ New conversation</button>
- <p class="ai-sidebar-label">EXPLORE</p>
- <a href="{{ url_for('messages') }}">↗ Message library</a><a href="{{ url_for('home') }}">↗ Scent of Water Ministry</a>
- <div class="ai-sidebar-bottom"><span class="ai-status-dot"></span> Rooted in the Word.<p>Explore our teachings, ministry and events.</p></div>
-</aside>
-<main id="main" class="ai-main" tabindex="-1">
- <header class="ai-topbar"><span>ScentAI <small>Message companion</small></span><a href="{{ url_for('messages') }}">Browse messages ↗</a></header>
- <div class="ai-scroll" id="ai-scroll">
-  <section class="ai-welcome" id="ai-welcome"><div class="ai-spark">✦</div><p class="guide-tag">A LITTLE SPACE TO REFLECT</p><h1>What’s on your heart?</h1><p>Bring your questions. Explore faith and everyday life<br> with teachings, ministry information and upcoming events.</p>
-   <div class="ai-starters"><button type="button" data-prompt="How can I grow in prayer?"><strong>A deeper prayer life ↗</strong><span>Build a daily rhythm with God</span></button><button type="button" data-prompt="What do the messages teach about hope in difficult times?"><strong>Hope for this season ↗</strong><span>Find encouragement for the journey</span></button><button type="button" data-prompt="What does living by faith look like every day?"><strong>Faith in everyday life ↗</strong><span>Put the teachings into practice</span></button></div>
-  </section>
-  <div id="ai-conversation" class="ai-conversation" role="log" aria-label="Conversation" aria-live="polite"></div>
- </div>
- <div class="ai-composer-wrap"><form id="scentai-form" action="{{ url_for('messages_ask') }}" method="post"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label class="sr-only" for="ai-question">Ask ScentAI</label><textarea id="ai-question" name="question" rows="2" maxlength="1200" placeholder="Ask about faith, our ministry or an event…" required></textarea><div class="ai-composer-actions"><span>✦ Explore the teachings</span><button type="submit" aria-label="Send question">↑</button></div></form><p class="ai-disclaimer">ScentAI can make mistakes. Explore the linked messages for context.</p></div>
-</main>
-<script src="/static/site/message-guide.js?v=5" defer></script>
+<meta name="description" content="Ask ScentAI about the teachings, ministry and events of {{ siteName }}.">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#151515" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/static/brand/swm-logo-128.png" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Figtree:wght@400..800&display=swap">
+<link rel="stylesheet" href="{{ url_for('static', path='site/scentai.css') }}?v=2">
+<script>try{var t=localStorage.getItem('scentai-theme');if(t)document.documentElement.dataset.theme=t;}catch(e){}</script>
+</head>
+<body>
+<a class="skip" href="#composer-input">Skip to the message box</a>
+<div class="app" id="app" data-endpoint="{{ url_for('scentai_stream') }}" data-feedback="{{ url_for('scentai_feedback') }}" data-csrf="{{ csrf_token }}">
+
+  {# ── Sidebar: new chat, search, history ── #}
+  <aside class="side" id="side" aria-label="Conversations">
+    <div class="side-top">
+      <a class="brand" href="{{ url_for('scentai') }}"><img src="/static/brand/swm-logo-128.png" alt="" width="30" height="30"><span>ScentAI</span></a>
+      <button class="icon" id="side-close" type="button" aria-label="Close sidebar" title="Close sidebar"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg></button>
+    </div>
+    <button class="new" id="new-chat" type="button" title="New chat (Ctrl+Shift+O)"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>New chat</button>
+    <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span class="sr">Search chats</span><input id="search" type="search" placeholder="Search chats" autocomplete="off"></label>
+    <nav class="history" id="history" aria-label="Previous chats"></nav>
+    <div class="side-foot">
+      <a href="{{ url_for('messages') }}"><svg viewBox="0 0 24 24"><path d="M4 19V5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2Zm0 0a2 2 0 0 1 2-2h12"/></svg>Message library</a>
+      <a href="{{ url_for('home') }}"><svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1Z"/></svg>{{ siteName }}</a>
+      <button type="button" id="theme" class="theme"><svg viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg><span>Dark mode</span></button>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim" hidden></div>
+
+  <main class="main" id="main">
+    <header class="top">
+      <button class="icon" id="side-open" type="button" aria-label="Open sidebar" title="Open sidebar"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/></svg></button>
+      <button class="icon only-collapsed" id="new-chat-2" type="button" aria-label="New chat" title="New chat"><svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+      <h1 class="title" id="title">ScentAI</h1>
+      <div class="top-r">
+        <button class="icon" id="copy-chat" type="button" aria-label="Copy the whole conversation" title="Copy conversation" hidden><svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+        <button class="icon" id="delete-chat" type="button" aria-label="Delete this conversation" title="Delete conversation" hidden><svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+      </div>
+    </header>
+
+    <div class="scroll" id="scroll">
+      <section class="hello" id="hello">
+        <div class="spark" aria-hidden="true">✦</div>
+        <h2>What’s on your heart?</h2>
+        <p>Ask about faith and everyday life, the messages preached here, or what is happening at church.</p>
+      </section>
+      <div class="thread" id="thread" role="log" aria-live="polite" aria-label="Conversation"></div>
+      <div class="pad"></div>
+    </div>
+
+    <button class="to-end" id="to-end" type="button" aria-label="Scroll to the latest message" hidden><svg viewBox="0 0 24 24"><path d="M12 5v14m-6-6 6 6 6-6"/></svg></button>
+
+    <div class="dock" id="dock">
+      <div class="chips" id="starters">
+        <button type="button" data-prompt="How can I grow in prayer?"><b>A deeper prayer life</b><span>Build a daily rhythm with God</span></button>
+        <button type="button" data-prompt="What do the messages teach about hope in difficult times?"><b>Hope for this season</b><span>Encouragement for the journey</span></button>
+        <button type="button" data-prompt="What does living by faith look like every day?"><b>Faith every day</b><span>Put the teachings into practice</span></button>
+        <button type="button" data-prompt="What is coming up at church?"><b>What’s coming up</b><span>Services and programmes</span></button>
+      </div>
+      <form class="composer" id="composer" autocomplete="off">
+        <label class="sr" for="composer-input">Message ScentAI</label>
+        <textarea id="composer-input" rows="1" maxlength="1600" placeholder="Ask ScentAI anything about faith, our ministry or events" enterkeyhint="send"></textarea>
+        <div class="composer-row">
+          <span class="count" id="count" aria-live="polite"></span>
+          <button type="button" class="icon mic" id="mic" aria-label="Speak your question" title="Speak" hidden><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+          <button type="submit" class="send" id="send" aria-label="Send" title="Send (Enter)" disabled><svg viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
+          <button type="button" class="send stop" id="stop" aria-label="Stop answering" title="Stop" hidden><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>
+        </div>
+      </form>
+      <p class="fine">ScentAI answers from the teachings and information of {{ siteName }} and can make mistakes. Listen to the linked messages for the full context.</p>
+    </div>
+  </main>
+</div>
+
+<template id="tpl-user"><div class="turn user"><div class="bubble"></div><div class="acts"><button type="button" class="icon sm" data-act="edit" aria-label="Edit and resend" title="Edit"><svg viewBox="0 0 24 24"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button><button type="button" class="icon sm" data-act="copy" aria-label="Copy" title="Copy"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></div></div></template>
+<template id="tpl-bot"><div class="turn bot"><div class="avatar" aria-hidden="true">✦</div><div class="body"><div class="md"></div><div class="cites"></div><div class="acts">
+  <button type="button" class="icon sm" data-act="copy" aria-label="Copy answer" title="Copy"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button>
+  <button type="button" class="icon sm" data-act="up" aria-label="Good answer" title="Good answer" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M7 10v11H4V10Zm0 0 4-7a2 2 0 0 1 3 2l-1 4h6a2 2 0 0 1 2 2.3l-1.4 7A2 2 0 0 1 17.6 21H7"/></svg></button>
+  <button type="button" class="icon sm" data-act="down" aria-label="Bad answer" title="Bad answer" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M17 14V3h3v11Zm0 0-4 7a2 2 0 0 1-3-2l1-4H5a2 2 0 0 1-2-2.3l1.4-7A2 2 0 0 1 6.4 3H17"/></svg></button>
+  <button type="button" class="icon sm" data-act="retry" aria-label="Write the answer again" title="Try again"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5"/></svg></button>
+  <button type="button" class="icon sm" data-act="speak" aria-label="Read aloud" title="Read aloud"><svg viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9Zm12 0a4 4 0 0 1 0 6m2-9a8 8 0 0 1 0 12"/></svg></button>
+</div><div class="follow"></div></div></div></template>
+
+<script src="{{ url_for('static', path='site/scentai.js') }}?v=1" defer></script>
 </body></html>

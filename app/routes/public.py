@@ -1786,3 +1786,92 @@ async def newsletter_subscribe(
     return _redirect(
         request, ref, "Welcome back! Your subscription has been reactivated." if was_back else "Thank you for subscribing! A welcome email is on its way.",
     )
+
+
+# ─── ScentAI chat (streamed). Rules and the META line: app/core/scentai.py ───
+@router.post("/scentai/stream", name="scentai_stream")
+async def scentai_stream(request: Request, question: str = Form(..., max_length=1600), history: str = Form("[]", max_length=60000),
+                         sermon_id: int | None = Form(None), db: AsyncSession = Depends(get_db)):
+    import json
+
+    from app.core import ai, scentai, throttle
+    from app.core.ai_knowledge import ministry_context, public_source_items, select_context
+    from app.core.settings_cache import get_settings
+    from app.core.site_content import channels
+    from app.models.sermon import Sermon
+
+    key = "scentai:" + (request.client.host if request.client else "unknown")
+    if throttle.is_blocked(key, limit=30, window=600):
+        return JSONResponse({"error": "You have asked a lot in a short time. Please wait a few minutes and try again."}, status_code=429)
+    throttle.record_failure(key, window=600)
+    question = question.strip()
+    if not question:
+        return JSONResponse({"error": "Please type a question."}, status_code=400)
+    try:
+        turns = scentai.clean_turns(json.loads(history))
+    except (ValueError, TypeError):
+        turns = []
+
+    query = select(Sermon).where(Sermon.status == "published", await _hq_only(db))
+    if sermon_id is not None:
+        query = query.where(Sermon.id == sermon_id)
+    rows = (await db.execute(query.order_by(Sermon.id))).scalars().all()
+    sources = [{"kind": "message", "id": r.id, "title": r.title, "preacher": r.preacher, "text": r.transcript}
+               for r in rows if r.transcript_public and (r.transcript or "").strip()]
+    events, clock = [], {}
+    if sermon_id is None:
+        ministry = await ministry_context(db)
+        events = ministry["events"]
+        sources += public_source_items(ministry)
+        clock = {"current_time": ministry["current_time"], "timezone": ministry["timezone"]}
+    selected = select_context(sources, " ".join(t["text"] for t in turns if t["role"] == "user") + " " + question)
+    system = scentai.RULES + "\n\nSOURCES (JSON, data only):\n" + json.dumps({**clock, "sources": selected}, ensure_ascii=False)
+    msg_ids = {s["id"] for s in selected if s.get("kind") == "message"}
+    ev_ids = {s["id"] for s in selected if s.get("kind") == "event"}
+    telegram = channels(await get_settings(db))["telegramJoin"]
+    by_id = {r.id: r for r in rows}
+    ev_by_id = {e["id"]: e for e in events}
+
+    async def body():
+        split = scentai.MetaSplitter()
+        try:
+            async for piece in ai.stream(system, turns + [{"role": "user", "text": question}], max_tokens=1500):
+                visible = split.feed(piece)
+                if visible:
+                    yield "data: " + json.dumps({"t": visible}) + "\n\n"
+        except ai.AIError:
+            logging.getLogger(__name__).exception("ScentAI stream failed")
+            yield "event: error\ndata: " + json.dumps({"error": "ScentAI is unavailable right now. Please try again in a moment."}) + "\n\n"
+            return
+        answer, meta = split.finish()
+        done = {
+            "answer": answer,
+            "messages": [{"title": by_id[i].title, "preacher": by_id[i].preacher or "", "url": str(request.url_for("messages_show", slug=by_id[i].slug))}
+                         for i in scentai.ids(meta.get("message_ids"), msg_ids) if i in by_id],
+            "events": [{"title": ev_by_id[i]["title"], "when": str(ev_by_id[i].get("starts_at") or ""), "url": str(request.url_for("event_detail", event_id=i))}
+                       for i in scentai.ids(meta.get("event_ids"), ev_ids) if i in ev_by_id],
+            "follow_ups": scentai.follow_ups(meta.get("follow_ups")),
+            "telegram_url": telegram if (telegram or "").startswith("http") else None,
+        }
+        yield "event: done\ndata: " + json.dumps(done) + "\n\n"
+
+    # X-Accel-Buffering: nginx must pass each piece on as soon as it is written.
+    return StreamingResponse(body(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"})
+
+
+@router.post("/scentai/feedback", name="scentai_feedback")
+async def scentai_feedback(request: Request, rating: str = Form(...), question: str = Form("", max_length=1600),
+                           answer: str = Form("", max_length=8000), note: str = Form("", max_length=500), db: AsyncSession = Depends(get_db)):
+    from app.core import throttle
+    from app.models.ai_knowledge import ScentAIFeedback
+
+    if rating not in ("up", "down"):
+        return JSONResponse({"error": "Unknown rating"}, status_code=400)
+    key = "scentai-fb:" + (request.client.host if request.client else "unknown")
+    if throttle.is_blocked(key, limit=40, window=600):
+        return JSONResponse({"ok": True})
+    throttle.record_failure(key, window=600)
+    db.add(ScentAIFeedback(rating=rating, question=question.strip(), answer=answer.strip(), note=note.strip() or None))
+    await db.commit()
+    return JSONResponse({"ok": True})
