@@ -31,6 +31,7 @@ from app.models.announcement import Announcement
 from app.models.engagement import AnalyticsCounter, EmailCampaign, EmailLog, EventReminder
 from app.models.publication import Publication, PublicationSource, PublicationSubtopic
 from app.models.telegram_archive import TelegramArchiveItem
+from app.models.whatsapp import WhatsAppPost
 
 __all__ = [
     "TelegramArchiveItem",

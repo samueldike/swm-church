@@ -43,6 +43,17 @@ async def admin_policy(request: Request) -> None:
     admin = await get_current_admin(request)
     if admin is None:
         return  # the route itself redirects unauthenticated users to the sign-in page
+    if perm == "whatsapp":
+        # Granted per person (Media HOD by default, HODs/Resident Pastors when switched on), not per role.
+        from app.core import whatsapp
+        from app.database import async_session
+
+        async with async_session() as db:
+            ok = await whatsapp.can_use(db, admin)
+        if not ok:
+            logger.warning("Access denied: admin=%s role=%s %s %s needs whatsapp", admin.id, admin.role, request.method, path)
+            raise AccessDenied(admin.role, perm)
+        return
     if not has_perm(admin.role, perm):
         logger.warning("Access denied: admin=%s role=%s %s %s needs %s", admin.id, admin.role, request.method, path, perm)
         raise AccessDenied(admin.role, perm)

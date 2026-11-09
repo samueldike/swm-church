@@ -36,6 +36,7 @@
   <nav class="admin-sidebar-scroll flex-1 overflow-y-auto py-3 px-2">
     {% if is_hod %}
       <div class="mb-2 px-1">{{ nav_item(url_for('hod_reports_index'), 'ri-file-chart-line', 'Monthly Reports', 'hod.reports') }}</div>
+      {% if can('whatsapp') %}<div class="mb-2 px-1">{{ nav_item(url_for('admin_whatsapp'), 'ri-whatsapp-line', 'WhatsApp', 'admin.whatsapp') }}</div>{% endif %}
     {% else %}
       {% if can('dashboard') %}<div class="mb-1.5 px-1">{{ nav_item(url_for('admin_dashboard'), 'ri-dashboard-3-line', 'Dashboard', 'admin.dashboard') }}</div>{% endif %}
 
@@ -62,10 +63,11 @@
         {% if can('activity') and not can('system') %}{{ nav_item(url_for('admin_activity'), 'ri-history-line', 'Activity', 'admin.activity') }}{% endif %}
       </div>
 
-      {% if can('audio') or can('inquiries') or can('prayer') or can('announcements.view') %}
+      {% if can('audio') or can('inquiries') or can('prayer') or can('announcements.view') or can('whatsapp') %}
       <div class="mb-1.5 px-1">
         {{ nav_heading('Communication') }}
         {% if can('announcements.view') %}{{ nav_item(url_for('admin_announcements'), 'ri-megaphone-line', 'Announcements', 'admin.announcements') }}{% endif %}
+        {% if can('whatsapp') %}{{ nav_item(url_for('admin_whatsapp'), 'ri-whatsapp-line', 'WhatsApp', 'admin.whatsapp') }}{% endif %}
         {% if can('audio') %}{{ nav_item(url_for('admin_messages'), 'ri-message-3-line', 'Audio Messages', 'admin.messages', badges.messages, '{n} draft messages not yet published') }}
         {{ nav_item(url_for('admin_transcriptions'), 'ri-file-text-line', 'Transcriptions', 'admin.transcriptions') }}{% endif %}
         {% if can('system') %}{{ nav_item(url_for('admin_telegram_archive'), 'ri-archive-drawer-line', 'Telegram archive', 'admin.telegram-archive') }}{% endif %}

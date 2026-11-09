@@ -341,8 +341,14 @@ async def _admin_context(request: Request, db: AsyncSession, active_page: str = 
         except Exception:
             logging.exception("Unhandled error")
 
+    from app.core.whatsapp import can_use as _wa_can_use
+
+    try:
+        whatsapp_ok = await _wa_can_use(db, admin)
+    except Exception:
+        whatsapp_ok = False
     return {
-        "can": (lambda perm, _r=admin.role: has_perm(_r, perm)),
+        "can": (lambda perm, _r=admin.role, _wa=whatsapp_ok: _wa if perm == "whatsapp" else has_perm(_r, perm)),
         "role_name": (lambda r: ROLE_LABELS.get(normalize_role(r), r or "")),
         "admin_branch_id": branch_id,
         "admin": admin,
@@ -1292,7 +1298,7 @@ async def admin_hods_edit_page(hod_id: int, request: Request, db: AsyncSession =
     departments = list((await db.execute(select(Department).order_by(Department.name))).scalars().all())
     ctx = await _admin_context(request, db, "admin.hods")
     return await render_template(request, "admin/hod-form.html", {
-        "_db": db, "hod": hod, "departments": departments, "branches": [],
+        "_db": db, "hod": hod, "departments": departments, "branches": [], "wa_access": await _wa_access_state(db, ctx.get("admin"), hod),
         "title": "Edit HOD", "headerIcon": "ri-user-star-line", **ctx,
     })
 
@@ -1941,7 +1947,7 @@ async def admin_admins_edit_page(admin_id: int, request: Request, db: AsyncSessi
     branches = list((await db.execute(select(Branch).where(Branch.is_active == True).order_by(Branch.name))).scalars().all())
     ctx = await _admin_context(request, db, "admin.admins")
     return await render_template(request, "admin/admin-form.html", {
-        "_db": db, "target": target, "branches": branches, **_admin_role_ctx(target),
+        "_db": db, "target": target, "branches": branches, **_admin_role_ctx(target), "wa_access": await _wa_access_state(db, ctx.get("admin"), target),
         "title": "Edit Administrator", "headerIcon": "ri-shield-user-line", **ctx,
     })
 
@@ -8245,3 +8251,378 @@ async def admin_analytics(request: Request, db: AsyncSession = Depends(get_db), 
     return await render_template(request, "admin/analytics.html", {
         "_db": db, "data": data, "peak": max([p["views"] for p in data["series"]] or [1]) or 1,
         "title": "Site traffic", "headerIcon": "ri-bar-chart-2-line", **ctx})
+
+
+# ─── WhatsApp: each church's own WhatsApp account (gateway: whatsapp-gateway/, rules: app/core/whatsapp.py) ───
+_WA_MAX_UPLOAD = 64 * 1024 * 1024
+_WA_KINDS = {"image": (".jpg", ".jpeg", ".png", ".webp", ".gif"), "video": (".mp4", ".mov", ".webm", ".3gp"),
+             "audio": (".mp3", ".m4a", ".ogg", ".opus", ".wav", ".aac")}
+
+
+async def _wa_guard(request: Request, db: AsyncSession):
+    """(admin, branch_id) for a signed-in admin allowed to use WhatsApp, else (None, None)."""
+    from app.core import whatsapp as wa
+
+    admin = await _get_admin(request)
+    if not admin or not await wa.can_use(db, admin):
+        return None, None
+    try:
+        requested = int(request.query_params.get("branch") or 0) or None
+    except ValueError:
+        requested = None
+    return admin, await wa.church_for(db, admin, requested)
+
+
+def _wa_json_error(e, status: int | None = None) -> JSONResponse:
+    return JSONResponse({"error": str(e)}, status_code=status or getattr(e, "status", 502) or 502)
+
+
+def _wa_quote(v: str) -> str:
+    from urllib.parse import quote
+
+    return quote(v or "", safe="")
+
+
+async def _wa_church_tz(db: AsyncSession, branch_id: int) -> str:
+    from app.core.platform import platform_timezone
+    from app.models.branch import Branch
+
+    b = await db.get(Branch, branch_id)
+    return (b.timezone if b and b.timezone else None) or await platform_timezone(db)
+
+
+async def _wa_save_upload(upload, branch_id: int) -> tuple[str, str, str]:
+    """Store an attachment under MEDIA_ROOT/whatsapp/b<id>/ and return (relative path, kind, original name)."""
+    import os as _os
+    import uuid
+
+    from app.core.media import media_root
+
+    name = _os.path.basename(upload.filename or "file")[:200]
+    ext = _os.path.splitext(name)[1].lower()
+    kind = next((k for k, exts in _WA_KINDS.items() if ext in exts), "document")
+    rel = f"whatsapp/b{branch_id}/{uuid.uuid4().hex}{ext}"
+    full = _os.path.join(media_root(), *rel.split("/"))
+    _os.makedirs(_os.path.dirname(full), exist_ok=True)
+    size = 0
+    with open(full, "wb") as fh:
+        while chunk := await upload.read(1024 * 1024):
+            size += len(chunk)
+            if size > _WA_MAX_UPLOAD:
+                fh.close()
+                _os.remove(full)
+                raise ValueError("That file is larger than 64 MB.")
+            fh.write(chunk)
+    return rel, kind, name
+
+
+@router.get("/whatsapp", name="admin_whatsapp")
+async def admin_whatsapp(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import whatsapp as wa
+    from app.core.access import is_super as _is_super
+    from app.models.branch import Branch
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    churches = []
+    if _is_super(admin.role):
+        churches = list((await db.execute(select(Branch).where(Branch.is_active == True).order_by(Branch.is_hq.desc(), Branch.name))).scalars().all())  # noqa: E712
+    church = await db.get(Branch, branch_id)
+    ctx = await _admin_context(request, db, "admin.whatsapp")
+    return await render_template(request, "admin/whatsapp.html", {
+        "_db": db, "church": church, "churches": churches, "branch_id": branch_id, "gateway_ready": wa.configured(),
+        "church_tz": await _wa_church_tz(db, branch_id), "title": "WhatsApp", "headerIcon": "ri-whatsapp-line", **ctx})
+
+
+@router.get("/whatsapp/state.json", name="admin_whatsapp_state")
+async def admin_whatsapp_state(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import whatsapp as wa
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not allowed"}, status_code=403)
+    try:
+        s = await wa.call("GET", f"/sessions/{wa.tenant(branch_id)}", timeout=10)
+    except wa.GatewayError as e:
+        return _wa_json_error(e)
+    keep = ("status", "qr", "linkCode", "phone", "name", "lastError", "connectedAt", "activity", "live")
+    return JSONResponse({k: s.get(k) for k in keep})
+
+
+@router.post("/whatsapp/connect", name="admin_whatsapp_connect")
+async def admin_whatsapp_connect(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import whatsapp as wa
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not allowed"}, status_code=403)
+    form = await request.form()
+    phone = "".join(ch for ch in str(form.get("phone") or "") if ch.isdigit())[:20]
+    try:
+        await wa.call("POST", f"/sessions/{wa.tenant(branch_id)}/start", json={"phone": phone or None}, timeout=15)
+    except wa.GatewayError as e:
+        return _wa_json_error(e)
+    await log_admin_action(db, admin.id, "whatsapp.connect", "branch", branch_id, {"pairing": "phone" if phone else "qr"}, request)
+    await db.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.post("/whatsapp/disconnect", name="admin_whatsapp_disconnect")
+async def admin_whatsapp_disconnect(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import whatsapp as wa
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not allowed"}, status_code=403)
+    try:
+        await wa.call("POST", f"/sessions/{wa.tenant(branch_id)}/logout", timeout=60)
+    except wa.GatewayError as e:
+        return _wa_json_error(e)
+    await log_admin_action(db, admin.id, "whatsapp.disconnect", "branch", branch_id, None, request)
+    await db.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.get("/whatsapp/chats.json", name="admin_whatsapp_chats")
+async def admin_whatsapp_chats(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import whatsapp as wa
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not allowed"}, status_code=403)
+    flt = request.query_params.get("filter") or ""
+    params = {"filter": flt if flt in ("groups", "channels", "unread", "users") else "", "count": 80}
+    try:
+        return JSONResponse(await wa.call("GET", f"/sessions/{wa.tenant(branch_id)}/chats", params=params, timeout=60))
+    except wa.GatewayError as e:
+        return _wa_json_error(e)
+
+
+@router.get("/whatsapp/messages.json", name="admin_whatsapp_messages")
+async def admin_whatsapp_messages(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import whatsapp as wa
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not allowed"}, status_code=403)
+    params = {"count": 40}
+    if request.query_params.get("before"):
+        params["before"] = request.query_params["before"]
+    path = f"/sessions/{wa.tenant(branch_id)}/chats/{_wa_quote(request.query_params.get('jid'))}/messages"
+    try:
+        return JSONResponse(await wa.call("GET", path, params=params, timeout=60))
+    except wa.GatewayError as e:
+        return _wa_json_error(e)
+
+
+@router.post("/whatsapp/seen", name="admin_whatsapp_seen")
+async def admin_whatsapp_seen(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import whatsapp as wa
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not allowed"}, status_code=403)
+    jid = str((await request.form()).get("jid") or "")
+    try:
+        await wa.call("POST", f"/sessions/{wa.tenant(branch_id)}/chats/{_wa_quote(jid)}/seen", timeout=20)
+    except wa.GatewayError:
+        pass
+    return JSONResponse({"ok": True})
+
+
+@router.get("/whatsapp/media", name="admin_whatsapp_media")
+async def admin_whatsapp_media(request: Request, db: AsyncSession = Depends(get_db)):
+    from fastapi.responses import Response
+
+    from app.core import whatsapp as wa
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return Response(status_code=403)
+    try:
+        r = await wa.call("GET", f"/sessions/{wa.tenant(branch_id)}/media/{_wa_quote(request.query_params.get('id'))}", timeout=90, raw=True)
+    except wa.GatewayError as e:
+        return Response(str(e), status_code=e.status, media_type="text/plain")
+    return Response(r.content, media_type=r.headers.get("content-type", "application/octet-stream"),
+                    headers={"Cache-Control": "private, max-age=86400"})
+
+
+@router.get("/whatsapp/avatar.json", name="admin_whatsapp_avatar")
+async def admin_whatsapp_avatar(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import whatsapp as wa
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return JSONResponse({"url": None}, status_code=403)
+    try:
+        return JSONResponse(await wa.call("GET", f"/sessions/{wa.tenant(branch_id)}/avatar/{_wa_quote(request.query_params.get('jid'))}", timeout=15))
+    except wa.GatewayError:
+        return JSONResponse({"url": None})
+
+
+@router.get("/whatsapp/targets.json", name="admin_whatsapp_targets")
+async def admin_whatsapp_targets(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import whatsapp as wa
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not allowed"}, status_code=403)
+    try:
+        return JSONResponse(await wa.call("GET", f"/sessions/{wa.tenant(branch_id)}/targets", timeout=60))
+    except wa.GatewayError as e:
+        return _wa_json_error(e)
+
+
+@router.post("/whatsapp/send", name="admin_whatsapp_send")
+async def admin_whatsapp_send(request: Request, db: AsyncSession = Depends(get_db)):
+    """Send now to one chat (the chat window, or a new chat by phone number)."""
+    from app.core import whatsapp as wa
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not allowed"}, status_code=403)
+    form = await request.form()
+    to, text = str(form.get("to") or "").strip(), str(form.get("text") or "")[:65000]
+    if not to:
+        return JSONResponse({"error": "Choose who to send to."}, status_code=400)
+    body = {"to": to, "text": text, "quotedId": str(form.get("quotedId") or "") or None}
+    upload = form.get("file")
+    if upload is not None and getattr(upload, "filename", ""):
+        try:
+            rel, kind, name = await _wa_save_upload(upload, branch_id)
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        body.update(file=rel, kind="voice" if form.get("voice") == "1" and kind == "audio" else kind, filename=name)
+    elif not text.strip():
+        return JSONResponse({"error": "Type a message first."}, status_code=400)
+    try:
+        r = await wa.call("POST", f"/sessions/{wa.tenant(branch_id)}/send", json=body, timeout=180)
+    except wa.GatewayError as e:
+        return _wa_json_error(e)
+    return JSONResponse({"ok": True, "id": r.get("id"), "to": r.get("to")})
+
+
+@router.post("/whatsapp/posts", name="admin_whatsapp_post_create")
+async def admin_whatsapp_post_create(request: Request, db: AsyncSession = Depends(get_db)):
+    """A post to several chats/groups/channels, or a Status: sent now or at a chosen time (church time)."""
+    import json as _json
+
+    from app.core import geo
+    from app.core import whatsapp as wa
+    from app.models.whatsapp import WhatsAppPost
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not allowed"}, status_code=403)
+    form = await request.form()
+    kind = "status" if form.get("kind") == "status" else "message"
+    text = str(form.get("text") or "")[:65000]
+    try:
+        targets = [{"jid": str(t["jid"])[:120], "name": str(t.get("name") or "")[:120]}
+                   for t in _json.loads(str(form.get("targets") or "[]")) if isinstance(t, dict) and t.get("jid")][:256]
+    except (ValueError, TypeError):
+        targets = []
+    if kind == "message" and not targets:
+        return JSONResponse({"error": "Choose at least one chat, group or channel."}, status_code=400)
+    when_raw = str(form.get("send_at") or "").strip()
+    if when_raw:
+        try:
+            send_at = geo.to_utc(datetime.fromisoformat(when_raw), await _wa_church_tz(db, branch_id))
+        except ValueError:
+            return JSONResponse({"error": "Pick a valid date and time."}, status_code=400)
+        if send_at < datetime.utcnow() - timedelta(minutes=1):
+            return JSONResponse({"error": "That time has already passed."}, status_code=400)
+    else:
+        send_at = datetime.utcnow()
+    post = WhatsAppPost(branch_id=branch_id, created_by=admin.id, kind=kind, targets=targets if kind == "message" else [],
+                        text=text, send_at=send_at, status="pending")
+    upload = form.get("file")
+    if upload is not None and getattr(upload, "filename", ""):
+        try:
+            post.media_path, post.media_kind, post.media_name = await _wa_save_upload(upload, branch_id)
+        except ValueError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        if kind == "status" and post.media_kind not in ("image", "video"):
+            return JSONResponse({"error": "A status can be text, a photo or a video."}, status_code=400)
+    elif not text.strip():
+        return JSONResponse({"error": "Write something or attach a file."}, status_code=400)
+    db.add(post)
+    await db.commit()
+    await log_admin_action(db, admin.id, "whatsapp.post", "whatsapp_post", post.id, {"kind": kind, "targets": len(targets), "scheduled": bool(when_raw)}, request)
+    await db.commit()
+    if not when_raw:
+        # Send straight away rather than waiting for the scheduler's next tick.
+        await wa.process_due()
+        await db.refresh(post)
+    return JSONResponse({"ok": True, "id": post.id, "status": post.status, "error": post.error})
+
+
+@router.get("/whatsapp/posts.json", name="admin_whatsapp_posts")
+async def admin_whatsapp_posts(request: Request, db: AsyncSession = Depends(get_db)):
+    from datetime import timezone as _tz
+
+    from app.core import geo
+    from app.models.whatsapp import WhatsAppPost
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not allowed"}, status_code=403)
+    tz = await _wa_church_tz(db, branch_id)
+    rows = (await db.execute(select(WhatsAppPost).where(WhatsAppPost.branch_id == branch_id).order_by(WhatsAppPost.send_at.desc()).limit(100))).scalars().all()
+
+    def local(d):
+        return d.replace(tzinfo=_tz.utc).astimezone(geo.zone(tz)).strftime("%a %d %b %Y, %I:%M %p").replace(" 0", " ") if d else None
+
+    return JSONResponse({"posts": [{
+        "id": p.id, "kind": p.kind, "text": (p.text or "")[:280], "targets": [t.get("name") or t.get("jid") for t in (p.targets or [])],
+        "media": p.media_name, "media_kind": p.media_kind, "when": local(p.send_at), "status": p.status, "error": p.error,
+        "by": p.author.full_name if p.author else None, "can_cancel": p.status == "pending"} for p in rows]})
+
+
+@router.post("/whatsapp/posts/{post_id}/cancel", name="admin_whatsapp_post_cancel")
+async def admin_whatsapp_post_cancel(post_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import update as _update
+
+    from app.models.whatsapp import WhatsAppPost
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not allowed"}, status_code=403)
+    res = await db.execute(_update(WhatsAppPost).where(WhatsAppPost.id == post_id, WhatsAppPost.branch_id == branch_id, WhatsAppPost.status == "pending").values(status="cancelled"))
+    await db.commit()
+    if res.rowcount != 1:
+        return JSONResponse({"error": "That post has already been sent or cancelled."}, status_code=409)
+    return JSONResponse({"ok": True})
+
+
+@router.post("/access/whatsapp/{target_id}", name="admin_whatsapp_access")
+async def admin_whatsapp_access(target_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    """Switch the WhatsApp feature on or off for one HOD or Resident Pastor."""
+    from app.core import whatsapp as wa
+    from app.models.admin import Admin
+
+    admin = await _get_admin(request)
+    target = await db.get(Admin, target_id)
+    back = request.headers.get("referer") or "/admin/dashboard"
+    if not back.startswith(str(request.base_url).rstrip("/")) and not back.startswith("/"):
+        back = "/admin/dashboard"
+    if not admin or not target or not wa.can_grant(admin, target):
+        return _redirect(request, back, "You cannot change WhatsApp access for that account.", "error")
+    on = (await request.form()).get("whatsapp") == "1"
+    default = wa.default_access(target.role, await wa.department_name(db, target))
+    target.whatsapp_access = None if on == default else ("grant" if on else "deny")
+    await log_admin_action(db, admin.id, "whatsapp.access." + ("grant" if on else "revoke"), "admin", target.id, None, request)
+    await db.commit()
+    return _redirect(request, back, f"WhatsApp {'turned on' if on else 'turned off'} for {target.full_name}.")
+
+
+async def _wa_access_state(db: AsyncSession, granter, target) -> dict | None:
+    """For the WhatsApp switch on HOD / Resident Pastor edit pages: None when this admin may not change it."""
+    from app.core import whatsapp as wa
+
+    if not wa.can_grant(granter, target):
+        return None
+    dept = await wa.department_name(db, target)
+    return {"on": wa.allowed(target.role, target.whatsapp_access, dept), "default": wa.default_access(target.role, dept),
+            "media": wa.is_media_department(dept)}

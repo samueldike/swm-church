@@ -1,0 +1,14 @@
+{
+  "name": "swm-whatsapp-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "WhatsApp Web sessions for the SWM admin console (one per branch), over an internal HTTP API.",
+  "main": "src/server.js",
+  "scripts": { "start": "node src/server.js" },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@wppconnect-team/wppconnect": "2.3.6",
+    "express": "4.21.2"
+  }
+}

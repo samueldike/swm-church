@@ -74,6 +74,7 @@ _ADDED_COLUMNS = [
     ("unit_reports", "resident_reviewed_at", "TIMESTAMP"),
     ("admins", "session_version", "INTEGER DEFAULT 0"),
     ("admins", "must_change_password", "BOOLEAN DEFAULT FALSE"),
+    ("admins", "whatsapp_access", "VARCHAR(10)"),
     ("sermons", "series", "VARCHAR(150)"),
     ("sermons", "scripture", "VARCHAR(150)"),
     ("sermons", "transcript_public", "BOOLEAN DEFAULT FALSE"),

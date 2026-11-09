@@ -1,0 +1,33 @@
+# WhatsApp gateway: its own compose project so it never collides with the main stack's file.
+#   cd /opt/swm && docker compose -f whatsapp-gateway/docker-compose.yml up -d --build
+# It joins the main stack's network (swm_swm-net) as "whatsapp" and publishes no port.
+services:
+  whatsapp:
+    build: .
+    image: swm-whatsapp:latest
+    container_name: swm-whatsapp
+    restart: unless-stopped
+    environment:
+      MEDIA_ROOT: /app/media
+    env_file: ../.env           # WA_GATEWAY_TOKEN comes from here
+    # Chromium needs more shared memory than Docker's 64 MB default, or it crashes silently.
+    shm_size: "512mb"
+    mem_limit: 4g
+    volumes:
+      - wa_data:/data                 # WhatsApp logins: never delete this volume
+      - ../app/media:/app/media:ro    # SWM uploads, handed over as file paths
+    networks:
+      swm-net:
+        aliases: [whatsapp]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+volumes:
+  wa_data:
+    name: swm_whatsapp_data
+
+networks:
+  swm-net:
+    external: true
+    name: swm_swm-net

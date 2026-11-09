@@ -29,6 +29,9 @@ class Admin(Base):
     # signed-in session of this account is then refused. Temporary/reset passwords must be replaced at once.
     session_version: Mapped[int] = mapped_column(default=0, server_default="0")
     must_change_password: Mapped[bool] = mapped_column(default=False, server_default=false())
+    # WhatsApp feature override (app/core/whatsapp.py:can_use): "grant", "deny" or empty for the default
+    # (HQ Administrator and the Media department's HOD have it; HODs and Resident Pastors can be granted it).
+    whatsapp_access: Mapped[str | None] = mapped_column(String(10))
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.utcnow()
     )

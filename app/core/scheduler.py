@@ -165,6 +165,9 @@ async def _loop() -> None:
             from app.core.giving_reconcile import recheck_pending
 
             await recheck_pending()
+            from app.core.whatsapp import process_due as whatsapp_due
+
+            await whatsapp_due()
             if datetime.utcnow() - last_housekeeping > timedelta(hours=24):
                 await housekeeping()
                 last_housekeeping = datetime.utcnow()

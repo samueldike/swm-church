@@ -65,5 +65,18 @@
       <a href="{{ url_for('admin_hods') }}" class="btn btn-secondary">Cancel</a>
     </div>
   </form>
+
+  {% if wa_access %}
+  <div class="mt-6 pt-5 border-t border-line">
+    <h2 class="text-[16px] font-bold text-ink mb-1"><i class="ri-whatsapp-line"></i> WhatsApp</h2>
+    <p class="text-[13px] text-ink-3 mb-3">{% if wa_access.media %}Media department HODs have WhatsApp by default.{% else %}Lets this person read and send the church's WhatsApp, post and schedule posts and statuses.{% endif %}</p>
+    <form method="POST" action="{{ url_for('admin_whatsapp_access', target_id=hod.id) }}" class="flex flex-wrap items-center gap-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="whatsapp" value="{{ '0' if wa_access.on else '1' }}">
+      <span class="badge {{ 'badge-ok' if wa_access.on else 'badge-neut' }}">{{ 'WhatsApp on' if wa_access.on else 'WhatsApp off' }}</span>
+      <button type="submit" class="btn {{ 'btn-secondary' if wa_access.on else 'btn-primary' }} btn-sm"><i class="{{ 'ri-close-circle-line' if wa_access.on else 'ri-whatsapp-line' }}"></i>{{ 'Remove WhatsApp access' if wa_access.on else 'Give WhatsApp access' }}</button>
+    </form>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

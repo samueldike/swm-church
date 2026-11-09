@@ -1,0 +1,530 @@
+{% extends "layouts/admin_base.html" %}
+{% block title %}WhatsApp | {{ siteName }}{% endblock %}
+{% block topbar_title %}WhatsApp{% endblock %}
+{% block topbar_subtitle %}{{ church.name if church else '' }}{% endblock %}
+{% block topbar_icon %}ri-whatsapp-line{% endblock %}
+
+{% block content %}
+{#- One screen, five tabs. Everything after the first paint is fetched as JSON from /admin/whatsapp/*.json,
+    which relay to the WhatsApp gateway for this church (app/core/whatsapp.py). -#}
+<div id="wa" class="wa" data-branch="{{ branch_id }}" data-super="{{ '1' if churches else '0' }}" data-csrf="{{ csrf_token }}">
+
+  <div class="wa-head">
+    <div class="wa-head-l">
+      <span class="wa-logo"><i class="ri-whatsapp-line"></i></span>
+      <div class="min-w-0">
+        <h1 class="wa-title">WhatsApp</h1>
+        <p class="wa-sub" id="wa-who">{{ church.name if church else '' }}</p>
+      </div>
+    </div>
+    {% if churches %}
+    <label class="wa-church">
+      <span class="sr-only">Church</span>
+      <select id="wa-church" class="field-select" aria-label="Which church's WhatsApp">
+        {% for b in churches %}<option value="{{ b.id }}" {{ 'selected' if b.id == branch_id else '' }}>{{ b.name }}{{ ' (HQ)' if b.is_hq else '' }}</option>{% endfor %}
+      </select>
+    </label>
+    {% endif %}
+  </div>
+
+  {% if not gateway_ready %}
+  <div class="panel wa-note">
+    <h2 class="text-[18px] font-bold mb-1">WhatsApp is not set up on this server yet</h2>
+    <p class="text-ink-2">The WhatsApp service (whatsapp-gateway) has to be started on the server once. Ask your technical team to follow the steps in AGENTS.md, section WhatsApp.</p>
+  </div>
+  {% else %}
+
+  {# ── Not connected: link a WhatsApp account ── #}
+  <section id="wa-connect" class="panel wa-connect" hidden>
+    <div class="wa-connect-text">
+      <h2 class="wa-h2">Link this church's WhatsApp</h2>
+      <ol class="wa-steps">
+        <li>Open WhatsApp on the church phone.</li>
+        <li>Tap <b>Settings</b> (or ⋮) then <b>Linked devices</b>, then <b>Link a device</b>.</li>
+        <li>Point the phone at the code here. It stays linked until someone presses Disconnect.</li>
+      </ol>
+      <p id="wa-connect-error" class="wa-error" hidden></p>
+      <div class="flex flex-wrap gap-2 mt-3">
+        <button type="button" class="btn btn-primary" id="wa-start"><i class="ri-qr-code-line"></i>Show the QR code</button>
+        <button type="button" class="btn btn-secondary" id="wa-phone-toggle"><i class="ri-smartphone-line"></i>Link with phone number instead</button>
+      </div>
+      <form id="wa-phone-form" class="mt-3 flex flex-wrap gap-2 items-end" hidden>
+        <label class="flex-1 min-w-[200px]"><span class="field-label">WhatsApp number with country code</span>
+          <input class="field-input" name="phone" inputmode="tel" placeholder="2348012345678" required></label>
+        <button class="btn btn-primary" type="submit">Get pairing code</button>
+      </form>
+    </div>
+    <div class="wa-qr-box" aria-live="polite">
+      <img id="wa-qr" alt="WhatsApp QR code to scan with the phone" hidden>
+      <div id="wa-code" class="wa-code" hidden></div>
+      <p id="wa-qr-wait" class="wa-muted">The code appears here.</p>
+    </div>
+  </section>
+
+  {# ── Connected ── #}
+  <section id="wa-app" hidden>
+    <nav class="wa-tabs" role="tablist" aria-label="WhatsApp">
+      <button role="tab" class="wa-tab is-on" data-tab="chats" aria-selected="true"><i class="ri-chat-3-line"></i>Chats<span class="wa-pill" id="wa-unread" hidden></span></button>
+      <button role="tab" class="wa-tab" data-tab="post" aria-selected="false"><i class="ri-send-plane-line"></i>Post</button>
+      <button role="tab" class="wa-tab" data-tab="status" aria-selected="false"><i class="ri-donut-chart-line"></i>Status</button>
+      <button role="tab" class="wa-tab" data-tab="scheduled" aria-selected="false"><i class="ri-calendar-schedule-line"></i>Scheduled</button>
+      <button role="tab" class="wa-tab" data-tab="account" aria-selected="false"><i class="ri-smartphone-line"></i>Account</button>
+    </nav>
+
+    {# Chats: list + conversation #}
+    <div class="wa-pane wa-chats" data-pane="chats">
+      <aside class="wa-list" id="wa-list-pane">
+        <div class="wa-list-top">
+          <label class="wa-search"><i class="ri-search-line" aria-hidden="true"></i><span class="sr-only">Search chats</span>
+            <input id="wa-search" type="search" placeholder="Search chats"></label>
+          <button type="button" class="icon-btn" id="wa-new" title="New chat" aria-label="New chat"><i class="ri-chat-new-line"></i></button>
+        </div>
+        <div class="wa-filters" role="group" aria-label="Filter chats">
+          <button class="wa-chip is-on" data-filter="">All</button>
+          <button class="wa-chip" data-filter="unread">Unread</button>
+          <button class="wa-chip" data-filter="groups">Groups</button>
+          <button class="wa-chip" data-filter="channels">Channels</button>
+        </div>
+        <ul id="wa-chatlist" class="wa-chatlist" aria-label="Chats"><li class="wa-muted p-4">Loading chats…</li></ul>
+      </aside>
+      <div class="wa-convo" id="wa-convo-pane">
+        <div class="wa-empty" id="wa-empty"><i class="ri-whatsapp-line"></i><p>Choose a chat to read and reply.</p></div>
+        <div class="wa-convo-in" id="wa-convo" hidden>
+          <header class="wa-convo-head">
+            <button type="button" class="icon-btn wa-back" id="wa-back" aria-label="Back to chats"><i class="ri-arrow-left-line"></i></button>
+            <span class="wa-avatar" id="wa-convo-av"></span>
+            <div class="min-w-0"><p class="wa-convo-name" id="wa-convo-name"></p><p class="wa-muted text-[12px]" id="wa-convo-sub"></p></div>
+          </header>
+          <div class="wa-msgs" id="wa-msgs" aria-live="polite"></div>
+          <div class="wa-reply" id="wa-reply" hidden><span id="wa-reply-text"></span><button type="button" class="icon-btn" id="wa-reply-x" aria-label="Cancel reply"><i class="ri-close-line"></i></button></div>
+          <form class="wa-compose" id="wa-compose">
+            <label class="icon-btn wa-attach" title="Attach a photo, video, audio or file"><i class="ri-attachment-2"></i><span class="sr-only">Attach a file</span>
+              <input type="file" id="wa-file" hidden></label>
+            <div class="wa-compose-mid">
+              <div class="wa-file-chip" id="wa-file-chip" hidden><i class="ri-file-line"></i><span id="wa-file-name"></span>
+                <label class="wa-voice" id="wa-voice-wrap" hidden><input type="checkbox" id="wa-voice"> send as voice note</label>
+                <button type="button" class="wa-link" id="wa-file-x">Remove</button></div>
+              <textarea id="wa-text" data-richtext="off" rows="1" placeholder="Type a message" aria-label="Message"></textarea>
+            </div>
+            <button class="btn btn-primary wa-send" type="submit" aria-label="Send"><i class="ri-send-plane-2-fill"></i></button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    {# Post now / schedule to many #}
+    <div class="wa-pane" data-pane="post" hidden>
+      <form id="wa-post" class="panel wa-form">
+        <h2 class="wa-h2">Post to chats, groups and channels</h2>
+        <p class="wa-muted mb-3">Send the same message to several places at once, now or at a time you choose.</p>
+        <div class="field-label">Send to</div>
+        <div class="wa-picked" id="wa-picked"><span class="wa-muted">Nothing chosen yet.</span></div>
+        <label class="wa-search mt-2"><i class="ri-search-line" aria-hidden="true"></i><span class="sr-only">Find a chat, group or channel</span>
+          <input id="wa-target-q" type="search" placeholder="Find a chat, group or channel"></label>
+        <ul class="wa-targets" id="wa-targets"></ul>
+        <label class="block mt-3"><span class="field-label">Message</span><textarea class="field-textarea" data-richtext="off" name="text" rows="5" placeholder="Write your message"></textarea></label>
+        <label class="block mt-3"><span class="field-label">Photo, video or file (optional)</span><input class="field-input" type="file" name="file"></label>
+        <fieldset class="wa-when mt-3"><legend class="field-label">When</legend>
+          <label><input type="radio" name="when" value="now" checked> Now</label>
+          <label><input type="radio" name="when" value="later"> Later</label>
+          <input class="field-input" type="datetime-local" name="send_at" hidden aria-label="Date and time">
+          <span class="wa-muted text-[12.5px]">Times are {{ church_tz }}.</span>
+        </fieldset>
+        <p class="wa-error" hidden></p>
+        <div class="mt-4"><button class="btn btn-primary" type="submit"><i class="ri-send-plane-line"></i><span>Send</span></button></div>
+      </form>
+    </div>
+
+    {# Status #}
+    <div class="wa-pane" data-pane="status" hidden>
+      <form id="wa-status" class="panel wa-form">
+        <h2 class="wa-h2">Post a Status</h2>
+        <p class="wa-muted mb-3">Your contacts see it for 24 hours. Text, a photo or a video, now or later.</p>
+        <label class="block"><span class="field-label">Text, or the caption for a photo or video</span><textarea class="field-textarea" data-richtext="off" name="text" rows="4" placeholder="What would you like to share?"></textarea></label>
+        <label class="block mt-3"><span class="field-label">Photo or video (optional)</span><input class="field-input" type="file" name="file" accept="image/*,video/*"></label>
+        <fieldset class="wa-when mt-3"><legend class="field-label">When</legend>
+          <label><input type="radio" name="when" value="now" checked> Now</label>
+          <label><input type="radio" name="when" value="later"> Later</label>
+          <input class="field-input" type="datetime-local" name="send_at" hidden aria-label="Date and time">
+          <span class="wa-muted text-[12.5px]">Times are {{ church_tz }}.</span>
+        </fieldset>
+        <p class="wa-error" hidden></p>
+        <div class="mt-4"><button class="btn btn-primary" type="submit"><i class="ri-donut-chart-line"></i><span>Post status</span></button></div>
+      </form>
+    </div>
+
+    {# Scheduled and sent #}
+    <div class="wa-pane" data-pane="scheduled" hidden>
+      <div class="panel-flush"><ul id="wa-posts" class="wa-posts"><li class="wa-muted p-4">Loading…</li></ul></div>
+    </div>
+
+    {# Account #}
+    <div class="wa-pane" data-pane="account" hidden>
+      <div class="panel wa-form">
+        <h2 class="wa-h2">Linked WhatsApp</h2>
+        <dl class="wa-facts">
+          <div><dt>Number</dt><dd id="wa-acc-phone">—</dd></div>
+          <div><dt>Name</dt><dd id="wa-acc-name">—</dd></div>
+          <div><dt>Linked since</dt><dd id="wa-acc-since">—</dd></div>
+        </dl>
+        <p class="wa-muted mt-3">This connection stays on, through restarts and updates, until someone presses Disconnect here or removes it under Linked devices on the phone.</p>
+        <button type="button" class="btn btn-danger mt-4" id="wa-disconnect"><i class="ri-link-unlink"></i>Disconnect WhatsApp</button>
+      </div>
+    </div>
+  </section>
+
+  <dialog id="wa-newchat" class="wa-dialog" aria-label="New chat">
+    <form method="dialog" id="wa-newchat-form">
+      <h2 class="wa-h2">New chat</h2>
+      <label class="block"><span class="field-label">Phone number with country code</span><input class="field-input" name="to" inputmode="tel" placeholder="2348012345678" required></label>
+      <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-secondary" value="cancel" id="wa-newchat-x">Cancel</button><button class="btn btn-primary">Open chat</button></div>
+    </form>
+  </dialog>
+  {% endif %}
+</div>
+
+<style>
+  .wa { display: flex; flex-direction: column; gap: 14px; }
+  .wa-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .wa-head-l { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .wa-logo { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: #25d366; color: #fff; font-size: 24px; flex: none; }
+  .wa-title { font-size: 28px; font-weight: 800; line-height: 1; }
+  .wa-sub { color: var(--color-ink-2); font-size: 14px; margin-top: 4px; }
+  .wa-church { min-width: 220px; }
+  .wa-h2 { font-size: 20px; font-weight: 800; margin-bottom: 6px; font-family: var(--font-display); }
+  .wa-muted { color: var(--color-ink-3); }
+  .wa-error { color: var(--color-bad); background: var(--color-bad-bg); border-radius: 12px; padding: 10px 12px; margin-top: 10px; font-size: 13.5px; }
+  .wa-note { max-width: 640px; }
+  .wa-connect { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); align-items: center; }
+  @media (min-width: 860px) { .wa-connect { grid-template-columns: minmax(0, 1fr) 300px; } }
+  .wa-steps { list-style: decimal; padding-left: 20px; display: grid; gap: 6px; color: var(--color-ink-2); }
+  .wa-qr-box { display: grid; place-items: center; min-height: 280px; border-radius: 16px; background: var(--color-sunken); padding: 14px; text-align: center; }
+  .wa-qr-box img { width: 264px; height: 264px; image-rendering: pixelated; background: #fff; border-radius: 10px; }
+  .wa-code { font: 800 34px/1 var(--font-code); letter-spacing: .12em; padding: 18px 20px; background: #fff; border-radius: 12px; }
+  .wa-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--color-line); margin-bottom: 14px; }
+  .wa-tab { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; font-weight: 700; font-size: 14px; color: var(--color-ink-2); border-bottom: 3px solid transparent; white-space: nowrap; }
+  .wa-tab.is-on { color: var(--color-ink); border-bottom-color: var(--color-gold); }
+  .wa-pill { background: #25d366; color: #fff; border-radius: 999px; font-size: 12px; padding: 1px 7px; }
+  .wa-chats { display: grid; grid-template-columns: 340px minmax(0, 1fr); height: calc(100dvh - 250px); min-height: 460px; border: 1px solid var(--color-line); border-radius: 16px; overflow: hidden; background: var(--color-surface); }
+  .wa-list { display: flex; flex-direction: column; border-right: 1px solid var(--color-line); min-height: 0; }
+  .wa-list-top { display: flex; gap: 8px; padding: 10px; }
+  .wa-search { flex: 1; display: flex; align-items: center; gap: 8px; border: 2px solid var(--color-line-2); border-radius: 999px; padding: 0 12px; min-height: 42px; background: var(--color-surface); }
+  .wa-search input { flex: 1; border: 0; outline: none; background: none; min-width: 0; font-size: 14px; }
+  .wa-filters { display: flex; gap: 6px; padding: 0 10px 10px; flex-wrap: wrap; }
+  .wa-chip { min-height: 32px; padding: 0 12px; border-radius: 999px; background: var(--color-sunken); font-size: 13px; font-weight: 700; color: var(--color-ink-2); }
+  .wa-chip.is-on { background: var(--color-gold); color: var(--color-on-gold); }
+  .wa-chatlist { overflow-y: auto; flex: 1; }
+  .wa-chat { display: flex; gap: 10px; align-items: center; width: 100%; padding: 10px 12px; text-align: left; border-top: 1px solid var(--color-line); min-height: 64px; }
+  .wa-chat:hover, .wa-chat.is-on { background: var(--color-sunken); }
+  .wa-chat-mid { flex: 1; min-width: 0; }
+  .wa-chat-name { font-weight: 700; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wa-chat-last { font-size: 13px; color: var(--color-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wa-chat-end { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 12px; color: var(--color-ink-3); flex: none; }
+  .wa-unread { background: #25d366; color: #fff; border-radius: 999px; min-width: 20px; height: 20px; display: grid; place-items: center; font-weight: 700; font-size: 12px; padding: 0 6px; }
+  .wa-avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--color-gold-tint); color: var(--color-gold-text); display: grid; place-items: center; font-weight: 800; flex: none; overflow: hidden; }
+  .wa-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .wa-convo { display: flex; min-height: 0; background: #f6f2ea; }
+  .wa-empty { margin: auto; text-align: center; color: var(--color-ink-3); }
+  .wa-empty i { font-size: 48px; color: #25d366; }
+  .wa-convo-in { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+  .wa-convo-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--color-surface); border-bottom: 1px solid var(--color-line); }
+  .wa-convo-name { font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wa-back { display: none; }
+  .wa-msgs { flex: 1; overflow-y: auto; padding: 14px 4%; display: flex; flex-direction: column; gap: 4px; }
+  .wa-day { align-self: center; background: var(--color-surface); border-radius: 8px; padding: 3px 10px; font-size: 12px; color: var(--color-ink-2); margin: 8px 0; }
+  .wa-msg { max-width: min(560px, 78%); align-self: flex-start; background: var(--color-surface); border-radius: 12px; padding: 6px 9px 4px; box-shadow: 0 1px 0 rgba(0,0,0,.06); font-size: 14.5px; line-height: 1.4; overflow-wrap: anywhere; }
+  .wa-msg.me { align-self: flex-end; background: #fdf3d6; }
+  .wa-msg-author { font-size: 12.5px; font-weight: 700; color: var(--color-gold-text); }
+  .wa-msg-quote { border-left: 3px solid var(--color-gold); background: rgba(0,0,0,.04); border-radius: 6px; padding: 4px 8px; font-size: 13px; color: var(--color-ink-2); margin-bottom: 4px; }
+  .wa-msg-meta { display: flex; justify-content: flex-end; align-items: center; gap: 3px; font-size: 11.5px; color: var(--color-ink-3); margin-top: 2px; }
+  .wa-msg-meta .read { color: #34b7f1; }
+  .wa-msg img, .wa-msg video { display: block; max-width: 100%; max-height: 360px; border-radius: 8px; margin-bottom: 4px; }
+  .wa-msg audio { max-width: 100%; }
+  .wa-msg .wa-doc { display: flex; align-items: center; gap: 8px; padding: 8px; background: rgba(0,0,0,.04); border-radius: 8px; text-decoration: none; color: inherit; font-weight: 600; }
+  .wa-msg-reply { font-size: 12px; color: var(--color-gold-text); font-weight: 700; margin-left: 6px; opacity: 0; }
+  .wa-msg:hover .wa-msg-reply, .wa-msg:focus-within .wa-msg-reply { opacity: 1; }
+  .wa-more { align-self: center; }
+  .wa-reply { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--color-surface); border-top: 1px solid var(--color-line); font-size: 13px; color: var(--color-ink-2); }
+  .wa-reply span { flex: 1; border-left: 3px solid var(--color-gold); padding-left: 8px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .wa-compose { display: flex; align-items: flex-end; gap: 8px; padding: 8px 10px; background: var(--color-surface); border-top: 1px solid var(--color-line); }
+  .wa-compose-mid { flex: 1; min-width: 0; }
+  .wa-compose textarea { width: 100%; resize: none; max-height: 160px; border: 2px solid var(--color-line-2); border-radius: 22px; padding: 9px 14px; font-size: 14.5px; background: var(--color-surface); }
+  .wa-send { min-width: 44px; min-height: 44px; padding: 0 14px; }
+  .wa-file-chip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; padding: 4px 6px 6px; }
+  .wa-link { color: var(--color-gold-text); font-weight: 700; text-decoration: underline; }
+  .wa-voice { display: inline-flex; align-items: center; gap: 4px; }
+  .wa-form { max-width: 760px; }
+  .wa-picked { display: flex; flex-wrap: wrap; gap: 6px; min-height: 36px; align-items: center; }
+  .wa-tag { display: inline-flex; align-items: center; gap: 6px; background: var(--color-gold-tint); border-radius: 999px; padding: 4px 6px 4px 12px; font-size: 13px; font-weight: 700; }
+  .wa-tag button { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; }
+  .wa-targets { max-height: 260px; overflow-y: auto; border: 1px solid var(--color-line); border-radius: 12px; margin-top: 8px; }
+  .wa-targets li button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 12px; min-height: 44px; text-align: left; border-top: 1px solid var(--color-line); }
+  .wa-targets li:first-child button { border-top: 0; }
+  .wa-targets li button:hover { background: var(--color-sunken); }
+  .wa-kind { font-size: 11.5px; font-weight: 700; color: var(--color-ink-3); margin-left: auto; }
+  .wa-when { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+  .wa-when label { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; font-weight: 600; }
+  .wa-when .field-input { width: auto; }
+  .wa-posts li { display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-top: 1px solid var(--color-line); }
+  .wa-posts li:first-child { border-top: 0; }
+  .wa-posts .wa-post-mid { flex: 1; min-width: 0; }
+  .wa-facts div { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--color-line); }
+  .wa-facts dt { width: 120px; color: var(--color-ink-3); font-weight: 700; }
+  .wa-dialog { border: 0; border-radius: 18px; padding: 20px; width: min(420px, 92vw); }
+  .wa-dialog::backdrop { background: rgba(0,0,0,.4); }
+  @media (max-width: 860px) {
+    .wa-chats { grid-template-columns: minmax(0, 1fr); height: calc(100dvh - 210px); }
+    .wa-chats.is-reading .wa-list { display: none; }
+    .wa-chats:not(.is-reading) .wa-convo { display: none; }
+    .wa-back { display: inline-flex; }
+    .wa-msg { max-width: 88%; }
+  }
+  html.dark .wa-convo { background: #12151b; }
+  html.dark .wa-msg.me { background: #3a3220; }
+</style>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+(() => {
+  window.__swmWaAbort?.abort();
+  clearInterval(window.__swmWaTimer);
+  const root = document.getElementById('wa');
+  if (!root) return;
+  const ctl = new AbortController(); window.__swmWaAbort = ctl;
+  const sig = { signal: ctl.signal };
+  document.addEventListener('turbo:before-visit', () => { ctl.abort(); clearInterval(window.__swmWaTimer); }, { once: true });
+
+  const branch = root.dataset.branch, csrf = root.dataset.csrf;
+  const q = (p) => `/admin/whatsapp${p}${p.includes('?') ? '&' : '?'}branch=${branch}`;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const linkify = (s) => esc(s).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener" class="underline">$1</a>').replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/_([^_\n]+)_/g, '<i>$1</i>').replace(/\n/g, '<br>');
+  const initials = (n) => (String(n || '?').replace(/[^\p{L}\p{N} ]/gu, '').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('') || '#').toUpperCase();
+  const clock = (t) => t ? new Date(t * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+  const dayLabel = (t) => { const d = new Date(t * 1000), now = new Date(); const y = new Date(now); y.setDate(now.getDate() - 1);
+    if (d.toDateString() === now.toDateString()) return 'Today'; if (d.toDateString() === y.toDateString()) return 'Yesterday';
+    return d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' }); };
+  const listTime = (t) => { if (!t) return ''; const d = new Date(t * 1000); return d.toDateString() === new Date().toDateString() ? clock(t) : d.toLocaleDateString([], { day: 'numeric', month: 'short' }); };
+  async function getJSON(path) { const r = await fetch(q(path), { credentials: 'same-origin', cache: 'no-store', signal: ctl.signal }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `Error ${r.status}`); return j; }
+  async function post(path, data) { const fd = data instanceof FormData ? data : new FormData(); if (!(data instanceof FormData)) Object.entries(data || {}).forEach(([k, v]) => fd.append(k, v)); fd.append('csrf_token', csrf);
+    const r = await fetch(q(path), { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRF-Token': csrf }, signal: ctl.signal }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || `Error ${r.status}`); return j; }
+
+  $('wa-church')?.addEventListener('change', (e) => { window.location.href = `/admin/whatsapp?branch=${e.target.value}`; }, sig);
+
+  // ── connection state ──
+  let state = {}, lastActivity = -1, mode = '';
+  async function refreshState() {
+    try { state = await getJSON('/state.json'); } catch (e) { showConnect(e.message); return; }
+    if (state.status === 'connected') { showApp(); if (state.activity !== lastActivity) { lastActivity = state.activity; onActivity(); } }
+    else showConnect(state.lastError);
+  }
+  function showConnect(err) {
+    if (mode !== 'connect') { mode = 'connect'; $('wa-app').hidden = true; $('wa-connect').hidden = false; }
+    const e = $('wa-connect-error'); e.hidden = !err; e.textContent = err || '';
+    const qr = $('wa-qr'), code = $('wa-code'), wait = $('wa-qr-wait');
+    if (state.linkCode) { code.textContent = state.linkCode; code.hidden = false; qr.hidden = true; wait.textContent = 'On the phone: Linked devices, Link a device, Link with phone number instead, then enter this code.'; }
+    else if (state.status === 'qr' && state.qr) { if (qr.src !== state.qr) qr.src = state.qr; qr.hidden = false; code.hidden = true; wait.textContent = 'Scan with WhatsApp on the phone. The code refreshes by itself.'; }
+    else { qr.hidden = true; code.hidden = true; wait.textContent = state.status === 'connecting' ? 'Starting WhatsApp… this can take up to a minute.' : 'The code appears here.'; }
+  }
+  function showApp() {
+    if (mode === 'app') return;
+    mode = 'app'; $('wa-connect').hidden = true; $('wa-app').hidden = false;
+    $('wa-acc-phone').textContent = state.phone ? '+' + state.phone : '—';
+    $('wa-acc-name').textContent = state.name || '—';
+    $('wa-acc-since').textContent = state.connectedAt ? new Date(state.connectedAt).toLocaleString() : '—';
+    $('wa-who').textContent = `${$('wa-who').textContent.split(' · ')[0]} · +${state.phone || ''}`;
+    loadChats();
+  }
+  $('wa-start')?.addEventListener('click', async () => { try { await post('/connect', {}); state.status = 'connecting'; showConnect(); } catch (e) { showConnect(e.message); } }, sig);
+  $('wa-phone-toggle')?.addEventListener('click', () => { $('wa-phone-form').hidden = !$('wa-phone-form').hidden; }, sig);
+  $('wa-phone-form')?.addEventListener('submit', async (ev) => { ev.preventDefault(); try { await post('/connect', new FormData(ev.target)); state.status = 'connecting'; showConnect(); } catch (e) { showConnect(e.message); } }, sig);
+  $('wa-disconnect')?.addEventListener('click', async () => {
+    const ok = window.SWMConfirm ? await window.SWMConfirm({ heading: 'Disconnect WhatsApp?', text: 'This church\'s WhatsApp will be unlinked. Scheduled posts will wait until it is linked again.', accept: 'Disconnect' }) : confirm('Disconnect WhatsApp?');
+    if (!ok) return;
+    try { await post('/disconnect', {}); mode = ''; state = {}; refreshState(); } catch (e) { alert(e.message); }
+  }, sig);
+
+  // ── tabs ──
+  root.querySelectorAll('.wa-tab').forEach((t) => t.addEventListener('click', () => {
+    root.querySelectorAll('.wa-tab').forEach((x) => { x.classList.toggle('is-on', x === t); x.setAttribute('aria-selected', String(x === t)); });
+    root.querySelectorAll('.wa-pane').forEach((p) => { p.hidden = p.dataset.pane !== t.dataset.tab; });
+    if (t.dataset.tab === 'scheduled') loadPosts();
+    if (t.dataset.tab === 'post') loadTargets();
+  }, sig));
+
+  // ── chats ──
+  let chats = [], filter = '', openJid = null, oldest = null, replyTo = null;
+  const avatarCache = new Map();
+  async function avatar(el, jid, name) {
+    el.textContent = initials(name);
+    if (!avatarCache.has(jid)) avatarCache.set(jid, getJSON('/avatar.json?jid=' + encodeURIComponent(jid)).then((j) => j.url).catch(() => null));
+    const url = await avatarCache.get(jid);
+    if (url) el.innerHTML = `<img src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer">`;
+  }
+  async function loadChats() {
+    try { chats = (await getJSON('/chats.json?filter=' + filter)).chats || []; } catch (e) { $('wa-chatlist').innerHTML = `<li class="wa-error m-3">${esc(e.message)}</li>`; return; }
+    renderChats();
+    const unread = chats.reduce((n, c) => n + (c.unread ? 1 : 0), 0); const pill = $('wa-unread'); pill.hidden = !unread; pill.textContent = unread;
+  }
+  function renderChats() {
+    const needle = $('wa-search').value.trim().toLowerCase();
+    const list = chats.filter((c) => !needle || c.name.toLowerCase().includes(needle) || c.jid.includes(needle));
+    $('wa-chatlist').innerHTML = list.length ? list.map((c) => `<li><button type="button" class="wa-chat ${c.jid === openJid ? 'is-on' : ''}" data-jid="${esc(c.jid)}">
+      <span class="wa-avatar" data-av="${esc(c.jid)}" data-name="${esc(c.name)}"></span>
+      <span class="wa-chat-mid"><span class="wa-chat-name block">${c.kind === 'group' ? '<i class="ri-group-line"></i> ' : c.kind === 'channel' ? '<i class="ri-broadcast-line"></i> ' : ''}${esc(c.name)}</span>
+      <span class="wa-chat-last block">${c.last ? (c.last.fromMe ? 'You: ' : '') + esc(c.last.text) : ''}</span></span>
+      <span class="wa-chat-end"><span>${listTime(c.t)}</span>${c.unread ? `<span class="wa-unread">${c.unread}</span>` : (c.muted ? '<i class="ri-volume-mute-line"></i>' : '')}</span></button></li>`).join('')
+      : '<li class="wa-muted p-4">No chats here.</li>';
+    $('wa-chatlist').querySelectorAll('[data-av]').forEach((el) => avatar(el, el.dataset.av, el.dataset.name));
+  }
+  $('wa-search').addEventListener('input', renderChats, sig);
+  root.querySelectorAll('.wa-chip').forEach((b) => b.addEventListener('click', () => { filter = b.dataset.filter; root.querySelectorAll('.wa-chip').forEach((x) => x.classList.toggle('is-on', x === b)); loadChats(); }, sig));
+  $('wa-chatlist').addEventListener('click', (e) => { const b = e.target.closest('.wa-chat'); if (b) openChat(b.dataset.jid); }, sig);
+
+  function msgHTML(m, isGroup) {
+    const media = m.media ? (() => { const src = q('/media?id=' + encodeURIComponent(m.id));
+      if (m.type === 'image' || m.type === 'sticker') return `<a href="${src}" target="_blank" rel="noopener"><img src="${src}" alt="${esc(m.text || 'Photo')}" loading="lazy"></a>`;
+      if (m.type === 'video') return `<video controls preload="none" src="${src}"></video>`;
+      if (m.type === 'ptt' || m.type === 'audio') return `<audio controls preload="none" src="${src}"></audio>`;
+      return `<a class="wa-doc" href="${src}" download="${esc(m.filename || 'file')}"><i class="ri-file-text-line text-xl"></i>${esc(m.filename || 'Document')}</a>`; })() : '';
+    const body = m.type === 'revoked' ? '<i class="wa-muted">This message was deleted</i>' : m.type === 'location' && m.location ? `<a class="underline" target="_blank" rel="noopener" href="https://maps.google.com/?q=${m.location.lat},${m.location.lng}">📍 Location</a>` : linkify(m.text);
+    const tick = m.fromMe ? (m.ack >= 3 ? '<i class="ri-check-double-line read" title="Read"></i>' : m.ack === 2 ? '<i class="ri-check-double-line" title="Delivered"></i>' : m.ack === 1 ? '<i class="ri-check-line" title="Sent"></i>' : '<i class="ri-time-line" title="Sending"></i>') : '';
+    return `<div class="wa-msg ${m.fromMe ? 'me' : ''}" data-id="${esc(m.id)}">
+      ${isGroup && !m.fromMe && m.authorName ? `<div class="wa-msg-author">${esc(m.authorName)}</div>` : ''}
+      ${m.quoted ? `<div class="wa-msg-quote">${esc(m.quoted.text)}</div>` : ''}${media}${body ? `<div>${body}</div>` : ''}
+      <div class="wa-msg-meta"><button type="button" class="wa-msg-reply" data-reply="${esc(m.id)}" data-text="${esc((m.text || m.type).slice(0, 80))}">Reply</button>${clock(m.t)} ${tick}</div></div>`;
+  }
+  function renderMessages(msgs, isGroup, prepend) {
+    const box = $('wa-msgs'); let html = '', lastDay = '';
+    msgs.forEach((m) => { const d = dayLabel(m.t); if (d !== lastDay) { html += `<div class="wa-day">${d}</div>`; lastDay = d; } html += msgHTML(m, isGroup); });
+    const more = msgs.length >= 40 ? '<button type="button" class="btn btn-secondary btn-sm wa-more" id="wa-older">Load earlier messages</button>' : '';
+    if (prepend) { const h = box.scrollHeight; box.querySelector('#wa-older')?.remove(); box.insertAdjacentHTML('afterbegin', more + html); box.scrollTop = box.scrollHeight - h; }
+    else { box.innerHTML = more + html; box.scrollTop = box.scrollHeight; }
+  }
+  async function openChat(jid, quiet) {
+    if (!jid) return;
+    const chat = chats.find((c) => c.jid === jid) || { jid, name: '+' + jid.split('@')[0], kind: jid.endsWith('@g.us') ? 'group' : 'user' };
+    const switching = openJid !== jid; openJid = jid;
+    $('wa-empty').hidden = true; $('wa-convo').hidden = false;
+    if (!quiet) root.querySelector('.wa-chats').classList.add('is-reading');
+    if (switching) { $('wa-convo-name').textContent = chat.name; $('wa-convo-sub').textContent = chat.kind === 'group' ? 'Group' : chat.kind === 'channel' ? 'Channel' : '+' + jid.split('@')[0]; avatar($('wa-convo-av'), jid, chat.name);
+      $('wa-msgs').innerHTML = '<p class="wa-muted text-center p-4">Loading messages…</p>'; clearReply(); renderChats(); }
+    try {
+      const j = await getJSON('/messages.json?jid=' + encodeURIComponent(jid));
+      if (openJid !== jid) return;
+      const box = $('wa-msgs'), atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+      if (j.name && switching) $('wa-convo-name').textContent = j.name;
+      oldest = j.messages[0]?.id || null;
+      if (switching || atBottom || !quiet) renderMessages(j.messages, chat.kind === 'group', false);
+      if (chat.unread) { chat.unread = 0; post('/seen', { jid }).catch(() => {}); renderChats(); }
+    } catch (e) { $('wa-msgs').innerHTML = `<p class="wa-error m-4">${esc(e.message)}</p>`; }
+  }
+  $('wa-msgs').addEventListener('click', async (e) => {
+    if (e.target.id === 'wa-older' && oldest) {
+      e.target.disabled = true;
+      try { const j = await getJSON(`/messages.json?jid=${encodeURIComponent(openJid)}&before=${encodeURIComponent(oldest)}`); oldest = j.messages[0]?.id || null; renderMessages(j.messages, openJid.endsWith('@g.us'), true); } catch (err) { e.target.disabled = false; }
+    }
+    const r = e.target.closest('[data-reply]'); if (r) { replyTo = r.dataset.reply; $('wa-reply-text').textContent = r.dataset.text; $('wa-reply').hidden = false; $('wa-text').focus(); }
+  }, sig);
+  const clearReply = () => { replyTo = null; $('wa-reply').hidden = true; };
+  $('wa-reply-x').addEventListener('click', clearReply, sig);
+  // Back (phones): leave the conversation so background refreshes never pull it open again.
+  $('wa-back').addEventListener('click', () => { root.querySelector('.wa-chats').classList.remove('is-reading'); openJid = null; renderChats(); }, sig);
+
+  // composer
+  const text = $('wa-text'), file = $('wa-file');
+  text.addEventListener('input', () => { text.style.height = 'auto'; text.style.height = Math.min(text.scrollHeight, 160) + 'px'; }, sig);
+  text.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('wa-compose').requestSubmit(); } }, sig);
+  file.addEventListener('change', () => { const f = file.files[0]; $('wa-file-chip').hidden = !f; $('wa-file-name').textContent = f ? f.name : ''; $('wa-voice-wrap').hidden = !(f && f.type.startsWith('audio')); }, sig);
+  $('wa-file-x').addEventListener('click', () => { file.value = ''; file.dispatchEvent(new Event('change')); }, sig);
+  $('wa-compose').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const to = openJid;
+    if (!to || (!text.value.trim() && !file.files[0])) return;
+    const fd = new FormData(); fd.append('to', to); fd.append('text', text.value);
+    if (file.files[0]) fd.append('file', file.files[0]);
+    if ($('wa-voice').checked) fd.append('voice', '1');
+    if (replyTo) fd.append('quotedId', replyTo);
+    const btn = e.target.querySelector('.wa-send'); btn.disabled = true;
+    const pending = text.value; text.value = ''; text.style.height = 'auto';
+    try { await post('/send', fd); file.value = ''; file.dispatchEvent(new Event('change')); clearReply(); if (openJid === to) await openChat(to, true); loadChats(); }
+    catch (err) { text.value = pending; alert(err.message); }
+    finally { btn.disabled = false; text.focus(); }
+  }, sig);
+
+  // new chat by number
+  const dlg = $('wa-newchat');
+  $('wa-new').addEventListener('click', () => dlg.showModal(), sig);
+  $('wa-newchat-x').addEventListener('click', () => dlg.close(), sig);
+  $('wa-newchat-form').addEventListener('submit', (e) => { const n = new FormData(e.target).get('to').replace(/\D/g, ''); if (n.length >= 7) { openChat(n + '@c.us'); e.target.reset(); } }, sig);
+
+  function onActivity() { if (mode !== 'app') return; loadChats(); if (openJid) openChat(openJid, true); }
+
+  // ── post to many ──
+  let targets = null; const picked = new Map();
+  async function loadTargets() {
+    if (targets) return renderTargets();
+    $('wa-targets').innerHTML = '<li class="wa-muted p-3">Loading your chats, groups and channels…</li>';
+    try { const t = await getJSON('/targets.json'); const seen = new Set();
+      targets = [...(t.channels || []).map((x) => ({ ...x, kind: 'Channel' })), ...(t.groups || []).map((x) => ({ ...x, kind: 'Group' })), ...chats.filter((c) => c.kind === 'user').map((c) => ({ jid: c.jid, name: c.name, kind: 'Chat' }))].filter((x) => !seen.has(x.jid) && seen.add(x.jid));
+    } catch (e) { $('wa-targets').innerHTML = `<li class="wa-error m-2">${esc(e.message)}</li>`; return; }
+    renderTargets();
+  }
+  function renderTargets() {
+    const n = $('wa-target-q').value.trim().toLowerCase();
+    const list = (targets || []).filter((t) => !picked.has(t.jid) && (!n || t.name.toLowerCase().includes(n))).slice(0, 120);
+    $('wa-targets').innerHTML = list.map((t) => `<li><button type="button" data-jid="${esc(t.jid)}"><i class="${t.kind === 'Group' ? 'ri-group-line' : t.kind === 'Channel' ? 'ri-broadcast-line' : 'ri-user-line'}"></i>${esc(t.name)}<span class="wa-kind">${t.kind}</span></button></li>`).join('') || '<li class="wa-muted p-3">Nothing matches.</li>';
+    $('wa-picked').innerHTML = picked.size ? [...picked.values()].map((t) => `<span class="wa-tag">${esc(t.name)}<button type="button" data-unpick="${esc(t.jid)}" aria-label="Remove ${esc(t.name)}"><i class="ri-close-line"></i></button></span>`).join('') : '<span class="wa-muted">Nothing chosen yet.</span>';
+  }
+  $('wa-target-q').addEventListener('input', renderTargets, sig);
+  $('wa-targets').addEventListener('click', (e) => { const b = e.target.closest('[data-jid]'); if (!b) return; const t = targets.find((x) => x.jid === b.dataset.jid); if (t) picked.set(t.jid, t); renderTargets(); }, sig);
+  $('wa-picked').addEventListener('click', (e) => { const b = e.target.closest('[data-unpick]'); if (b) { picked.delete(b.dataset.unpick); renderTargets(); } }, sig);
+
+  function whenToggle(form) {
+    form.querySelectorAll('[name=when]').forEach((r) => r.addEventListener('change', () => {
+      const later = form.querySelector('[name=when]:checked').value === 'later'; const dt = form.querySelector('[name=send_at]'); dt.hidden = !later; dt.required = later;
+      form.querySelector('[type=submit] span').textContent = later ? 'Schedule' : (form.id === 'wa-status' ? 'Post status' : 'Send');
+    }, sig));
+  }
+  async function submitPost(form, kind) {
+    const err = form.querySelector('.wa-error'); err.hidden = true;
+    const fd = new FormData(form); fd.append('kind', kind);
+    if (kind === 'message') fd.append('targets', JSON.stringify([...picked.values()].map((t) => ({ jid: t.jid, name: t.name }))));
+    if (form.querySelector('[name=when]:checked').value !== 'later') fd.delete('send_at');
+    fd.delete('when');
+    const btn = form.querySelector('[type=submit]'); btn.disabled = true;
+    try {
+      const r = await post('/posts', fd);
+      if (r.status === 'failed') throw new Error(r.error || 'It could not be sent.');
+      form.reset(); form.querySelector('[name=send_at]').hidden = true; picked.clear(); renderTargets();
+      const msg = r.status === 'pending' ? (fd.get('send_at') ? 'Scheduled. You can see it under Scheduled.' : `Waiting to send: ${r.error || ''}`) : r.status === 'partial' ? `Sent, but some could not be delivered: ${r.error}` : 'Sent.';
+      err.hidden = false; err.style.color = 'var(--color-ok)'; err.style.background = 'var(--color-ok-bg)'; err.textContent = msg;
+    } catch (e2) { err.hidden = false; err.style.color = ''; err.style.background = ''; err.textContent = e2.message; }
+    finally { btn.disabled = false; }
+  }
+  const postForm = $('wa-post'), statusForm = $('wa-status');
+  whenToggle(postForm); whenToggle(statusForm);
+  postForm.addEventListener('submit', (e) => { e.preventDefault(); if (!picked.size) { const err = postForm.querySelector('.wa-error'); err.hidden = false; err.textContent = 'Choose at least one chat, group or channel.'; return; } submitPost(postForm, 'message'); }, sig);
+  statusForm.addEventListener('submit', (e) => { e.preventDefault(); submitPost(statusForm, 'status'); }, sig);
+
+  // ── scheduled ──
+  const badge = { pending: ['Scheduled', 'badge-gold'], sending: ['Sending', 'badge-warn'], sent: ['Sent', 'badge-ok'], partial: ['Partly sent', 'badge-warn'], failed: ['Failed', 'badge-bad'], cancelled: ['Cancelled', 'badge-neut'] };
+  async function loadPosts() {
+    try { const { posts } = await getJSON('/posts.json');
+      $('wa-posts').innerHTML = posts.length ? posts.map((p) => { const [label, cls] = badge[p.status] || [p.status, 'badge-neut'];
+        return `<li><i class="${p.kind === 'status' ? 'ri-donut-chart-line' : 'ri-send-plane-line'} text-xl text-gold-text"></i><div class="wa-post-mid">
+          <p class="font-bold">${p.kind === 'status' ? 'Status' : 'To ' + esc(p.targets.slice(0, 4).join(', ')) + (p.targets.length > 4 ? ` and ${p.targets.length - 4} more` : '')}</p>
+          <p class="text-ink-2 text-[14px]">${esc(p.text) || (p.media ? '<i>' + esc(p.media) + '</i>' : '')}</p>
+          <p class="wa-muted text-[12.5px] mt-1">${esc(p.when)}${p.by ? ' · ' + esc(p.by) : ''}${p.error ? ' · ' + esc(p.error) : ''}</p></div>
+          <div class="flex flex-col items-end gap-2"><span class="badge ${cls}">${label}</span>${p.can_cancel ? `<button type="button" class="btn btn-secondary btn-sm" data-cancel="${p.id}">Cancel</button>` : ''}</div></li>`; }).join('')
+        : '<li class="wa-muted p-4">Nothing scheduled or sent yet.</li>';
+    } catch (e) { $('wa-posts').innerHTML = `<li class="wa-error m-3">${esc(e.message)}</li>`; }
+  }
+  $('wa-posts').addEventListener('click', async (e) => { const b = e.target.closest('[data-cancel]'); if (!b) return; try { await post(`/posts/${b.dataset.cancel}/cancel`, {}); loadPosts(); } catch (err) { alert(err.message); } }, sig);
+
+  refreshState();
+  window.__swmWaTimer = setInterval(() => { if (!document.hidden) refreshState(); }, 3000);
+})();
+</script>
+{% endblock %}
