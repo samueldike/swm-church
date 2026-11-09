@@ -30,12 +30,12 @@
   --color-gold-tint: #f4e7c4;
   --color-gold-hi: #f0d68e;
 
-  /* Chrome (sidebar ground): light, like the site header */
-  --color-chrome: #ffffff;
-  --color-chrome-2: #f8f6f1;
-  --color-chrome-line: #ebe8e1;
-  --color-chrome-text: #4d4d4d;
-  --color-chrome-ink: #161616;
+  /* Chrome (sidebar ground): near-black, with the gold active tab running into the white page */
+  --color-chrome: #161616;
+  --color-chrome-2: #2a2927;
+  --color-chrome-line: #2e2d2a;
+  --color-chrome-text: #ecebe8;
+  --color-chrome-ink: #ffffff;
   --color-on-gold: #161616;
 
   /* Status */
@@ -55,7 +55,7 @@
   --color-secondary: #161616;
   --color-secondary-light: #2a2a2a;
   --color-background-light: #ffffff;
-  --color-sidebar-bg: #ffffff;
+  --color-sidebar-bg: #161616;
 }
 
 @layer components {

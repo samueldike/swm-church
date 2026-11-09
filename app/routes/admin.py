@@ -198,6 +198,10 @@ def _admin_theme_css(settings: dict) -> str:
             decls += ["--color-chrome-ink: #ffffff;", "--color-chrome-text: #c9c4ba;",
                       f"--color-chrome-2: color-mix(in srgb, {colors['sidebar']} 82%, white);",
                       f"--color-chrome-line: color-mix(in srgb, {colors['sidebar']} 80%, white);"]
+        else:
+            decls += ["--color-chrome-ink: #161616;", "--color-chrome-text: #3d3d3d;",
+                      f"--color-chrome-2: color-mix(in srgb, {colors['sidebar']} 90%, black);",
+                      f"--color-chrome-line: color-mix(in srgb, {colors['sidebar']} 88%, black);"]
     return " ".join(decls)
 
 
