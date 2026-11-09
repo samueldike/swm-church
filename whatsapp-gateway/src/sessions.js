@@ -218,14 +218,17 @@ function probeLogin(id, client) {
   setTimeout(tick, 2000).unref?.();
 }
 
+// Only a real WhatsApp id counts ("2348012345678@c.us"); the device suffix (":12") is dropped.
+const asJid = j => { const m = String(j || '').match(/^(\d+)(?::\d+)?@(c\.us|s\.whatsapp\.net)$/); return m ? `${m[1]}@c.us` : null; };
+
 async function markConnected(id, client) {
   let jid = null;
   for (let i = 0; i < 5 && !jid; i++) {
     try {
       const host = await client.getHostDevice();
-      jid = widToString(host?.wid || host?.me || host?.id) || null;
+      jid = asJid(widToString(host?.wid || host?.me || host?.id));
     } catch { /* retry */ }
-    if (!jid) { try { jid = widToString(await client.getWid()) || null; } catch { jid = null; } }
+    if (!jid) { try { jid = asJid(widToString(await client.getWid())); } catch { jid = null; } }
     if (!jid) {
       try {
         jid = widToString(await client.page.evaluate(() => {
@@ -240,7 +243,8 @@ async function markConnected(id, client) {
             if (m) w = `${m[1]}@c.us`;
           }
           return w;
-        })) || null;
+        }));
+        jid = asJid(jid);
       } catch { jid = null; }
     }
     if (jid && !jid.includes('@')) jid = null;
