@@ -36,7 +36,12 @@ export const clientOf = id => sessions.get(id)?.client || null;
 export function widToString(v) {
   if (!v) return '';
   if (typeof v === 'string') return v;
-  if (typeof v === 'object' && '_serialized' in v) return String(v._serialized || '');
+  if (typeof v === 'object') {
+    if (v._serialized) return String(v._serialized);
+    if (v.user && v.server) return `${v.user}@${v.server}`;          // WA-JS wid objects
+    if (v.wid || v.id) return widToString(v.wid || v.id);
+    return '';
+  }
   return String(v);
 }
 export const phoneFromJid = jid => (jid || '').split('@')[0]?.split(':')[0] || '';
@@ -220,11 +225,19 @@ async function markConnected(id, client) {
       const host = await client.getHostDevice();
       jid = widToString(host?.wid || host?.me || host?.id) || null;
     } catch { /* retry */ }
-    if (!jid) { try { jid = await client.getWid(); } catch { jid = null; } }
+    if (!jid) { try { jid = widToString(await client.getWid()) || null; } catch { jid = null; } }
+    if (!jid) {
+      try {
+        jid = widToString(await client.page.evaluate(() => {
+          const w = window.WPP?.conn?.getMyUserId?.();
+          return w ? (w._serialized || (w.user && w.server ? `${w.user}@${w.server}` : null)) : null;
+        })) || null;
+      } catch { jid = null; }
+    }
     if (jid && !jid.includes('@')) jid = null;
     if (!jid && i < 4) await new Promise(r => setTimeout(r, 2000));
   }
-  if (!jid) return;
+  if (!jid) { log.warn({ id }, 'linked but the account id could not be read yet'); return; }
   const e = sessions.get(id);
   if (e) e.wasConnected = true;
   let name = '';
