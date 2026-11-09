@@ -12,7 +12,7 @@
 <script src="{{ url_for('static', path='js/turbo.es2017-umd.js') }}" defer></script>
 <script src="{{ url_for('static', path='js/live-actions.js') }}?v=2" defer></script>
 
-<header class="bg-surface border-b border-line flex-shrink-0 z-20">
+<header id="admin-topbar" class="bg-surface border-b border-line flex-shrink-0 z-20">
   <div class="flex items-center justify-between px-4 md:px-6 h-14 gap-3">
     <div class="flex items-center gap-2.5 min-w-0">
       <button id="admin-sidebar-open" type="button" class="lg:hidden tap-44 inline-flex items-center justify-center rounded-full text-ink-2 hover:text-gold-text hover:bg-sunken flex-shrink-0" aria-label="Open menu">
@@ -135,6 +135,23 @@
     syncThemeButton();
   });
   if (!sidebar || !overlay) return;
+  // Desktop icon rail. Default comes from the server (data-rail-default); a choice is remembered per page.
+  const railBtn = document.getElementById('admin-sidebar-rail');
+  const railKey = 'swm-rail:' + (sidebar.dataset.railPage || '');
+  const setRail = (on) => {
+    sidebar.classList.toggle('is-rail', on);
+    railBtn?.setAttribute('aria-pressed', on ? 'true' : 'false');
+    const label = on ? 'Expand menu' : 'Collapse menu';
+    railBtn?.setAttribute('aria-label', label); railBtn?.setAttribute('title', label);
+    const ic = railBtn?.querySelector('i'); if (ic) ic.className = (on ? 'ri-menu-unfold-line' : 'ri-menu-fold-line') + ' text-base w-5 text-center flex-shrink-0';
+    const tx = railBtn?.querySelector('span'); if (tx) tx.textContent = label;
+  };
+  let railSaved = null; try { railSaved = localStorage.getItem(railKey); } catch (_) {}
+  setRail(railSaved ? railSaved === 'on' : sidebar.dataset.railDefault === '1');
+  railBtn?.addEventListener('click', () => {
+    const on = !sidebar.classList.contains('is-rail'); setRail(on);
+    try { localStorage.setItem(railKey, on ? 'on' : 'off'); } catch (_) {}
+  }, listenerOptions);
   const open = () => { sidebar.classList.remove('-translate-x-full'); overlay.classList.remove('hidden'); body.classList.add('overflow-hidden'); };
   const close = () => { sidebar.classList.add('-translate-x-full'); overlay.classList.add('hidden'); body.classList.remove('overflow-hidden'); };
   openBtn?.addEventListener('click', open, listenerOptions);
