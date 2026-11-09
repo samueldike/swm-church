@@ -229,15 +229,34 @@ async function markConnected(id, client) {
     if (!jid) {
       try {
         jid = widToString(await client.page.evaluate(() => {
-          const w = window.WPP?.conn?.getMyUserId?.();
-          return w ? (w._serialized || (w.user && w.server ? `${w.user}@${w.server}` : null)) : null;
+          const str = (w) => w ? (typeof w === 'string' ? w : (w._serialized || (w.user && w.server ? `${w.user}@${w.server}` : null))) : null;
+          let w = null;
+          try { w = str(window.WPP?.conn?.getMyUserId?.()); } catch { /* not ready */ }
+          if (!w) try { w = str(window.WPP?.whatsapp?.UserPrefs?.getMaybeMeUser?.()); } catch { /* not ready */ }
+          if (!w) {
+            // WhatsApp Web keeps the account id in localStorage, e.g. "\"2348012345678:5@c.us\""
+            const raw = localStorage.getItem('last-wid-md') || localStorage.getItem('last-wid') || '';
+            const m = raw.replace(/"/g, '').match(/^(\d+)(?::\d+)?@(c\.us|s\.whatsapp\.net)$/);
+            if (m) w = `${m[1]}@c.us`;
+          }
+          return w;
         })) || null;
       } catch { jid = null; }
     }
     if (jid && !jid.includes('@')) jid = null;
     if (!jid && i < 4) await new Promise(r => setTimeout(r, 2000));
   }
-  if (!jid) { log.warn({ id }, 'linked but the account id could not be read yet'); return; }
+  if (!jid) {
+    let seen = null;
+    try {
+      seen = await client.page.evaluate(() => ({
+        wpp: typeof window.WPP, conn: typeof window.WPP?.conn?.getMyUserId,
+        ls: Object.keys(localStorage).filter(k => /wid/i.test(k)).map(k => [k, String(localStorage.getItem(k)).slice(0, 40)]),
+      }));
+    } catch (err) { seen = String(err?.message || err).slice(0, 200); }
+    log.warn({ id, seen }, 'linked but the account id could not be read yet');
+    return;
+  }
   const e = sessions.get(id);
   if (e) e.wasConnected = true;
   let name = '';
