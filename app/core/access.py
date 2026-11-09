@@ -114,7 +114,7 @@ _RULES: list[tuple[re.Pattern, str, tuple[str, ...] | None]] = [
     (re.compile(r"^/departments/create$"), "departments.manage", ("GET",)),
     (re.compile(r"^/departments/\d+/edit$"), "departments.manage", ("GET",)),
     (re.compile(r"^/departments(/|$)"), "departments.view", ("GET",)),
-    (re.compile(r"^/(sliders|photos|program-flyers|stories|publications|subscribers|campaigns)(/|$)"), "media", None),
+    (re.compile(r"^/(sliders|photos|program-flyers|stories|blog|publications|subscribers|campaigns)(/|$)"), "media", None),
     (re.compile(r"^/analytics(/|$)"), "analytics", None),
     (re.compile(r"^/donations(/|$)"), "donations", None),
     (re.compile(r"^/remittances(/|$)"), "remittances", None),

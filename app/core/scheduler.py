@@ -168,6 +168,9 @@ async def _loop() -> None:
             from app.core.whatsapp import process_due as whatsapp_due
 
             await whatsapp_due()
+            from app.core.blog import publish_due
+
+            await publish_due()
             if datetime.utcnow() - last_housekeeping > timedelta(hours=24):
                 await housekeeping()
                 last_housekeeping = datetime.utcnow()

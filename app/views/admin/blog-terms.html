@@ -1,0 +1,113 @@
+{% extends "layouts/admin_base.html" %}
+{% block title %}{{ 'Categories' if kind == 'cat' else 'Tags' }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}Blog{% endblock %}
+{% block topbar_subtitle %}{{ 'Categories' if kind == 'cat' else 'Tags' }}{% endblock %}
+{% block topbar_icon %}{{ 'ri-folder-2-line' if kind == 'cat' else 'ri-price-tag-3-line' }}{% endblock %}
+
+{% block content %}
+{% set one = 'category' if kind == 'cat' else 'tag' %}
+<div class="wp">
+  <div class="wp-head">
+    <h1 class="wp-h1">{{ 'Categories' if kind == 'cat' else 'Tags' }}</h1>
+    <nav class="wp-subnav" aria-label="Blog">
+      <a href="{{ url_for('admin_blog') }}">All Posts</a>
+      <a href="{{ url_for('admin_blog_new') }}" data-turbo="false">Add New Post</a>
+      <a href="{{ url_for('admin_blog_categories') }}" class="{{ 'is-on' if kind == 'cat' else '' }}" {% if kind == 'cat' %}aria-current="page"{% endif %}>Categories</a>
+      <a href="{{ url_for('admin_blog_tags') }}" class="{{ 'is-on' if kind == 'tag' else '' }}" {% if kind == 'tag' %}aria-current="page"{% endif %}>Tags</a>
+    </nav>
+  </div>
+
+  <div class="wp-terms">
+    <div class="panel p-5 self-start">
+      {% if kind == 'cat' %}
+        <h2 class="font-extrabold text-[16px] mb-3">Add New Category</h2>
+        <form method="POST" action="{{ url_for('admin_blog_terms') }}" class="grid gap-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="kind" value="cat"><input type="hidden" name="op" value="add">
+          <label><span class="field-label">Name</span><input name="new_name" class="field-input" maxlength="60" required></label>
+          <p class="text-[12.5px] text-ink-3">The name is how it appears on the website. Categories are also listed in Settings → Lists.</p>
+          <div><button class="btn btn-primary btn-sm" type="submit">Add New Category</button></div>
+        </form>
+      {% else %}
+        <h2 class="font-extrabold text-[16px] mb-2">About tags</h2>
+        <p class="text-[13.5px] text-ink-2">Tags are added while writing a post (the Tags box in the editor). Here you can rename a tag or remove it from every post.</p>
+      {% endif %}
+    </div>
+
+    <div class="panel-flush">
+      <table class="dtable dtable-responsive">
+        <thead><tr><th>Name</th><th>Slug</th><th class="text-right">Count</th></tr></thead>
+        <tbody>
+          {% for t in terms %}
+          <tr class="wp-row">
+            <td data-label="Name">
+              <strong>{{ t.name }}</strong>
+              <div class="wp-actions">
+                <button type="button" class="wp-link" data-rename="{{ loop.index }}">Rename</button> |
+                <button type="submit" form="del-{{ loop.index }}" class="wp-link wp-danger"
+                        data-turbo-confirm="Delete the {{ one }} “{{ t.name }}”? Posts keep their other {{ 'categories' if kind == 'cat' else 'tags' }}.">Delete</button> |
+                <a href="{{ url_for('admin_blog') }}{% if kind == 'cat' %}?cat={{ t.name|urlencode }}{% else %}?s={{ t.name|urlencode }}{% endif %}">View posts</a>
+              </div>
+              <form method="POST" action="{{ url_for('admin_blog_terms') }}" class="wp-rename" id="ren-{{ loop.index }}" hidden>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="op" value="rename"><input type="hidden" name="name" value="{{ t.name }}">
+                <label class="sr-only" for="ren-in-{{ loop.index }}">New name for {{ t.name }}</label>
+                <input id="ren-in-{{ loop.index }}" name="new_name" class="field-input" value="{{ t.name }}" maxlength="60" required>
+                <button class="btn btn-primary btn-sm" type="submit">Update</button>
+                <button class="btn btn-secondary btn-sm" type="button" data-rename-cancel="{{ loop.index }}">Cancel</button>
+              </form>
+              <form method="POST" action="{{ url_for('admin_blog_terms') }}" id="del-{{ loop.index }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="op" value="delete"><input type="hidden" name="name" value="{{ t.name }}">
+              </form>
+            </td>
+            <td data-label="Slug" class="text-ink-3">{{ t.slug }}</td>
+            <td data-label="Count" class="text-right">
+              {% if kind == 'cat' %}<a class="text-gold-text font-semibold" href="{{ url_for('admin_blog') }}?cat={{ t.name|urlencode }}">{{ t.count }}</a>{% else %}{{ t.count }}{% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" class="wp-none">No {{ 'categories' if kind == 'cat' else 'tags' }} found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<style>
+  .wp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 16px; }
+  .wp-h1 { font-size: 28px; font-weight: 800; }
+  .wp-subnav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+  .wp-subnav a { padding: 8px 12px; border-radius: 999px; font-weight: 700; font-size: 13.5px; color: var(--color-ink-2); }
+  .wp-subnav a:hover { background: var(--color-sunken); }
+  .wp-subnav a.is-on { background: var(--color-gold); color: var(--color-on-gold); }
+  .wp-terms { display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 960px) { .wp-terms { grid-template-columns: 320px minmax(0, 1fr); } }
+  .wp-actions { font-size: 13px; color: var(--color-line-2); margin-top: 4px; visibility: hidden; }
+  .wp-row:hover .wp-actions, .wp-row:focus-within .wp-actions { visibility: visible; }
+  .wp-actions a, .wp-link { color: var(--color-gold-text); font-weight: 600; background: none; border: 0; padding: 0; font-size: 13px; cursor: pointer; text-decoration: none; }
+  .wp-link:hover, .wp-actions a:hover { text-decoration: underline; }
+  .wp-danger { color: var(--color-bad) !important; }
+  .wp-rename { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .wp-rename[hidden] { display: none; }
+  .wp-rename .field-input { max-width: 260px; }
+  .wp-none { text-align: center; padding: 28px !important; color: var(--color-ink-3); }
+  @media (max-width: 860px) { .wp-actions { visibility: visible; } .wp-subnav { margin-left: 0; } }
+</style>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+(() => {
+  window.__swmTermsAbort?.abort();
+  const ctl = new AbortController(); window.__swmTermsAbort = ctl;
+  document.addEventListener('click', (e) => {
+    const r = e.target.closest('[data-rename]');
+    if (r) { const f = document.getElementById('ren-' + r.dataset.rename); f.hidden = false; f.querySelector('input[name=new_name]').select(); }
+    const c = e.target.closest('[data-rename-cancel]');
+    if (c) document.getElementById('ren-' + c.dataset.renameCancel).hidden = true;
+  }, { signal: ctl.signal });
+})();
+</script>
+{% endblock %}

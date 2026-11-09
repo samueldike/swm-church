@@ -51,12 +51,13 @@ def test_transcription_detail_has_edit():
     assert "admin_transcriptions_update" in p, "transcription update URL missing"
 
 
-def test_stories_template_exists():
-    assert pathlib.Path("app/views/admin/stories.html").exists(), (
-        "stories admin template missing"
-    )
-    p = pathlib.Path("app/views/admin/stories.html").read_text(encoding="utf-8")
-    assert "New Story" in p, "stories template incomplete"
+def test_blog_templates_exist():
+    posts = pathlib.Path("app/views/admin/blog-posts.html").read_text(encoding="utf-8")
+    assert "Add New Post" in posts and "Quick Edit" in posts and "Bulk actions" in posts
+    editor = pathlib.Path("app/views/admin/blog-editor.html").read_text(encoding="utf-8")
+    assert "admin_blog_save" in editor and "Are you ready to publish?" in editor
+    assert pathlib.Path("app/views/admin/blog-terms.html").exists()
+    assert not pathlib.Path("app/views/admin/stories.html").exists()
 
 
 def test_inquiries_template_guards_branch():

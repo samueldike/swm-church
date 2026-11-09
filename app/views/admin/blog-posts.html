@@ -1,0 +1,239 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import pager with context %}
+{% block title %}Posts | {{ siteName }}{% endblock %}
+{% block topbar_title %}Blog{% endblock %}
+{% block topbar_subtitle %}Posts{% endblock %}
+{% block topbar_icon %}ri-article-line{% endblock %}
+
+{% block content %}
+{% set qs = request.query_params %}
+{% macro link(status) -%}{{ url_for('admin_blog') }}{% if status != 'all' %}?post_status={{ status }}{% endif %}{%- endmacro %}
+{% macro sort(col, label) -%}
+  {% set next = 'asc' if (orderby == col and order == 'desc') else 'desc' %}
+  <a href="{{ request.url.include_query_params(orderby=col, order=next, page=1).path }}?{{ request.url.include_query_params(orderby=col, order=next, page=1).query }}" class="wp-sort">{{ label }}{% if orderby == col %}<i class="ri-arrow-{{ 'up' if order == 'asc' else 'down' }}-s-fill"></i>{% endif %}</a>
+{%- endmacro %}
+
+<div class="wp">
+  <div class="wp-head">
+    <h1 class="wp-h1">Posts</h1>
+    <a href="{{ url_for('admin_blog_new') }}" class="btn btn-secondary btn-sm" data-turbo="false">Add New Post</a>
+    <nav class="wp-subnav" aria-label="Blog">
+      <a href="{{ url_for('admin_blog') }}" class="is-on" aria-current="page">All Posts</a>
+      <a href="{{ url_for('admin_blog_new') }}" data-turbo="false">Add New Post</a>
+      <a href="{{ url_for('admin_blog_categories') }}">Categories</a>
+      <a href="{{ url_for('admin_blog_tags') }}">Tags</a>
+    </nav>
+  </div>
+
+  {% if undo %}
+  <form method="POST" action="{{ url_for('admin_blog_restore', post_id=undo|int) }}" class="wp-notice">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <span>1 post moved to the Trash.</span> <button type="submit" class="wp-link">Undo</button>
+  </form>
+  {% endif %}
+
+  <ul class="wp-status" aria-label="Filter by status">
+    {% set items = [('all', 'All', counts.all), ('mine', 'Mine', counts.mine), ('published', 'Published', counts.published), ('future', 'Scheduled', counts.future),
+                    ('draft', 'Drafts', counts.draft), ('pending', 'Pending', counts.pending), ('private', 'Private', counts.private), ('trash', 'Trash', counts.trash)] %}
+    {% for key, label, n in items if n or key in ('all', 'mine') %}
+      <li>
+        {% set on = (author == 'mine') if key == 'mine' else (post_status == key and author != 'mine') %}
+        <a href="{{ url_for('admin_blog') ~ ('?author=mine' if key == 'mine' else ('' if key == 'all' else '?post_status=' ~ key)) }}" class="{{ 'is-on' if on else '' }}" {% if on %}aria-current="page"{% endif %}>{{ label }} <span>({{ n }})</span></a>
+      </li>
+    {% endfor %}
+  </ul>
+
+  <form method="get" action="{{ url_for('admin_blog') }}" class="wp-search" role="search">
+    {% if post_status != 'all' %}<input type="hidden" name="post_status" value="{{ post_status }}">{% endif %}
+    <label class="sr-only" for="post-search">Search posts</label>
+    <input id="post-search" type="search" name="s" value="{{ s }}" class="field-input">
+    <button class="btn btn-secondary btn-sm" type="submit">Search Posts</button>
+  </form>
+
+  <form method="POST" action="{{ url_for('admin_blog_bulk') }}" id="wp-list">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="wp-tablenav">
+      <label class="sr-only" for="bulk">Bulk actions</label>
+      <select id="bulk" name="bulk" class="field-select wp-select">
+        <option value="">Bulk actions</option>
+        {% if post_status == 'trash' %}
+          <option value="restore">Restore</option><option value="delete">Delete permanently</option>
+        {% else %}
+          <option value="publish">Publish</option><option value="draft">Move to Draft</option><option value="trash">Move to Trash</option>
+        {% endif %}
+      </select>
+      <button class="btn btn-secondary btn-sm" type="submit">Apply</button>
+      <span class="wp-gap"></span>
+      <label class="sr-only" for="filter-m">Filter by date</label>
+      <select id="filter-m" name="m" form="wp-filter" class="field-select wp-select">
+        <option value="">All dates</option>
+        {% for key, label in months %}<option value="{{ key }}" {{ 'selected' if m == key else '' }}>{{ label }}</option>{% endfor %}
+      </select>
+      <label class="sr-only" for="filter-cat">Filter by category</label>
+      <select id="filter-cat" name="cat" form="wp-filter" class="field-select wp-select">
+        <option value="">All Categories</option>
+        {% for c in categories %}<option value="{{ c }}" {{ 'selected' if cat == c else '' }}>{{ c }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-secondary btn-sm" type="submit" form="wp-filter">Filter</button>
+      {% if post_status == 'trash' and counts.trash %}
+        <button class="btn btn-danger btn-sm" type="submit" form="wp-empty" data-turbo-confirm="Permanently delete every post in the Trash?">Empty Trash</button>
+      {% endif %}
+      <span class="wp-count">{{ pagination.total }} item{{ '' if pagination.total == 1 else 's' }}</span>
+    </div>
+
+    <div class="panel-flush">
+      <table class="dtable wp-table">
+        <thead>
+          <tr>
+            <th class="wp-cb"><input type="checkbox" class="field-checkbox" id="cb-all" aria-label="Select all posts"></th>
+            <th>{{ sort('title', 'Title') }}</th>
+            <th class="wp-hide-m">Author</th>
+            <th class="wp-hide-m">Categories</th>
+            <th class="wp-hide-m">Tags</th>
+            <th>{{ sort('date', 'Date') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in posts %}{% set p = row.p %}
+          <tr class="wp-row" id="post-{{ p.id }}">
+            <td class="wp-cb"><input type="checkbox" class="field-checkbox" name="post" value="{{ p.id }}" aria-label="Select “{{ p.title }}”"></td>
+            <td class="wp-title-cell">
+              <strong>
+                {% if p.status == 'trash' %}<span>{{ p.title }}</span>{% else %}<a href="{{ url_for('admin_blog_edit', post_id=p.id) }}" data-turbo="false" class="wp-title">{{ p.title }}</a>{% endif %}
+                {% if p.status not in ('published', 'trash') %}<span class="wp-state"> — {{ statuses[p.status] }}</span>{% endif %}
+                {% if p.is_featured %}<span class="wp-state"> — Sticky</span>{% endif %}
+              </strong>
+              <div class="wp-actions">
+                {% if p.status == 'trash' %}
+                  <button type="submit" form="restore-{{ p.id }}" class="wp-link">Restore</button> |
+                  <button type="submit" form="delete-{{ p.id }}" class="wp-link wp-danger" data-turbo-confirm="Delete “{{ p.title }}” permanently?">Delete Permanently</button>
+                {% else %}
+                  <a href="{{ url_for('admin_blog_edit', post_id=p.id) }}" data-turbo="false">Edit</a> |
+                  <button type="button" class="wp-link" data-quick="{{ p.id }}">Quick Edit</button> |
+                  <button type="submit" form="trash-{{ p.id }}" class="wp-link wp-danger">Trash</button> |
+                  {% if p.status == 'published' %}<a href="{{ url_for('story_detail', slug=p.slug) }}" target="_blank" rel="noopener">View</a>
+                  {% else %}<a href="{{ url_for('admin_blog_preview_saved', post_id=p.id) }}" target="_blank" rel="noopener">Preview</a>{% endif %}
+                {% endif %}
+              </div>
+            </td>
+            <td class="wp-hide-m">{{ p.author_name or (p.creator.full_name if p.creator else '—') }}</td>
+            <td class="wp-hide-m">{% for c in row.cats %}<a href="{{ url_for('admin_blog') }}?cat={{ c|urlencode }}">{{ c }}</a>{{ ', ' if not loop.last }}{% else %}—{% endfor %}</td>
+            <td class="wp-hide-m">{{ row.tags|join(', ') or '—' }}</td>
+            <td class="wp-date">
+              {% if p.status == 'published' %}Published{% elif p.status == 'future' %}Scheduled{% elif p.status == 'private' %}Published{% else %}Last Modified{% endif %}<br>
+              {% set d = row.local if p.status in ('published', 'future', 'private') else row.modified %}
+              <span>{{ d.strftime('%Y/%m/%d at %I:%M %p').replace(' 0', ' ') if d else '—' }}</span>
+            </td>
+          </tr>
+          {# Quick Edit (hidden until "Quick Edit" is clicked) #}
+          <tr class="wp-quick" id="quick-{{ p.id }}" hidden>
+            <td colspan="6">
+              <fieldset class="wp-quick-in" form="q-{{ p.id }}">
+                <legend class="wp-quick-h">Quick Edit</legend>
+                <div class="wp-quick-grid">
+                  <label><span class="field-label">Title</span><input class="field-input" name="title" form="q-{{ p.id }}" value="{{ p.title }}"></label>
+                  <label><span class="field-label">Slug</span><input class="field-input" name="slug" form="q-{{ p.id }}" value="{{ p.slug }}"></label>
+                  <label><span class="field-label">Date</span><input class="field-input" type="datetime-local" name="publish_at" form="q-{{ p.id }}" value="{{ row.local.strftime('%Y-%m-%dT%H:%M') if row.local and p.published_at else '' }}"></label>
+                  <label><span class="field-label">Status</span>
+                    <select class="field-select" name="status" form="q-{{ p.id }}">
+                      {% for k in ('published', 'pending', 'draft', 'private') %}<option value="{{ k }}" {{ 'selected' if (p.status == k or (k == 'published' and p.status == 'future')) else '' }}>{{ statuses[k] }}</option>{% endfor %}
+                    </select></label>
+                  <div class="wp-quick-cats"><span class="field-label">Categories</span>
+                    {% for c in categories %}<label class="wp-check"><input type="checkbox" class="field-checkbox" name="categories" value="{{ c }}" form="q-{{ p.id }}" {{ 'checked' if c in row.cats else '' }}> {{ c }}</label>{% endfor %}
+                  </div>
+                  <label><span class="field-label">Tags (separate with commas)</span><textarea class="field-textarea" data-richtext="off" rows="3" name="tags" form="q-{{ p.id }}">{{ row.tags|join(', ') }}</textarea></label>
+                </div>
+                <div class="wp-quick-act">
+                  <button type="submit" form="q-{{ p.id }}" class="btn btn-primary btn-sm">Update</button>
+                  <button type="button" class="btn btn-secondary btn-sm" data-quick-cancel="{{ p.id }}">Cancel</button>
+                </div>
+              </fieldset>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="wp-none">{% if s %}No posts found for “{{ s }}”.{% elif post_status == 'trash' %}No posts found in Trash.{% else %}No posts found. <a href="{{ url_for('admin_blog_new') }}" data-turbo="false">Add your first post</a>.{% endif %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </form>
+  <div class="px-1">{{ pager(pagination) }}</div>
+
+  {# One small form per row action, outside the bulk form (forms cannot nest). #}
+  <form id="wp-filter" method="get" action="{{ url_for('admin_blog') }}">{% if post_status != 'all' %}<input type="hidden" name="post_status" value="{{ post_status }}">{% endif %}{% if s %}<input type="hidden" name="s" value="{{ s }}">{% endif %}</form>
+  <form id="wp-empty" method="POST" action="{{ url_for('admin_blog_empty_trash') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"></form>
+  {% for row in posts %}{% set p = row.p %}
+    <form id="trash-{{ p.id }}" method="POST" action="{{ url_for('admin_blog_trash', post_id=p.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"></form>
+    <form id="restore-{{ p.id }}" method="POST" action="{{ url_for('admin_blog_restore', post_id=p.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"></form>
+    <form id="delete-{{ p.id }}" method="POST" action="{{ url_for('admin_blog_delete', post_id=p.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"></form>
+    <form id="q-{{ p.id }}" method="POST" action="{{ url_for('admin_blog_quick', post_id=p.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"></form>
+  {% endfor %}
+</div>
+
+<style>
+  .wp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 10px; }
+  .wp-h1 { font-size: 28px; font-weight: 800; }
+  .wp-subnav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+  .wp-subnav a { padding: 8px 12px; border-radius: 999px; font-weight: 700; font-size: 13.5px; color: var(--color-ink-2); }
+  .wp-subnav a:hover { background: var(--color-sunken); }
+  .wp-subnav a.is-on { background: var(--color-gold); color: var(--color-on-gold); }
+  .wp-notice { display: flex; align-items: center; gap: 6px; padding: 10px 14px; margin-bottom: 10px; border-left: 4px solid var(--color-gold-text); background: var(--color-surface); border-radius: 0 10px 10px 0; box-shadow: 0 0 0 1px var(--color-line); font-size: 14px; }
+  .wp-status { display: flex; flex-wrap: wrap; gap: 2px 0; font-size: 14px; margin-bottom: 10px; }
+  .wp-status li + li::before { content: "|"; color: var(--color-line-2); margin: 0 8px; }
+  .wp-status a { color: var(--color-gold-text); font-weight: 600; text-decoration: none; }
+  .wp-status a.is-on { color: var(--color-ink); font-weight: 800; }
+  .wp-status span { color: var(--color-ink-3); font-weight: 400; }
+  .wp-search { display: flex; justify-content: flex-end; gap: 8px; margin: -38px 0 10px auto; max-width: 360px; }
+  .wp-tablenav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .wp-select { width: auto !important; min-width: 150px; }
+  .wp-gap { width: 6px; }
+  .wp-count { margin-left: auto; font-size: 13.5px; color: var(--color-ink-3); }
+  .wp-cb { width: 40px; }
+  .wp-sort { display: inline-flex; align-items: center; gap: 2px; color: inherit; }
+  .wp-title { font-size: 14.5px; color: var(--color-ink); }
+  .wp-title:hover { color: var(--color-gold-text); }
+  .wp-state { color: var(--color-ink-2); font-weight: 700; }
+  .wp-actions { font-size: 13px; color: var(--color-line-2); margin-top: 4px; visibility: hidden; }
+  .wp-row:hover .wp-actions, .wp-row:focus-within .wp-actions { visibility: visible; }
+  .wp-actions a, .wp-link { color: var(--color-gold-text); font-weight: 600; background: none; border: 0; padding: 0; font-size: 13px; cursor: pointer; text-decoration: none; }
+  .wp-actions a:hover, .wp-link:hover { text-decoration: underline; }
+  .wp-danger { color: var(--color-bad) !important; }
+  .wp-date { font-size: 13px; color: var(--color-ink-2); white-space: nowrap; }
+  .wp-none { text-align: center; padding: 28px !important; color: var(--color-ink-3); }
+  .wp-quick td { background: var(--color-sunken); }
+  .wp-quick-in { border: 0; padding: 6px 2px; margin: 0; }
+  .wp-quick-h { font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 10px; }
+  .wp-quick-grid { display: grid; gap: 12px 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .wp-quick-cats { display: flex; flex-direction: column; gap: 4px; max-height: 170px; overflow-y: auto; }
+  .wp-check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+  .wp-quick-act { display: flex; gap: 8px; margin-top: 12px; }
+  @media (max-width: 860px) {
+    .wp-hide-m { display: none; }
+    .wp-search { margin: 0 0 10px; max-width: none; }
+    .wp-actions { visibility: visible; }
+    .wp-subnav { margin-left: 0; }
+  }
+</style>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+(() => {
+  window.__swmBlogAbort?.abort();
+  const ctl = new AbortController(); window.__swmBlogAbort = ctl; const sig = { signal: ctl.signal };
+  const all = document.getElementById('cb-all');
+  all?.addEventListener('change', () => document.querySelectorAll('input[name="post"]').forEach((c) => { c.checked = all.checked; }), sig);
+  document.addEventListener('click', (e) => {
+    const q = e.target.closest('[data-quick]');
+    if (q) { const id = q.dataset.quick; document.getElementById('post-' + id).hidden = true; const row = document.getElementById('quick-' + id); row.hidden = false; row.querySelector('input').focus(); }
+    const c = e.target.closest('[data-quick-cancel]');
+    if (c) { const id = c.dataset.quickCancel; document.getElementById('quick-' + id).hidden = true; document.getElementById('post-' + id).hidden = false; }
+  }, sig);
+  document.getElementById('wp-list')?.addEventListener('submit', (e) => {
+    const act = e.target.querySelector('#bulk').value;
+    if (!act || !e.target.querySelector('input[name="post"]:checked')) { e.preventDefault(); alert('Choose one or more posts and a bulk action.'); return; }
+    if (act === 'delete' && !confirm('Permanently delete the selected posts?')) e.preventDefault();
+  }, sig);
+})();
+</script>
+{% endblock %}

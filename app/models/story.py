@@ -19,6 +19,10 @@ class Story(Base):
     author_name: Mapped[str | None] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(20), default="draft")
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Blog (WordPress-style): JSON lists of names; Trash remembers the status to restore.
+    categories: Mapped[str | None] = mapped_column(Text)
+    tags: Mapped[str | None] = mapped_column(Text)
+    trashed_status: Mapped[str | None] = mapped_column(String(20))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[int | None] = mapped_column(ForeignKey("admins.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(
@@ -29,4 +33,4 @@ class Story(Base):
         onupdate=lambda: datetime.utcnow(),
     )
 
-    creator = relationship("Admin")
+    creator = relationship("Admin", lazy="selectin")

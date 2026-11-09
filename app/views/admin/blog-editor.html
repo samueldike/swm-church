@@ -1,0 +1,392 @@
+{% extends "layouts/admin_base.html" %}
+{% block title %}{{ 'Edit Post' if post else 'Add New Post' }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}Blog{% endblock %}
+{% block topbar_subtitle %}{{ 'Edit Post' if post else 'Add New Post' }}{% endblock %}
+{% block topbar_icon %}ri-article-line{% endblock %}
+
+{% block extra_head %}
+<style>
+  .ed { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 0; margin: -16px; min-height: calc(100vh - 64px); }
+  @media (min-width: 640px) { .ed { margin: -24px; } }
+  .ed.no-side { grid-template-columns: minmax(0, 1fr) 0; }
+  .ed.no-side .ed-side { display: none; }
+  .ed-bar { grid-column: 1 / -1; position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 8px; padding: 8px 14px;
+            background: var(--color-surface); border-bottom: 1px solid var(--color-line); }
+  .ed-back { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; font-size: 13.5px; color: var(--color-ink-2); padding: 8px 10px; border-radius: 8px; }
+  .ed-back:hover { background: var(--color-sunken); }
+  .ed-state { font-size: 13px; color: var(--color-ink-3); margin-right: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ed-state b { color: var(--color-ink-2); }
+  .ed-icon { width: 40px; height: 40px; display: inline-grid; place-items: center; border-radius: 8px; border: 1px solid transparent; font-size: 18px; color: var(--color-ink-2); background: none; cursor: pointer; }
+  .ed-icon:hover { background: var(--color-sunken); }
+  .ed-icon[aria-pressed="true"] { background: var(--color-ink); color: #fff; }
+  .ed-main { padding: 36px 20px 80px; background: var(--color-surface); min-width: 0; }
+  .ed-canvas { max-width: 760px; margin: 0 auto; }
+  .ed-title { width: 100%; border: 0; outline: 0; resize: none; overflow: hidden; background: transparent; font-family: var(--font-display, inherit);
+              font-size: clamp(28px, 4vw, 40px); font-weight: 800; line-height: 1.15; color: var(--color-ink); padding: 0; margin-bottom: 8px; }
+  .ed-title::placeholder { color: var(--color-ink-3); }
+  .ed-link { font-size: 13px; color: var(--color-ink-3); margin-bottom: 18px; word-break: break-all; }
+  .ed-link a { color: var(--color-gold-text); }
+  .ed-canvas .admin-richtext-editor { min-height: 420px; font-size: 17px; line-height: 1.7; }
+  .ed-foot { margin-top: 10px; font-size: 12.5px; color: var(--color-ink-3); display: flex; gap: 14px; flex-wrap: wrap; }
+  .ed-side { border-left: 1px solid var(--color-line); background: var(--color-surface); overflow-y: auto; }
+  .ed-tabs { display: flex; border-bottom: 1px solid var(--color-line); }
+  .ed-tabs span { padding: 13px 16px; font-weight: 800; font-size: 13.5px; box-shadow: inset 0 -3px 0 var(--color-gold); }
+  .ed-panel { border-bottom: 1px solid var(--color-line); }
+  .ed-panel > summary { list-style: none; cursor: pointer; padding: 14px 16px; font-weight: 800; font-size: 13.5px; display: flex; justify-content: space-between; align-items: center; min-height: 44px; }
+  .ed-panel > summary::-webkit-details-marker { display: none; }
+  .ed-panel > summary::after { content: "\ea4e"; font-family: remixicon; font-weight: 400; font-size: 18px; color: var(--color-ink-3); }
+  .ed-panel[open] > summary::after { content: "\ea78"; }
+  .ed-body { padding: 0 16px 16px; display: grid; gap: 12px; font-size: 13.5px; }
+  .ed-row { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: center; gap: 8px; }
+  .ed-row > span:first-child { color: var(--color-ink-2); }
+  .ed-cats { max-height: 210px; overflow-y: auto; display: grid; gap: 6px; padding: 2px; }
+  .ed-check { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+  .ed-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; border: 1px solid var(--color-line-2); border-radius: 8px; background: var(--color-surface); }
+  .ed-chips input { flex: 1; min-width: 90px; border: 0; outline: 0; background: transparent; font-size: 13.5px; padding: 4px; }
+  .ed-chip { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 10px; border-radius: 999px; background: var(--color-sunken); font-size: 12.5px; font-weight: 600; }
+  .ed-chip button { width: 24px; height: 24px; border: 0; background: none; border-radius: 999px; cursor: pointer; color: var(--color-ink-3); }
+  .ed-chip button:hover { background: var(--color-line); color: var(--color-ink); }
+  .ed-sugg { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12.5px; }
+  .ed-sugg button { background: none; border: 0; padding: 2px 0; color: var(--color-gold-text); cursor: pointer; text-decoration: underline; }
+  .ed-img { border-radius: 10px; overflow: hidden; border: 1px solid var(--color-line); aspect-ratio: 16/9; background: var(--color-sunken); display: grid; place-items: center; color: var(--color-ink-3); }
+  .ed-img img { width: 100%; height: 100%; object-fit: cover; }
+  .ed-note { font-size: 12.5px; color: var(--color-ink-3); }
+  .ed-danger { color: var(--color-bad); font-weight: 700; background: none; border: 0; padding: 6px 0; cursor: pointer; text-align: left; }
+  .ed-danger:hover { text-decoration: underline; }
+  .ed-restore { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; margin-bottom: 16px; border-left: 4px solid var(--color-gold-text); background: var(--color-gold-tint); border-radius: 0 10px 10px 0; font-size: 13.5px; }
+  /* Pre-publish panel */
+  .ed-pre { position: fixed; top: 0; right: 0; bottom: 0; width: min(360px, 100vw); z-index: 60; background: var(--color-surface); box-shadow: -10px 0 40px rgba(0,0,0,.14);
+            display: flex; flex-direction: column; }
+  .ed-pre[hidden] { display: none; }
+  .ed-pre-top { display: flex; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--color-line); }
+  .ed-pre-in { padding: 18px 16px; display: grid; gap: 14px; overflow-y: auto; font-size: 14px; }
+  .ed-pre-in h2 { font-size: 18px; font-weight: 800; }
+  .ed-pre-in dl { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; }
+  .ed-pre-in dt { color: var(--color-ink-3); }
+  .ed-pre-in dd { font-weight: 700; }
+  @media (max-width: 900px) {
+    .ed, .ed.no-side { grid-template-columns: minmax(0, 1fr); }
+    .ed-side { border-left: 0; border-top: 1px solid var(--color-line); }
+    .ed-state { display: none; }
+    .ed-hide-s { display: none; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% set st = post.status if post else 'new' %}
+{% set live = st in ('published', 'private', 'future') %}
+<form id="ed-form" method="POST" action="{{ url_for('admin_blog_save') }}" enctype="multipart/form-data" data-turbo="false"
+      data-key="swm-blog-{{ post.id if post else 'new' }}" data-updated="{{ post.updated_at.timestamp()|int if post and post.updated_at else 0 }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="id" value="{{ post.id if post else '' }}">
+  <input type="hidden" name="current_image" value="{{ post.featured_image if post and post.featured_image else '' }}">
+
+  <div class="ed" id="ed">
+    <div class="ed-bar">
+      <a href="{{ url_for('admin_blog') }}" class="ed-back" data-turbo="false"><i class="ri-arrow-left-s-line text-lg"></i><span class="ed-hide-s">Posts</span></a>
+      <span class="ed-state" id="ed-state">
+        {% if st == 'new' %}New post{% else %}<b>{{ statuses[st] }}</b>{% if st == 'future' %} for {{ when_label }}{% endif %}{% endif %}
+        <span id="ed-dirty" hidden> · Unsaved changes</span>
+      </span>
+      {% if live %}
+        <button type="submit" name="action" value="draft" class="btn btn-secondary btn-sm ed-hide-s" data-go>Switch to draft</button>
+      {% else %}
+        <button type="submit" name="action" value="draft" class="btn btn-secondary btn-sm" data-go>Save draft</button>
+      {% endif %}
+      <button type="submit" formaction="{{ url_for('admin_blog_preview') }}" formtarget="_blank" class="btn btn-secondary btn-sm" id="ed-preview">Preview</button>
+      {% if st == 'published' or st == 'private' %}
+        <a href="{{ url_for('story_detail', slug=post.slug) }}" target="_blank" rel="noopener" class="ed-icon ed-hide-s" title="View post" aria-label="View post"><i class="ri-external-link-line"></i></a>
+      {% endif %}
+      {% if live %}
+        <button type="submit" name="action" value="update" class="btn btn-primary btn-sm" data-go id="ed-main-btn">{{ 'Update' }}</button>
+      {% else %}
+        <button type="button" class="btn btn-primary btn-sm" id="ed-open-pre">Publish</button>
+      {% endif %}
+      <button type="button" class="ed-icon" id="ed-toggle" aria-pressed="true" title="Settings" aria-label="Settings" aria-controls="ed-side"><i class="ri-layout-right-line"></i></button>
+    </div>
+
+    <div class="ed-main">
+      <div class="ed-canvas">
+        <div class="ed-restore" id="ed-restore" hidden>
+          <span>The backup of this post in your browser is different from the version below.</span>
+          <button type="button" class="btn btn-secondary btn-sm" id="ed-restore-yes">Restore the backup</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="ed-restore-no">Dismiss</button>
+        </div>
+        <label class="sr-only" for="ed-title">Title</label>
+        <textarea id="ed-title" name="title" rows="1" class="ed-title" data-richtext="off" placeholder="Add title" maxlength="255">{{ post.title if post and post.title != '(no title)' else '' }}</textarea>
+        <p class="ed-link">
+          {% if post %}Permalink: {% if st in ('published', 'private') %}<a href="{{ url_for('story_detail', slug=post.slug) }}" target="_blank" rel="noopener">{{ public_base }}/stories/{{ post.slug }}</a>{% else %}{{ public_base }}/stories/{{ post.slug }}{% endif %}
+          {% else %}The permalink is made from the title when you first save.{% endif %}
+        </p>
+        <label class="sr-only" for="ed-content">Content</label>
+        <textarea id="ed-content" name="content" rows="18" class="field-textarea">{{ post.content if post and post.content else '' }}</textarea>
+        <div class="ed-foot"><span><b id="ed-words">{{ words }}</b> words</span><span id="ed-read"></span>{% if post and post.updated_at %}<span>Last edited {{ post.updated_at.strftime('%d %b %Y, %H:%M') }} UTC</span>{% endif %}</div>
+      </div>
+    </div>
+
+    <aside class="ed-side" id="ed-side" aria-label="Post settings">
+      <div class="ed-tabs"><span>Post</span></div>
+
+      <details class="ed-panel" open>
+        <summary>Summary</summary>
+        <div class="ed-body">
+          <label class="ed-row"><span>Visibility</span>
+            <select name="status" class="field-select" id="ed-vis">
+              <option value="published" {{ 'selected' if st != 'private' else '' }}>Public</option>
+              <option value="private" {{ 'selected' if st == 'private' else '' }}>Private</option>
+            </select></label>
+          <label class="ed-row"><span>Publish</span>
+            <input type="datetime-local" name="publish_at" id="ed-when" class="field-input" value="{{ when_value }}"></label>
+          <p class="ed-note" id="ed-when-note">{% if when_value %}{{ 'Scheduled' if st == 'future' else 'Dated' }} {{ when_label }} ({{ tz }}).{% else %}Empty = immediately, when you publish. Times are {{ tz }}.{% endif %}</p>
+          <label class="ed-row"><span>Slug</span><input name="slug" class="field-input" value="{{ post.slug if post else '' }}" placeholder="made from the title"></label>
+          <label class="ed-row"><span>Author</span><input name="author_name" class="field-input" value="{{ post.author_name if post and post.author_name else admin_name }}"></label>
+          <label class="ed-check"><input type="checkbox" class="field-checkbox" name="is_featured" value="1" {{ 'checked' if post and post.is_featured else '' }}> Stick to the top of the blog</label>
+          {% if not live %}
+          <label class="ed-check"><input type="checkbox" class="field-checkbox" id="ed-pending" {{ 'checked' if st == 'pending' else '' }}> Pending review</label>
+          {% endif %}
+          {% if post %}<button type="submit" form="ed-trash" class="ed-danger">Move to trash</button>{% endif %}
+        </div>
+      </details>
+
+      <details class="ed-panel" open>
+        <summary>Categories</summary>
+        <div class="ed-body">
+          <div class="ed-cats" id="ed-cats">
+            {% for c in categories %}<label class="ed-check"><input type="checkbox" class="field-checkbox" name="categories" value="{{ c }}" {{ 'checked' if c in post_cats else '' }}> {{ c }}</label>{% endfor %}
+          </div>
+          <details>
+            <summary class="ed-sugg"><button type="button" tabindex="-1" style="pointer-events:none">Add New Category</button></summary>
+            <div class="flex gap-2 mt-2">
+              <label class="sr-only" for="ed-newcat">New category name</label>
+              <input id="ed-newcat" class="field-input" maxlength="60">
+              <button type="button" class="btn btn-secondary btn-sm" id="ed-addcat">Add</button>
+            </div>
+          </details>
+        </div>
+      </details>
+
+      <details class="ed-panel" open>
+        <summary>Tags</summary>
+        <div class="ed-body">
+          <input type="hidden" name="tags" id="ed-tags" value="{{ post_tags|join(', ') }}">
+          <div class="ed-chips" id="ed-chips">
+            <label class="sr-only" for="ed-tag-in">Add tag</label>
+            <input id="ed-tag-in" list="ed-tag-list" placeholder="Add tag" maxlength="60" autocomplete="off">
+          </div>
+          <datalist id="ed-tag-list">{% for t in used_tags %}<option value="{{ t }}">{% endfor %}</datalist>
+          <p class="ed-note">Separate with commas or the Enter key.</p>
+          {% if used_tags %}
+          <div><p class="ed-note mb-1">Most used</p><div class="ed-sugg">{% for t in used_tags[:12] %}<button type="button" data-tag="{{ t }}">{{ t }}</button>{% endfor %}</div></div>
+          {% endif %}
+        </div>
+      </details>
+
+      <details class="ed-panel" open>
+        <summary>Featured image</summary>
+        <div class="ed-body">
+          <div class="ed-img" id="ed-img">{% if post and post.featured_image %}<img src="/{{ post.featured_image.lstrip('/') }}" alt="">{% else %}<span>No image</span>{% endif %}</div>
+          <label class="btn btn-secondary btn-sm cursor-pointer text-center">
+            <span id="ed-img-label">{{ 'Replace image' if post and post.featured_image else 'Set featured image' }}</span>
+            <input type="file" name="image" id="ed-img-in" accept=".jpg,.jpeg,.png,.webp,.gif,image/*" class="sr-only">
+          </label>
+          {% if post and post.featured_image %}<label class="ed-check"><input type="checkbox" class="field-checkbox" name="remove_image" value="1" id="ed-img-rm"> Remove featured image</label>{% endif %}
+          <p class="ed-note">JPG, PNG, WebP or GIF, up to 5 MB.</p>
+        </div>
+      </details>
+
+      <details class="ed-panel" {{ 'open' if post and post.excerpt else '' }}>
+        <summary>Excerpt</summary>
+        <div class="ed-body">
+          <label class="sr-only" for="ed-excerpt">Excerpt</label>
+          <textarea id="ed-excerpt" name="excerpt" rows="4" class="field-textarea" data-richtext="off" maxlength="2000">{{ post.excerpt if post and post.excerpt else '' }}</textarea>
+          <p class="ed-note">A short summary shown on the blog cards. Empty = the start of the post.</p>
+        </div>
+      </details>
+    </aside>
+  </div>
+
+  {# Pre-publish check, like WordPress's "Are you ready to publish?" #}
+  <div class="ed-pre" id="ed-pre" role="dialog" aria-modal="true" aria-labelledby="ed-pre-h" hidden>
+    <div class="ed-pre-top">
+      <button type="submit" name="action" value="publish" class="btn btn-primary btn-sm" id="ed-final" data-go>Publish</button>
+      <button type="button" class="btn btn-secondary btn-sm" id="ed-pre-cancel">Cancel</button>
+    </div>
+    <div class="ed-pre-in">
+      <h2 id="ed-pre-h">Are you ready to publish?</h2>
+      <p class="ed-note">Double-check your settings before publishing.</p>
+      <dl>
+        <dt>Visibility</dt><dd id="pre-vis">Public</dd>
+        <dt>Publish</dt><dd id="pre-when">Immediately</dd>
+        <dt>Categories</dt><dd id="pre-cats">—</dd>
+        <dt>Tags</dt><dd id="pre-tags">—</dd>
+      </dl>
+    </div>
+  </div>
+</form>
+{% if post %}
+<form id="ed-trash" method="POST" action="{{ url_for('admin_blog_trash', post_id=post.id) }}" data-turbo="false"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"></form>
+{% endif %}
+{% endblock %}
+
+{% block extra_body %}
+<script>
+(() => {
+  window.__swmEdAbort?.abort();
+  const ctl = new AbortController(); window.__swmEdAbort = ctl; const sig = { signal: ctl.signal };
+  const form = document.getElementById('ed-form');
+  if (!form) return;
+  const $ = (id) => document.getElementById(id);
+  const content = $('ed-content'), title = $('ed-title');
+  let dirty = false, leaving = false;
+
+  // Title grows with its text
+  const fit = () => { title.style.height = 'auto'; title.style.height = title.scrollHeight + 'px'; };
+  title.addEventListener('input', fit, sig); fit();
+  title.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); document.querySelector('.admin-richtext-editor')?.focus(); } }, sig);
+
+  // Word count and reading time
+  const count = () => {
+    const n = (content.value.replace(/<[^>]+>/g, ' ').match(/\S+/g) || []).length;
+    $('ed-words').textContent = n;
+    $('ed-read').textContent = n ? Math.max(1, Math.round(n / 200)) + ' min read' : '';
+  };
+  count();
+
+  // Unsaved changes + local backup
+  const key = form.dataset.key;
+  const snap = () => ({ title: title.value, content: content.value, excerpt: $('ed-excerpt').value });
+  const initial = JSON.stringify(snap());
+  let backupTimer;
+  const changed = () => {
+    count();
+    const now = JSON.stringify(snap());
+    dirty = now !== initial; $('ed-dirty').hidden = !dirty;
+    clearTimeout(backupTimer);
+    backupTimer = setTimeout(() => { try { dirty ? localStorage.setItem(key, JSON.stringify({ ...snap(), t: Date.now() })) : localStorage.removeItem(key); } catch (_) {} }, 800);
+  };
+  form.addEventListener('input', changed, sig);
+  form.addEventListener('change', () => { dirty = true; $('ed-dirty').hidden = false; }, sig);
+  // the rich editor writes into the textarea without an input event on it
+  document.addEventListener('input', (e) => { if (e.target.closest?.('.admin-richtext')) setTimeout(changed, 0); }, sig);
+  try {
+    const b = JSON.parse(localStorage.getItem(key) || 'null');
+    const cur = snap();
+    if (b && (b.title !== cur.title || b.content !== cur.content || b.excerpt !== cur.excerpt) && b.t > Number(form.dataset.updated) * 1000) {
+      $('ed-restore').hidden = false;
+      $('ed-restore-yes').addEventListener('click', () => {
+        title.value = b.title; content.value = b.content; $('ed-excerpt').value = b.excerpt || '';
+        content.dispatchEvent(new Event('input', { bubbles: true })); fit(); changed(); $('ed-restore').hidden = true;
+      }, sig);
+      $('ed-restore-no').addEventListener('click', () => { try { localStorage.removeItem(key); } catch (_) {} $('ed-restore').hidden = true; }, sig);
+    } else if (b) { localStorage.removeItem(key); }
+  } catch (_) {}
+  window.addEventListener('beforeunload', (e) => { if (dirty && !leaving) { e.preventDefault(); e.returnValue = ''; } }, sig);
+  form.addEventListener('submit', (e) => {
+    const btn = e.submitter;
+    if (btn && btn.hasAttribute('data-go')) { leaving = true; try { localStorage.removeItem(key); } catch (_) {} }
+  }, sig);
+  $('ed-trash')?.addEventListener('submit', (e) => { if (!confirm('Move this post to the Trash?')) e.preventDefault(); else leaving = true; }, sig);
+
+  // Settings sidebar toggle (remembered)
+  const ed = $('ed'), tog = $('ed-toggle');
+  const setSide = (on) => { ed.classList.toggle('no-side', !on); tog.setAttribute('aria-pressed', on ? 'true' : 'false'); };
+  try { if (localStorage.getItem('swm-blog-side') === 'off') setSide(false); } catch (_) {}
+  tog.addEventListener('click', () => { const on = ed.classList.contains('no-side'); setSide(on); try { localStorage.setItem('swm-blog-side', on ? 'on' : 'off'); } catch (_) {} }, sig);
+
+  // Tags as chips; the hidden input carries them comma-separated
+  const tagsIn = $('ed-tag-in'), chips = $('ed-chips'), tagsHidden = $('ed-tags');
+  let tags = tagsHidden.value.split(',').map((t) => t.trim()).filter(Boolean);
+  const drawTags = () => {
+    chips.querySelectorAll('.ed-chip').forEach((c) => c.remove());
+    tags.forEach((t, i) => {
+      const c = document.createElement('span'); c.className = 'ed-chip'; c.textContent = t;
+      const x = document.createElement('button'); x.type = 'button'; x.setAttribute('aria-label', 'Remove tag ' + t); x.innerHTML = '<i class="ri-close-line"></i>';
+      x.addEventListener('click', () => { tags.splice(i, 1); drawTags(); dirty = true; $('ed-dirty').hidden = false; });
+      c.append(x); chips.insertBefore(c, tagsIn);
+    });
+    tagsHidden.value = tags.join(', ');
+  };
+  const addTag = (raw) => {
+    raw.split(',').map((t) => t.trim().replace(/\s+/g, ' ').slice(0, 60)).filter(Boolean).forEach((t) => {
+      if (!tags.some((x) => x.toLowerCase() === t.toLowerCase())) tags.push(t);
+    });
+    tagsIn.value = ''; drawTags(); dirty = true; $('ed-dirty').hidden = false;
+  };
+  tagsIn.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ',') && tagsIn.value.trim()) { e.preventDefault(); addTag(tagsIn.value); }
+    else if (e.key === 'Enter') e.preventDefault();
+    else if (e.key === 'Backspace' && !tagsIn.value && tags.length) { tags.pop(); drawTags(); }
+  }, sig);
+  tagsIn.addEventListener('change', () => { if (tagsIn.value.trim()) addTag(tagsIn.value); }, sig);
+  document.querySelectorAll('[data-tag]').forEach((b) => b.addEventListener('click', () => addTag(b.dataset.tag), sig));
+  form.addEventListener('submit', () => { if (tagsIn.value.trim()) addTag(tagsIn.value); }, sig);
+  drawTags();
+
+  // Add New Category (saved with the post)
+  const addCat = () => {
+    const name = $('ed-newcat').value.trim().replace(/\s+/g, ' ').slice(0, 60);
+    if (!name) return;
+    const exists = [...document.querySelectorAll('#ed-cats input')].find((i) => i.value.toLowerCase() === name.toLowerCase());
+    if (exists) { exists.checked = true; }
+    else {
+      const l = document.createElement('label'); l.className = 'ed-check';
+      const i = document.createElement('input'); i.type = 'checkbox'; i.className = 'field-checkbox'; i.name = 'new_category'; i.value = name; i.checked = true;
+      l.append(i, document.createTextNode(' ' + name)); $('ed-cats').prepend(l);
+    }
+    $('ed-newcat').value = ''; dirty = true; $('ed-dirty').hidden = false;
+  };
+  $('ed-addcat').addEventListener('click', addCat, sig);
+  $('ed-newcat').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addCat(); } }, sig);
+
+  // Featured image preview
+  $('ed-img-in').addEventListener('change', (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    if (f.size > 5 * 1024 * 1024) { alert('The image is larger than 5 MB.'); e.target.value = ''; return; }
+    const img = document.createElement('img'); img.alt = ''; img.src = URL.createObjectURL(f);
+    $('ed-img').replaceChildren(img); $('ed-img-label').textContent = 'Replace image';
+    if ($('ed-img-rm')) $('ed-img-rm').checked = false;
+  }, sig);
+
+  // Publish / Schedule / Submit for Review labels
+  const when = $('ed-when'), vis = $('ed-vis'), pending = $('ed-pending');
+  const future = () => when.value && new Date(when.value) > new Date();
+  const label = () => {
+    const open = $('ed-open-pre'), final = $('ed-final');
+    const isPending = pending && pending.checked;
+    const text = isPending ? 'Submit for Review' : (future() ? 'Schedule' : 'Publish');
+    if (open) open.textContent = isPending ? text : text + '…';
+    final.textContent = text; final.value = isPending ? 'pending' : 'publish';
+    $('ed-pre-h').textContent = isPending ? 'Ready to submit for review?' : (future() ? 'Are you ready to schedule?' : 'Are you ready to publish?');
+    const main = $('ed-main-btn');
+    if (main) main.textContent = future() && vis.value !== 'private' ? 'Schedule' : 'Update';
+    if (when.value) $('ed-when-note').textContent = (future() ? 'Will publish ' : 'Dated ') + new Date(when.value).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) + ' ({{ tz }}).';
+  };
+  [when, vis, pending].forEach((el) => el?.addEventListener('change', label, sig));
+  when.addEventListener('input', label, sig);
+  label();
+
+  // Pre-publish panel
+  const pre = $('ed-pre');
+  const openPre = () => {
+    if (!title.value.trim() && !content.value.trim()) { alert('Add a title or some content first.'); return; }
+    $('pre-vis').textContent = vis.value === 'private' ? 'Private' : 'Public';
+    $('pre-when').textContent = when.value ? new Date(when.value).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Immediately';
+    const cats = [...document.querySelectorAll('#ed-cats input:checked')].map((i) => i.value);
+    $('pre-cats').textContent = cats.join(', ') || 'Uncategorised';
+    $('pre-tags').textContent = tags.join(', ') || '—';
+    pre.hidden = false; $('ed-final').focus();
+  };
+  $('ed-open-pre')?.addEventListener('click', () => (pending && pending.checked) ? $('ed-final').click() : openPre(), sig);
+  $('ed-pre-cancel').addEventListener('click', () => { pre.hidden = true; $('ed-open-pre')?.focus(); }, sig);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !pre.hidden) pre.hidden = true;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {          // Ctrl+S saves, like WordPress
+      e.preventDefault();
+      (form.querySelector('[data-go][value="update"]') || form.querySelector('[data-go][value="draft"]'))?.click();
+    }
+  }, sig);
+
+})();
+</script>
+{% endblock %}

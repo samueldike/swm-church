@@ -5602,7 +5602,7 @@ async def admin_hod_reports_edit(report_id: int, request: Request, db: AsyncSess
     })
 
 
-# --- Stories ---
+# --- Blog helpers (slugs, featured images, categories); the Blog routes are further down ---
 async def _unique_story_slug(db, base_slug: str, exclude_id: int | None = None) -> str:
     from app.models.story import Story
     slug = base_slug
@@ -5631,38 +5631,9 @@ async def _save_story_image(image) -> str:
     with open(dest, "wb") as f:
         f.write(content)
     return f"images/stories/{filename}"
-@router.get("/stories", name="admin_stories")
-async def admin_stories(request: Request, db: AsyncSession = Depends(get_db), q: str = Query("")):
-    admin = await _get_admin(request)
-    if not admin:
-        return RedirectResponse(url="/admin", status_code=303)
-    from app.models.story import Story
-    query = select(Story).order_by(Story.created_at.desc())
-    if q:
-        pat = f"%{q}%"
-        query = query.where(or_(Story.title.ilike(pat), Story.excerpt.ilike(pat)))
-    result = await db.execute(query)
-    stories = list(result.scalars().all())
-    ctx = await _admin_context(request, db, "admin.stories")
-    return await render_template(request, "admin/stories.html", {"_db": db, "stories": stories, "search": q, "title": "Stories", "headerIcon": "ri-quill-pen-line", **ctx})
-@router.get("/stories/create", name="admin_stories_create_page")
-async def admin_stories_create_page(request: Request, db: AsyncSession = Depends(get_db)):
-    admin = await _get_admin(request)
-    if not admin or not has_perm(admin.role, "media"):
-        return RedirectResponse(url="/admin/dashboard", status_code=303)
-    ctx = await _admin_context(request, db, "admin.stories")
-    return await render_template(request, "admin/story-form.html", {"_db": db, "story": None, "categories": await _story_categories(db), "title": "New Story", "headerIcon": "ri-quill-pen-line", **ctx})
-@router.get("/stories/{story_id}/edit", name="admin_stories_edit_page")
-async def admin_stories_edit_page(story_id: int, request: Request, db: AsyncSession = Depends(get_db)):
-    admin = await _get_admin(request)
-    if not admin or not has_perm(admin.role, "media"):
-        return RedirectResponse(url="/admin/dashboard", status_code=303)
-    from app.models.story import Story
-    story = (await db.execute(select(Story).where(Story.id == story_id))).scalar_one_or_none()
-    if not story:
-        return _redirect(request, "/admin/stories", "Story not found.", "error")
-    ctx = await _admin_context(request, db, "admin.stories")
-    return await render_template(request, "admin/story-form.html", {"_db": db, "story": story, "categories": await _story_categories(db), "title": "Edit Story", "headerIcon": "ri-quill-pen-line", **ctx})
+
+
+
 async def _story_categories(db: AsyncSession) -> list[str]:
     from app.core import lists
 
@@ -5687,76 +5658,6 @@ def _lists_canonical(value: str, choices: list[str]) -> str | None:
     return lists.canonical(value, choices)
 
 
-@router.post("/stories", name="admin_stories_store")
-async def admin_stories_store(request: Request, db: AsyncSession = Depends(get_db), title: str = Form(...), excerpt: str = Form(""), content: str = Form(""), category: str = Form(""), author_name: str = Form(""), status: str = Form("draft"), is_featured: str | None = Form(None), image: UploadFile | None = File(None)):
-    admin = await _get_admin(request)
-    if not admin or not has_perm(admin.role, "media"):
-        return RedirectResponse(url="/admin/dashboard", status_code=303)
-    from app.models.story import Story
-    from slugify import slugify
-    slug = await _unique_story_slug(db, slugify(title.strip()))
-    feat = is_featured in ("1","true","on","True")
-    st = status.strip().lower() or "draft"
-    cat = _lists_canonical(category, await _story_categories(db))
-    if category.strip() and not cat:
-        return _redirect(request, "/admin/stories/create", "Choose the category from the list (Settings → Lists).", "error")
-    story = Story(title=title.strip(), slug=slug, excerpt=excerpt.strip() if excerpt else None, content=content.strip() if content else None, category=cat, author_name=author_name.strip() if author_name else None, status=st, is_featured=feat, created_by=admin.id)
-    if st == "published":
-        story.published_at = datetime.utcnow()
-    if image and image.filename:
-        try:
-            story.featured_image = await _save_story_image(image)
-        except ValueError:
-            return _redirect(request, "/admin/stories", "Image too large (max 5MB).", "error")
-    db.add(story)
-    await db.flush()
-    return _redirect(request, "/admin/stories", "Story created successfully.")
-@router.post("/stories/{story_id}/update", name="admin_stories_update")
-async def admin_stories_update(story_id: int, request: Request, db: AsyncSession = Depends(get_db), title: str = Form(""), excerpt: str = Form(""), content: str = Form(""), category: str = Form(""), author_name: str = Form(""), status: str = Form("draft"), is_featured: str | None = Form(None), image: UploadFile | None = File(None)):
-    admin = await _get_admin(request)
-    if not admin or not has_perm(admin.role, "media"):
-        return RedirectResponse(url="/admin/dashboard", status_code=303)
-    from app.models.story import Story
-    from slugify import slugify
-    result = await db.execute(select(Story).where(Story.id == story_id))
-    story = result.scalar_one_or_none()
-    if not story:
-        return _redirect(request, "/admin/stories", "Story not found.", "error")
-    was_published = story.status == "published"
-    if title.strip() and title.strip() != story.title:
-        story.title = title.strip()
-        story.slug = await _unique_story_slug(db, slugify(story.title), exclude_id=story.id)
-    story.excerpt = excerpt.strip() if excerpt else None
-    story.content = content.strip() if content else None
-    cat = _lists_canonical(category, await _story_categories(db))
-    if category.strip() and not cat and category.strip() != (story.category or ""):
-        return _redirect(request, f"/admin/stories/{story_id}/edit", "Choose the category from the list (Settings → Lists).", "error")
-    story.category = cat or (story.category if category.strip() == (story.category or "") else None)
-    story.author_name = author_name.strip() if author_name else None
-    story.status = status.strip().lower() or "draft"
-    story.is_featured = is_featured in ("1","true","on","True")
-    if story.status == "published" and not was_published:
-        story.published_at = datetime.utcnow()
-    if image and image.filename:
-        try:
-            story.featured_image = await _save_story_image(image)
-        except ValueError:
-            return _redirect(request, "/admin/stories", "Image too large.", "error")
-    await db.flush()
-    return _redirect(request, "/admin/stories", "Story updated successfully.")
-@router.post("/stories/{story_id}/destroy", name="admin_stories_destroy")
-async def admin_stories_destroy(story_id: int, request: Request, db: AsyncSession = Depends(get_db)):
-    admin = await _get_admin(request)
-    if not admin or not has_perm(admin.role, "media"):
-        return RedirectResponse(url="/admin/dashboard", status_code=303)
-    from app.models.story import Story
-    result = await db.execute(select(Story).where(Story.id == story_id))
-    story = result.scalar_one_or_none()
-    if not story:
-        return _redirect(request, "/admin/stories", "Story not found.", "error")
-    await db.delete(story)
-    await db.flush()
-    return _redirect(request, "/admin/stories", "Story deleted successfully.")
 
 
 
@@ -8630,3 +8531,498 @@ async def _wa_access_state(db: AsyncSession, granter, target) -> dict | None:
     dept = await wa.department_name(db, target)
     return {"on": wa.allowed(target.role, target.whatsapp_access, dept), "default": wa.default_access(target.role, dept),
             "media": wa.is_media_department(dept)}
+
+
+# ─── Blog: posts managed the WordPress way (rules: app/core/blog.py; public pages stay at /stories) ───
+_BLOG_PER_PAGE = 20
+
+
+def _blog_guard_ok(admin) -> bool:
+    return bool(admin) and has_perm(admin.role, "media")
+
+
+async def _blog_tz(db: AsyncSession) -> str:
+    from app.core.platform import platform_timezone
+
+    return await platform_timezone(db)
+
+
+def _blog_local(d, tz: str):
+    from app.core import blog, geo
+
+    d = blog.aware(d)
+    return d.astimezone(geo.zone(tz)) if d else None
+
+
+async def _blog_counts(db: AsyncSession, admin) -> dict:
+    from sqlalchemy import func as _f
+
+    from app.models.story import Story
+
+    rows = dict((await db.execute(select(Story.status, _f.count()).group_by(Story.status))).all())
+    mine = (await db.execute(select(_f.count()).select_from(Story).where(Story.created_by == admin.id, Story.status != "trash"))).scalar_one()
+    out = {k: rows.get(k, 0) for k in ("published", "future", "draft", "pending", "private", "trash")}
+    out["all"] = sum(v for k, v in out.items() if k != "trash")
+    out["mine"] = mine
+    return out
+
+
+@router.get("/stories", name="admin_stories")
+async def admin_stories_moved(request: Request):
+    """Stories became Blog: old bookmarks land on the posts list."""
+    return RedirectResponse(url="/admin/blog", status_code=301)
+
+
+@router.get("/blog", name="admin_blog")
+async def admin_blog(request: Request, db: AsyncSession = Depends(get_db), post_status: str = Query("all"), author: str = Query(""),
+                     s: str = Query(""), m: str = Query(""), cat: str = Query(""), orderby: str = Query("date"), order: str = Query("desc"),
+                     page: int = Query(1, ge=1), undo: str = Query("")):
+    from sqlalchemy import extract, func as _f
+
+    from app.core import blog
+    from app.models.story import Story
+
+    admin = await _get_admin(request)
+    if not _blog_guard_ok(admin):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    tz = await _blog_tz(db)
+    q = select(Story)
+    if post_status in blog.STATUSES:
+        q = q.where(Story.status == post_status)
+    else:
+        post_status = "all"
+        q = q.where(Story.status != "trash")
+    if author == "mine":
+        q = q.where(Story.created_by == admin.id)
+    if s.strip():
+        pat = f"%{s.strip()[:100]}%"
+        q = q.where(or_(Story.title.ilike(pat), Story.content.ilike(pat), Story.excerpt.ilike(pat)))
+    if re.fullmatch(r"\d{6}", m or ""):
+        stamp = _f.coalesce(Story.published_at, Story.created_at)
+        q = q.where(extract("year", stamp) == int(m[:4]), extract("month", stamp) == int(m[4:]))
+    if cat.strip():
+        like = '%"' + cat.strip().replace('"', "") + '"%'
+        q = q.where(or_(Story.categories.ilike(like), Story.category == cat.strip()))
+    col = Story.title if orderby == "title" else _f.coalesce(Story.published_at, Story.created_at)
+    q = q.order_by(col.asc() if order == "asc" else col.desc(), Story.id.desc())
+    pagination = await paginate(db, q, page=page, per_page=_BLOG_PER_PAGE)
+
+    months = []
+    for (when,) in (await db.execute(select(_f.coalesce(Story.published_at, Story.created_at)).where(Story.status != "trash"))).all():
+        if when:
+            key = when.strftime("%Y%m")
+            if key not in [k for k, _ in months]:
+                months.append((key, when.strftime("%B %Y")))
+    months.sort(reverse=True)
+    posts = [{"p": p, "cats": blog.post_categories(p), "tags": blog.post_tags(p), "local": _blog_local(p.published_at or p.created_at, tz),
+              "modified": _blog_local(p.updated_at, tz)} for p in pagination["items"]]
+    ctx = await _admin_context(request, db, "admin.blog")
+    return await render_template(request, "admin/blog-posts.html", {
+        "_db": db, "posts": posts, "pagination": pagination, "counts": await _blog_counts(db, admin), "post_status": post_status,
+        "author": author, "s": s, "m": m, "cat": cat, "orderby": orderby, "order": order, "months": months, "undo": undo,
+        "categories": await _story_categories(db), "statuses": blog.STATUSES, "now": blog.now_utc(),
+        "title": "Posts", "headerIcon": "ri-article-line", **ctx})
+
+
+async def _blog_editor(request: Request, db: AsyncSession, post, admin):
+    from app.core import blog
+
+    tz = await _blog_tz(db)
+    from app.models.story import Story
+
+    used_tags = sorted({t for (raw,) in (await db.execute(select(Story.tags))).all() for t in blog.names(raw)}, key=str.lower)
+    when = _blog_local(post.published_at, tz) if post and post.published_at else None
+    return await render_template(request, "admin/blog-editor.html", {
+        "_db": db, "post": post, "post_cats": blog.post_categories(post) if post else [], "post_tags": blog.post_tags(post) if post else [],
+        "categories": await _story_categories(db), "used_tags": used_tags, "statuses": blog.STATUSES, "tz": tz,
+        "when_value": when.strftime("%Y-%m-%dT%H:%M") if when else "", "when_label": when.strftime("%B %d, %Y %I:%M %p").replace(" 0", " ") if when else "",
+        "words": blog.words(post.content if post else ""), "admin_name": admin.full_name,
+        "public_base": str(request.base_url).rstrip("/"), **(await _admin_context(request, db, "admin.blog"))})
+
+
+@router.get("/blog/new", name="admin_blog_new")
+async def admin_blog_new(request: Request, db: AsyncSession = Depends(get_db)):
+    admin = await _get_admin(request)
+    if not _blog_guard_ok(admin):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    return await _blog_editor(request, db, None, admin)
+
+
+@router.get("/blog/{post_id}/edit", name="admin_blog_edit")
+async def admin_blog_edit(post_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    from app.models.story import Story
+
+    admin = await _get_admin(request)
+    if not _blog_guard_ok(admin):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    post = await db.get(Story, post_id)
+    if not post:
+        return _redirect(request, "/admin/blog", "That post no longer exists.", "error")
+    return await _blog_editor(request, db, post, admin)
+
+
+async def _blog_apply(db: AsyncSession, post, form, admin, tz: str) -> str | None:
+    """Copy the editor's fields onto ``post``. Returns an error message or None."""
+    from slugify import slugify
+
+    from app.core import blog, geo
+
+    title = str(form.get("title") or "").strip()[:255]
+    post.title = title or "(no title)"
+    post.content = blog.sanitize(str(form.get("content") or ""))
+    post.excerpt = str(form.get("excerpt") or "").strip()[:2000] or None
+    post.author_name = str(form.get("author_name") or "").strip()[:255] or admin.full_name
+    post.is_featured = form.get("is_featured") == "1"
+    cats = await _story_categories(db)
+    fresh = [c for c in blog.names(form.getlist("new_category")) if c.lower() not in {x.lower() for x in cats}]
+    if fresh:                                   # "Add New Category" in the editor sidebar, like WordPress
+        import json as _json
+
+        from app.core import lists
+        from app.core.settings_cache import update_settings
+
+        cats = cats + fresh
+        await update_settings(db, {lists.setting_key("story_categories"): _json.dumps(cats, ensure_ascii=False)})
+    allowed = {c.lower(): c for c in cats}
+    chosen = list(form.getlist("categories")) + fresh
+    blog.set_categories(post, [allowed[c.lower()] for c in chosen if c.lower() in allowed])
+    post.tags = blog.dump(str(form.get("tags") or "").split(","))
+    wanted = slugify(str(form.get("slug") or "").strip() or title) or f"post-{post.id or 'new'}"
+    post.slug = await _unique_story_slug(db, wanted[:200], exclude_id=post.id)
+    when_raw = str(form.get("publish_at") or "").strip()
+    when = None
+    if when_raw:
+        try:
+            when = geo.to_utc(datetime.fromisoformat(when_raw), tz).replace(tzinfo=timezone.utc)
+        except ValueError:
+            return "That publish date is not valid."
+    action = str(form.get("action") or "draft")
+    status = blog.decide_status(action, str(form.get("status") or ""), when)
+    if status == "future":
+        post.published_at = when
+    elif status in ("published", "private"):
+        # A chosen (past) date is kept; otherwise a post already live keeps its date and a new one gets "now".
+        if when:
+            post.published_at = when
+        elif not (post.published_at and post.status in ("published", "private", "future")):
+            post.published_at = blog.now_utc()
+    elif when:
+        post.published_at = when            # a draft can carry its planned date
+    post.status = status
+    if form.get("remove_image") == "1":
+        post.featured_image = None
+    image = form.get("image")
+    if image is not None and getattr(image, "filename", ""):
+        try:
+            post.featured_image = await _save_story_image(image)
+        except ValueError:
+            return "The featured image is larger than 5 MB."
+    return None
+
+
+@router.post("/blog/save", name="admin_blog_save")
+async def admin_blog_save(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import blog
+    from app.models.story import Story
+
+    admin = await _get_admin(request)
+    if not _blog_guard_ok(admin):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    form = await request.form()
+    post_id = str(form.get("id") or "")
+    post = await db.get(Story, int(post_id)) if post_id.isdigit() else None
+    if post_id and not post:
+        return _redirect(request, "/admin/blog", "That post no longer exists.", "error")
+    was = post.status if post else None
+    if post is None:
+        post = Story(title="", slug=f"tmp-{datetime.utcnow().timestamp()}", status="draft", created_by=admin.id)
+        db.add(post)
+        await db.flush()
+    err = await _blog_apply(db, post, form, admin, await _blog_tz(db))
+    if err:
+        await db.rollback()
+        return _redirect(request, f"/admin/blog/{post_id}/edit" if post_id else "/admin/blog/new", err, "error")
+    await log_admin_action(db, admin.id, f"blog.{post.status}", "story", post.id, {"title": post.title[:120]}, request)
+    await db.commit()
+    msg = {"published": "Post published." if was != "published" else "Post updated.", "future": "Post scheduled.",
+           "draft": "Draft saved.", "pending": "Post submitted for review.", "private": "Post published privately."}.get(post.status, "Saved.")
+    return _redirect(request, f"/admin/blog/{post.id}/edit?saved={post.status}", msg)
+
+
+@router.post("/blog/preview", name="admin_blog_preview")
+async def admin_blog_preview(request: Request, db: AsyncSession = Depends(get_db)):
+    """What the post would look like, from the editor's unsaved fields. Nothing is stored."""
+    from types import SimpleNamespace
+
+    from app.core import blog
+
+    admin = await _get_admin(request)
+    if not _blog_guard_ok(admin):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    form = await request.form()
+    cats = [c for c in form.getlist("categories")]
+    post = SimpleNamespace(title=str(form.get("title") or "(no title)"), slug="preview", excerpt=str(form.get("excerpt") or ""),
+                           content=blog.sanitize(str(form.get("content") or "")), category=cats[0] if cats else None,
+                           author_name=str(form.get("author_name") or admin.full_name), published_at=blog.now_utc(),
+                           featured_image=str(form.get("current_image") or "") or None, id=0)
+    resp = await render_template(request, "pages/stories_show.html", {"_db": db, "story": post, "related": [], "robots": "noindex, nofollow"})
+    resp.headers["X-Robots-Tag"] = "noindex"
+    return resp
+
+
+@router.get("/blog/{post_id}/preview", name="admin_blog_preview_saved")
+async def admin_blog_preview_saved(post_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    """Preview a saved post whatever its status (drafts and scheduled posts are not public yet)."""
+    from app.models.story import Story
+
+    admin = await _get_admin(request)
+    if not _blog_guard_ok(admin):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    post = await db.get(Story, post_id)
+    if not post:
+        return _redirect(request, "/admin/blog", "That post no longer exists.", "error")
+    resp = await render_template(request, "pages/stories_show.html", {"_db": db, "story": post, "related": [], "robots": "noindex, nofollow"})
+    resp.headers["X-Robots-Tag"] = "noindex"
+    return resp
+
+
+@router.post("/blog/{post_id}/quick", name="admin_blog_quick")
+async def admin_blog_quick(post_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    """Quick Edit from the posts list: title, slug, date, categories, tags, status."""
+    from slugify import slugify
+
+    from app.core import blog, geo
+    from app.models.story import Story
+
+    admin = await _get_admin(request)
+    if not _blog_guard_ok(admin):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    post = await db.get(Story, post_id)
+    back = request.headers.get("referer") or "/admin/blog"
+    if not post:
+        return _redirect(request, back, "That post no longer exists.", "error")
+    form = await request.form()
+    post.title = str(form.get("title") or post.title).strip()[:255] or post.title
+    post.slug = await _unique_story_slug(db, slugify(str(form.get("slug") or "") or post.title)[:200], exclude_id=post.id)
+    allowed = {c.lower(): c for c in await _story_categories(db)}
+    blog.set_categories(post, [allowed[c.lower()] for c in form.getlist("categories") if c.lower() in allowed])
+    post.tags = blog.dump(str(form.get("tags") or "").split(","))
+    status = str(form.get("status") or post.status)
+    when_raw = str(form.get("publish_at") or "").strip()
+    if when_raw:
+        try:
+            post.published_at = geo.to_utc(datetime.fromisoformat(when_raw), await _blog_tz(db)).replace(tzinfo=timezone.utc)
+        except ValueError:
+            return _redirect(request, back, "That date is not valid.", "error")
+    if status == "published" and post.published_at and blog.aware(post.published_at) > blog.now_utc():
+        status = "future"
+    if status in ("published", "private") and not post.published_at:
+        post.published_at = blog.now_utc()
+    if status in blog.STATUSES and status != "trash":
+        post.status = status
+    await db.commit()
+    return _redirect(request, back, f"“{post.title}” updated.")
+
+
+async def _blog_set_trash(db: AsyncSession, ids: list[int], to_trash: bool) -> int:
+    from app.models.story import Story
+
+    n = 0
+    for p in (await db.execute(select(Story).where(Story.id.in_(ids)))).scalars():
+        if to_trash and p.status != "trash":
+            p.trashed_status, p.status = p.status, "trash"
+            n += 1
+        elif not to_trash and p.status == "trash":
+            p.status, p.trashed_status = p.trashed_status or "draft", None
+            n += 1
+    await db.commit()
+    return n
+
+
+@router.post("/blog/{post_id}/trash", name="admin_blog_trash")
+async def admin_blog_trash(post_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    admin = await _get_admin(request)
+    if not _blog_guard_ok(admin):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    await _blog_set_trash(db, [post_id], True)
+    await log_admin_action(db, admin.id, "blog.trash", "story", post_id, None, request)
+    await db.commit()
+    return _redirect(request, f"/admin/blog?undo={post_id}", "1 post moved to the Trash.")
+
+
+@router.post("/blog/{post_id}/restore", name="admin_blog_restore")
+async def admin_blog_restore(post_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    admin = await _get_admin(request)
+    if not _blog_guard_ok(admin):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    await _blog_set_trash(db, [post_id], False)
+    return _redirect(request, request.headers.get("referer") or "/admin/blog", "1 post restored from the Trash.")
+
+
+@router.post("/blog/{post_id}/delete", name="admin_blog_delete")
+async def admin_blog_delete(post_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    from app.models.story import Story
+
+    admin = await _get_admin(request)
+    if not _blog_guard_ok(admin):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    post = await db.get(Story, post_id)
+    if post and post.status == "trash":       # only from the Trash, like WordPress
+        await db.delete(post)
+        await log_admin_action(db, admin.id, "blog.delete", "story", post_id, {"title": post.title[:120]}, request)
+        await db.commit()
+        return _redirect(request, "/admin/blog?post_status=trash", "1 post permanently deleted.")
+    return _redirect(request, "/admin/blog", "Move the post to the Trash first.", "error")
+
+
+@router.post("/blog/bulk", name="admin_blog_bulk")
+async def admin_blog_bulk(request: Request, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import delete as _delete
+
+    from app.models.story import Story
+
+    admin = await _get_admin(request)
+    if not _blog_guard_ok(admin):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    form = await request.form()
+    ids = [int(i) for i in form.getlist("post") if str(i).isdigit()]
+    action = str(form.get("bulk") or "")
+    back = request.headers.get("referer") or "/admin/blog"
+    if not ids or action not in ("trash", "restore", "delete", "draft", "publish"):
+        return _redirect(request, back, "Choose posts and an action.", "error")
+    if action in ("trash", "restore"):
+        n = await _blog_set_trash(db, ids, action == "trash")
+        word = "moved to the Trash" if action == "trash" else "restored from the Trash"
+    elif action == "delete":
+        res = await db.execute(_delete(Story).where(Story.id.in_(ids), Story.status == "trash"))
+        await db.commit()
+        n, word = res.rowcount, "permanently deleted"
+    else:
+        from app.core import blog
+
+        n = 0
+        for p in (await db.execute(select(Story).where(Story.id.in_(ids), Story.status != "trash"))).scalars():
+            if action == "draft":
+                p.status = "draft"
+            else:
+                p.published_at = blog.aware(p.published_at) or blog.now_utc()
+                p.status = "future" if p.published_at > blog.now_utc() else "published"
+            n += 1
+        await db.commit()
+        word = "moved to Drafts" if action == "draft" else "published"
+    await log_admin_action(db, admin.id, f"blog.bulk.{action}", "story", None, {"count": n}, request)
+    await db.commit()
+    return _redirect(request, back, f"{n} post{'' if n == 1 else 's'} {word}.")
+
+
+@router.post("/blog/empty-trash", name="admin_blog_empty_trash")
+async def admin_blog_empty_trash(request: Request, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import delete as _delete
+
+    from app.models.story import Story
+
+    admin = await _get_admin(request)
+    if not _blog_guard_ok(admin):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    res = await db.execute(_delete(Story).where(Story.status == "trash"))
+    await log_admin_action(db, admin.id, "blog.empty_trash", "story", None, {"count": res.rowcount}, request)
+    await db.commit()
+    return _redirect(request, "/admin/blog", f"{res.rowcount} post{'' if res.rowcount == 1 else 's'} permanently deleted.")
+
+
+# Categories and Tags screens
+async def _blog_term_counts(db: AsyncSession, kind: str) -> dict[str, int]:
+    from app.core import blog
+    from app.models.story import Story
+
+    counts: dict[str, int] = {}
+    for p in (await db.execute(select(Story).where(Story.status != "trash"))).scalars():
+        for n in (blog.post_categories(p) if kind == "cat" else blog.post_tags(p)):
+            counts[n.lower()] = counts.get(n.lower(), 0) + 1
+    return counts
+
+
+@router.get("/blog/categories", name="admin_blog_categories")
+async def admin_blog_categories(request: Request, db: AsyncSession = Depends(get_db)):
+    admin = await _get_admin(request)
+    if not _blog_guard_ok(admin):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from slugify import slugify
+
+    counts = await _blog_term_counts(db, "cat")
+    terms = [{"name": c, "slug": slugify(c), "count": counts.get(c.lower(), 0)} for c in await _story_categories(db)]
+    ctx = await _admin_context(request, db, "admin.blog")
+    return await render_template(request, "admin/blog-terms.html", {"_db": db, "kind": "cat", "terms": terms, "title": "Categories", "headerIcon": "ri-folder-2-line", **ctx})
+
+
+@router.get("/blog/tags", name="admin_blog_tags")
+async def admin_blog_tags(request: Request, db: AsyncSession = Depends(get_db)):
+    admin = await _get_admin(request)
+    if not _blog_guard_ok(admin):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from slugify import slugify
+
+    from app.core import blog
+    from app.models.story import Story
+
+    counts = await _blog_term_counts(db, "tag")
+    names = sorted({t for (raw,) in (await db.execute(select(Story.tags))).all() for t in blog.names(raw)}, key=str.lower)
+    terms = [{"name": t, "slug": slugify(t), "count": counts.get(t.lower(), 0)} for t in names]
+    ctx = await _admin_context(request, db, "admin.blog")
+    return await render_template(request, "admin/blog-terms.html", {"_db": db, "kind": "tag", "terms": terms, "title": "Tags", "headerIcon": "ri-price-tag-3-line", **ctx})
+
+
+@router.post("/blog/terms", name="admin_blog_terms")
+async def admin_blog_terms(request: Request, db: AsyncSession = Depends(get_db)):
+    """Add / rename / delete a category or tag. Categories are the Settings → Lists "story_categories" list."""
+    import json as _json
+
+    from app.core import blog, lists
+    from app.core.settings_cache import update_settings
+    from app.models.story import Story
+
+    admin = await _get_admin(request)
+    if not _blog_guard_ok(admin):
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    form = await request.form()
+    kind = "tag" if form.get("kind") == "tag" else "cat"
+    op = str(form.get("op") or "")
+    name = " ".join(str(form.get("name") or "").split())[:60]
+    new = " ".join(str(form.get("new_name") or "").split())[:60]
+    back = "/admin/blog/tags" if kind == "tag" else "/admin/blog/categories"
+    label = "Tag" if kind == "tag" else "Category"
+    cats = await _story_categories(db)
+
+    async def save_cats(values):
+        await update_settings(db, {lists.setting_key("story_categories"): _json.dumps(values, ensure_ascii=False)})
+
+    if kind == "cat" and op == "add":
+        if not new:
+            return _redirect(request, back, "Type a category name.", "error")
+        if new.lower() in [c.lower() for c in cats]:
+            return _redirect(request, back, f"“{new}” already exists.", "error")
+        await save_cats(cats + [new])
+        await db.commit()
+        return _redirect(request, back, f"Category “{new}” added.")
+    if op not in ("rename", "delete") or not name:
+        return _redirect(request, back, "Nothing to change.", "error")
+    if op == "rename" and not new:
+        return _redirect(request, back, "Type the new name.", "error")
+    changed = 0
+    for p in (await db.execute(select(Story))).scalars():
+        current = blog.post_categories(p) if kind == "cat" else blog.post_tags(p)
+        if name.lower() not in [c.lower() for c in current]:
+            continue
+        updated = [(new if op == "rename" else None) if c.lower() == name.lower() else c for c in current]
+        updated = [c for c in updated if c]
+        if kind == "cat":
+            blog.set_categories(p, updated)
+        else:
+            p.tags = blog.dump(updated)
+        changed += 1
+    if kind == "cat":
+        values = [(new if c.lower() == name.lower() else c) for c in cats] if op == "rename" else [c for c in cats if c.lower() != name.lower()]
+        await save_cats(blog.names(values) or cats[:1])
+    await db.commit()
+    verb = f"renamed to “{new}”" if op == "rename" else "deleted"
+    return _redirect(request, back, f"{label} “{name}” {verb}" + (f" ({changed} post{'' if changed == 1 else 's'} updated)." if changed else "."))
