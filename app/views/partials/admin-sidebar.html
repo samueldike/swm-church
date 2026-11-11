@@ -8,10 +8,12 @@
 #}
 <div id="admin-sidebar-overlay" class="fixed inset-0 bg-black/50 z-30 hidden lg:hidden" aria-hidden="true"></div>
 
-{#- Pages that open with the menu collapsed to icons (wide work areas). Focus pages also hide the admin header. -#}
-{%- set rail_default = active_page in ['admin.whatsapp', 'admin.documents'] -%}
+{#- Full-view pages open with the menu collapsed to icons: whole sections by name, or any page whose route passes
+    full_view=True (the Books Pub editor and the blog post editor share a name with their lists, so they use the flag).
+    Focus pages also hide the admin header. -#}
+{%- set rail_default = active_page in ['admin.whatsapp', 'admin.documents'] or (full_view is defined and full_view) -%}
 {%- set focus_page = active_page in ['admin.whatsapp'] -%}
-<aside id="admin-sidebar" data-rail-default="{{ '1' if rail_default else '0' }}" data-focus="{{ '1' if focus_page else '0' }}" data-rail-page="{{ active_page }}" class="{{ 'is-rail ' if rail_default else '' }}fixed lg:static inset-y-0 left-0 z-40 w-64 bg-chrome border-r border-chrome-line flex flex-col flex-shrink-0 transform -translate-x-full lg:translate-x-0 transition-transform duration-200 ease-out">
+<aside id="admin-sidebar" data-rail-default="{{ '1' if rail_default else '0' }}" data-focus="{{ '1' if focus_page else '0' }}" data-rail-page="{{ active_page }}{{ '.editor' if (full_view is defined and full_view) else '' }}" class="{{ 'is-rail ' if rail_default else '' }}fixed lg:static inset-y-0 left-0 z-40 w-64 bg-chrome border-r border-chrome-line flex flex-col flex-shrink-0 transform -translate-x-full lg:translate-x-0 transition-transform duration-200 ease-out">
 
   <a href="{{ url_for('home') }}" class="flex items-center gap-3 px-4 py-4.5 border-b border-chrome-line min-w-0">
     <img src="/static/brand/swm-logo-128.png" alt="" width="40" height="40" class="w-10 h-10 rounded-full object-contain bg-white flex-shrink-0">

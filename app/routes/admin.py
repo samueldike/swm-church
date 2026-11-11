@@ -6757,7 +6757,7 @@ async def admin_pubs_editor(kind: str, pub_id: int, request: Request, db: AsyncS
         return err
     if not pub.document_html:
         return _redirect(request, f"/admin/publications/{kind}/{pub_id}", "Generate the document first.", "error")
-    return await _pub_render(request, db, "admin/pub-editor.html", kind, pub=pub, title=f"Editor — {pub.title}")
+    return await _pub_render(request, db, "admin/pub-editor.html", kind, pub=pub, title=f"Editor — {pub.title}", full_view=True)
 
 
 @router.post("/publications/{kind}/{pub_id}/editor/save", name="admin_pubs_editor_save")
@@ -9203,7 +9203,7 @@ async def _blog_editor(request: Request, db: AsyncSession, post, admin):
 
     used_tags = sorted({t for (raw,) in (await db.execute(select(Story.tags))).all() for t in blog.names(raw)}, key=str.lower)
     when = _blog_local(post.published_at, tz) if post and post.published_at else None
-    return await render_template(request, "admin/blog-editor.html", {
+    return await render_template(request, "admin/blog-editor.html", {"full_view": True,
         "_db": db, "post": post, "post_cats": blog.post_categories(post) if post else [], "post_tags": blog.post_tags(post) if post else [],
         "categories": await _story_categories(db), "used_tags": used_tags, "statuses": blog.STATUSES, "tz": tz,
         "when_value": when.strftime("%Y-%m-%dT%H:%M") if when else "", "when_label": when.strftime("%B %d, %Y %I:%M %p").replace(" 0", " ") if when else "",
