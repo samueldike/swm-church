@@ -1,23 +1,27 @@
 /* SWM console: WhatsApp, laid out like the official WhatsApp Web. Scoped to .wx (the connected app) and
    .wa (the page). Colours follow WhatsApp Web's light and dark themes; the admin's dark mode switches them. */
 .wa { --wx-h: calc(100dvh - 32px); }
-.wx {
+/* Colour tokens: on the app AND on the layers attached to <body> (menus, dialogs, viewers). */
+.wx, .wx-menu, .wx-modal, .wx-viewer, .wx-status-view {
   --wx-green: #00a884; --wx-green-d: #008069; --wx-badge: #25d366; --wx-blue: #53bdeb;
   --wx-bg: #ffffff; --wx-panel: #f0f2f5; --wx-line: #e9edef; --wx-line2: #d1d7db;
   --wx-ink: #111b21; --wx-ink2: #3b4a54; --wx-ink3: #667781; --wx-hover: #f5f6f6; --wx-active: #f0f2f5;
   --wx-convo: #efeae2; --wx-in: #ffffff; --wx-out: #d9fdd3; --wx-chip: #ffffff; --wx-quote: rgba(11,20,26,.05);
   --wx-menu: #ffffff; --wx-shadow: 0 2px 5px rgba(11,20,26,.26), 0 2px 10px rgba(11,20,26,.16);
   --wx-doodle: rgba(0,0,0,.035);
-  display: grid; grid-template-columns: 64px minmax(300px, 30%) minmax(0, 1fr) auto; height: var(--wx-h);
-  background: var(--wx-bg); color: var(--wx-ink); border: 1px solid var(--wx-line); border-radius: 0; overflow: hidden;
-  font-size: 14.2px; position: relative;
 }
-html.dark .wx {
+html.dark .wx, html.dark .wx-menu, html.dark .wx-modal, html.dark .wx-viewer, html.dark .wx-status-view {
   --wx-bg: #111b21; --wx-panel: #202c33; --wx-line: #222d34; --wx-line2: #313d45;
   --wx-ink: #e9edef; --wx-ink2: #d1d7db; --wx-ink3: #8696a0; --wx-hover: #202c33; --wx-active: #2a3942;
   --wx-convo: #0b141a; --wx-in: #202c33; --wx-out: #005c4b; --wx-chip: #182229; --wx-quote: rgba(255,255,255,.06);
   --wx-menu: #233138; --wx-doodle: rgba(255,255,255,.025);
 }
+.wx {
+  display: grid; grid-template-columns: 64px minmax(300px, 30%) minmax(0, 1fr) auto; height: var(--wx-h);
+  background: var(--wx-bg); color: var(--wx-ink); border: 1px solid var(--wx-line); border-radius: 0; overflow: hidden;
+  font-size: 14.2px; position: relative;
+}
+
 .wx [hidden] { display: none !important; }
 .wx button { cursor: pointer; color: inherit; }
 .wx .ic { width: 40px; height: 40px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 20px; color: var(--wx-ink3); flex: none; }
@@ -378,3 +382,20 @@ html.dark .wx-viewer { background: rgba(11,20,26,.97); }
   .wx-mreact { display: none !important; }
   .wx-mchev { display: grid; opacity: .7; }
 }
+
+/* The admin stylesheet styles every input/textarea (border, gold focus ring). WhatsApp Web fields are flat. */
+.wx input, .wx textarea, .wx select, .wx-modal input, .wx-modal textarea {
+  box-shadow: none !important; outline: none !important; border-radius: 0; font-family: inherit;
+}
+.wx .wx-tin textarea, .wx .wx-search input, .wx .wx-preview-cap input, .wx-modal .wx-search input {
+  border: 0 !important; background: transparent; padding: 0; min-height: 0; height: auto;
+}
+.wx .wx-tin textarea { line-height: 20px; }
+.wx .wx-preview-cap input { background: var(--wx-bg); padding: 11px 14px; border-radius: 8px; }
+.wx .wx-input, .wx-modal .wx-input { border: 0 !important; border-bottom: 2px solid var(--wx-line2) !important; border-radius: 0; background: transparent; color: var(--wx-ink); }
+.wx .wx-input:focus, .wx-modal .wx-input:focus { border-bottom-color: var(--wx-green) !important; }
+.wx .wx-tin:focus-within { box-shadow: none; }
+.wx .wx-church { border: 1px solid var(--wx-line2) !important; border-radius: 8px; }
+.wx-modal .wx-search { background: var(--wx-panel); }
+.wx-menu, .wx-dialog { color: var(--wx-ink2); }
+.wx-menu { background: var(--wx-menu); }
