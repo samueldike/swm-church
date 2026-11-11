@@ -147,7 +147,7 @@
     const tx = railBtn?.querySelector('span'); if (tx) tx.textContent = label;
   };
   let railSaved = null; try { railSaved = localStorage.getItem(railKey); } catch (_) {}
-  // Focus pages (WhatsApp) always open collapsed; elsewhere the last choice for that page is kept.
+  // Pages on the sidebar's rail_default list (WhatsApp, Documents) always open collapsed; elsewhere the last choice for that page is kept.
   const focusPage = sidebar.dataset.railDefault === '1';
   setRail(focusPage ? true : railSaved === 'on');
   railBtn?.addEventListener('click', () => {
