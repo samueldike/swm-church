@@ -206,6 +206,12 @@ def _accept_hod(monkeypatch, password, email_taken=None):
         return "form"
 
     monkeypatch.setattr(admin_routes, "render_template", render)
+
+    async def switches_off(_db, _key):           # never read the real Settings from a test
+        return False
+
+    from app.core import admin_security
+    monkeypatch.setattr(admin_security, "setting_on", switches_off)
     request = SimpleNamespace(session={})
     resp = asyncio.run(admin_routes.hod_invitation_accept("tok", request, password, password, db))
     return resp, db, shown, invitation
