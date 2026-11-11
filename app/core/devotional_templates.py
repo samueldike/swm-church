@@ -384,9 +384,41 @@ def fit_day(day: DayPage, opts: Options) -> tuple[int, int]:
     return level, count
 
 
+def _overflowing(document, n: int) -> dict[int, int]:
+    """Pages taken by each of the ``n`` days of a document (anchors ``day-<index>`` mark where each starts)."""
+    where: dict[str, int] = {}
+    for i, page in enumerate(document.pages):
+        for anchor in page.anchors:
+            where.setdefault(anchor, i)
+    total = len(document.pages)
+    out = {}
+    for k in range(n):
+        start = where.get(f"day-{k}", 0)
+        out[k] = where.get(f"day-{k + 1}", total) - start
+    return out
+
+
 def _fit_many(args) -> list[tuple[int, int]]:
+    """``fit_day`` for a batch, but laid out together: one document for the batch, then one for just
+    the days that spilled over (one level smaller), and so on. Far quicker than a document per day."""
     days, opts = args
-    return [fit_day(d, opts) for d in days]
+    work = [copy.copy(d) for d in days]
+    for d in work:
+        d.fit = max(0, _guess_fit(d) - 1)
+    result: list[tuple[int, int]] = [(0, 1)] * len(work)
+    pending = list(range(len(work)))
+    while pending:
+        batch = [work[k] for k in pending]
+        counts = _overflowing(_render(render_html(batch, opts, title_page=False, first_number=1)), len(batch))
+        nxt = []
+        for pos, k in enumerate(pending):
+            if counts[pos] > 1 and work[k].fit < FIT_LEVELS - 1:
+                work[k].fit += 1
+                nxt.append(k)
+            else:
+                result[k] = (work[k].fit, counts[pos])
+        pending = nxt
+    return result
 
 
 def _render_chunk(args) -> bytes:
@@ -416,7 +448,7 @@ def build_pdf(pages: list[DayPage], opts: Options, *, progress=None, workers: in
     pool = ProcessPoolExecutor(max_workers=workers, mp_context=get_context("spawn")) if workers > 1 else None
     try:
         # 1. Measure: the type level of every day (in small batches so progress moves).
-        batches = _chunks(pages, max(1, total // 4)) if pool else [[d] for d in pages]
+        batches = _chunks(pages, max(1, -(-total // 30)))  # about 30 days per batch
         done = 0
         results = pool.map(_fit_many, [(b, opts) for b in batches]) if pool else map(_fit_many, [(b, opts) for b in batches])
         counts: list[int] = []
