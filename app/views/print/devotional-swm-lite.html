@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+{#- SWM Lite: a greyscale print-book devotional, one day per page (app/core/devotional_templates.py).
+    Rendered by WeasyPrint only: page furniture (top rule, logo, bottom rule, page number) lives in
+    @page margin boxes and is mirrored for left/right pages. -#}
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>{{ title }}</title>
+<style>
+@font-face { font-family: "SWM Head"; font-weight: 500; font-style: normal; src: url("{{ font_dir }}/montserrat-500-normal.woff2"); }
+@font-face { font-family: "SWM Head"; font-weight: 500; font-style: italic; src: url("{{ font_dir }}/montserrat-500-italic.woff2"); }
+@font-face { font-family: "SWM Head"; font-weight: 700; font-style: normal; src: url("{{ font_dir }}/montserrat-700-normal.woff2"); }
+@font-face { font-family: "SWM Head"; font-weight: 800; font-style: normal; src: url("{{ font_dir }}/montserrat-800-normal.woff2"); }
+@font-face { font-family: "SWM Text"; font-weight: 400; font-style: normal; src: url("{{ font_dir }}/source-sans-3-400-normal.woff2"); }
+@font-face { font-family: "SWM Text"; font-weight: 400; font-style: italic; src: url("{{ font_dir }}/source-sans-3-400-italic.woff2"); }
+@font-face { font-family: "SWM Text"; font-weight: 600; font-style: italic; src: url("{{ font_dir }}/source-sans-3-600-italic.woff2"); }
+@font-face { font-family: "SWM Text"; font-weight: 700; font-style: normal; src: url("{{ font_dir }}/source-sans-3-700-normal.woff2"); }
+
+@page {
+  size: {{ size }};
+  margin: 21mm 13mm 17mm 17mm;
+}
+@page:first { counter-reset: page {{ counter_start }}; }
+
+/* Right-hand page: binding on the left, logo and page number on the outside (right). */
+@page {{ recto }} {
+  margin-left: 17mm; margin-right: 13mm;
+  @top-left { content: ""; width: 100%; border-bottom: 1.3pt solid #3d3d3d; margin-bottom: 9.5mm; }
+  @top-right {
+    content: ""; width: 17mm; margin: 4mm -5mm 2mm 2mm;
+    background: url("{{ logo }}") no-repeat right center; background-size: contain;
+  }
+  @bottom-left { content: ""; width: 100%; border-top: 2.8pt solid #3d3d3d; vertical-align: top; margin-top: 6.2mm; }
+  @bottom-right {
+    content: counter(page); width: 10mm; vertical-align: top; margin-top: 4.7mm; padding: 1mm 0 .9mm;
+    background: #3d3d3d; color: #fff; font: 700 9.5pt/1 "SWM Head"; text-align: center;
+  }
+}
+/* Left-hand page: the mirror image. */
+@page {{ verso }} {
+  margin-left: 13mm; margin-right: 17mm;
+  @top-right { content: ""; width: 100%; border-bottom: 1.3pt solid #3d3d3d; margin-bottom: 9.5mm; }
+  @top-left {
+    content: ""; width: 17mm; margin: 4mm 2mm 2mm -5mm;
+    background: url("{{ logo }}") no-repeat left center; background-size: contain;
+  }
+  @bottom-right { content: ""; width: 100%; border-top: 2.8pt solid #3d3d3d; vertical-align: top; margin-top: 6.2mm; }
+  @bottom-left {
+    content: counter(page); width: 10mm; vertical-align: top; margin-top: 4.7mm; padding: 1mm 0 .9mm;
+    background: #3d3d3d; color: #fff; font: 700 9.5pt/1 "SWM Head"; text-align: center;
+  }
+}
+@page cover {
+  margin: 0; border-top: 9mm solid #3d3d3d; border-bottom: 9mm solid #3d3d3d;
+  @top-left { content: none; } @top-right { content: none; }
+  @bottom-left { content: none; } @bottom-right { content: none; }
+}
+
+html { color: #262626; font-family: "SWM Text", "DejaVu Sans", sans-serif; font-size: 9.6pt; }
+body { margin: 0; }
+
+/* ── Title page ── */
+.cover { page: cover; break-after: page; text-align: center; padding-top: 22mm; }
+.cover-logo { width: 40mm; height: 40mm; margin: 0 auto 12mm; }
+.cover-logo img { width: 100%; }
+.cover h1 { font: 800 22pt/1.15 "SWM Head"; text-transform: uppercase; color: #3d3d3d; margin: 0 16mm; letter-spacing: .3pt; }
+.cover .cover-sub { font: italic 500 11pt/1.3 "SWM Head"; text-transform: uppercase; color: #555; margin: 5mm 16mm 0; }
+.cover .cover-rule { width: 22mm; border-top: 2.4pt solid #3d3d3d; margin: 8mm auto; }
+.cover .cover-author { font: 700 10.5pt "SWM Head"; color: #3d3d3d; }
+.cover .cover-church { font: 500 8.5pt "SWM Head"; text-transform: uppercase; letter-spacing: 1.2pt; color: #666; margin-top: 2mm; }
+
+/* ── One day ── */
+.day { break-before: page; }
+.cover + .day { break-before: auto; }
+
+.dh { width: 100%; border-collapse: collapse; }
+.dh td { padding: 0; vertical-align: top; }
+.dh h1 { font: 800 15.5pt/1.12 "SWM Head"; text-transform: uppercase; color: #3d3d3d; margin: 0; letter-spacing: .15pt; }
+.dh h2 { font: italic 500 11.5pt/1.2 "SWM Head"; text-transform: uppercase; color: #474747; margin: 3.6mm 0 0; }
+.badge-cell { width: 13.5mm; padding-left: 3mm !important; }
+.badge { background: #5c5c5c; color: #fff; text-align: center; padding: .9mm 0 1mm; font-family: "SWM Head"; }
+.badge .wd { display: block; font: 700 6.6pt/1 "SWM Head"; letter-spacing: .3pt; }
+.badge .dd { display: block; font: 800 17pt/1 "SWM Head"; margin: .6mm 0 .5mm; }
+.badge .mm { display: block; font: 700 7.4pt/1 "SWM Head"; letter-spacing: .3pt; }
+.badge .dn { display: block; font: 700 6.4pt/1 "SWM Head"; letter-spacing: .4pt; }
+
+.rule { border-top: .9pt solid #4a4a4a; margin: 4.4mm 0 4mm; }
+.scripture { background: #d3d3d3; padding: 2.3mm 3.2mm 2.5mm; margin: 0; font: italic 600 9.4pt/1.32 "SWM Text"; color: #333; }
+.tick { width: 9mm; border-top: .9pt solid #4a4a4a; margin: 4.6mm 0 4mm; }
+
+.body p { margin: 0 0 3mm; text-align: justify; hyphens: auto; line-height: 1.33; }
+.body p:last-child { margin-bottom: 0; }
+.drop {
+  float: left; width: 6.4mm; height: 6.4mm; margin: .9mm 1.8mm 0 0; background: #5c5c5c; color: #fff;
+  font: 500 15pt/6.4mm "SWM Head"; text-align: center;
+}
+
+.boxes { width: 100%; border-collapse: separate; border-spacing: 0 2.2mm; margin-top: 5mm; }
+.boxes td { vertical-align: top; }
+.boxes .lbl {
+  width: 13mm; background: #5f5f5f; color: #fff; text-align: center; padding: 1.4mm .6mm 3.5mm;
+  font: 700 6.4pt/1.15 "SWM Head"; text-transform: uppercase; letter-spacing: .2pt;
+}
+.boxes .gap { width: 1.6mm; }
+.boxes .txt { background: #d9d9d9; padding: 1.7mm 3mm 2.6mm; font: italic 600 9pt/1.3 "SWM Text"; color: #3a3a3a; }
+
+.reading { width: 100%; border-collapse: collapse; margin-top: 1.2mm; background: #d0d0d0; font: 600 7.6pt/1 "SWM Head"; }
+.reading td { padding: 0; vertical-align: middle; white-space: nowrap; }
+.reading .rl { background: #6a6a6a; color: #fff; padding: 1.1mm 1.4mm 1.1mm 2mm; text-transform: uppercase; font-size: 6.5pt; letter-spacing: .2pt; }
+.reading .ar { width: 2.4mm; line-height: 0; }
+.reading .ar svg { display: block; }
+.reading .rt { padding: 0 3mm 0 1.6mm; color: #444; font-weight: 500; }
+
+/* Shrinking steps for long days (chosen in build_pdf so each day fits its page). */
+.fit-1 { font-size: 9.2pt; } .fit-1 .body p { line-height: 1.3; margin-bottom: 2.4mm; }
+.fit-1 .rule { margin: 3.6mm 0 3.2mm; } .fit-1 .tick { margin: 3.6mm 0 3.2mm; }
+.fit-2 { font-size: 8.8pt; } .fit-2 .body p { line-height: 1.27; margin-bottom: 2mm; }
+.fit-2 .rule { margin: 3mm 0 2.8mm; } .fit-2 .tick { margin: 3mm 0 2.8mm; } .fit-2 .boxes { margin-top: 3mm; }
+.fit-2 .scripture { font-size: 8.8pt; } .fit-2 .boxes .txt { font-size: 8.5pt; }
+.fit-3 { font-size: 8.3pt; } .fit-3 .body p { line-height: 1.24; margin-bottom: 1.6mm; }
+.fit-3 .rule { margin: 2.4mm 0 2.2mm; } .fit-3 .tick { margin: 2.4mm 0 2.2mm; } .fit-3 .boxes { margin-top: 2mm; }
+.fit-3 .scripture { font-size: 8.3pt; } .fit-3 .boxes .txt { font-size: 8pt; } .fit-3 .dh h1 { font-size: 14pt; }
+</style>
+</head>
+<body>
+{% if opts.title_page %}
+<section class="cover">
+  {% if logo %}<div class="cover-logo"><img src="{{ logo }}" alt=""></div>{% endif %}
+  <h1>{{ title }}</h1>
+  {% if subtitle %}<p class="cover-sub">{{ subtitle }}</p>{% endif %}
+  <div class="cover-rule"></div>
+  {% if author %}<div class="cover-author">{{ author }}</div>{% endif %}
+  {% if church %}<div class="cover-church">{{ church }}</div>{% endif %}
+</section>
+{% endif %}
+{% for d in pages %}
+<section class="day fit-{{ d.fit }}" id="day-{{ loop.index0 }}">
+  <table class="dh"><tr>
+    <td>
+      <h1>{{ d.topic }}</h1>
+      {% if d.subtitle %}<h2>{{ d.subtitle }}</h2>{% endif %}
+    </td>
+    <td class="badge-cell">
+      <div class="badge">
+        {% if d.day %}<span class="wd">{{ d.weekday }}</span><span class="dd">{{ d.day.day }}</span><span class="mm">{{ d.month }}</span>
+        {% else %}<span class="dn">DAY</span><span class="dd">{{ d.number }}</span>{% endif %}
+      </div>
+    </td>
+  </tr></table>
+  <div class="rule"></div>
+  {% if d.scripture %}<p class="scripture">{{ d.scripture | safe }}</p><div class="tick"></div>{% endif %}
+  <div class="body">
+    {% for p in d.paragraphs %}
+      {% if loop.first and d.lead[0] %}<p><span class="drop">{{ d.lead[0] }}</span>{{ d.lead[1] | safe }}</p>
+      {% else %}<p>{{ p | safe }}</p>{% endif %}
+    {% endfor %}
+  </div>
+  {% if d.action or d.prayer %}
+  <table class="boxes">
+    {% if d.action %}<tr><td class="lbl">Action<br>Plan</td><td class="gap"></td><td class="txt">{{ d.action | safe }}</td></tr>{% endif %}
+    {% if d.prayer %}<tr><td class="lbl">Prayer</td><td class="gap"></td><td class="txt">{{ d.prayer | safe }}</td></tr>{% endif %}
+  </table>
+  {% endif %}
+  {% if opts.reading and d.one_year %}
+  <table class="reading"><tr>
+    <td class="rl">Bible in one year</td><td class="ar"><svg width="2.4mm" height="4.4mm" viewBox="0 0 10 20"><path d="M0 0L10 10L0 20Z" fill="#6a6a6a"/></svg></td><td class="rt">{{ d.one_year }}</td>
+    <td class="rl">Bible in two years</td><td class="ar"><svg width="2.4mm" height="4.4mm" viewBox="0 0 10 20"><path d="M0 0L10 10L0 20Z" fill="#6a6a6a"/></svg></td><td class="rt">{{ d.two_year }}</td>
+  </tr></table>
+  {% endif %}
+</section>
+{% endfor %}
+</body>
+</html>

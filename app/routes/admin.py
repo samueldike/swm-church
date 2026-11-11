@@ -6757,7 +6757,10 @@ async def admin_pubs_editor(kind: str, pub_id: int, request: Request, db: AsyncS
         return err
     if not pub.document_html:
         return _redirect(request, f"/admin/publications/{kind}/{pub_id}", "Generate the document first.", "error")
-    return await _pub_render(request, db, "admin/pub-editor.html", kind, pub=pub, title=f"Editor — {pub.title}", full_view=True)
+    from app.core.devotional_templates import TEMPLATES, TRIMS
+
+    return await _pub_render(request, db, "admin/pub-editor.html", kind, pub=pub, title=f"Editor — {pub.title}",
+                             full_view=True, print_templates=TEMPLATES, print_trims=TRIMS)
 
 
 @router.post("/publications/{kind}/{pub_id}/editor/save", name="admin_pubs_editor_save")
@@ -6800,6 +6803,79 @@ async def admin_pubs_export(kind: str, pub_id: int, fmt: str, request: Request, 
     await log_admin_action(db, admin.id, "publication.export", "publication", pub.id, {"format": fmt}, request)
     name = f"{slugify(pub.title) or 'publication'}.{fmt}"
     return Response(content=data, media_type=media, headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+# Designed PDFs from a print template (app/core/devotional_templates.py). Thumbnails are page 1 of
+# the real PDF, cached per (publication, last save, template, trim, reading) in this process.
+_PUB_THUMBS: dict[tuple, bytes] = {}
+
+
+async def _pub_template_meta(db, pub) -> dict:
+    from app.core.publications import period_label
+    from app.core.settings_cache import get_settings
+
+    site = await get_settings(db)
+    return {"title": pub.title, "subtitle": period_label(pub), "author": pub.author_name or "",
+            "church": site.get("siteName", "Scent of Water Ministry")}
+
+
+@router.get("/publications/{kind}/{pub_id}/templates/{key}/thumb.png", name="admin_pubs_template_thumb")
+async def admin_pubs_template_thumb(kind: str, pub_id: int, key: str, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, pub, err = await _pub_guard(request, db, kind, pub_id)
+    if err:
+        return err
+    import asyncio
+    import copy
+
+    from fastapi.responses import Response
+
+    from app.core import devotional_templates as dt
+
+    if key not in dt.TEMPLATES or not pub.is_devotional:
+        return Response(status_code=404)
+    opts = dt.Options.from_query({**request.query_params, "template": key})
+    stamp = pub.document_saved_at or pub.document_built_at or pub.updated_at
+    cache_key = (pub.id, str(stamp), key, opts.trim, opts.reading, opts.two_year_plan)
+    png = _PUB_THUMBS.get(cache_key)
+    if png is None:
+        pages = dt.day_pages(pub, reading=opts.reading, two_year_plan=opts.two_year_plan)[:1] or [copy.deepcopy(dt.SAMPLE_DAY)]
+        meta = await _pub_template_meta(db, pub)
+        png = await asyncio.to_thread(dt.thumbnail_png, pages, opts, **meta)
+        if len(_PUB_THUMBS) > 200:
+            _PUB_THUMBS.clear()
+        _PUB_THUMBS[cache_key] = png
+    return Response(content=png, media_type="image/png", headers={"Cache-Control": "private, max-age=300"})
+
+
+@router.get("/publications/{kind}/{pub_id}/export-template", name="admin_pubs_export_template")
+async def admin_pubs_export_template(kind: str, pub_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, pub, err = await _pub_guard(request, db, kind, pub_id)
+    if err:
+        return err
+    import asyncio
+
+    from fastapi.responses import Response
+    from slugify import slugify
+
+    from app.core import devotional_templates as dt
+
+    back = f"/admin/publications/{kind}/{pub_id}/editor"
+    if not pub.is_devotional:
+        return _redirect(request, back, "Print templates are for daily devotionals.", "error")
+    opts = dt.Options.from_query(request.query_params)
+    pages = dt.day_pages(pub, reading=opts.reading, two_year_plan=opts.two_year_plan)
+    if not pages:
+        return _redirect(request, back, "There are no days with content to put into the template yet.", "error")
+    meta = await _pub_template_meta(db, pub)
+    try:
+        data = await asyncio.to_thread(dt.build_pdf, pages, opts, **meta)
+    except Exception:
+        logging.getLogger(__name__).exception("Template export failed for publication %s", pub.id)
+        return _redirect(request, back, "The designed PDF could not be made. Please try again.", "error")
+    await log_admin_action(db, admin.id, "publication.export", "publication", pub.id,
+                           {"format": "pdf", "template": opts.template, "trim": opts.trim}, request)
+    name = f"{slugify(pub.title) or 'devotional'}-{opts.template}.pdf"
+    return Response(content=data, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 # ─── Community: Prayer Requests, Newsletter Subscribers, Donations ──

@@ -54,6 +54,37 @@
   #ed-save-state.dirty { color: #b45309; } #ed-save-state.ok { color: #15803d; } #ed-save-state.err { color: #b91c1c; }
   .ed-pop { position: absolute; z-index: 30; background: var(--color-surface, #fff); border: 1px solid var(--color-line-2, #d8d3c6); border-radius: 8px; padding: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.14); display: none; }
   .ed-pop.open { display: block; }
+  /* Print-template chooser */
+  dialog.tp { border: 0; padding: 0; border-radius: 12px; width: min(760px, calc(100vw - 24px)); max-height: calc(100vh - 32px); background: var(--color-surface, #fff); color: var(--color-ink, #1a1a1a); box-shadow: 0 24px 64px rgba(0,0,0,.28); }
+  dialog.tp::backdrop { background: rgba(20,18,14,.45); }
+  .tp-in { display: flex; flex-direction: column; max-height: calc(100vh - 32px); }
+  .tp-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 18px 20px 12px; border-bottom: 1px solid var(--color-line, #e4e0d6); }
+  .tp-head h2 { font-size: 17px; font-weight: 700; margin: 0; }
+  .tp-head p { font-size: 13px; color: var(--color-ink-3, #6b675e); margin: 4px 0 0; }
+  .tp-body { display: grid; grid-template-columns: 1fr 250px; gap: 20px; padding: 16px 20px; overflow: auto; }
+  @media (max-width: 680px) { .tp-body { grid-template-columns: 1fr; } }
+  .tp-cards { border: 0; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; align-content: start; }
+  .tp-cards legend, .tp-opts > label, .tp-opts .tp-check { font-size: 12.5px; font-weight: 600; color: var(--color-ink-2, #3a3731); }
+  .tp-cards legend { margin-bottom: 8px; }
+  .tp-card { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1.5px solid var(--color-line-2, #d8d3c6); border-radius: 10px; cursor: pointer; }
+  .tp-card:has(input:checked) { border-color: var(--color-gold, #b8891f); box-shadow: 0 0 0 3px var(--color-gold-tint, #f6ecd2); }
+  .tp-card input { position: absolute; top: 14px; left: 14px; z-index: 2; accent-color: var(--color-gold, #b8891f); width: 16px; height: 16px; }
+  .tp-thumb { position: relative; display: block; aspect-ratio: 148 / 210; background: #f3f2ef; border-radius: 6px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+  .tp-thumb img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: contain; display: block; }
+  .tp-thumb img:not([src]), .tp-thumb img.err { visibility: hidden; }
+  .tp-spin { position: absolute; inset: 0; margin: auto; width: 22px; height: 22px; font-size: 22px; line-height: 22px; color: #9a958a; animation: tpspin 1s linear infinite; }
+  @keyframes tpspin { to { transform: rotate(360deg); } }
+  .tp-name { font-size: 13.5px; font-weight: 700; }
+  .tp-desc { font-size: 12px; color: var(--color-ink-3, #6b675e); line-height: 1.35; }
+  .tp-opts { display: flex; flex-direction: column; gap: 12px; }
+  .tp-opts > label:not(.tp-check) { display: flex; flex-direction: column; gap: 5px; }
+  .tp-opts .rs { width: 100%; height: 34px; }
+  .tp-check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .tp-check input { width: 16px; height: 16px; accent-color: var(--color-gold, #b8891f); }
+  .tp-note { font-size: 12px; color: var(--color-ink-3, #6b675e); line-height: 1.45; margin: 0; }
+  .tp-foot { display: flex; align-items: center; gap: 8px; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid var(--color-line, #e4e0d6); }
+  .tp-msg { margin-right: auto; font-size: 12.5px; color: var(--color-ink-3, #6b675e); }
+  .tp-msg.err { color: #b42318; }
   .tblgrid { display: grid; grid-template-columns: repeat(8, 18px); gap: 3px; }
   .tblgrid span { width: 18px; height: 18px; border: 1px solid var(--color-line-2, #cfcabd); border-radius: 2px; }
   .tblgrid span.on { background: var(--color-gold-tint, #f6ecd2); border-color: var(--color-gold, #b8891f); }
@@ -90,6 +121,7 @@
           <a class="btn btn-ghost btn-sm w-full justify-start" data-export href="{{ url_for('admin_pubs_export', kind=kind, pub_id=pub.id, fmt='docx') }}" data-turbo="false"><i class="ri-file-word-line"></i>Word document (.docx)</a>
           <a class="btn btn-ghost btn-sm w-full justify-start" data-export href="{{ url_for('admin_pubs_export', kind=kind, pub_id=pub.id, fmt='pdf') }}" data-turbo="false"><i class="ri-file-pdf-line"></i>PDF (.pdf)</a>
           <button type="button" class="btn btn-ghost btn-sm w-full justify-start" id="ed-print"><i class="ri-printer-line"></i>Print / Save as PDF…</button>
+          {% if pub.is_devotional %}<button type="button" class="btn btn-ghost btn-sm w-full justify-start" id="ed-tpl-open"><i class="ri-layout-masonry-line"></i>Designed PDF (template)…</button>{% endif %}
         </div>
       </div>
     </div>
@@ -182,6 +214,52 @@
     <span class="flex-grow"></span>
     <span>Ctrl+S saves · autosaves every 20 s</span>
   </div>
+
+  {% if pub.is_devotional %}
+  {#- Print templates (app/core/devotional_templates.py). A thumbnail is page 1 of the real PDF. -#}
+  <dialog id="ed-tpl" class="tp" aria-labelledby="ed-tpl-h"
+          data-thumb="{{ url_for('admin_pubs_template_thumb', kind=kind, pub_id=pub.id, key='__KEY__') }}"
+          data-export="{{ url_for('admin_pubs_export_template', kind=kind, pub_id=pub.id) }}">
+    <form method="dialog" class="tp-in" id="ed-tpl-form">
+      <header class="tp-head">
+        <div><h2 id="ed-tpl-h">Export with a print template</h2>
+          <p>Each day of the devotional is laid out on its own book page, from the document as last saved.</p></div>
+        <button type="button" class="rb" id="ed-tpl-x" aria-label="Close"><i class="ri-close-line"></i></button>
+      </header>
+      <div class="tp-body">
+        <fieldset class="tp-cards"><legend>Template</legend>
+          {% for key, t in print_templates.items() %}
+          <label class="tp-card">
+            <input type="radio" name="template" value="{{ key }}" {{ 'checked' if loop.first else '' }}>
+            <span class="tp-thumb"><i class="ri-loader-4-line tp-spin" aria-hidden="true"></i><img alt="Preview of {{ t.name }}" data-key="{{ key }}"></span>
+            <span class="tp-name">{{ t.name }}</span>
+            <span class="tp-desc">{{ t.description }}</span>
+          </label>
+          {% endfor %}
+        </fieldset>
+        <div class="tp-opts">
+          <label>Page size
+            <select name="trim" class="rs">{% for k, tr in print_trims.items() %}<option value="{{ k }}">{{ tr.label }}</option>{% endfor %}</select></label>
+          <label>Page number of the first day
+            <input type="number" name="first_page" class="rs" value="1" min="1" max="9999"></label>
+          <label class="tp-check"><input type="checkbox" name="title_page" value="1" checked> Start with a title page</label>
+          <label class="tp-check"><input type="checkbox" name="reading" value="1" checked> Bible-reading strip</label>
+          <label>Two-year reading plan: this is
+            <select name="two_year_plan" class="rs">
+              <option value="1" {{ 'selected' if (pub.year or 1) % 2 == 1 else '' }}>Year 1 (Genesis to Proverbs)</option>
+              <option value="2" {{ 'selected' if (pub.year or 1) % 2 == 0 else '' }}>Year 2 (Ecclesiastes to Revelation)</option>
+            </select></label>
+          <p class="tp-note">{% if pub.start_date %}Dates follow the project's period (Day 1 is {{ pub.start_date.strftime('%d %b %Y') }}). {% else %}This project has no start date, so pages show “Day N” instead of a date, and no Bible reading. {% endif %}Readings run from Genesis to Revelation in order. A long day gets slightly smaller type so it fits its page.</p>
+        </div>
+      </div>
+      <footer class="tp-foot">
+        <span class="tp-msg" id="ed-tpl-msg" role="status" aria-live="polite"></span>
+        <button type="button" class="btn btn-secondary btn-sm" id="ed-tpl-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm" id="ed-tpl-go"><i class="ri-file-pdf-line"></i>Export PDF</button>
+      </footer>
+    </form>
+  </dialog>
+  {% endif %}
 </div>
 {% endblock %}
 
@@ -489,6 +567,70 @@
     if (dirty && !(await save(true))) { alert('Could not save your changes, so the export was cancelled.'); return; }
     location.href = a.href;
   }, opt));
+
+  /* ── Designed PDF from a print template ── */
+  const tpl = $('ed-tpl');
+  if (tpl) {
+    const form = $('ed-tpl-form');
+    const msg = $('ed-tpl-msg');
+    const params = () => {
+      const fd = new FormData(form);
+      const q = new URLSearchParams();
+      for (const k of ['template', 'trim', 'first_page', 'two_year_plan']) q.set(k, fd.get(k) || '');
+      q.set('title_page', fd.get('title_page') ? '1' : '0');
+      q.set('reading', fd.get('reading') ? '1' : '0');
+      return q;
+    };
+    const loadThumbs = () => {
+      const q = params();
+      const extra = new URLSearchParams({ trim: q.get('trim'), reading: q.get('reading'), two_year_plan: q.get('two_year_plan'), v: shell.dataset.saved || '' });
+      tpl.querySelectorAll('.tp-thumb img').forEach((img) => {
+        const url = tpl.dataset.thumb.replace('__KEY__', img.dataset.key) + '?' + extra;
+        if (img.getAttribute('src') === url) return;
+        img.classList.remove('err');
+        img.onerror = () => img.classList.add('err');
+        img.src = url;
+      });
+    };
+    $('ed-tpl-open').addEventListener('click', async () => {
+      epop.classList.remove('open');
+      msg.textContent = ''; msg.classList.remove('err');
+      tpl.showModal();
+      if (dirty) await save(true);  // the thumbnail shows the saved document
+      shell.dataset.saved = String(Date.now());
+      loadThumbs();
+    }, opt);
+    const close = () => tpl.close();
+    $('ed-tpl-x').addEventListener('click', close, opt);
+    $('ed-tpl-cancel').addEventListener('click', close, opt);
+    form.addEventListener('change', (e) => { if (['trim', 'reading', 'two_year_plan'].includes(e.target.name)) loadThumbs(); }, opt);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const go = $('ed-tpl-go');
+      msg.classList.remove('err');
+      if (dirty && !(await save(true))) { msg.textContent = 'Could not save your changes, so the export was cancelled.'; msg.classList.add('err'); return; }
+      go.disabled = true;
+      msg.textContent = 'Laying out the pages… a full year can take a minute or two.';
+      try {
+        const res = await fetch(tpl.dataset.export + '?' + params(), { credentials: 'same-origin' });
+        const type = res.headers.get('content-type') || '';
+        if (!res.ok || !type.includes('application/pdf')) throw new Error('not a pdf');
+        const blob = await res.blob();
+        const cd = res.headers.get('content-disposition') || '';
+        const name = (cd.match(/filename="([^"]+)"/) || [])[1] || 'devotional.pdf';
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = name;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+        msg.textContent = 'Your PDF is downloading.';
+      } catch (err) {
+        msg.textContent = 'The designed PDF could not be made. Check that the days have content, then try again.';
+        msg.classList.add('err');
+      } finally {
+        go.disabled = false;
+      }
+    }, opt);
+  }
 
   $('ed-print').addEventListener('click', () => {
     epop.classList.remove('open');

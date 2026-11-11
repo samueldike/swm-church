@@ -29,6 +29,12 @@ bcrypt==4.0.1
 Pillow==10.4.0
 python-docx==1.2.0
 reportlab==5.1.0
+# Designed devotional PDFs (app/core/devotional_templates.py); pango is installed in the Dockerfile
+weasyprint==70.0
+pypdfium2==5.15.2
+# Designed devotional PDFs (app/core/devotional_templates.py); needs pango in the Dockerfile
+weasyprint==70.0
+pypdfium2==5.15.2
 telethon==1.44.0
 pycountry==26.2.16
 babel==2.18.0

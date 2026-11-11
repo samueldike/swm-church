@@ -16,7 +16,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc libpq-dev && \
+    apt-get install -y --no-install-recommends gcc libpq-dev \
+        libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core && \
     rm -rf /var/lib/apt/lists/*
 
 # constraints.txt pins every package (not just the direct ones) so a rebuild cannot pull a new major version.
