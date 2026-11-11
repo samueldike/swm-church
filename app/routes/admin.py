@@ -8379,6 +8379,57 @@ async def admin_whatsapp_targets(request: Request, db: AsyncSession = Depends(ge
         return _wa_json_error(e)
 
 
+@router.get("/whatsapp/contacts.json", name="admin_whatsapp_contacts")
+async def admin_whatsapp_contacts(request: Request, db: AsyncSession = Depends(get_db)):
+    """New chat panel: the linked phone's contacts on WhatsApp, A to Z."""
+    from app.core import whatsapp as wa
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not allowed"}, status_code=403)
+    params = {"fresh": "1"} if request.query_params.get("fresh") else None
+    try:
+        return JSONResponse(await wa.call("GET", f"/sessions/{wa.tenant(branch_id)}/contacts", params=params, timeout=60))
+    except wa.GatewayError as e:
+        return _wa_json_error(e)
+
+
+@router.get("/whatsapp/check.json", name="admin_whatsapp_check")
+async def admin_whatsapp_check(request: Request, db: AsyncSession = Depends(get_db)):
+    """New chat panel: is this phone number on WhatsApp?"""
+    from app.core import whatsapp as wa
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not allowed"}, status_code=403)
+    digits = re.sub(r"\D", "", request.query_params.get("to") or "")[:15]
+    if len(digits) < 7:
+        return JSONResponse({"jid": None, "exists": False})
+    try:
+        return JSONResponse(await wa.call("POST", f"/sessions/{wa.tenant(branch_id)}/check-number", json={"to": digits}, timeout=30))
+    except wa.GatewayError as e:
+        return _wa_json_error(e)
+
+
+@router.post("/whatsapp/groups", name="admin_whatsapp_group_create")
+async def admin_whatsapp_group_create(request: Request, db: AsyncSession = Depends(get_db)):
+    """New chat panel → New group: a name and the members."""
+    from app.core import whatsapp as wa
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not allowed"}, status_code=403)
+    form = await request.form()
+    body = {"name": str(form.get("name") or "").strip()[:100], "participants": [str(p) for p in form.getlist("participants")][:256]}
+    try:
+        r = await wa.call("POST", f"/sessions/{wa.tenant(branch_id)}/groups", json=body, timeout=90)
+    except wa.GatewayError as e:
+        return _wa_json_error(e)
+    await log_admin_action(db, admin.id, "whatsapp.group_create", "whatsapp", branch_id, {"name": body["name"], "members": len(body["participants"])}, request)
+    await db.commit()
+    return JSONResponse({"ok": True, "jid": r.get("jid")})
+
+
 @router.post("/whatsapp/send", name="admin_whatsapp_send")
 async def admin_whatsapp_send(request: Request, db: AsyncSession = Depends(get_db)):
     """Send now to one chat (the chat window, or a new chat by phone number)."""

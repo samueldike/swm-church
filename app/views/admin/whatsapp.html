@@ -86,6 +86,39 @@
           <button class="wa-chip" data-filter="channels">Channels</button>
         </div>
         <ul id="wa-chatlist" class="wa-chatlist" aria-label="Chats"><li class="wa-muted p-4">Loading chats…</li></ul>
+
+        {# New chat, like WhatsApp Web: slides over the chat list #}
+        <section class="wa-drawer" id="wa-nc" aria-label="New chat" hidden>
+          <header class="wa-drawer-head">
+            <button type="button" class="icon-btn" data-nc-close aria-label="Back to chats"><i class="ri-arrow-left-line"></i></button>
+            <h2>New chat</h2>
+          </header>
+          <div class="wa-list-top"><label class="wa-search"><i class="ri-search-line" aria-hidden="true"></i><span class="sr-only">Search name or number</span>
+            <input id="wa-nc-q" type="search" placeholder="Search name or number" autocomplete="off"></label></div>
+          <div class="wa-drawer-body" id="wa-nc-body"></div>
+        </section>
+
+        <section class="wa-drawer" id="wa-ng" aria-label="New group" hidden>
+          <header class="wa-drawer-head">
+            <button type="button" class="icon-btn" id="wa-ng-back" aria-label="Back"><i class="ri-arrow-left-line"></i></button>
+            <h2 id="wa-ng-title">Add group members</h2>
+          </header>
+          <div id="wa-ng-step1" class="wa-ng-step">
+            <div class="wa-ng-picked" id="wa-ng-picked"></div>
+            <div class="wa-list-top"><label class="wa-search"><i class="ri-search-line" aria-hidden="true"></i><span class="sr-only">Search name or number</span>
+              <input id="wa-ng-q" type="search" placeholder="Search name or number" autocomplete="off"></label></div>
+            <ul class="wa-drawer-body" id="wa-ng-list"></ul>
+            <button type="button" class="wa-fab" id="wa-ng-next" aria-label="Next" hidden><i class="ri-arrow-right-line"></i></button>
+          </div>
+          <form id="wa-ng-step2" class="wa-ng-step" hidden>
+            <div class="wa-ng-icon"><i class="ri-group-line"></i></div>
+            <label class="block px-4"><span class="field-label">Group subject</span>
+              <input class="field-input" name="name" maxlength="100" required placeholder="Group subject"></label>
+            <p class="wa-muted text-[13px] px-4 mt-2" id="wa-ng-count"></p>
+            <p class="wa-error mx-4" id="wa-ng-err" hidden></p>
+            <button type="submit" class="wa-fab" aria-label="Create group"><i class="ri-check-line"></i></button>
+          </form>
+        </section>
       </aside>
       <div class="wa-convo" id="wa-convo-pane">
         <div class="wa-empty" id="wa-empty"><i class="ri-whatsapp-line"></i><p>Choose a chat to read and reply.</p></div>
@@ -173,13 +206,6 @@
     </div>
   </section>
 
-  <dialog id="wa-newchat" class="wa-dialog" aria-label="New chat">
-    <form method="dialog" id="wa-newchat-form">
-      <h2 class="wa-h2">New chat</h2>
-      <label class="block"><span class="field-label">Phone number with country code</span><input class="field-input" name="to" inputmode="tel" placeholder="2348012345678" required></label>
-      <div class="flex gap-2 mt-4 justify-end"><button type="button" class="btn btn-secondary" value="cancel" id="wa-newchat-x">Cancel</button><button class="btn btn-primary">Open chat</button></div>
-    </form>
-  </dialog>
   {% endif %}
 </div>
 
@@ -270,8 +296,32 @@
   .wa-posts .wa-post-mid { flex: 1; min-width: 0; }
   .wa-facts div { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--color-line); }
   .wa-facts dt { width: 120px; color: var(--color-ink-3); font-weight: 700; }
-  .wa-dialog { border: 0; border-radius: 18px; padding: 20px; width: min(420px, 92vw); }
-  .wa-dialog::backdrop { background: rgba(0,0,0,.4); }
+  .wa-list { position: relative; }
+  .wa-drawer { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; background: var(--color-surface); animation: wa-slide .18s ease-out; }
+  .wa-drawer[hidden] { display: none; }
+  @keyframes wa-slide { from { transform: translateX(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .wa-drawer-head { display: flex; align-items: center; gap: 10px; padding: 10px 10px 4px; }
+  .wa-drawer-head h2 { font-size: 18px; font-weight: 800; }
+  .wa-drawer-body { flex: 1; overflow-y: auto; min-height: 0; }
+  .wa-nc-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 0 14px; min-height: 64px; text-align: left; }
+  .wa-nc-row:hover, .wa-nc-row:focus-visible { background: var(--color-sunken); }
+  .wa-nc-row .wa-avatar.icon { background: #25d366; color: #fff; font-size: 20px; }
+  .wa-nc-mid { flex: 1; min-width: 0; border-bottom: 1px solid var(--color-line); padding: 12px 0; }
+  .wa-nc-name { font-weight: 700; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .wa-nc-sub { font-size: 12.5px; color: var(--color-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .wa-nc-sec { padding: 18px 16px 8px; font-size: 13px; font-weight: 700; color: #1a7f45; letter-spacing: .02em; }
+  .wa-nc-letter { padding: 14px 16px 4px; font-size: 13px; font-weight: 700; color: var(--color-ink-3); }
+  .wa-nc-note { padding: 18px 16px; color: var(--color-ink-3); font-size: 14px; text-align: center; }
+  .wa-check { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--color-line-2); display: grid; place-items: center; flex: none; color: #fff; font-size: 13px; }
+  .wa-nc-row[aria-checked="true"] .wa-check { background: #25d366; border-color: #25d366; }
+  .wa-ng-step { display: flex; flex-direction: column; flex: 1; min-height: 0; position: relative; }
+  .wa-ng-step[hidden] { display: none; }
+  .wa-ng-picked { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 12px; max-height: 110px; overflow-y: auto; }
+  .wa-ng-picked:empty { display: none; }
+  .wa-ng-icon { width: 120px; height: 120px; border-radius: 50%; margin: 18px auto; display: grid; place-items: center; background: var(--color-sunken); color: var(--color-ink-3); font-size: 44px; }
+  .wa-fab { position: absolute; right: 18px; bottom: 18px; width: 52px; height: 52px; border-radius: 50%; background: #25d366; color: #fff; font-size: 24px; display: grid; place-items: center; box-shadow: 0 6px 18px rgba(0,0,0,.2); }
+  .wa-fab[hidden] { display: none; }
+  .wa-fab:disabled { opacity: .6; }
   @media (max-width: 860px) {
     .wa-chats { grid-template-columns: minmax(0, 1fr); height: calc(100dvh - 210px); }
     .wa-chats.is-reading .wa-list { display: none; }
@@ -364,6 +414,7 @@
 
   // ── chats ──
   let chats = [], filter = '', openJid = null, oldest = null, replyTo = null;
+  const known = new Map();            // names of contacts opened from New chat (not in the chat list yet)
   const avatarCache = new Map();
   async function avatar(el, jid, name) {
     el.textContent = initials(name);
@@ -413,7 +464,7 @@
   }
   async function openChat(jid, quiet) {
     if (!jid) return;
-    const chat = chats.find((c) => c.jid === jid) || { jid, name: '+' + jid.split('@')[0], kind: jid.endsWith('@g.us') ? 'group' : 'user' };
+    const chat = chats.find((c) => c.jid === jid) || { jid, name: known.get(jid) || '+' + jid.split('@')[0], kind: jid.endsWith('@g.us') ? 'group' : 'user' };
     const switching = openJid !== jid; openJid = jid;
     $('wa-empty').hidden = true; $('wa-convo').hidden = false;
     if (!quiet) root.querySelector('.wa-chats').classList.add('is-reading');
@@ -462,11 +513,127 @@
     finally { btn.disabled = false; text.focus(); }
   }, sig);
 
-  // new chat by number
-  const dlg = $('wa-newchat');
-  $('wa-new').addEventListener('click', () => dlg.showModal(), sig);
-  $('wa-newchat-x').addEventListener('click', () => dlg.close(), sig);
-  $('wa-newchat-form').addEventListener('submit', (e) => { const n = new FormData(e.target).get('to').replace(/\D/g, ''); if (n.length >= 7) { openChat(n + '@c.us'); e.target.reset(); } }, sig);
+  // ── New chat (like WhatsApp Web): a panel over the chat list with search, New group, Message yourself and contacts ──
+  let contacts = null, contactsLoading = null;
+  const nc = $('wa-nc'), ncBody = $('wa-nc-body'), ncQ = $('wa-nc-q'), ng = $('wa-ng');
+  const digitsOf = (v) => String(v || '').replace(/\D/g, '');
+  const avIO = 'IntersectionObserver' in window ? new IntersectionObserver((entries) => entries.forEach((en) => {
+    if (en.isIntersecting) { avIO.unobserve(en.target); avatar(en.target, en.target.dataset.lazyAv, en.target.dataset.name); }
+  }), { root: null, rootMargin: '120px' }) : null;
+  const lazyAvatars = (box) => box.querySelectorAll('[data-lazy-av]').forEach((el) => { el.textContent = initials(el.dataset.name); avIO ? avIO.observe(el) : avatar(el, el.dataset.lazyAv, el.dataset.name); });
+  function loadContacts() {
+    if (contacts) return Promise.resolve(contacts);
+    contactsLoading ||= getJSON('/contacts.json').then((j) => (contacts = j.contacts || [])).catch((e) => { contactsLoading = null; throw e; });
+    return contactsLoading;
+  }
+  const row = (c, extra = '') => `<button type="button" class="wa-nc-row" data-open="${esc(c.jid)}" data-name="${esc(c.name)}" ${extra}>
+      <span class="wa-avatar" data-lazy-av="${esc(c.jid)}" data-name="${esc(c.name)}"></span>
+      <span class="wa-nc-mid"><span class="wa-nc-name">${esc(c.name)}</span><span class="wa-nc-sub">${esc(c.pushname && c.pushname !== c.name ? '~' + c.pushname : '+' + (c.phone || c.jid.split('@')[0]))}</span></span></button>`;
+  const iconRow = (attr, icon, title, sub = '') => `<button type="button" class="wa-nc-row" ${attr}><span class="wa-avatar icon"><i class="${icon}"></i></span>
+      <span class="wa-nc-mid"><span class="wa-nc-name">${esc(title)}</span>${sub ? `<span class="wa-nc-sub">${esc(sub)}</span>` : ''}</span></button>`;
+  const matches = (c, q, d) => c.name.toLowerCase().includes(q) || (c.pushname || '').toLowerCase().includes(q) || (d.length >= 3 && (c.phone || '').includes(d));
+  let checkTimer = null, checkSeq = 0;
+  function renderNewChat() {
+    const raw = ncQ.value.trim(), q = raw.toLowerCase(), d = digitsOf(raw);
+    let html = '';
+    if (!q) {
+      html += iconRow('data-nc-group', 'ri-group-line', 'New group');
+      if (state.phone) html += row({ jid: state.phone + '@c.us', name: (state.name || 'You') + ' (You)', phone: state.phone, pushname: '' }, 'data-self="1"').replace('<span class="wa-nc-sub">', '<span class="wa-nc-sub">Message yourself · ');
+    }
+    if (!contacts) { ncBody.innerHTML = html + '<p class="wa-nc-note">Loading contacts…</p>'; return; }
+    const list = q ? contacts.filter((c) => matches(c, q, d)) : contacts;
+    // A typed phone number that is not in the contacts: check it is on WhatsApp, then offer it.
+    const isNumber = d.length >= 7 && /^[+\d\s()-]+$/.test(raw);
+    if (isNumber && !list.some((c) => c.phone === d)) html += `<p class="wa-nc-sec">Phone number</p><div id="wa-nc-num"><p class="wa-nc-note">Checking +${esc(d)} on WhatsApp…</p></div>`;
+    if (list.length) {
+      html += `<p class="wa-nc-sec">${q ? 'Contacts' : 'Contacts on WhatsApp'}</p>`;
+      let letter = '';
+      list.slice(0, q ? 200 : 3000).forEach((c) => {
+        const L = (c.name[0] || '#').toUpperCase(), key = /[A-Z]/.test(L) ? L : '#';
+        if (!q && key !== letter) { letter = key; html += `<p class="wa-nc-letter">${letter}</p>`; }
+        html += row(c);
+      });
+    }
+    // groups and channels already in the chat list, when searching by name
+    const others = q ? chats.filter((c) => c.kind !== 'user' && c.name.toLowerCase().includes(q)).slice(0, 30) : [];
+    if (others.length) html += '<p class="wa-nc-sec">Groups and channels</p>' + others.map((c) => row({ jid: c.jid, name: c.name, pushname: '', phone: '' }).replace(/<span class="wa-nc-sub">[^<]*<\/span>/, `<span class="wa-nc-sub">${c.kind === 'group' ? 'Group' : 'Channel'}</span>`)).join('');
+    if (q && !list.length && !others.length && !isNumber) html += `<p class="wa-nc-note">No results found for ‘${esc(raw)}’</p>`;
+    ncBody.innerHTML = html; lazyAvatars(ncBody);
+    clearTimeout(checkTimer);
+    if (isNumber && $('wa-nc-num')) {
+      const seq = ++checkSeq;
+      checkTimer = setTimeout(async () => {
+        let r; try { r = await getJSON('/check.json?to=' + d); } catch (e) { r = { exists: null }; }
+        const box = $('wa-nc-num'); if (!box || seq !== checkSeq) return;
+        const jid = (r.jid && r.jid.endsWith('@c.us')) ? r.jid : d + '@c.us';
+        box.innerHTML = r.exists === false
+          ? `<p class="wa-nc-note">+${esc(d)} is not on WhatsApp. Check the country code.</p>`
+          : row({ jid, name: '+' + d, phone: d, pushname: '' }).replace('<span class="wa-nc-sub">+' + esc(d) + '</span>', '<span class="wa-nc-sub">Message this number</span>');
+        lazyAvatars(box);
+      }, 450);
+    }
+  }
+  function openNewChat() {
+    nc.hidden = false; ncQ.value = ''; renderNewChat(); ncQ.focus();
+    loadContacts().then(() => { if (!nc.hidden) renderNewChat(); }).catch((e) => { if (!nc.hidden) ncBody.insertAdjacentHTML('beforeend', `<p class="wa-error m-3">${esc(e.message)}</p>`); });
+  }
+  const closeNewChat = () => { nc.hidden = true; ng.hidden = true; $('wa-new').focus(); };
+  $('wa-new').addEventListener('click', openNewChat, sig);
+  nc.querySelector('[data-nc-close]').addEventListener('click', closeNewChat, sig);
+  ncQ.addEventListener('input', renderNewChat, sig);
+  ncQ.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const first = ncBody.querySelector('[data-open]'); if (first) { e.preventDefault(); first.click(); } } }, sig);
+  ncBody.addEventListener('click', (e) => {
+    if (e.target.closest('[data-nc-group]')) { openNewGroup(); return; }
+    const b = e.target.closest('[data-open]'); if (!b) return;
+    known.set(b.dataset.open, b.dataset.self ? (state.name || 'You') : b.dataset.name);
+    nc.hidden = true; openChat(b.dataset.open);
+  }, sig);
+  root.addEventListener('keydown', (e) => { if (e.key === 'Escape' && (!nc.hidden || !ng.hidden)) { e.preventDefault(); if (!ng.hidden) { ng.hidden = true; nc.hidden = false; ncQ.focus(); } else closeNewChat(); } }, sig);
+
+  // ── New group: pick members, then the subject ──
+  const members = new Map();
+  function renderMembers() {
+    const q = $('wa-ng-q').value.trim().toLowerCase(), d = digitsOf(q);
+    const list = (contacts || []).filter((c) => !q || matches(c, q, d)).slice(0, 400);
+    $('wa-ng-list').innerHTML = list.length ? list.map((c) => `<li>${row(c, `role="checkbox" aria-checked="${members.has(c.jid)}"`).replace('</span></button>', '</span><span class="wa-check">' + (members.has(c.jid) ? '<i class="ri-check-line"></i>' : '') + '</span></button>')}</li>`).join('')
+      : `<li class="wa-nc-note">${contacts ? 'No contacts found' : 'Loading contacts…'}</li>`;
+    lazyAvatars($('wa-ng-list'));
+    $('wa-ng-picked').innerHTML = [...members].map(([jid, n]) => `<span class="wa-tag">${esc(n)}<button type="button" data-unpick="${esc(jid)}" aria-label="Remove ${esc(n)}"><i class="ri-close-line"></i></button></span>`).join('');
+    $('wa-ng-next').hidden = !members.size;
+  }
+  function openNewGroup() {
+    nc.hidden = true; ng.hidden = false; members.clear();
+    $('wa-ng-step1').hidden = false; $('wa-ng-step2').hidden = true; $('wa-ng-title').textContent = 'Add group members';
+    $('wa-ng-q').value = ''; renderMembers(); $('wa-ng-q').focus();
+    loadContacts().then(() => { if (!ng.hidden) renderMembers(); }).catch(() => {});
+  }
+  $('wa-ng-q').addEventListener('input', renderMembers, sig);
+  $('wa-ng-list').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-open]'); if (!b) return;
+    members.has(b.dataset.open) ? members.delete(b.dataset.open) : members.set(b.dataset.open, b.dataset.name);
+    renderMembers(); $('wa-ng-q').focus();
+  }, sig);
+  $('wa-ng-picked').addEventListener('click', (e) => { const b = e.target.closest('[data-unpick]'); if (b) { members.delete(b.dataset.unpick); renderMembers(); } }, sig);
+  $('wa-ng-next').addEventListener('click', () => {
+    $('wa-ng-step1').hidden = true; $('wa-ng-step2').hidden = false; $('wa-ng-title').textContent = 'New group';
+    $('wa-ng-count').textContent = `Members: ${[...members.values()].join(', ')}`; $('wa-ng-err').hidden = true;
+    $('wa-ng-step2').querySelector('input[name=name]').focus();
+  }, sig);
+  $('wa-ng-back').addEventListener('click', () => {
+    if (!$('wa-ng-step2').hidden) { $('wa-ng-step2').hidden = true; $('wa-ng-step1').hidden = false; $('wa-ng-title').textContent = 'Add group members'; }
+    else { ng.hidden = true; nc.hidden = false; ncQ.focus(); }
+  }, sig);
+  $('wa-ng-step2').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target); members.forEach((_, jid) => fd.append('participants', jid));
+    const btn = e.target.querySelector('.wa-fab'); btn.disabled = true; $('wa-ng-err').hidden = true;
+    try {
+      const r = await post('/groups', fd);
+      ng.hidden = true; e.target.reset(); await loadChats();
+      if (r.jid) { known.set(r.jid, String(fd.get('name'))); openChat(r.jid); }
+    } catch (err) { $('wa-ng-err').textContent = err.message; $('wa-ng-err').hidden = false; }
+    finally { btn.disabled = false; }
+  }, sig);
 
   function onActivity() { if (mode !== 'app') return; loadChats(); if (openJid) openChat(openJid, true); }
 

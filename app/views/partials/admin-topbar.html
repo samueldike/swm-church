@@ -147,10 +147,12 @@
     const tx = railBtn?.querySelector('span'); if (tx) tx.textContent = label;
   };
   let railSaved = null; try { railSaved = localStorage.getItem(railKey); } catch (_) {}
-  setRail(railSaved ? railSaved === 'on' : sidebar.dataset.railDefault === '1');
+  // Focus pages (WhatsApp) always open collapsed; elsewhere the last choice for that page is kept.
+  const focusPage = sidebar.dataset.railDefault === '1';
+  setRail(focusPage ? true : railSaved === 'on');
   railBtn?.addEventListener('click', () => {
     const on = !sidebar.classList.contains('is-rail'); setRail(on);
-    try { localStorage.setItem(railKey, on ? 'on' : 'off'); } catch (_) {}
+    if (!focusPage) { try { localStorage.setItem(railKey, on ? 'on' : 'off'); } catch (_) {} }
   }, listenerOptions);
   const open = () => { sidebar.classList.remove('-translate-x-full'); overlay.classList.remove('hidden'); body.classList.add('overflow-hidden'); };
   const close = () => { sidebar.classList.add('-translate-x-full'); overlay.classList.add('hidden'); body.classList.remove('overflow-hidden'); };

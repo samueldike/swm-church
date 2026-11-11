@@ -122,7 +122,14 @@ app.get('/sessions/:id/chats/:jid/messages', wrap(async (req, res) => {
   const c = await needClient(req.params.id);
   const params = { count: Math.min(Number(req.query.count) || 40, 100) };
   if (req.query.before) { params.id = String(req.query.before); params.direction = 'before'; }
-  const msgs = await withTimeout(c.getMessages(req.params.jid, params), 25000, 'getMessages');
+  let msgs;
+  try {
+    msgs = await withTimeout(c.getMessages(req.params.jid, params), 25000, 'getMessages');
+  } catch (e) {
+    // A new chat (from New chat) has no history yet: show an empty conversation, like WhatsApp Web.
+    if (!/chat not found|not found/i.test(String(e?.message || e))) throw e;
+    msgs = [];
+  }
   let chatName = '';
   try { chatName = name(await c.getChatById(req.params.jid)); } catch { /* optional */ }
   res.json({ name: chatName, messages: msgs.filter(m => m && m.type !== 'e2e_notification' && m.type !== 'notification_template').map(shapeMessage) });
@@ -157,6 +164,41 @@ app.get('/sessions/:id/avatar/:jid', wrap(async (req, res) => {
   const c = await needClient(req.params.id);
   const p = await withTimeout(c.getProfilePicFromServer(req.params.jid), 10000, 'avatar').catch(() => null);
   res.json({ url: p?.eurl || p?.imgFull || p?.img || null });
+}));
+
+// ─── contacts and groups (New chat panel) ───
+const contactCache = new Map();          // id -> { at, list }
+app.get('/sessions/:id/contacts', wrap(async (req, res) => {
+  const c = await needClient(req.params.id);
+  const hit = contactCache.get(req.params.id);
+  if (hit && Date.now() - hit.at < 5 * 60_000 && !req.query.fresh) return res.json({ contacts: hit.list });
+  const all = await withTimeout(c.getAllContacts(), 30000, 'contacts');
+  const seen = new Set(), list = [];
+  for (const k of all || []) {
+    const jid = S.widToString(k.id);
+    if (!jid || !jid.endsWith('@c.us') || seen.has(jid)) continue;
+    if (!k.isMyContact || k.isMe || k.isGroup) continue;            // "Contacts on WhatsApp": saved contacts
+    if (k.isWAContact === false) continue;
+    seen.add(jid);
+    list.push({ jid, name: (k.name || k.formattedName || k.pushname || '').trim() || '+' + S.phoneFromJid(jid),
+      pushname: (k.pushname || '').trim(), phone: S.phoneFromJid(jid) });
+  }
+  list.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  contactCache.set(req.params.id, { at: Date.now(), list });
+  res.json({ contacts: list });
+}));
+
+// body: { name, participants: [jid|phone] }
+app.post('/sessions/:id/groups', wrap(async (req, res) => {
+  const c = await needClient(req.params.id);
+  const title = String(req.body?.name || '').trim().slice(0, 100);
+  const members = [...new Set((req.body?.participants || []).map(toJid))];
+  if (!title) return res.status(400).json({ error: 'Give the group a name.' });
+  if (!members.length) return res.status(400).json({ error: 'Add at least one member.' });
+  const r = await withTimeout(c.createGroup(title, members), 60000, 'createGroup');
+  const gid = S.widToString(r?.gid || r?.groupInfo?.id || r?.id || r?.wid) || null;
+  S.bump(req.params.id);
+  res.json({ ok: true, jid: gid });
 }));
 
 // ─── sending ───
