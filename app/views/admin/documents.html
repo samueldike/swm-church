@@ -3,7 +3,7 @@
 {% block topbar_title %}Documents{% endblock %}
 {% block topbar_subtitle %}Office library{% endblock %}
 {% block topbar_icon %}ri-folder-3-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/documents.css') }}?v=1">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/documents.css') }}?v=2">{% endblock %}
 
 {% block content %}
 {#- The church offices' document library. The page is a shell: app/static/js/documents.js fetches everything
@@ -75,6 +75,6 @@
 {% endblock %}
 
 {% block extra_body %}
-<script src="{{ url_for('static', path='js/documents.js') }}?v=1"></script>
+<script src="{{ url_for('static', path='js/documents.js') }}?v=2"></script>
 <script>window.SWMDocuments && window.SWMDocuments.init();</script>
 {% endblock %}
