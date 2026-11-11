@@ -37,9 +37,13 @@ _COMMON = {
 
 async def setting_on(db: AsyncSession, key: str) -> bool:
     """A security switch from Settings. If settings cannot be read, the switch counts as off (the standard rules,
-    e.g. 8+ character passwords, still apply)."""
+    e.g. 8+ character passwords, still apply). Uses its own short session, never the caller's (``db`` is
+    accepted for call-site symmetry), so reading a setting cannot disturb the caller's transaction."""
+    from app.database import async_session
+
     try:
-        return (await get_setting(db, key, "0")) == "1"
+        async with async_session() as own:
+            return (await get_setting(own, key, "0")) == "1"
     except Exception:
         return False
 
