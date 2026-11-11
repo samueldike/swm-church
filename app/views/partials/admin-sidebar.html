@@ -30,10 +30,12 @@
   </div>
 
   {#- count: a live number; hint says what it counts ("{n}" = the number), shown on hover and read by screen readers -#}
-  {% macro nav_item(url, icon, label, page, count=0, hint='') -%}
-    <a href="{{ url }}" class="nav-link {{ 'nav-link-active' if active_page == page else '' }}" data-tip="{{ label }}">
+  {#- tag: a small label after the title (e.g. "Coming soon") -#}
+  {% macro nav_item(url, icon, label, page, count=0, hint='', tag='') -%}
+    <a href="{{ url }}" class="nav-link {{ 'nav-link-active' if active_page == page else '' }}" data-tip="{{ label }}{{ ' (' ~ tag|lower ~ ')' if tag else '' }}">
       <i class="{{ icon }} text-base w-5 text-center flex-shrink-0"></i>
       <span class="flex-1 whitespace-nowrap rail-hide">{{ label }}</span>
+      {% if tag %}<span class="nav-tag" aria-label="{{ tag }}">{{ tag }}</span>{% endif %}
       {% if count and count > 0 %}{% set what = hint|replace('{n}', count|string) if hint else count|string %}<span class="text-[12px] font-bold text-on-gold bg-gold rounded-full px-1.5 py-0.5 min-w-[18px] text-center nav-count" title="{{ what }}" aria-label="{{ what }}">{{ count }}</span>{% endif %}
     </a>
   {%- endmacro %}
@@ -53,7 +55,7 @@
         {% if can('members') %}{{ nav_item(url_for('admin_members'), 'ri-team-line', 'Members', 'admin.members', badges.members, '{n} joined in the last 7 days') }}{% endif %}
         {% if can('ministers.view') %}{{ nav_item(url_for('admin_ministers'), 'ri-user-voice-line', 'Ministers', 'admin.ministers') }}{% endif %}
         {% if can('hods') %}{{ nav_item(url_for('admin_hods'), 'ri-user-star-line', 'Department HODs', 'admin.hods') }}{% endif %}
-        {% if can('harvest') %}{{ nav_item(url_for('admin_harvesttrack'), 'ri-seedling-line', 'HarvestTrack', 'admin.harvesttrack') }}{% endif %}
+        {% if can('harvest') %}{{ nav_item(url_for('admin_harvesttrack'), 'ri-seedling-line', 'HarvestTrack', 'admin.harvesttrack', tag='Coming soon') }}{% endif %}
         {% if can('system') %}{{ nav_item(url_for('admin_admins'), 'ri-shield-user-line', 'Admins & roles', 'admin.admins') }}{% endif %}
       </div>
       {% endif %}
@@ -167,6 +169,13 @@
       background: #111; color: #fff; font-size: 12.5px; font-weight: 600; padding: 6px 10px; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.25);
     }
     #admin-sidebar.is-rail .admin-sidebar-scroll { overflow-x: visible; }
+  }
+  /* "Coming soon" and similar tags on menu items */
+  .nav-tag { flex: none; font-size: 10.5px; font-weight: 700; line-height: 1; letter-spacing: .02em; padding: 4px 7px; border-radius: 999px;
+             background: rgba(232, 200, 112, .16); color: #e8c870; border: 1px solid rgba(232, 200, 112, .35); white-space: nowrap; }
+  .nav-link-active .nav-tag { background: rgba(0, 0, 0, .08); color: inherit; border-color: currentColor; }
+  @media (min-width: 1024px) {
+    #admin-sidebar.is-rail .nav-tag { position: absolute; top: 6px; right: 10px; width: 8px; height: 8px; padding: 0; font-size: 0; border: 0; background: #e8c870; }
   }
   .rail-toggle-row { display: none; }
   @media (min-width: 1024px) {
