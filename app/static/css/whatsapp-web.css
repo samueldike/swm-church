@@ -399,3 +399,51 @@ html.dark .wx-viewer { background: rgba(11,20,26,.97); }
 .wx-modal .wx-search { background: var(--wx-panel); }
 .wx-menu, .wx-dialog { color: var(--wx-ink2); }
 .wx-menu { background: var(--wx-menu); }
+
+/* The admin focus rule is `input:not(...)x4:focus, textarea:focus, select:focus { ... !important }`.
+   Inside WhatsApp, beat it with an id-scoped selector so fields stay flat (no gold ring/border). */
+#wa .wx input:not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=button]):focus,
+#wa .wx textarea:focus, #wa .wx select:focus,
+body .wx-modal input:not([type=checkbox]):not([type=radio]):not([type=submit]):not([type=button]):focus,
+body .wx-modal textarea:focus {
+  box-shadow: none !important; outline: none !important; border-color: transparent !important;
+}
+#wa .wx .wx-input:focus, body .wx-modal .wx-input:focus { border-color: transparent transparent var(--wx-green) transparent !important; }
+#wa .wx select.wx-church:focus { border-color: var(--wx-green) !important; }
+.wx input[type=search]::-webkit-search-cancel-button, .wx-modal input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+.wx-search:focus-within { box-shadow: inset 0 0 0 1px var(--wx-green); }
+.wx-search:focus-within i.ri-search-line { color: var(--wx-green); }
+.wx-search .wx-clear { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; color: var(--wx-ink3); font-size: 18px; flex: none; }
+.wx-search .wx-clear:hover { background: rgba(11,20,26,.08); }
+.wx input[type=radio], .wx input[type=checkbox], .wx-modal input[type=radio], .wx-modal input[type=checkbox] { accent-color: var(--wx-green); width: 17px; height: 17px; }
+
+/* forms: rows sit at the top instead of stretching over the panel */
+.wx .wx-form { align-content: start; grid-auto-rows: max-content; }
+.wx-file { display: grid; gap: 8px; justify-items: start; }
+.wx-file-lbl { color: var(--wx-green-d); font-size: 14px; }
+html.dark .wx-file-lbl { color: var(--wx-green); }
+.wx-file label.wx-btn { cursor: pointer; }
+.wx-file-chip { display: flex; align-items: center; gap: 10px; max-width: 100%; background: var(--wx-panel); border-radius: 10px; padding: 6px 6px 6px 10px; }
+.wx-file-chip img { width: 44px; height: 44px; border-radius: 6px; object-fit: cover; }
+.wx-file-chip i.ri-file-text-line { font-size: 22px; color: var(--wx-ink3); }
+.wx-file-chip img:not([hidden]) + i { display: none; }
+.wx-file-chip .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.wx-to { display: grid; gap: 8px; }
+.wx-combo { position: relative; }
+.wx-suggest { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 20; max-height: 340px; overflow-y: auto; background: var(--wx-menu); border-radius: 8px; box-shadow: var(--wx-shadow); padding: 6px 0; }
+.wx-suggest .wx-row { height: 60px; }
+.wx-suggest .wx-row .wx-av { width: 40px; height: 40px; }
+.wx-suggest .wx-row.is-active, .wx-suggest .wx-row:hover { background: var(--wx-hover); }
+.wx-suggest .wx-row-mid { border-bottom: 0; }
+.wx-suggest mark, .wx-row-name mark { background: transparent; color: var(--wx-green); font-weight: 600; }
+.wx-suggest .kind { font-size: 12px; color: var(--wx-ink3); margin-right: 14px; flex: none; }
+.wx-suggest .wx-note { padding: 14px; }
+.wx-picked:empty { display: none; }
+.wx-pill .wx-av { width: 24px; height: 24px; font-size: 12px; margin-left: -8px; }
+.wx-pill .wx-av i { font-size: 14px; }
+/* default avatars: WhatsApp's grey silhouette */
+.wx-av, .wx-av.sm { color: #fff; }
+.wx-av > i { font-size: 30px; }
+.wx-av.sm > i, .wx-suggest .wx-av > i { font-size: 24px; }
+.wx-pill .wx-av > i { font-size: 15px; }
+.wx-av.lg > i { font-size: 110px; }

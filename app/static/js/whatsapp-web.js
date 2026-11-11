@@ -35,7 +35,40 @@
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const initials = (n) => (String(n || '').replace(/[^\p{L}\p{N} ]/gu, '').trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('') || '').toUpperCase();
     const phoneOf = (jid) => String(jid || '').split('@')[0].split(':')[0];
+    const num = (jid) => (/@(c\.us|s\.whatsapp\.net)$/.test(String(jid || '')) ? '+' + phoneOf(jid) : '');
     const nameColor = (s) => { let h = 0; for (const ch of String(s)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return NAME_COLORS[h % NAME_COLORS.length]; };
+    // Search like WhatsApp: every typed word must start a word of the name (any order), or match its initials
+    // ("swm" finds "Scent of Water Ministry", "swm nigeria" finds "Scent of Water Ministry Nigeria"); numbers
+    // match anywhere in the phone. Results are ranked best first.
+    const norm = (v) => String(v || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
+    const subseq = (hay, needle) => { let i = 0; for (const ch of hay) if (ch === needle[i]) i++; return i === needle.length; };
+    function score(text, query) {
+      const t = norm(text), qn = norm(query);
+      if (!qn) return 1; if (!t) return 0;
+      const qd = String(query).replace(/\D/g, '');
+      if (qd.length >= 3 && /^[+\d\s()-]+$/.test(String(query).trim())) return String(text).replace(/\D/g, '').includes(qd) ? 70 : 0;
+      if (t === qn) return 100;
+      if (t.startsWith(qn)) return 90;
+      const words = t.split(' '), qs = qn.split(' '), ini = words.map((w) => w[0]).join('');
+      if (qs.every((w) => words.some((x) => x.startsWith(w)))) return 80;
+      if (t.includes(qn)) return 60;
+      const qc = qn.replace(/ /g, '');
+      if (qc.length >= 2 && ini.startsWith(qc)) return 50;
+      if (qs.every((w) => words.some((x) => x.startsWith(w)) || (w.length >= 2 && subseq(ini, w)))) return 40;
+      if (qs.every((w) => t.includes(w))) return 30;
+      return 0;
+    }
+    function rank(list, query, fields, limit = 300) {
+      if (!String(query || '').trim()) return list.slice(0, limit);
+      return list.map((x, i) => [x, Math.max(0, ...fields(x).map((f) => score(f, query))), i]).filter((r) => r[1] > 0)
+        .sort((a, b) => (b[1] - a[1]) || (a[2] - b[2])).slice(0, limit).map((r) => r[0]);
+    }
+    // highlight the matched word starts in a name
+    function hl(name, query) {
+      const qs = norm(query).split(' ').filter(Boolean); if (!qs.length) return esc(name);
+      return esc(name).replace(/(^|[\s(\-~])([\p{L}\p{N}]+)/gu, (m, pre, w) => {
+        const q1 = qs.find((x) => norm(w).startsWith(x)); return q1 ? `${pre}<mark>${w.slice(0, q1.length)}</mark>${w.slice(q1.length)}` : m; });
+    }
     const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (_) { return d; } },
       set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} } };
     const K = (k) => `swm-wa-${k}-b${branch}`;
@@ -138,8 +171,7 @@
     // ── avatars: fetched once per jid, lazily as rows scroll into view ──
     const avatarCache = new Map();
     function paintAvatar(el, jid, name, kind) {
-      const ini = initials(name);
-      el.innerHTML = kind === 'group' ? '<i class="ri-group-fill"></i>' : kind === 'channel' ? '<i class="ri-broadcast-fill"></i>' : (ini && !/^\d/.test(ini) ? esc(ini) : '<i class="ri-user-fill"></i>');
+      el.innerHTML = kind === 'group' ? '<i class="ri-group-fill"></i>' : kind === 'channel' ? '<i class="ri-broadcast-fill"></i>' : '<i class="ri-user-fill"></i>';
       if (!jid) return;
       if (!avatarCache.has(jid)) avatarCache.set(jid, getJSON('/avatar.json?jid=' + enc(jid)).then((j) => j.url).catch(() => null));
       avatarCache.get(jid).then((url) => { if (url && el.isConnected) el.innerHTML = `<img src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer">`; });
@@ -149,10 +181,26 @@
     }), { rootMargin: '150px' }) : null;
     const lazyAv = (box) => box.querySelectorAll('[data-av]').forEach((el) => {
       if (el.dataset.done) return; el.dataset.done = '1';
-      const ini = initials(el.dataset.name); el.innerHTML = el.dataset.kind === 'group' ? '<i class="ri-group-fill"></i>' : (ini && !/^\d/.test(ini) ? esc(ini) : '<i class="ri-user-fill"></i>');
+      el.innerHTML = el.dataset.kind === 'group' ? '<i class="ri-group-fill"></i>' : el.dataset.kind === 'channel' ? '<i class="ri-broadcast-fill"></i>' : '<i class="ri-user-fill"></i>';
       avIO ? avIO.observe(el) : paintAvatar(el, el.dataset.av, el.dataset.name, el.dataset.kind);
     });
     const av = (jid, name, kind, cls = '') => `<span class="wx-av ${cls}" data-av="${esc(jid)}" data-name="${esc(name)}" data-kind="${esc(kind || '')}"></span>`;
+
+    function decorateSearch(scope) {
+      scope.querySelectorAll('.wx-search').forEach((lab) => {
+        if (lab.querySelector('.wx-clear')) return;
+        const input = lab.querySelector('input'); if (!input) return;
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'wx-clear'; b.hidden = true; b.setAttribute('aria-label', 'Clear search'); b.innerHTML = '<i class="ri-close-line"></i>';
+        b.addEventListener('mousedown', (e) => e.preventDefault());
+        b.addEventListener('click', () => { input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true })); input.focus(); });
+        input.addEventListener('input', () => { b.hidden = !input.value; });
+        lab.append(b);
+      });
+    }
+    decorateSearch(app);
+    const searchMO = new MutationObserver(() => decorateSearch(document.body));
+    searchMO.observe(document.body, { childList: true });
+    ctl.signal.addEventListener('abort', () => searchMO.disconnect());
 
     // ── layout: fill the window under whatever is above ──
     function fit() {
@@ -252,7 +300,15 @@
     const known = new Map();                 // names for chats not in the list yet (new chats, starred, contacts)
     const prevUnread = new Map();
     const chatOf = (jid) => chats.find((c) => c.jid === jid) || channels.find((c) => c.jid === jid) || archived.find((c) => c.jid === jid);
-    const nameOf = (jid) => chatOf(jid)?.name || known.get(jid) || (contacts || []).find((c) => c.jid === jid)?.name || '+' + phoneOf(jid);
+    const people = new Map();               // @lid and unknown ids resolved by the gateway: jid -> { label, name, pushname, phone }
+    const nameOf = (jid) => chatOf(jid)?.name || known.get(jid) || (contacts || []).find((c) => c.jid === jid)?.name || people.get(jid)?.label || num(jid) || 'Unknown';
+    let peopleBusy = false;
+    async function resolvePeople(ids, then) {
+      const want = [...new Set(ids.filter((j) => j && !people.has(j) && !(contacts || []).some((c) => c.jid === j)))].slice(0, 300);
+      if (!want.length || peopleBusy) return;
+      peopleBusy = true;
+      try { const r = await api('people', { ids: want }); Object.entries(r.people || {}).forEach(([j, v]) => people.set(j, v)); then?.(); } catch (_) { /* optional */ } finally { peopleBusy = false; }
+    }
     const kindOf = (jid) => jid.endsWith('@g.us') ? 'group' : jid.endsWith('@newsletter') ? 'channel' : 'user';
     const muted = (c) => c && c.muted;
 
@@ -295,10 +351,11 @@
         last = (c.last.fromMe ? tick(c.last.ack) + ' ' : '') + (c.last.who && !c.last.fromMe ? esc(c.last.who) + ': ' : '') + icon + esc(c.last.text || '');
       }
       const unread = c.unread > 0 || c.markedUnread;
+      const shown = opts.hl ? hl(c.name, opts.hl) : esc(c.name);
       return `<div class="wx-row ${c.jid === openJid ? 'is-on' : ''}" role="button" tabindex="0" data-jid="${esc(c.jid)}">
         ${av(c.jid, c.name, c.kind)}
         <div class="wx-row-mid">
-          <div class="wx-row-top"><span class="wx-row-name">${esc(c.name)}</span><span class="wx-row-time ${unread && !opts.sub ? 'unread' : ''}">${opts.sub !== undefined ? '' : listTime(c.t)}</span></div>
+          <div class="wx-row-top"><span class="wx-row-name">${shown}</span><span class="wx-row-time ${unread && !opts.sub ? 'unread' : ''}">${opts.sub !== undefined ? '' : listTime(c.t)}</span></div>
           <div class="wx-row-bot"><span class="wx-row-last">${last}</span>
             <span class="wx-row-end">${c.muted ? '<i class="ri-volume-mute-fill" aria-label="Muted"></i>' : ''}${c.pinned ? '<i class="ri-pushpin-2-fill" aria-label="Pinned"></i>' : ''}${favs.has(c.jid) && filter !== 'favourites' ? '' : ''}
               ${c.unread > 0 ? `<span class="wx-badge ${c.muted ? 'muted' : ''}">${c.unread}</span>` : c.markedUnread ? '<span class="wx-badge dot"></span>' : ''}
@@ -309,15 +366,15 @@
       const box = $('wx-chatlist'), needle = $('wx-q').value.trim().toLowerCase();
       let list = chats;
       if (filter === 'favourites') list = list.filter((c) => favs.has(c.jid));
-      if (needle) list = list.filter((c) => c.name.toLowerCase().includes(needle) || phoneOf(c.jid).includes(needle.replace(/\D/g, '') || '§'));
+      if (needle) list = rank(list, needle, (c) => [c.name, num(c.jid)]);
       let html = '';
       if (!needle && filter === 'all' && archivedCount) html += `<button type="button" class="wx-archived" data-go="archived"><i class="ri-inbox-archive-line"></i><span>Archived</span><b>${archivedCount}</b></button>`;
       if (needle) html += list.length ? '<p class="wx-sec">Chats</p>' : '';
-      html += list.map((c) => rowHTML(c)).join('');
+      html += list.map((c) => rowHTML(c, needle ? { hl: needle } : {})).join('');
       if (needle && contacts) {
-        const inList = new Set(list.map((c) => c.jid)), d = needle.replace(/\D/g, '');
-        const more = contacts.filter((c) => !inList.has(c.jid) && (c.name.toLowerCase().includes(needle) || (d.length >= 3 && c.phone.includes(d)))).slice(0, 40);
-        if (more.length) html += '<p class="wx-sec">Contacts</p>' + more.map((c) => rowHTML({ jid: c.jid, name: c.name, kind: 'user' }, { sub: c.pushname ? '~' + c.pushname : '+' + c.phone, noMenu: true })).join('');
+        const inList = new Set(list.map((c) => c.jid));
+        const more = rank(contacts.filter((c) => !inList.has(c.jid)), needle, (c) => [c.name, c.pushname, c.phone], 40);
+        if (more.length) html += '<p class="wx-sec">Contacts</p>' + more.map((c) => rowHTML({ jid: c.jid, name: c.name, kind: 'user' }, { sub: c.pushname && c.pushname !== c.name ? '~' + c.pushname : '+' + c.phone, noMenu: true, hl: needle })).join('');
       }
       if (!list.length && !html) html = `<p class="wx-note">${needle ? 'No chats, contacts or messages found' : filter === 'unread' ? 'No unread chats' : filter === 'favourites' ? 'Add chats to Favourites from the chat menu (˅).' : filter === 'groups' ? 'No groups' : 'No chats yet'}</p>`;
       box.innerHTML = html; lazyAv(box);
@@ -423,9 +480,8 @@
       return contactsLoading;
     }
     const digitsOf = (v) => String(v || '').replace(/\D/g, '');
-    const matches = (c, ql, d) => c.name.toLowerCase().includes(ql) || (c.pushname || '').toLowerCase().includes(ql) || (d.length >= 3 && (c.phone || '').includes(d));
-    const contactRow = (c, extra = '', end = '') => `<div class="wx-row" role="button" tabindex="0" data-pick="${esc(c.jid)}" data-name="${esc(c.name)}" ${extra}>${av(c.jid, c.name, c.kind || 'user')}
-      <div class="wx-row-mid"><div class="wx-row-top"><span class="wx-row-name">${esc(c.name)}</span></div><div class="wx-row-bot"><span class="wx-row-last">${esc(c.sub ?? (c.pushname && c.pushname !== c.name ? '~' + c.pushname : '+' + (c.phone || phoneOf(c.jid))))}</span>${end}</div></div></div>`;
+    const contactRow = (c, extra = '', end = '', query = '') => `<div class="wx-row" role="button" tabindex="0" data-pick="${esc(c.jid)}" data-name="${esc(c.name)}" ${extra}>${av(c.jid, c.name, c.kind || 'user')}
+      <div class="wx-row-mid"><div class="wx-row-top"><span class="wx-row-name">${query ? hl(c.name, query) : esc(c.name)}</span></div><div class="wx-row-bot"><span class="wx-row-last">${esc(c.sub ?? (c.pushname && c.pushname !== c.name ? '~' + c.pushname : '+' + (c.phone || phoneOf(c.jid))))}</span>${end}</div></div></div>`;
     const iconRow = (attr, icon, title) => `<div class="wx-row" role="button" tabindex="0" ${attr}><span class="wx-av" style="background:var(--wx-green)"><i class="${icon}"></i></span>
       <div class="wx-row-mid"><div class="wx-row-top"><span class="wx-row-name">${esc(title)}</span></div></div></div>`;
     let checkTimer = null, checkSeq = 0;
@@ -437,7 +493,7 @@
         if (state.phone) html += contactRow({ jid: state.phone + '@c.us', name: (me.name || 'You') + ' (You)', sub: 'Message yourself' });
       }
       if (!contacts) { box.innerHTML = html + '<p class="wx-note">Loading contacts…</p>'; lazyAv(box); return; }
-      const list = ql ? contacts.filter((c) => matches(c, ql, d)) : contacts;
+      const list = ql ? rank(contacts, raw, (c) => [c.name, c.pushname, c.phone], 200) : contacts;
       const isNumber = d.length >= 7 && /^[+\d\s()-]+$/.test(raw);
       if (isNumber && !list.some((c) => c.phone === d)) html += `<p class="wx-sec">Phone number</p><div id="wx-nc-num"><p class="wx-note">Checking +${esc(d)} on WhatsApp…</p></div>`;
       if (list.length) {
@@ -446,10 +502,10 @@
         list.slice(0, ql ? 200 : 3000).forEach((c) => {
           const L = (c.name[0] || '#').toUpperCase(), key = /\p{L}/u.test(L) ? L : '#';
           if (!ql && key !== letter) { letter = key; html += `<p class="wx-letter">${esc(letter)}</p>`; }
-          html += contactRow(c);
+          html += contactRow(c, '', '', ql ? raw : '');
         });
       }
-      const groups = ql ? chats.filter((c) => c.kind === 'group' && c.name.toLowerCase().includes(ql)).slice(0, 30) : [];
+      const groups = ql ? rank(chats.filter((c) => c.kind === 'group'), raw, (c) => [c.name], 30) : [];
       if (groups.length) html += '<p class="wx-sec">Groups</p>' + groups.map((c) => contactRow({ jid: c.jid, name: c.name, kind: 'group', sub: 'Group' })).join('');
       if (ql && !list.length && !groups.length && !isNumber) html += `<p class="wx-note">No results found for '${esc(raw)}'</p>`;
       box.innerHTML = html; lazyAv(box);
@@ -483,8 +539,8 @@
     const members = new Map();
     function renderMembers() {
       const ql = $('wx-ng-q').value.trim().toLowerCase(), d = digitsOf(ql);
-      const list = (contacts || []).filter((c) => !ql || matches(c, ql, d)).slice(0, 500);
-      $('wx-ng-list').innerHTML = list.length ? list.map((c) => contactRow(c, `role="checkbox" aria-checked="${members.has(c.jid)}"`, '<span class="wx-check">' + (members.has(c.jid) ? '<i class="ri-check-line"></i>' : '') + '</span>')).join('')
+      void d; const list = rank(contacts || [], ql, (c) => [c.name, c.pushname, c.phone], 500);
+      $('wx-ng-list').innerHTML = list.length ? list.map((c) => contactRow(c, `role="checkbox" aria-checked="${members.has(c.jid)}"`, '<span class="wx-check">' + (members.has(c.jid) ? '<i class="ri-check-line"></i>' : '') + '</span>', ql)).join('')
         : `<p class="wx-note">${contacts ? 'No contacts found' : 'Loading contacts…'}</p>`;
       lazyAv($('wx-ng-list'));
       $('wx-ng-picked').innerHTML = [...members].map(([jid, n]) => `<span class="wx-pill">${esc(n)}<button type="button" data-unpick="${esc(jid)}" aria-label="Remove ${esc(n)}"><i class="ri-close-line"></i></button></span>`).join('');
@@ -516,7 +572,13 @@
     const box = $('wx-msgs');
     const isGroup = () => openJid && openJid.endsWith('@g.us');
     const atBottom = () => box.scrollHeight - box.scrollTop - box.clientHeight < 90;
-    const senderName = (m) => m.authorName || nameOf(m.author) || '+' + phoneOf(m.author);
+    // Group senders: the saved name, else WhatsApp's "~ pushname", else the number (never a hidden @lid id)
+    const senderName = (m) => {
+      const saved = (contacts || []).find((c) => c.jid === m.author)?.name || people.get(m.author)?.name;
+      if (saved) return saved;
+      if (m.authorName) return '~ ' + m.authorName;
+      return people.get(m.author)?.label || num(m.author) || 'Unknown';
+    };
 
     function bubble(m, first) {
       const me = m.fromMe;
@@ -559,6 +621,10 @@
       });
       if (!msgs.length) html += `<div class="wx-sys"><span><i class="ri-lock-fill"></i> Messages are end-to-end encrypted. No one outside of this chat, not even WhatsApp, can read or listen to them.</span></div>`;
       box.innerHTML = html; lazyAv(box);
+      if (isGroup()) {
+        const unknown = msgs.filter((m) => !m.fromMe && m.author && !m.authorName && !(contacts || []).some((c) => c.jid === m.author)).map((m) => m.author);
+        if (unknown.some((j) => !people.has(j))) resolvePeople(unknown, () => { if (isGroup()) render('stay'); });
+      }
       if (keep === 'unread' && $('wx-unread-line')) $('wx-unread-line').scrollIntoView({ block: 'center' });
       else if (keep === 'top') box.scrollTop = box.scrollHeight - prevH + prevTop;
       else if (keep === 'stay' && !wasBottom) box.scrollTop = prevTop;
@@ -588,7 +654,7 @@
         if (presence?.lastSeen) { const d = new Date(presence.lastSeen * 1000); el.textContent = `last seen ${sameDay(d, new Date()) ? 'today' : listTime(presence.lastSeen).toLowerCase()} at ${clock(presence.lastSeen)}`; return; }
         el.textContent = 'click here for contact info'; return;
       }
-      if (kind === 'group') { el.textContent = info?.participants ? info.participants.map((p) => p.me ? 'You' : (p.name || '+' + p.phone)).slice(0, 30).join(', ') : 'click here for group info'; return; }
+      if (kind === 'group') { el.textContent = info?.participants ? info.participants.map((p) => p.me ? 'You' : (p.name || (p.phone ? '+' + p.phone : (p.pushname ? '~' + p.pushname : '')))).filter(Boolean).slice(0, 30).join(', ') : 'click here for group info'; return; }
       el.textContent = 'Channel';
     }
 
@@ -724,7 +790,7 @@
       const p = dialog({ title: 'Forward message to', html, buttons: [{ label: 'Cancel', ghost: true, value: null }, { label: 'Forward', value: () => [...picked] }] });
       const list = document.getElementById('wx-fw-list'), qEl = document.getElementById('wx-fw-q');
       const draw = () => { const ql = qEl.value.trim().toLowerCase();
-        list.innerHTML = pool.filter((c) => !ql || c.name.toLowerCase().includes(ql) || c.jid.includes(ql)).slice(0, 150).map((c) => contactRow({ ...c, sub: c.kind === 'group' ? 'Group' : '+' + phoneOf(c.jid) }, `role="checkbox" aria-checked="${picked.has(c.jid)}"`, '<span class="wx-check">' + (picked.has(c.jid) ? '<i class="ri-check-line"></i>' : '') + '</span>')).join('');
+        list.innerHTML = rank(pool, ql, (c) => [c.name, num(c.jid)], 150).map((c) => contactRow({ ...c, sub: c.kind === 'group' ? 'Group' : num(c.jid) }, `role="checkbox" aria-checked="${picked.has(c.jid)}"`, '<span class="wx-check">' + (picked.has(c.jid) ? '<i class="ri-check-line"></i>' : '') + '</span>', ql)).join('') || '<p class="wx-note">No chats or contacts found</p>';
         lazyAv(list); };
       qEl.addEventListener('input', draw); list.addEventListener('click', (e) => { const r = e.target.closest('[data-pick]'); if (!r) return;
         if (picked.has(r.dataset.pick)) picked.delete(r.dataset.pick); else if (picked.size < 5) picked.add(r.dataset.pick); else toast('You can only share with up to 5 chats'); draw(); });
@@ -909,7 +975,7 @@
         buttons: [{ label: 'Cancel', ghost: true, value: null }, { label: 'Send', value: () => chosen }] });
       const list = document.getElementById('wx-ct-list'), qEl = document.getElementById('wx-ct-q');
       const draw = () => { const ql = qEl.value.trim().toLowerCase(), d = digitsOf(ql);
-        list.innerHTML = (contacts || []).filter((c) => !ql || matches(c, ql, d)).slice(0, 150).map((c) => contactRow(c, `role="radio" aria-checked="${chosen?.jid === c.jid}"`, '<span class="wx-check" style="border-radius:50%">' + (chosen?.jid === c.jid ? '<i class="ri-check-line"></i>' : '') + '</span>')).join('') || '<p class="wx-note">No contacts</p>'; lazyAv(list); };
+        void d; list.innerHTML = rank(contacts || [], ql, (c) => [c.name, c.pushname, c.phone], 150).map((c) => contactRow(c, `role="radio" aria-checked="${chosen?.jid === c.jid}"`, '<span class="wx-check" style="border-radius:50%">' + (chosen?.jid === c.jid ? '<i class="ri-check-line"></i>' : '') + '</span>', ql)).join('') || '<p class="wx-note">No contacts found</p>'; lazyAv(list); };
       qEl.addEventListener('input', draw); list.addEventListener('click', (e) => { const r = e.target.closest('[data-pick]'); if (r) { chosen = { jid: r.dataset.pick, name: r.dataset.name }; draw(); } });
       draw();
       const c = await p; if (!c) return;
@@ -1029,8 +1095,9 @@
       api(`chats/${enc(jid)}/shared?kind=media`).then((r) => { if (openJid !== jid) return; const el = $('wx-i-thumbs'); if (!el) return;
         el.innerHTML = r.items.length ? r.items.slice(0, 6).map((m) => `<button type="button" data-imedia="${esc(m.id)}">${m.type === 'video' ? '<span style="display:grid;place-items:center;height:100%;font-size:30px;color:var(--wx-ink3)"><i class="ri-video-fill"></i></span>' : `<img src="${q('/media?id=' + enc(m.id))}" alt="" loading="lazy">`}</button>`).join('') : '<span class="wx-note" style="grid-column:1/-1;padding:6px 0;text-align:left">No media yet</span>'; }).catch(() => {});
     }
-    const membersHTML = (list) => list.map((p) => `<button type="button" class="wx-member" data-member="${esc(p.jid)}">${av(p.jid, p.name || p.phone, 'user', 'sm')}
-      <span class="m-mid"><b>${esc(p.me ? 'You' : (p.name || '+' + p.phone))}</b><small>${p.name && !p.me ? '+' + esc(p.phone) : ''}</small></span>${p.admin ? `<span class="adm">${p.owner ? 'Group owner' : 'Group admin'}</span>` : ''}</button>`).join('');
+    const memberLabel = (p) => p.me ? 'You' : (p.name || (p.phone ? '+' + p.phone : (p.pushname ? '~' + p.pushname : 'Unknown')));
+    const membersHTML = (list) => list.map((p) => `<button type="button" class="wx-member" data-member="${esc(p.jid)}">${av(p.jid, memberLabel(p), 'user', 'sm')}
+      <span class="m-mid"><b>${esc(memberLabel(p))}</b><small>${!p.me && p.name && p.phone ? '+' + esc(p.phone) : (!p.me && !p.name && p.phone && p.pushname ? '~' + esc(p.pushname) : '')}</small></span>${p.admin ? `<span class="adm">${p.owner ? 'Group owner' : 'Group admin'}</span>` : ''}</button>`).join('');
     $('wx-info-body').addEventListener('click', async (e) => {
       const jid = openJid, i = info;
       const thumb = e.target.closest('[data-imedia]'); if (thumb) { const id = thumb.dataset.imedia; if (!msgById(id)) { const r = await api(`chats/${enc(jid)}/shared?kind=media`).catch(() => ({ items: [] })); r.items.forEach((m) => { if (!msgById(m.id)) msgs.unshift(m); }); } viewMedia(id); return; }
@@ -1038,11 +1105,12 @@
       const mem = e.target.closest('[data-member]');
       if (mem) {
         const p = i.participants.find((x) => x.jid === mem.dataset.member); if (!p || p.me) return;
+        const msgJid = p.phone ? p.phone + '@c.us' : p.jid;
         const gAct = async (action, okText) => { try { await api(`groups/${enc(jid)}/action`, { action, value: [p.jid] }); toast(okText); loadInfoState(jid); } catch (err) { toast(err.message); } };
         openMenu(mem, [
-          { icon: 'ri-chat-1-line', label: `Message ${p.name || '+' + p.phone}`, run: () => { known.set(p.jid, p.name || '+' + p.phone); openChat(p.jid); } },
+          { icon: 'ri-chat-1-line', label: `Message ${memberLabel(p)}`, run: () => { known.set(msgJid, memberLabel(p)); openChat(msgJid); } },
           i.iAmAdmin && (p.admin ? { icon: 'ri-shield-user-line', label: 'Dismiss as admin', run: () => gAct('demote', 'Dismissed as admin') } : { icon: 'ri-shield-user-line', label: 'Make group admin', run: () => gAct('promote', 'Now a group admin') }),
-          i.iAmAdmin && { icon: 'ri-user-unfollow-line', label: 'Remove', danger: true, run: async () => { if (await confirmBox(`Remove ${p.name || '+' + p.phone} from "${i.name}" group?`, '', 'Remove', true)) gAct('remove', 'Removed from the group'); } },
+          i.iAmAdmin && { icon: 'ri-user-unfollow-line', label: 'Remove', danger: true, run: async () => { if (await confirmBox(`Remove ${memberLabel(p)} from "${i.name}" group?`, '', 'Remove', true)) gAct('remove', 'Removed from the group'); } },
         ], { alignLeft: true });
         return;
       }
@@ -1055,7 +1123,12 @@
       else if (k === 'clear') clearChat(jid);
       else if (k === 'delete') deleteChat(jid);
       else if (k === 'leave') exitGroup(jid);
-      else if (k === 'msearch') { const t = prompt('Search members'); if (t !== null) $('wx-i-members').innerHTML = membersHTML(i.participants.filter((p) => (p.name + ' ' + p.phone).toLowerCase().includes(t.toLowerCase()))); lazyAv($('wx-i-members')); }
+      else if (k === 'msearch') {
+        const box2 = btn.closest('.wx-card-sec'); if (box2.querySelector('#wx-msq')) { box2.querySelector('#wx-msq').focus(); return; }
+        box2.querySelector('.lbl').insertAdjacentHTML('afterend', '<label class="wx-search" style="margin:0 20px 8px"><i class="ri-search-line"></i><input id="wx-msq" type="search" placeholder="Search members" autocomplete="off"></label>');
+        const inp = box2.querySelector('#wx-msq'); inp.focus(); decorateSearch(box2);
+        inp.addEventListener('input', () => { $('wx-i-members').innerHTML = membersHTML(rank(i.participants, inp.value, (p) => [p.name, p.pushname, p.phone], 1024)); lazyAv($('wx-i-members')); });
+      }
       else if (k === 'desc' || k === 'subject') {
         const v = await dialog({ title: k === 'desc' ? 'Group description' : 'Group name', html: k === 'desc' ? `<textarea class="wx-input" id="wx-gd" rows="5" maxlength="2048">${esc(i.description)}</textarea>` : `<input class="wx-input" id="wx-gd" maxlength="100" value="${esc(i.name)}">`,
           buttons: [{ label: 'Cancel', ghost: true, value: null }, { label: 'Save', value: (w) => w.querySelector('#wx-gd').value }] });
@@ -1078,7 +1151,7 @@
           buttons: [{ label: 'Cancel', ghost: true, value: null }, { label: 'Add', value: () => [...picked] }] });
         const list = document.getElementById('wx-am-list'), qEl = document.getElementById('wx-am-q');
         const draw = () => { const ql = qEl.value.trim().toLowerCase(), d = digitsOf(ql);
-          list.innerHTML = (contacts || []).filter((c) => !inGroup.has(c.jid) && (!ql || matches(c, ql, d))).slice(0, 200).map((c) => contactRow(c, `role="checkbox" aria-checked="${picked.has(c.jid)}"`, '<span class="wx-check">' + (picked.has(c.jid) ? '<i class="ri-check-line"></i>' : '') + '</span>')).join('') || '<p class="wx-note">No contacts</p>'; lazyAv(list); };
+          void d; list.innerHTML = rank((contacts || []).filter((c) => !inGroup.has(c.jid)), ql, (c) => [c.name, c.pushname, c.phone], 200).map((c) => contactRow(c, `role="checkbox" aria-checked="${picked.has(c.jid)}"`, '<span class="wx-check">' + (picked.has(c.jid) ? '<i class="ri-check-line"></i>' : '') + '</span>', ql)).join('') || '<p class="wx-note">No contacts found</p>'; lazyAv(list); };
         qEl.addEventListener('input', draw); list.addEventListener('click', (ev) => { const r = ev.target.closest('[data-pick]'); if (r) { picked.has(r.dataset.pick) ? picked.delete(r.dataset.pick) : picked.add(r.dataset.pick); draw(); } });
         draw();
         const add = await p; if (!add || !add.length) return;
@@ -1212,25 +1285,65 @@
     }
 
     // ── Post to many + status composer + scheduled (SWM extras) ──
-    let targets = null; const picked = new Map();
+    let targets = null, activeIdx = 0, sugg = [];
+    const picked = new Map();
+    const tq = $('wa-target-q'), tbox = $('wa-targets');
     async function loadTargets() {
-      if (targets) return renderTargets();
-      $('wa-targets').innerHTML = '<p class="wx-note">Loading your chats, groups and channels…</p>';
-      try { const t = await getJSON('/targets.json'); const seen = new Set();
-        targets = [...(t.channels || []).map((x) => ({ ...x, kind: 'Channel' })), ...(t.groups || []).map((x) => ({ ...x, kind: 'Group' })), ...chats.filter((c) => c.kind === 'user').map((c) => ({ jid: c.jid, name: c.name, kind: 'Chat' }))].filter((x) => !seen.has(x.jid) && seen.add(x.jid));
-      } catch (e) { $('wa-targets').innerHTML = `<p class="wx-note">${esc(e.message)}</p>`; return; }
-      renderTargets();
+      renderPicked();
+      if (targets) return;
+      try {
+        const [t] = await Promise.all([getJSON('/targets.json'), loadContacts().catch(() => null)]);
+        const seen = new Set();
+        targets = [
+          ...(t.groups || []).map((x) => ({ ...x, kind: 'group', label: 'Group' })),
+          ...(t.channels || []).map((x) => ({ ...x, kind: 'channel', label: 'Channel' })),
+          ...chats.filter((c) => c.kind === 'user').map((c) => ({ jid: c.jid, name: c.name, kind: 'user', label: 'Chat' })),
+          ...(contacts || []).map((c) => ({ jid: c.jid, name: c.name, kind: 'user', label: 'Contact', phone: c.phone, pushname: c.pushname })),
+        ].filter((x) => x.jid && !seen.has(x.jid) && seen.add(x.jid));
+        if (document.activeElement === tq) suggest();
+      } catch (e) { tbox.innerHTML = `<p class="wx-note">${esc(e.message)}</p>`; }
     }
-    function renderTargets() {
-      const n = $('wa-target-q').value.trim().toLowerCase();
-      const list = (targets || []).filter((t) => !picked.has(t.jid) && (!n || t.name.toLowerCase().includes(n))).slice(0, 120);
-      $('wa-targets').innerHTML = list.map((t) => contactRow({ jid: t.jid, name: t.name, kind: t.kind === 'Group' ? 'group' : t.kind === 'Channel' ? 'channel' : 'user', sub: t.kind })).join('') || '<p class="wx-note">Nothing matches.</p>';
-      lazyAv($('wa-targets'));
-      $('wa-picked').innerHTML = picked.size ? [...picked.values()].map((t) => `<span class="wx-pill">${esc(t.name)}<button type="button" data-unpick="${esc(t.jid)}" aria-label="Remove ${esc(t.name)}"><i class="ri-close-line"></i></button></span>`).join('') : '<span class="wx-note" style="padding:0">Nothing chosen yet.</span>';
+    function renderPicked() {
+      $('wa-picked').innerHTML = [...picked.values()].map((t) => `<span class="wx-pill">${av(t.jid, t.name, t.kind)}${esc(t.name)}<button type="button" data-unpick="${esc(t.jid)}" aria-label="Remove ${esc(t.name)}"><i class="ri-close-line"></i></button></span>`).join('');
+      lazyAv($('wa-picked'));
+      $('wa-to-lbl').textContent = picked.size ? `Send to (${picked.size})` : 'Send to';
     }
-    $('wa-target-q').addEventListener('input', renderTargets, sig);
-    $('wa-targets').addEventListener('click', (e) => { const b = e.target.closest('[data-pick]'); if (!b) return; const t = targets.find((x) => x.jid === b.dataset.pick); if (t) picked.set(t.jid, t); renderTargets(); }, sig);
-    $('wa-picked').addEventListener('click', (e) => { const b = e.target.closest('[data-unpick]'); if (b) { picked.delete(b.dataset.unpick); renderTargets(); } }, sig);
+    function suggest() {
+      const raw = tq.value.trim();
+      if (!targets) { tbox.innerHTML = '<p class="wx-note">Loading your chats, groups, channels and contacts…</p>'; tbox.hidden = false; tq.setAttribute('aria-expanded', 'true'); return; }
+      const pool = targets.filter((t) => !picked.has(t.jid));
+      sugg = raw ? rank(pool, raw, (t) => [t.name, t.pushname, t.phone], 40) : pool.filter((t) => t.kind !== 'user' || t.label === 'Chat').slice(0, 12);
+      const d = raw.replace(/\D/g, '');
+      if (d.length >= 7 && /^[+\d\s()-]+$/.test(raw) && !sugg.some((t) => t.phone === d)) sugg.unshift({ jid: d + '@c.us', name: '+' + d, kind: 'user', label: 'Number' });
+      activeIdx = 0;
+      tbox.innerHTML = (raw ? '' : '<p class="wx-sec" style="padding:8px 16px 4px">Groups, channels and recent chats</p>') + (sugg.length ? sugg.map((t, i) => `<div class="wx-row ${i === 0 ? 'is-active' : ''}" role="option" aria-selected="${i === 0}" data-sug="${i}">${av(t.jid, t.name, t.kind)}
+          <div class="wx-row-mid"><div class="wx-row-top"><span class="wx-row-name">${raw ? hl(t.name, raw) : esc(t.name)}</span><span class="kind">${t.label}</span></div>
+          ${t.label === 'Contact' || t.label === 'Number' ? `<div class="wx-row-bot"><span class="wx-row-last">${t.phone ? '+' + esc(t.phone) : ''}</span></div>` : ''}</div></div>`).join('')
+        : `<p class="wx-note">No chat, group, channel or contact matches '${esc(raw)}'.</p>`);
+      tbox.hidden = false; tq.setAttribute('aria-expanded', 'true'); lazyAv(tbox);
+    }
+    function pick(i) {
+      const t = sugg[i]; if (!t) return;
+      picked.set(t.jid, t); tq.value = ''; renderPicked(); suggest(); tq.focus();
+    }
+    const closeSuggest = () => { tbox.hidden = true; tq.setAttribute('aria-expanded', 'false'); };
+    tq.addEventListener('focus', () => { suggest(); loadTargets(); }, sig);
+    tq.addEventListener('input', suggest, sig);
+    tq.addEventListener('keydown', (e) => {
+      if (tbox.hidden && (e.key === 'ArrowDown' || e.key === 'Enter')) { suggest(); }
+      const rows = [...tbox.querySelectorAll('[data-sug]')];
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault(); if (!rows.length) return;
+        activeIdx = (activeIdx + (e.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
+        rows.forEach((r, i) => { r.classList.toggle('is-active', i === activeIdx); r.setAttribute('aria-selected', String(i === activeIdx)); });
+        rows[activeIdx].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') { e.preventDefault(); if (rows.length) pick(activeIdx); }
+      else if (e.key === 'Escape') { e.stopPropagation(); closeSuggest(); }
+      else if (e.key === 'Backspace' && !tq.value && picked.size) { picked.delete([...picked.keys()].pop()); renderPicked(); suggest(); }
+    }, sig);
+    tbox.addEventListener('mousedown', (e) => { const r = e.target.closest('[data-sug]'); if (r) { e.preventDefault(); pick(Number(r.dataset.sug)); } }, sig);
+    tq.addEventListener('blur', () => setTimeout(closeSuggest, 120), sig);
+    $('wa-picked').addEventListener('click', (e) => { const b = e.target.closest('[data-unpick]'); if (b) { picked.delete(b.dataset.unpick); renderPicked(); if (!tbox.hidden) suggest(); } }, sig);
     function whenToggle(form) {
       form.querySelectorAll('[name=when]').forEach((r) => r.addEventListener('change', () => {
         const later = form.querySelector('[name=when]:checked').value === 'later'; const dt = form.querySelector('[name=send_at]'); dt.hidden = !later; dt.required = later;
@@ -1247,16 +1360,27 @@
       try {
         const r = await post('/posts', fd);
         if (r.status === 'failed') throw new Error(r.error || 'It could not be sent.');
-        form.reset(); form.querySelector('[name=send_at]').hidden = true; picked.clear(); renderTargets();
+        form.reset(); form.querySelector('[name=send_at]').hidden = true; if (kind === 'message') { picked.clear(); renderPicked(); }
         err.hidden = false; err.className = 'wa-error wx-ok';
         err.textContent = r.status === 'pending' ? (fd.get('send_at') ? 'Scheduled. You can see it under Scheduled.' : `Waiting to send: ${r.error || ''}`) : r.status === 'partial' ? `Sent, but some could not be delivered: ${r.error}` : 'Sent.';
         if (kind === 'status') setTimeout(loadStatuses, 3000);
       } catch (e2) { err.hidden = false; err.textContent = e2.message; }
       finally { btn.disabled = false; }
     }
+    app.querySelectorAll('.wx-file').forEach((w) => {
+      const input = w.querySelector('input[type=file]'), chip = w.querySelector('.wx-file-chip'), img = chip.querySelector('img');
+      const paint = () => { const f = input.files[0]; chip.hidden = !f; w.querySelector('label span').textContent = f ? 'Change file' : 'Choose a file';
+        if (!f) return; chip.querySelector('.nm').textContent = `${f.name} · ${(f.size / 1048576).toFixed(1)} MB`;
+        if (f.type.startsWith('image/')) { img.src = URL.createObjectURL(f); img.hidden = false; } else img.hidden = true; };
+      input.addEventListener('change', paint, sig);
+      chip.querySelector('[data-file-x]').addEventListener('click', () => { input.value = ''; paint(); }, sig);
+      input.form?.addEventListener('reset', () => setTimeout(paint, 0), sig);
+    });
     const postForm = $('wa-post'), statusForm = $('wa-status');
     whenToggle(postForm); whenToggle(statusForm);
-    postForm.addEventListener('submit', (e) => { e.preventDefault(); if (!picked.size) { const err = postForm.querySelector('.wa-error'); err.hidden = false; err.textContent = 'Choose at least one chat, group or channel.'; return; } submitPost(postForm, 'message'); }, sig);
+    postForm.addEventListener('submit', (e) => { e.preventDefault(); if (!picked.size) { const err = postForm.querySelector('.wa-error'); err.hidden = false; err.className = 'wa-error wx-err'; err.textContent = 'Choose at least one chat, group, channel or contact.'; tq.focus(); return; }
+      if (!postForm.querySelector('[name=text]').value.trim() && !postForm.querySelector('[name=file]').files.length) { const err = postForm.querySelector('.wa-error'); err.hidden = false; err.className = 'wa-error wx-err'; err.textContent = 'Write a message or attach a file.'; return; }
+      submitPost(postForm, 'message'); }, sig);
     statusForm.addEventListener('submit', (e) => { e.preventDefault(); submitPost(statusForm, 'status'); }, sig);
     const badge = { pending: ['Scheduled', 'badge-gold'], sending: ['Sending', 'badge-warn'], sent: ['Sent', 'badge-ok'], partial: ['Partly sent', 'badge-warn'], failed: ['Failed', 'badge-bad'], cancelled: ['Cancelled', 'badge-neut'] };
     async function loadPosts() {

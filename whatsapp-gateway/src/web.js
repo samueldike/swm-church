@@ -42,6 +42,30 @@ export function registerWeb(app, h) {
   const myJid = id => registry.get(id).jid || '';
   const clean = list => list.filter(m => m && m.type !== 'e2e_notification' && m.type !== 'notification_template' && m.type !== 'gp2' && m.type !== 'protocol');
 
+  // WhatsApp now hides many people behind a "lid" id (xxx@lid) that is NOT a phone number. Resolve it to the
+  // real number and saved name when the phone knows them, so nobody is shown as "+1327279165550".
+  const people = new Map();                       // session|jid -> { name, pushname, phone }
+  async function person(c, sid, jid) {
+    const key = sid + '|' + jid;
+    if (people.has(key)) return people.get(key);
+    let k = await withTimeout(c.getContact(jid), 5000, 'contact').catch(() => null);
+    let phone = jid.endsWith('@c.us') ? S.phoneFromJid(jid) : '';
+    if (!phone && jid.endsWith('@lid')) {
+      const e = await withTimeout(c.getPnLidEntry(jid), 5000, 'lid').catch(() => null);
+      const pn = S.widToString(e?.phoneNumber || e?.phone || e?.pn);
+      if (pn && pn.includes('@')) {
+        phone = S.phoneFromJid(pn);
+        const k2 = await withTimeout(c.getContact(pn.replace('@s.whatsapp.net', '@c.us')), 5000, 'contact').catch(() => null);
+        if (k2) k = { ...k, ...Object.fromEntries(Object.entries(k2).filter(([, v]) => v)) };
+      }
+    }
+    const out = { name: (k?.name || k?.verifiedName || '').trim(), pushname: (k?.pushname || '').trim(), phone };
+    people.set(key, out);
+    if (people.size > 20000) people.clear();
+    return out;
+  }
+  const label = p => p.name || (p.pushname ? '~' + p.pushname : (p.phone ? '+' + p.phone : 'Unknown'));
+
   const shapeAll = async (c, raw) => withReactions(c, raw.map(shapeMessage), raw, withTimeout);
 
   // ─── chat actions: archive, pin, mute, read/unread, clear, delete, block, typing, leave ───
@@ -184,10 +208,12 @@ export function registerWeb(app, h) {
       const parts = (meta.participants || []).slice(0, 1024);
       out.participants = await Promise.all(parts.map(async p => {
         const pj = S.widToString(p.id);
-        const k = pj.endsWith('@c.us') ? await c.getContact(pj).catch(() => null) : null;
-        return { jid: pj, name: (k?.name || k?.pushname || '').trim(), phone: S.phoneFromJid(pj), admin: !!(p.isAdmin || p.isSuperAdmin), owner: !!p.isSuperAdmin, me: pj === me };
+        const who = await person(c, req.params.id, pj);
+        const isMe = pj === me || (who.phone && who.phone === S.phoneFromJid(me));
+        return { jid: pj, name: who.name, pushname: who.pushname, phone: who.phone, admin: !!(p.isAdmin || p.isSuperAdmin), owner: !!p.isSuperAdmin, me: isMe };
       }));
-      out.participants.sort((a, b) => (b.me - a.me) || (b.admin - a.admin) || (a.name || 'zz').localeCompare(b.name || 'zz'));
+      // WhatsApp Web order: you, then admins, then saved contacts A-Z, then everyone else
+      out.participants.sort((a, b) => (b.me - a.me) || (b.admin - a.admin) || (!!b.name - !!a.name) || label(a).localeCompare(label(b)));
       out.iAmAdmin = out.participants.some(p => p.me && p.admin);
       out.count = (meta.participants || []).length;
     }
@@ -209,6 +235,15 @@ export function registerWeb(app, h) {
     let lastSeen = null;
     if (jid.endsWith('@c.us') && !p?.online) lastSeen = await withTimeout(c.getLastSeen(jid), 6000, 'last seen').catch(() => null);
     res.json({ online: !!p?.online, state: p?.state || null, typing: p?.typing || [], lastSeen: typeof lastSeen === 'number' ? lastSeen : null });
+  }));
+
+  // ─── names for ids the page could not resolve (group message authors on @lid) ───
+  app.post('/sessions/:id/people', wrap(async (req, res) => {
+    const c = await needClient(req.params.id);
+    const ids = [...new Set((req.body?.ids || []).map(String))].filter(j => /@(c\.us|lid)$/.test(j)).slice(0, 300);
+    const out = {};
+    await Promise.all(ids.map(async j => { const p = await person(c, req.params.id, j); out[j] = { ...p, label: label(p) }; }));
+    res.json({ people: out });
   }));
 
   // ─── starred messages (all chats) ───
@@ -247,8 +282,9 @@ export function registerWeb(app, h) {
       });
     });
     const out = await Promise.all((raw || []).filter(s => s.msgs.length).map(async s => {
-      const k = s.jid.endsWith('@c.us') ? await c.getContact(s.jid).catch(() => null) : null;
-      return { ...s, mine: s.jid === me, name: (k?.name || k?.pushname || '').trim() || '+' + S.phoneFromJid(s.jid) };
+      const who = await person(c, req.params.id, s.jid);
+      const mine = s.jid === me || (who.phone && who.phone === S.phoneFromJid(me));
+      return { ...s, mine, name: label(who), phone: who.phone };
     }));
     out.sort((a, b) => (b.mine - a.mine) || (b.t - a.t));
     res.json({ statuses: out });
@@ -269,7 +305,10 @@ export function registerWeb(app, h) {
       withTimeout(c.getProfilePicFromServer(jid), 8000, 'photo').catch(() => null),
     ]);
     const r = registry.get(req.params.id);
-    res.json({ jid, phone: r.phone, name: r.name || '', about: about?.status || '', avatar: pic?.eurl || pic?.imgFull || pic?.img || null });
+    let profileName = await withTimeout(c.getProfileName(), 6000, 'name').catch(() => '');
+    if (typeof profileName !== 'string') profileName = '';
+    if (!profileName || /^\+?[\d\s()-]+$/.test(profileName)) profileName = (r.name && !/^\+?[\d\s()-]+$/.test(r.name)) ? r.name : '';
+    res.json({ jid, phone: r.phone, name: profileName, about: about?.status || '', avatar: pic?.eurl || pic?.imgFull || pic?.img || null });
   }));
   app.post('/sessions/:id/me', wrap(async (req, res) => {
     const c = await needClient(req.params.id);

@@ -8392,6 +8392,7 @@ _WA_RELAY = (
     ("POST", re.compile(r"statuses/seen")),
     ("POST", re.compile(r"groups/[^/]+/action")),
     ("POST", re.compile(r"send-extra")),
+    ("POST", re.compile(r"people")),
     ("POST", re.compile(r"me")),
 )
 _WA_AUDITED = {"delete", "clear", "block", "unblock", "leave", "add", "remove", "promote", "demote", "subject", "description", "announce", "revoke"}
