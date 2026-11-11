@@ -76,7 +76,8 @@ def test_html_escapes_text_and_mirrors_pages():
     html = dt.render_html([day], dt.Options(first_page=270, title_page=False), title="T")
     assert "<script>x" not in html and "&lt;script&gt;" in html
     assert "counter-reset: page 270" in html
-    assert "@page :left {" in html.replace(":left {\n  margin-left: 17mm", ":left {")  # even first page is a left page
+    assert "@page :left {\n  margin-left: 17mm" in html  # an even first page number is a left-hand page
+    assert 'class="cover"' not in html
 
 
 @pytest.mark.skipif(not (importlib.util.find_spec("weasyprint") and importlib.util.find_spec("pypdfium2")),
@@ -90,5 +91,12 @@ def test_real_pdf_one_page_per_day_and_thumbnail():
     import pypdfium2 as pdfium
     assert len(pdfium.PdfDocument(pdf)) == 3  # title page + one page per day
     assert pages[1].fit > pages[0].fit
+    # A long book is split over processes and merged: same pages, numbers continue.
+    many = [copy.deepcopy(dt.SAMPLE_DAY) for _ in range(14)]
+    seen = []
+    merged = dt.build_pdf(many, dt.Options(first_page=5), workers=2, progress=lambda d, t, s: seen.append(s), title="T")
+    doc = pdfium.PdfDocument(merged)
+    assert len(doc) == 15 and "measure" in seen and "render" in seen
+    assert "18" in doc[14].get_textpage().get_text_range()
     png = dt.thumbnail_png([copy.deepcopy(dt.SAMPLE_DAY)], dt.Options())
     assert png.startswith(b"\x89PNG")

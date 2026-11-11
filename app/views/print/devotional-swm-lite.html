@@ -32,7 +32,7 @@
   }
   @bottom-left { content: ""; width: 100%; border-top: 2.8pt solid #3d3d3d; vertical-align: top; margin-top: 6.2mm; }
   @bottom-right {
-    content: counter(page); width: 10mm; vertical-align: top; margin-top: 4.7mm; padding: 1mm 0 .9mm;
+    content: counter(page); width: 10mm; height: 3.7mm; vertical-align: top; margin-top: 4.7mm; padding: 1mm 0 .9mm;
     background: #3d3d3d; color: #fff; font: 700 9.5pt/1 "SWM Head"; text-align: center;
   }
 }
@@ -46,7 +46,7 @@
   }
   @bottom-right { content: ""; width: 100%; border-top: 2.8pt solid #3d3d3d; vertical-align: top; margin-top: 6.2mm; }
   @bottom-left {
-    content: counter(page); width: 10mm; vertical-align: top; margin-top: 4.7mm; padding: 1mm 0 .9mm;
+    content: counter(page); width: 10mm; height: 3.7mm; vertical-align: top; margin-top: 4.7mm; padding: 1mm 0 .9mm;
     background: #3d3d3d; color: #fff; font: 700 9.5pt/1 "SWM Head"; text-align: center;
   }
 }
@@ -123,7 +123,7 @@ body { margin: 0; }
 </style>
 </head>
 <body>
-{% if opts.title_page %}
+{% if show_title_page %}
 <section class="cover">
   {% if logo %}<div class="cover-logo"><img src="{{ logo }}" alt=""></div>{% endif %}
   <h1>{{ title }}</h1>

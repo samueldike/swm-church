@@ -6847,35 +6847,88 @@ async def admin_pubs_template_thumb(kind: str, pub_id: int, key: str, request: R
     return Response(content=png, media_type="image/png", headers={"Cache-Control": "private, max-age=300"})
 
 
-@router.get("/publications/{kind}/{pub_id}/export-template", name="admin_pubs_export_template")
+# A year of pages takes a minute or two, so the export runs as a job in this process: POST starts it,
+# the editor polls its status and then downloads the file (kept in memory for an hour, owner only).
+_PUB_EXPORTS: dict[str, dict] = {}
+_PUB_EXPORT_MAX_RUNNING = 2
+
+
+def _pub_export_job(admin, pub_id: int, job_id: str) -> dict | None:
+    job = _PUB_EXPORTS.get(job_id)
+    return job if job and job["admin_id"] == admin.id and job["pub_id"] == pub_id else None
+
+
+@router.post("/publications/{kind}/{pub_id}/export-template", name="admin_pubs_export_template")
 async def admin_pubs_export_template(kind: str, pub_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     admin, pub, err = await _pub_guard(request, db, kind, pub_id)
     if err:
-        return err
+        return JSONResponse({"ok": False, "error": "You cannot export this project."}, status_code=403)
     import asyncio
+    import secrets
+    import time
 
-    from fastapi.responses import Response
     from slugify import slugify
 
     from app.core import devotional_templates as dt
 
-    back = f"/admin/publications/{kind}/{pub_id}/editor"
     if not pub.is_devotional:
-        return _redirect(request, back, "Print templates are for daily devotionals.", "error")
-    opts = dt.Options.from_query(request.query_params)
+        return JSONResponse({"ok": False, "error": "Print templates are for daily devotionals."}, status_code=400)
+    now = time.time()
+    for key in [k for k, j in _PUB_EXPORTS.items() if now - j["created"] > 3600]:
+        _PUB_EXPORTS.pop(key, None)
+    if sum(1 for j in _PUB_EXPORTS.values() if j["status"] == "running") >= _PUB_EXPORT_MAX_RUNNING:
+        return JSONResponse({"ok": False, "error": "Other designed PDFs are being made right now. Please try again in a minute."}, status_code=429)
+    form = await request.form()
+    opts = dt.Options.from_query(form)
     pages = dt.day_pages(pub, reading=opts.reading, two_year_plan=opts.two_year_plan)
     if not pages:
-        return _redirect(request, back, "There are no days with content to put into the template yet.", "error")
+        return JSONResponse({"ok": False, "error": "There are no days with content to put into the template yet."}, status_code=400)
     meta = await _pub_template_meta(db, pub)
-    try:
-        data = await asyncio.to_thread(dt.build_pdf, pages, opts, **meta)
-    except Exception:
-        logging.getLogger(__name__).exception("Template export failed for publication %s", pub.id)
-        return _redirect(request, back, "The designed PDF could not be made. Please try again.", "error")
+    job_id = secrets.token_urlsafe(12)
+    job = {"admin_id": admin.id, "pub_id": pub.id, "created": now, "status": "running", "stage": "measure",
+           "done": 0, "total": len(pages), "data": None, "error": "",
+           "name": f"{slugify(pub.title) or 'devotional'}-{opts.template}.pdf"}
+    _PUB_EXPORTS[job_id] = job
+
+    def progress(done, total, stage):
+        job.update(done=done, total=total, stage=stage)
+
+    async def run():
+        try:
+            job["data"] = await asyncio.to_thread(dt.build_pdf, pages, opts, progress=progress, **meta)
+            job["status"] = "done"
+        except Exception:
+            logging.getLogger(__name__).exception("Template export failed for publication %s", pub_id)
+            job.update(status="error", error="The designed PDF could not be made. Please try again.")
+
+    job["task"] = asyncio.create_task(run())
     await log_admin_action(db, admin.id, "publication.export", "publication", pub.id,
-                           {"format": "pdf", "template": opts.template, "trim": opts.trim}, request)
-    name = f"{slugify(pub.title) or 'devotional'}-{opts.template}.pdf"
-    return Response(content=data, media_type="application/pdf", headers={"Content-Disposition": f'attachment; filename="{name}"'})
+                           {"format": "pdf", "template": opts.template, "trim": opts.trim, "days": len(pages)}, request)
+    return JSONResponse({"ok": True, "job": job_id, "total": len(pages)})
+
+
+@router.get("/publications/{kind}/{pub_id}/export-template/{job_id}", name="admin_pubs_export_template_status")
+async def admin_pubs_export_template_status(kind: str, pub_id: int, job_id: str, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, pub, err = await _pub_guard(request, db, kind, pub_id)
+    job = None if err else _pub_export_job(admin, pub_id, job_id)
+    if not job:
+        return JSONResponse({"ok": False, "error": "This export is no longer available. Please start it again."}, status_code=404)
+    return JSONResponse({"ok": True, "status": job["status"], "stage": job["stage"], "done": job["done"],
+                         "total": job["total"], "error": job["error"]})
+
+
+@router.get("/publications/{kind}/{pub_id}/export-template/{job_id}/file", name="admin_pubs_export_template_file")
+async def admin_pubs_export_template_file(kind: str, pub_id: int, job_id: str, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, pub, err = await _pub_guard(request, db, kind, pub_id)
+    if err:
+        return err
+    from fastapi.responses import Response
+
+    job = _pub_export_job(admin, pub_id, job_id)
+    if not job or job["status"] != "done":
+        return _redirect(request, f"/admin/publications/{kind}/{pub_id}/editor", "This export is no longer available. Please start it again.", "error")
+    return Response(content=job["data"], media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{job["name"]}"', "Cache-Control": "no-store"})
 
 
 # ─── Community: Prayer Requests, Newsletter Subscribers, Donations ──

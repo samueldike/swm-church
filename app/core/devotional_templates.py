@@ -11,6 +11,7 @@ part (e.g. its scripture line was deleted) falls back to the subtopic's own fiel
 from __future__ import annotations
 
 import base64
+import copy
 import html
 import io
 import re
@@ -328,12 +329,17 @@ class Options:
 
 
 def render_html(pages: list[DayPage], opts: Options, *, title: str = "", subtitle: str = "",
-                author: str = "", church: str = "") -> str:
-    # Page numbers: the first day page gets ``first_page``; a title page before it is unnumbered.
-    first_number = opts.first_page - (1 if opts.title_page else 0)
+                author: str = "", church: str = "", first_number: int | None = None,
+                title_page: bool | None = None) -> str:
+    """The template's HTML. ``first_number`` is the number of the document's first page (by default
+    ``first_page``, or one less when a title page comes first); chunks of a long book pass their own."""
+    title_page = opts.title_page if title_page is None else title_page
+    if first_number is None:
+        first_number = opts.first_page - (1 if title_page else 0)
     tpl = _env().get_template(TEMPLATES[opts.template]["file"])
     return tpl.render(
         pages=pages, opts=opts, size=TRIMS[opts.trim]["size"], counter_start=first_number,
+        show_title_page=title_page,
         # WeasyPrint makes the document's first page a right-hand page; an even first number
         # belongs on the left, so swap the mirrored selectors.
         recto=":left" if first_number % 2 == 0 else ":right",
@@ -343,40 +349,120 @@ def render_html(pages: list[DayPage], opts: Options, *, title: str = "", subtitl
     )
 
 
-def _overflowing(document, pages: list[DayPage]) -> set[int]:
-    """Days whose content ran past their own page (their anchor's page is followed by a non-anchor page)."""
-    where: dict[str, int] = {}
-    for i, page in enumerate(document.pages):
-        for anchor in page.anchors:
-            where.setdefault(anchor, i)
-    bad: set[int] = set()
-    total = len(document.pages)
-    for k, day in enumerate(pages):
-        start = where.get(f"day-{k}")
-        if start is None:
-            continue
-        nxt = where.get(f"day-{k + 1}", total)
-        if nxt - start > 1:
-            bad.add(k)
-    return bad
-
-
-def build_pdf(pages: list[DayPage], opts: Options, **meta) -> bytes:
-    """Render, then shrink the type of any day that spilled onto a second page and render again."""
+def _render(html_text: str):
     from weasyprint import HTML
 
-    for day in pages:  # a first guess from the length, so most documents need a single pass
-        n = day.text_length
-        day.fit = 0 if n < 1500 else 1 if n < 1750 else 2 if n < 2000 else 3
-    base = FONT_DIR.as_uri() + "/"
-    for _ in range(FIT_LEVELS):
-        document = HTML(string=render_html(pages, opts, **meta), base_url=base).render()
-        bad = [k for k in _overflowing(document, pages) if pages[k].fit < FIT_LEVELS - 1]
-        if not bad:
-            break
-        for k in bad:
-            pages[k].fit += 1
-    return document.write_pdf()
+    return HTML(string=html_text, base_url=FONT_DIR.as_uri() + "/").render()
+
+
+def _guess_fit(day: DayPage) -> int:
+    n = day.text_length
+    return 0 if n < 1450 else 1 if n < 1700 else 2 if n < 2000 else 3
+
+
+def fit_day(day: DayPage, opts: Options) -> tuple[int, int]:
+    """The largest type level at which ``day`` fits one page: (level, pages it takes at that level).
+
+    Starts from a guess based on its length, then steps up (smaller type) while it overflows, or
+    down (larger type) while the larger size still fits. At the smallest level a very long day may
+    take two pages; that is reported, not hidden.
+    """
+    def pages_at(level: int) -> int:
+        d = copy.copy(day)
+        d.fit = level
+        return len(_render(render_html([d], opts, title_page=False, first_number=1)).pages)
+
+    level = _guess_fit(day)
+    count = pages_at(level)
+    if count == 1:
+        while level > 0 and pages_at(level - 1) == 1:
+            level -= 1
+        return level, 1
+    while count > 1 and level < FIT_LEVELS - 1:
+        level += 1
+        count = pages_at(level)
+    return level, count
+
+
+def _fit_many(args) -> list[tuple[int, int]]:
+    days, opts = args
+    return [fit_day(d, opts) for d in days]
+
+
+def _render_chunk(args) -> bytes:
+    days, opts, first_number, title_page, meta = args
+    return _render(render_html(days, opts, first_number=first_number, title_page=title_page, **meta)).write_pdf()
+
+
+def _chunks(items: list, n: int) -> list[list]:
+    size = max(1, -(-len(items) // n))
+    return [items[i:i + size] for i in range(0, len(items), size)]
+
+
+def build_pdf(pages: list[DayPage], opts: Options, *, progress=None, workers: int | None = None, **meta) -> bytes:
+    """The finished book. Each day first gets the largest type that fits its page (``fit_day``), then
+    the pages are rendered; a long book is split over a few processes and the parts are merged.
+
+    ``progress(done, total, stage)`` is called as days are measured and parts rendered.
+    """
+    import os
+    from concurrent.futures import ProcessPoolExecutor
+    from multiprocessing import get_context
+
+    total = len(pages)
+    if workers is None:
+        workers = 0 if total <= 12 else max(1, min(3, (os.cpu_count() or 2) - 1))
+    report = progress or (lambda *a: None)
+    pool = ProcessPoolExecutor(max_workers=workers, mp_context=get_context("spawn")) if workers > 1 else None
+    try:
+        # 1. Measure: the type level of every day (in small batches so progress moves).
+        batches = _chunks(pages, max(1, total // 4)) if pool else [[d] for d in pages]
+        done = 0
+        results = pool.map(_fit_many, [(b, opts) for b in batches]) if pool else map(_fit_many, [(b, opts) for b in batches])
+        counts: list[int] = []
+        for batch, res in zip(batches, results):
+            for day, (level, count) in zip(batch, res):
+                day.fit = level
+                counts.append(count)
+            done += len(batch)
+            report(done, total, "measure")
+
+        # 2. Render: page numbers are known now, so each part can start at the right number.
+        parts = _chunks(pages, workers) if pool else [pages]
+        jobs, idx = [], 0
+        number = opts.first_page - (1 if opts.title_page else 0)
+        for i, part in enumerate(parts):
+            title_page = opts.title_page and i == 0
+            jobs.append((part, opts, number, title_page, meta))
+            number += sum(counts[idx:idx + len(part)]) + (1 if title_page else 0)
+            idx += len(part)
+        report(0, len(jobs), "render")
+        pdfs = []
+        for k, pdf in enumerate(pool.map(_render_chunk, jobs) if pool else map(_render_chunk, jobs)):
+            pdfs.append(pdf)
+            report(k + 1, len(jobs), "render")
+    finally:
+        if pool:
+            pool.shutdown(cancel_futures=True)
+    return pdfs[0] if len(pdfs) == 1 else merge_pdfs(pdfs)
+
+
+def merge_pdfs(pdfs: list[bytes]) -> bytes:
+    import pypdfium2 as pdfium
+
+    out = pdfium.PdfDocument.new()
+    try:
+        for data in pdfs:
+            src = pdfium.PdfDocument(data)
+            try:
+                out.import_pages(src)
+            finally:
+                src.close()
+        buf = io.BytesIO()
+        out.save(buf)
+        return buf.getvalue()
+    finally:
+        out.close()
 
 
 def thumbnail_png(pages: list[DayPage], opts: Options, width: int = 360, **meta) -> bytes:
@@ -384,7 +470,7 @@ def thumbnail_png(pages: list[DayPage], opts: Options, width: int = 360, **meta)
     import pypdfium2 as pdfium
 
     opts = Options(**{**opts.__dict__, "title_page": False})
-    pdf = pdfium.PdfDocument(build_pdf(pages[:1], opts, **meta))
+    pdf = pdfium.PdfDocument(build_pdf(pages[:1], opts, workers=0, **meta))
     try:
         page = pdf[0]
         scale = width / page.get_width()

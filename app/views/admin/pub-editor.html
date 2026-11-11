@@ -610,22 +610,33 @@
       msg.classList.remove('err');
       if (dirty && !(await save(true))) { msg.textContent = 'Could not save your changes, so the export was cancelled.'; msg.classList.add('err'); return; }
       go.disabled = true;
-      msg.textContent = 'Laying out the pages… a full year can take a minute or two.';
+      msg.textContent = 'Starting…';
+      const fail = (text) => { msg.textContent = text || 'The designed PDF could not be made. Please try again.'; msg.classList.add('err'); };
       try {
-        const res = await fetch(tpl.dataset.export + '?' + params(), { credentials: 'same-origin' });
-        const type = res.headers.get('content-type') || '';
-        if (!res.ok || !type.includes('application/pdf')) throw new Error('not a pdf');
-        const blob = await res.blob();
-        const cd = res.headers.get('content-disposition') || '';
-        const name = (cd.match(/filename="([^"]+)"/) || [])[1] || 'devotional.pdf';
+        const body = params();
+        const res = await fetch(tpl.dataset.export, { method: 'POST', credentials: 'same-origin', body,
+          headers: { 'X-CSRF-Token': shell.dataset.csrf } });
+        const start = await res.json().catch(() => ({}));
+        if (!res.ok || !start.ok) { fail(start.error); return; }
+        const statusUrl = tpl.dataset.export + '/' + encodeURIComponent(start.job);
+        // Poll until the server has laid out every page (a year takes a minute or two).
+        for (;;) {
+          await new Promise((r) => setTimeout(r, 1500));
+          if (ctl.signal.aborted) return;
+          const st = await fetch(statusUrl, { credentials: 'same-origin' }).then((r) => r.json()).catch(() => ({}));
+          if (!st.ok) { fail(st.error); return; }
+          if (st.status === 'error') { fail(st.error); return; }
+          if (st.status === 'done') break;
+          msg.textContent = st.stage === 'render'
+            ? 'Putting the pages together…'
+            : `Fitting each day to its page… ${st.done} of ${st.total}`;
+        }
+        msg.textContent = 'Done. Your PDF is downloading.';
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob); a.download = name;
+        a.href = statusUrl + '/file'; a.setAttribute('data-turbo', 'false');
         document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 60000);
-        msg.textContent = 'Your PDF is downloading.';
       } catch (err) {
-        msg.textContent = 'The designed PDF could not be made. Check that the days have content, then try again.';
-        msg.classList.add('err');
+        fail();
       } finally {
         go.disabled = false;
       }
