@@ -36,7 +36,12 @@ _COMMON = {
 
 
 async def setting_on(db: AsyncSession, key: str) -> bool:
-    return (await get_setting(db, key, "0")) == "1"
+    """A security switch from Settings. If settings cannot be read, the switch counts as off (the standard rules,
+    e.g. 8+ character passwords, still apply)."""
+    try:
+        return (await get_setting(db, key, "0")) == "1"
+    except Exception:
+        return False
 
 
 async def retention_days(db: AsyncSession) -> int:

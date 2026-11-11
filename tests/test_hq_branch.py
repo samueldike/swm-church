@@ -70,7 +70,10 @@ def test_every_admin_route_is_covered_by_the_access_policy():
 
     from app.routes.admin import router
 
-    open_routes = {("GET", "/"), ("POST", "/login"), ("POST", "/logout"), ("GET", "/invitation/{token}"), ("POST", "/invitation/{token}")}
+    open_routes = {("GET", "/"), ("POST", "/login"), ("POST", "/logout"), ("GET", "/invitation/{token}"), ("POST", "/invitation/{token}"),
+                   # before sign-in on purpose (access.OPEN_PREFIXES): the two-step code, forgot / reset password
+                   ("GET", "/two-step"), ("POST", "/two-step"), ("GET", "/forgot-password"), ("POST", "/forgot-password"),
+                   ("GET", "/reset-password/{token}"), ("POST", "/reset-password/{token}")}
     uncovered = []
     for r in router.routes:
         for m in getattr(r, "methods", None) or []:
