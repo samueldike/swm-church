@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.database import Base
+from app.models.admin import Admin
 from app.models.branch import Branch
 from app.models.department import Department
 from app.models.member import Member, member_departments
@@ -18,7 +19,7 @@ def _run(fn):
         async with eng.begin() as c:
             await c.exec_driver_sql("PRAGMA foreign_keys=ON")
             await c.run_sync(lambda conn: Base.metadata.create_all(conn, tables=[
-                Branch.__table__, Department.__table__, Member.__table__, member_departments]))
+                Branch.__table__, Admin.__table__, Department.__table__, Member.__table__, member_departments]))
         Session = async_sessionmaker(eng, expire_on_commit=False)
         try:
             async with Session() as db:
