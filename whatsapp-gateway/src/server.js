@@ -8,6 +8,7 @@ import { log } from './log.js';
 import * as registry from './registry.js';
 import * as S from './sessions.js';
 import { postStatus } from './status.js';
+import { registerWeb, toVoice, withReactions } from './web.js';
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -79,7 +80,12 @@ app.get('/sessions/:id/chats', wrap(async (req, res) => {
   if (filter === 'channels') opts.onlyNewsletter = true;
   if (filter === 'unread') opts.onlyWithUnreadMessage = true;
   if (filter === 'users') opts.onlyUsers = true;
-  const chats = await withTimeout(c.listChats(opts), 25000, 'listChats');
+  const archivedView = req.query.archived === '1';
+  if (archivedView) opts.onlyArchived = true;
+  const all = await withTimeout(c.listChats(archivedView ? opts : { ...opts, count: undefined }), 25000, 'listChats');
+  // WhatsApp Web keeps archived chats out of the list (one "Archived" row instead).
+  const archivedCount = archivedView ? 0 : all.filter(ch => ch.archive).length;
+  const chats = (archivedView ? all : all.filter(ch => !ch.archive)).slice(0, opts.count);
   const out = [];
   await Promise.all(chats.map(async ch => {
     const jid = S.widToString(ch.id);
@@ -89,19 +95,21 @@ app.get('/sessions/:id/chats', wrap(async (req, res) => {
     if (last === undefined) {
       try {
         const [m] = await withTimeout(c.getMessages(jid, { count: 1 }), 8000, 'last message');
-        last = m ? { text: preview(m), fromMe: !!m.fromMe, ack: m.ack ?? null } : null;
+        const who = m && !m.fromMe && jid.endsWith('@g.us') ? (m.sender?.pushname || m.sender?.formattedName || '').trim().split(' ')[0] : '';
+        last = m ? { text: preview(m), fromMe: !!m.fromMe, ack: m.ack ?? null, who, type: m.type } : null;
       } catch { last = null; }
       previewCache.set(key, last);
       if (previewCache.size > 3000) previewCache.clear();
     }
     out.push({
-      jid, name: name(ch) || jid, t: ch.t || 0, unread: ch.unreadCount || 0,
+      jid, name: name(ch) || jid, t: ch.t || 0, unread: Math.max(ch.unreadCount || 0, 0), markedUnread: (ch.unreadCount || 0) < 0,
+      readOnly: !!ch.isReadOnly,
       kind: jid.endsWith('@g.us') ? 'group' : jid.endsWith('@newsletter') ? 'channel' : 'user',
       pinned: !!ch.pin, muted: !!(ch.muteExpiration && ch.muteExpiration !== 0), archived: !!ch.archive, last,
     });
   }));
   out.sort((a, b) => (b.pinned - a.pinned) || (b.t - a.t));
-  res.json({ chats: out });
+  res.json({ chats: out, archivedCount });
 }));
 
 function shapeMessage(m) {
@@ -114,8 +122,13 @@ function shapeMessage(m) {
     media: ['image', 'video', 'ptt', 'audio', 'document', 'sticker'].includes(m.type),
     mimetype: m.mimetype || null, filename: m.filename || null, duration: m.duration || null,
     ack: m.ack ?? null,
-    quoted: m.quotedMsg ? { text: preview(m.quotedMsg), id: S.widToString(m.quotedStanzaID || '') } : null,
-    location: m.type === 'location' ? { lat: m.lat, lng: m.lng } : null,
+    quoted: m.quotedMsg ? { text: preview(m.quotedMsg), stanza: String(m.quotedStanzaID || ''), who: S.widToString(m.quotedParticipant || ''), type: m.quotedMsg.type || 'chat' } : null,
+    location: m.type === 'location' ? { lat: m.lat, lng: m.lng, title: m.loc || '' } : null,
+    starred: !!m.star, forwarded: !!m.isForwarded, edited: !!(m.latestEditMsgKey || m.editMsgType),
+    poll: m.type === 'poll_creation' ? { name: m.pollName || m.body || '', options: (m.pollOptions || []).map(o => o.name), multi: (m.pollSelectableOptionsCount ?? 1) !== 1 } : null,
+    vcard: m.type === 'vcard' || m.type === 'multi_vcard' ? { name: m.vcardFormattedName || '', phone: ((m.body || '').match(/waid=(\d+)/) || [])[1] || '' } : null,
+    link: m.type === 'chat' && m.title ? { title: m.title || '', desc: m.description || '', url: m.matchedText || '' } : null,
+    pinned: !!m.isPinned, viewOnce: !!m.isViewOnce,
   };
 }
 app.get('/sessions/:id/chats/:jid/messages', wrap(async (req, res) => {
@@ -132,7 +145,8 @@ app.get('/sessions/:id/chats/:jid/messages', wrap(async (req, res) => {
   }
   let chatName = '';
   try { chatName = name(await c.getChatById(req.params.jid)); } catch { /* optional */ }
-  res.json({ name: chatName, messages: msgs.filter(m => m && m.type !== 'e2e_notification' && m.type !== 'notification_template').map(shapeMessage) });
+  const kept = msgs.filter(m => m && !['e2e_notification', 'notification_template', 'protocol', 'gp2'].includes(m.type));
+  res.json({ name: chatName, messages: await withReactions(c, kept.map(shapeMessage), kept, withTimeout) });
 }));
 app.post('/sessions/:id/chats/:jid/seen', wrap(async (req, res) => {
   const c = await needClient(req.params.id);
@@ -212,7 +226,7 @@ app.post('/sessions/:id/send', wrap(async (req, res) => {
     const p = mediaPath(file);
     const fname = filename || path.basename(p);
     if (kind === 'image') result = await c.sendImage(jid, p, fname, text, quotedId);
-    else if (kind === 'voice') result = await c.sendPtt(jid, p, fname, '', quotedId);
+    else if (kind === 'voice') result = await c.sendPtt(jid, await toVoice(p), 'voice.ogg', '', quotedId);
     else if (kind === 'video') result = await c.sendFile(jid, p, { filename: fname, caption: text, type: 'video', quotedMsg: quotedId });
     else if (kind === 'audio') result = await c.sendFile(jid, p, { filename: fname, type: 'audio', quotedMsg: quotedId });
     else result = await c.sendFile(jid, p, { filename: fname, caption: text, type: 'document', quotedMsg: quotedId });
@@ -249,6 +263,8 @@ app.get('/sessions/:id/targets', wrap(async (req, res) => {
   const map = list => list.map(x => ({ jid: S.widToString(x.id), name: name(x) })).filter(x => x.jid).sort((a, b) => a.name.localeCompare(b.name));
   res.json({ groups: map(groups), channels: map(channels) });
 }));
+
+registerWeb(app, { wrap, needClient, withTimeout, toJid, mediaPath, name, shapeMessage });
 
 await registry.load();
 const server = app.listen(config.port, () => log.info({ port: config.port }, 'whatsapp gateway listening'));

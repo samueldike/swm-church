@@ -8297,7 +8297,9 @@ async def admin_whatsapp_chats(request: Request, db: AsyncSession = Depends(get_
     if not admin:
         return JSONResponse({"error": "Not allowed"}, status_code=403)
     flt = request.query_params.get("filter") or ""
-    params = {"filter": flt if flt in ("groups", "channels", "unread", "users") else "", "count": 80}
+    params = {"filter": flt if flt in ("groups", "channels", "unread", "users") else "", "count": 120}
+    if request.query_params.get("archived") == "1":
+        params["archived"] = "1"
     try:
         return JSONResponse(await wa.call("GET", f"/sessions/{wa.tenant(branch_id)}/chats", params=params, timeout=60))
     except wa.GatewayError as e:
@@ -8379,6 +8381,85 @@ async def admin_whatsapp_targets(request: Request, db: AsyncSession = Depends(ge
         return _wa_json_error(e)
 
 
+# WhatsApp Web features relayed to the gateway (whatsapp-gateway/src/web.js). Only these paths pass;
+# the church is always the one _wa_guard resolved for this admin, never one named in the request.
+_WA_RELAY = (
+    ("GET", re.compile(r"chats/[^/]+/(info|presence|search|shared)")),
+    ("GET", re.compile(r"chats/[^/]+/around/[^/]+")),
+    ("GET", re.compile(r"(starred|statuses|me)")),
+    ("POST", re.compile(r"chats/[^/]+/action")),
+    ("POST", re.compile(r"messages/action")),
+    ("POST", re.compile(r"statuses/seen")),
+    ("POST", re.compile(r"groups/[^/]+/action")),
+    ("POST", re.compile(r"send-extra")),
+    ("POST", re.compile(r"me")),
+)
+_WA_AUDITED = {"delete", "clear", "block", "unblock", "leave", "add", "remove", "promote", "demote", "subject", "description", "announce", "revoke"}
+
+
+@router.api_route("/whatsapp/api/{path:path}", methods=["GET", "POST"], name="admin_whatsapp_api")
+async def admin_whatsapp_api(path: str, request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import whatsapp as wa
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not allowed"}, status_code=403)
+    if not any(m == request.method and rx.fullmatch(path) for m, rx in _WA_RELAY):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    target = f"/sessions/{wa.tenant(branch_id)}/" + "/".join(_wa_quote(seg) for seg in path.split("/"))
+    body = None
+    if request.method == "POST":
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+    params = {k: v for k, v in request.query_params.items() if k in ("q", "kind")}
+    try:
+        r = await wa.call(request.method, target, json=body, params=params or None, timeout=120)
+    except wa.GatewayError as e:
+        return _wa_json_error(e)
+    action = str((body or {}).get("action") or "")
+    if request.method == "POST" and (action in _WA_AUDITED or path == "me"):
+        detail = {"path": path.split("/")[0], "action": action or path}
+        await log_admin_action(db, admin.id, f"whatsapp.{detail['path']}.{detail['action']}", "branch", branch_id, detail, request)
+        await db.commit()
+    return JSONResponse(r)
+
+
+@router.post("/whatsapp/photo", name="admin_whatsapp_photo")
+async def admin_whatsapp_photo(request: Request, db: AsyncSession = Depends(get_db)):
+    """A new profile photo (target=me) or group icon (target=group, jid=...)."""
+    from app.core import whatsapp as wa
+
+    admin, branch_id = await _wa_guard(request, db)
+    if not admin:
+        return JSONResponse({"error": "Not allowed"}, status_code=403)
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None or not getattr(upload, "filename", ""):
+        return JSONResponse({"error": "Choose a photo."}, status_code=400)
+    try:
+        rel, kind, _name = await _wa_save_upload(upload, branch_id)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    if kind != "image":
+        return JSONResponse({"error": "Choose a JPG, PNG or WebP photo."}, status_code=400)
+    tenant = wa.tenant(branch_id)
+    try:
+        if form.get("target") == "group":
+            jid = str(form.get("jid") or "")
+            await wa.call("POST", f"/sessions/{tenant}/groups/{_wa_quote(jid)}/action", json={"action": "icon", "value": rel}, timeout=90)
+        else:
+            await wa.call("POST", f"/sessions/{tenant}/me", json={"photo": rel}, timeout=90)
+    except wa.GatewayError as e:
+        return _wa_json_error(e)
+    await log_admin_action(db, admin.id, "whatsapp.photo", "branch", branch_id, {"target": str(form.get("target") or "me")}, request)
+    await db.commit()
+    return JSONResponse({"ok": True})
+
+
 @router.get("/whatsapp/contacts.json", name="admin_whatsapp_contacts")
 async def admin_whatsapp_contacts(request: Request, db: AsyncSession = Depends(get_db)):
     """New chat panel: the linked phone's contacts on WhatsApp, A to Z."""
@@ -8449,7 +8530,9 @@ async def admin_whatsapp_send(request: Request, db: AsyncSession = Depends(get_d
             rel, kind, name = await _wa_save_upload(upload, branch_id)
         except ValueError as e:
             return JSONResponse({"error": str(e)}, status_code=400)
-        body.update(file=rel, kind="voice" if form.get("voice") == "1" and kind == "audio" else kind, filename=name)
+        # A recorded voice note arrives as .webm (Chrome) or .ogg (Firefox); the gateway converts it to OGG/Opus.
+        is_voice = form.get("voice") == "1" and (kind == "audio" or rel.endswith(".webm"))
+        body.update(file=rel, kind="voice" if is_voice else kind, filename=name)
     elif not text.strip():
         return JSONResponse({"error": "Type a message first."}, status_code=400)
     try:
