@@ -1474,9 +1474,21 @@
     whenToggle(postForm); whenToggle(statusForm);
     postForm.addEventListener('input', () => renderSafety(), sig);
     postForm.addEventListener('change', () => renderSafety(), sig);
+    // {name}: at the cursor while typing; otherwise the message starts with a greeting ("Hi {name}, ...")
+    let nameCaret = null;
+    postForm.querySelector('[name=text]').addEventListener('blur', (e) => { nameCaret = [e.target.selectionStart, e.target.selectionEnd]; }, sig);
+    postForm.querySelector('[name=text]').addEventListener('focus', () => { nameCaret = null; }, sig);
+    $('wa-name-token').addEventListener('mousedown', (e) => e.preventDefault(), sig);
     $('wa-name-token').addEventListener('click', () => {
-      const ta = postForm.querySelector('[name=text]'), at = ta.selectionStart ?? ta.value.length;
-      ta.value = ta.value.slice(0, at) + '{name}' + ta.value.slice(ta.selectionEnd ?? at); ta.focus(); ta.selectionStart = ta.selectionEnd = at + 6; renderSafety();
+      const ta = postForm.querySelector('[name=text]');
+      if (ta.value.includes('{name}')) { ta.focus(); return; }
+      if (document.activeElement === ta || nameCaret) {
+        const [a0, b0] = document.activeElement === ta ? [ta.selectionStart, ta.selectionEnd] : nameCaret;
+        if (a0 > 0 || b0 > 0 || !ta.value) {
+          ta.value = ta.value.slice(0, a0) + '{name}' + ta.value.slice(b0); ta.focus(); ta.selectionStart = ta.selectionEnd = a0 + 6; renderSafety(); return;
+        }
+      }
+      ta.value = 'Hi {name}, ' + ta.value.replace(/^\s+/, ''); ta.focus(); ta.selectionStart = ta.selectionEnd = ta.value.length; renderSafety();
     }, sig);
     postForm.addEventListener('submit', (e) => { e.preventDefault(); if (!picked.size) { const err = postForm.querySelector('.wa-error'); err.hidden = false; err.className = 'wa-error wx-err'; err.textContent = 'Choose at least one chat, group, channel or contact.'; tq.focus(); return; }
       const ppl = [...picked.keys()].filter(isPerson);
