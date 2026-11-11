@@ -63,15 +63,16 @@ def normalize_role(role: str | None) -> str:
 ALL = "*"
 ROLE_PERMS: dict[str, set[str]] = {
     SUPER: {ALL},
-    HQ_MEDIA: {"dashboard", "profile", "media", "audio", "events", "announcements.view", "analytics"},
-    HQ_FINANCE: {"dashboard", "profile", "donations", "remittances", "announcements.view"},
-    HQ_PASTORAL: {"dashboard", "profile", "prayer", "inquiries", "members", "reports", "branch_reports", "harvest", "departments.view", "ministers", "announcements.view"},
+    HQ_MEDIA: {"dashboard", "profile", "documents", "media", "audio", "events", "announcements.view", "analytics"},
+    HQ_FINANCE: {"dashboard", "profile", "documents", "donations", "remittances", "announcements.view"},
+    HQ_PASTORAL: {"dashboard", "profile", "documents", "prayer", "inquiries", "members", "reports", "branch_reports", "harvest", "departments.view", "ministers", "announcements.view"},
     BRANCH_ADMIN: {
-        "dashboard", "profile", "members", "events", "audio", "inquiries", "prayer", "harvest", "hods",
+        "dashboard", "profile", "documents", "members", "events", "audio", "inquiries", "prayer", "harvest", "hods",
         "reports", "branch_reports", "donations", "remittances", "branch_settings", "branch.view", "departments.view", "ministers", "announcements.view", "activity",
     },
-    RESIDENT_PASTOR: {"dashboard", "profile", "reports", "ministers.view", "announcements.view"},
-    HOD: {"profile", "hod_reports"},
+    RESIDENT_PASTOR: {"dashboard", "profile", "documents", "reports", "ministers.view", "announcements.view"},
+    # every console user has the document library; what each file shows is decided per file (app/core/documents.py)
+    HOD: {"profile", "documents", "hod_reports"},
 }
 
 
@@ -142,6 +143,7 @@ _RULES: list[tuple[re.Pattern, str, tuple[str, ...] | None]] = [
     (re.compile(r"^/hod/"), "hod_reports", None),
     (re.compile(r"^/(dashboard|metrics)(/|$)"), "dashboard", None),
     (re.compile(r"^/profile(/|$)"), "profile", None),
+    (re.compile(r"^/documents(/|$)"), "documents", None),     # per file: app/core/documents.py
 ]
 
 

@@ -1,0 +1,80 @@
+{% extends "layouts/admin_base.html" %}
+{% block title %}Documents | {{ siteName }}{% endblock %}
+{% block topbar_title %}Documents{% endblock %}
+{% block topbar_subtitle %}Office library{% endblock %}
+{% block topbar_icon %}ri-folder-3-line{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/documents.css') }}?v=1">{% endblock %}
+
+{% block content %}
+{#- The church offices' document library. The page is a shell: app/static/js/documents.js fetches everything
+    from /admin/documents/*.json, and every file is checked against its permissions on the server. -#}
+<div id="dl" class="dl" data-csrf="{{ csrf_token }}" data-me="{{ admin.id }}" data-church="{{ doc_church_id }}"
+     data-church-name="{{ doc_church }}" data-max-mb="{{ doc_max_mb }}" data-super="{{ '1' if doc_churches else '0' }}">
+
+  <aside class="dl-nav" aria-label="Library">
+    <div class="dl-new-wrap">
+      <button type="button" class="dl-new" id="dl-new" aria-haspopup="menu"><i class="ri-add-line"></i><span>New</span></button>
+      <div class="dl-pop" id="dl-new-menu" role="menu" hidden>
+        <button type="button" role="menuitem" data-new="upload"><i class="ri-upload-cloud-2-line"></i>Upload files</button>
+        <button type="button" role="menuitem" data-new="folder"><i class="ri-folder-add-line"></i>New folder</button>
+      </div>
+    </div>
+    <nav class="dl-views">
+      <button type="button" data-view="library" class="is-on"><i class="ri-building-4-line"></i><span><span id="dl-lib-name">{{ doc_church }}</span> library</span></button>
+      <button type="button" data-view="received"><i class="ri-inbox-archive-line"></i><span>Received</span><b class="dl-count" id="dl-unread" hidden></b></button>
+      <button type="button" data-view="sent"><i class="ri-send-plane-line"></i><span>Sent</span></button>
+      <button type="button" data-view="shared"><i class="ri-team-line"></i><span>Shared with me</span></button>
+      <button type="button" data-view="starred"><i class="ri-star-line"></i><span>Starred</span></button>
+      <button type="button" data-view="recent"><i class="ri-time-line"></i><span>Recent</span></button>
+      <button type="button" data-view="mine"><i class="ri-user-line"></i><span>My files</span></button>
+      <button type="button" data-view="trash"><i class="ri-delete-bin-6-line"></i><span>Trash</span></button>
+    </nav>
+    {% if doc_churches %}
+    <label class="dl-church">
+      <span>Church library</span>
+      <select id="dl-church">
+        {% for c in doc_churches %}<option value="{{ c.id }}" {{ 'selected' if c.id == doc_church_id else '' }}>{{ c.name }}</option>{% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    <p class="dl-hint"><i class="ri-shield-check-line"></i> Files are private to the console and checked on every open. Up to {{ doc_max_mb }} MB each.</p>
+  </aside>
+
+  <section class="dl-main" id="dl-main" aria-label="Files">
+    <header class="dl-top">
+      <nav class="dl-crumbs" id="dl-crumbs" aria-label="Folder path"></nav>
+      <div class="dl-tools">
+        <label class="dl-search"><i class="ri-search-line" aria-hidden="true"></i><span class="sr-only">Search documents</span>
+          <input id="dl-q" type="search" placeholder="Search by name, note or tag" autocomplete="off"></label>
+        <select id="dl-sort" aria-label="Sort">
+          <option value="updated">Last modified</option><option value="name">Name</option><option value="created">Date added</option><option value="size">Size</option>
+        </select>
+        <div class="dl-toggle" role="group" aria-label="Layout">
+          <button type="button" data-layout="grid" aria-label="Grid" class="is-on"><i class="ri-layout-grid-line"></i></button>
+          <button type="button" data-layout="list" aria-label="List"><i class="ri-list-check-2"></i></button>
+        </div>
+      </div>
+    </header>
+    <div class="dl-chips" role="group" aria-label="Type">
+      <button type="button" class="dl-chip is-on" data-kind="">All</button>
+      {% for k, label in doc_kinds.items() %}<button type="button" class="dl-chip" data-kind="{{ k }}">{{ label }}</button>{% endfor %}
+    </div>
+    <div class="dl-body" id="dl-body"><div class="dl-empty"><i class="ri-loader-4-line dl-spin"></i><p>Loading…</p></div></div>
+    <div class="dl-drop" id="dl-drop" hidden><div><i class="ri-upload-cloud-2-line"></i><p>Drop files to upload to <b id="dl-drop-to"></b></p></div></div>
+  </section>
+
+  <aside class="dl-side" id="dl-side" aria-label="Details" hidden></aside>
+
+  <input type="file" id="dl-file" multiple hidden accept=".{{ doc_types | join(',.') }}">
+  <input type="file" id="dl-file-version" hidden accept=".{{ doc_types | join(',.') }}">
+  <div class="dl-uploads" id="dl-uploads" hidden>
+    <header><b id="dl-up-title">Uploading</b><button type="button" class="dl-ic" id="dl-up-x" aria-label="Close"><i class="ri-close-line"></i></button></header>
+    <ul id="dl-up-list"></ul>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_body %}
+<script src="{{ url_for('static', path='js/documents.js') }}?v=1"></script>
+<script>window.SWMDocuments && window.SWMDocuments.init();</script>
+{% endblock %}

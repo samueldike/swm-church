@@ -231,7 +231,8 @@ async def _admin_context(request: Request, db: AsyncSession, active_page: str = 
     branch_id = admin.branch_id if hasattr(admin, "branch_id") else None
 
     seven_days_ago = datetime.utcnow() - timedelta(days=7)
-    badges = {"members": 0, "events": 0, "inquiries": 0, "messages": 0, "unit_reports": 0, "prayers": 0, "branch_reports": 0, "data_check": 0}
+    badges = {"members": 0, "events": 0, "inquiries": 0, "messages": 0, "unit_reports": 0, "prayers": 0, "branch_reports": 0, "data_check": 0,
+              "documents": await documents_unread(db, admin)}
 
     try:
         q = select(func.count()).select_from(Member)
@@ -9596,3 +9597,610 @@ async def admin_blog_terms(request: Request, db: AsyncSession = Depends(get_db))
     await db.commit()
     verb = f"renamed to “{new}”" if op == "rename" else "deleted"
     return _redirect(request, back, f"{label} “{name}” {verb}" + (f" ({changed} post{'' if changed == 1 else 's'} updated)." if changed else "."))
+
+
+# ─── Documents (shared, permissioned office library; app/core/documents.py) ───────────────────────────────
+from sqlalchemy import false  # noqa: E402
+
+from app.core.access import normalize_role  # noqa: E402
+
+async def _doc_ctx(request: Request, db: AsyncSession):
+    """(admin, hq_id) for any signed-in console user, else (None, None)."""
+    from app.core.hq_branch import get_hq_branch_id
+
+    admin = await _get_admin(request)
+    if not admin:
+        return None, None
+    return admin, await get_hq_branch_id(db)
+
+
+def _doc_json(d, *, starred=False, access=None, labels=None, unread=None, delivery=None) -> dict:
+    from app.core import documents as docs
+
+    return {
+        "id": d.id, "title": d.title, "filename": d.filename, "ext": d.ext, "kind": docs.kind_of(d.ext), "size": d.size,
+        "size_h": docs.human_size(d.size), "version": d.version, "visibility": d.visibility, "description": d.description or "",
+        "tags": [t for t in (d.tags or "").split(",") if t], "folder_id": d.folder_id, "folder": d.folder.name if d.folder else None,
+        "church": ("HQ" if d.branch and d.branch.is_hq else (d.branch.name if d.branch else "")),
+        "owner": d.owner.full_name if d.owner else "Former user", "owner_id": d.owner_id,
+        "updated": d.updated_at.isoformat() + "Z" if d.updated_at else None, "created": d.created_at.isoformat() + "Z" if d.created_at else None,
+        "trashed": bool(d.trashed_at), "starred": starred, "access": access, "inline": d.ext in docs.INLINE,
+        **({"delivery": delivery} if delivery else {}), **({"unread": unread} if unread is not None else {}),
+    }
+
+
+async def _doc_get(db: AsyncSession, admin, hq_id: int, doc_id: int, need: str = "view"):
+    """(document, access) if this person has at least `need`, else (None, None)."""
+    from app.core import documents as docs
+    from app.models.document import Document
+
+    d = await db.get(Document, doc_id)
+    if not d:
+        return None, None
+    acc = await docs.access_of(db, admin, hq_id, d)
+    order = {"view": 1, "edit": 2, "manage": 3}
+    if not acc or order[acc] < order[need]:
+        return None, None
+    return d, acc
+
+
+def _doc_err(message: str, status: int = 400) -> JSONResponse:
+    return JSONResponse({"error": message}, status_code=status)
+
+
+@router.get("/documents", name="admin_documents")
+async def admin_documents(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.config import settings as _cfg
+    from app.core import documents as docs
+
+    admin, hq_id = await _doc_ctx(request, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+    ctx = await _admin_context(request, db, "admin.documents")
+    from app.models.branch import Branch
+
+    church = await db.get(Branch, docs.church_of(admin, hq_id))
+    churches = []
+    if is_super_role(admin.role):
+        churches = [{"id": b.id, "name": "HQ" if b.is_hq else b.name} for b in
+                    (await db.execute(select(Branch).where(Branch.is_active == True).order_by(Branch.is_hq.desc(), Branch.name))).scalars()]  # noqa: E712
+    return await render_template(request, "admin/documents.html", {
+        "_db": db, "title": "Documents", "headerIcon": "ri-folder-3-line", "doc_church": ("HQ" if church and church.is_hq else (church.name if church else "")),
+        "doc_church_id": docs.church_of(admin, hq_id), "doc_churches": churches, "doc_kinds": docs.KINDS, "doc_visibility": docs.VISIBILITY,
+        "doc_max_mb": _cfg.DOCUMENTS_MAX_UPLOAD_MB, "doc_types": sorted(docs.TYPES), **ctx})
+
+
+@router.get("/documents/list.json", name="admin_documents_list")
+async def admin_documents_list(request: Request, db: AsyncSession = Depends(get_db), view: str = Query("library"),
+                               folder: str = Query(""), q: str = Query(""), kind: str = Query(""), sort: str = Query("updated"),
+                               church: str = Query("")):
+    from sqlalchemy import func as _f
+
+    from app.core import documents as docs
+    from app.models.document import Document, DocumentDelivery, DocumentFolder, DocumentRead, DocumentStar
+
+    admin, hq_id = await _doc_ctx(request, db)
+    if not admin:
+        return _doc_err("Sign in again.", 401)
+    my_church = docs.church_of(admin, hq_id)
+    lib = _to_int(church) if is_super_role(admin.role) and _to_int(church) else my_church
+    stars = set((await db.execute(select(DocumentStar.document_id).where(DocumentStar.admin_id == admin.id))).scalars().all())
+    visible = docs.visible_condition(admin, hq_id)
+    query = select(Document)
+    folders, crumbs = [], []
+    if view == "trash":
+        query = query.where(Document.trashed_at.isnot(None), or_(Document.owner_id == admin.id, visible if is_super_role(admin.role) else false()))
+    else:
+        query = query.where(Document.trashed_at.is_(None), visible)
+    if view == "library":
+        fid = _to_int(folder)
+        query = query.where(Document.branch_id == lib, Document.folder_id == fid if fid else Document.folder_id.is_(None))
+        folders = [{"id": f.id, "name": f.name, "color": f.color, "count": n} for f, n in (await db.execute(
+            select(DocumentFolder, _f.count(Document.id))
+            .outerjoin(Document, and_(Document.folder_id == DocumentFolder.id, Document.trashed_at.is_(None)))
+            .where(DocumentFolder.branch_id == lib, DocumentFolder.parent_id == fid if fid else DocumentFolder.parent_id.is_(None))
+            .group_by(DocumentFolder.id).order_by(DocumentFolder.name))).all()]
+        f = await db.get(DocumentFolder, fid) if fid else None
+        while f is not None and f.branch_id == lib:
+            crumbs.insert(0, {"id": f.id, "name": f.name})
+            f = await db.get(DocumentFolder, f.parent_id) if f.parent_id else None
+    elif view == "mine":
+        query = query.where(Document.owner_id == admin.id)
+    elif view == "starred":
+        query = query.where(Document.id.in_(stars or {0}))
+    elif view == "shared":                     # shared with me or my office in particular (not just visible to the church)
+        from app.models.document import DocumentShare
+
+        query = query.where(Document.owner_id != admin.id, Document.id.in_(
+            select(DocumentShare.document_id).where(DocumentShare.target.in_(docs.targets_of(admin, hq_id)))))
+    elif view == "recent":
+        pass
+    if q.strip():
+        pat = f"%{q.strip()[:100]}%"
+        query = query.where(or_(Document.title.ilike(pat), Document.filename.ilike(pat), Document.description.ilike(pat), Document.tags.ilike(pat)))
+    if kind in docs.KINDS:
+        query = query.where(Document.ext.in_([e for e, (k, _m) in docs.TYPES.items() if k == kind]))
+    order = {"name": Document.title.asc(), "size": Document.size.desc(), "created": Document.created_at.desc()}.get(sort, Document.updated_at.desc())
+
+    if view in ("received", "sent"):
+        mine = docs.targets_of(admin, hq_id)
+        dq = select(DocumentDelivery).join(Document, Document.id == DocumentDelivery.document_id).where(Document.trashed_at.is_(None))
+        dq = dq.where(DocumentDelivery.target.in_(mine), or_(DocumentDelivery.sender_id.is_(None), DocumentDelivery.sender_id != admin.id)) if view == "received" \
+            else dq.where(DocumentDelivery.sender_id == admin.id)
+        if q.strip():
+            pat = f"%{q.strip()[:100]}%"
+            dq = dq.where(or_(Document.title.ilike(pat), DocumentDelivery.message.ilike(pat)))
+        rows = (await db.execute(dq.order_by(DocumentDelivery.created_at.desc()).limit(300))).scalars().all()
+        read = set((await db.execute(select(DocumentRead.delivery_id).where(DocumentRead.admin_id == admin.id,
+                                                                             DocumentRead.delivery_id.in_([r.id for r in rows] or [0])))).scalars().all())
+        labels = await docs.labels_for(db, {r.target for r in rows})
+        items = [_doc_json(r.document, starred=r.document_id in stars, unread=(view == "received" and r.id not in read), delivery={
+            "id": r.id, "from": r.sender.full_name if r.sender else "Someone", "to": labels.get(r.target, ""), "message": r.message or "",
+            "at": r.created_at.isoformat() + "Z"}) for r in rows]
+        return JSONResponse({"items": items, "folders": [], "crumbs": []})
+
+    rows = (await db.execute(query.order_by(order).limit(500 if view != "recent" else 50))).scalars().all()
+    return JSONResponse({"items": [_doc_json(d, starred=d.id in stars) for d in rows], "folders": folders, "crumbs": crumbs,
+                         "library": lib})
+
+
+@router.get("/documents/targets.json", name="admin_documents_targets")
+async def admin_documents_targets(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import documents as docs
+
+    admin, hq_id = await _doc_ctx(request, db)
+    if not admin:
+        return _doc_err("Sign in again.", 401)
+    people = [p for p in await docs.people_options(db) if p["target"] != f"user:{admin.id}"]
+    return JSONResponse({"offices": await docs.office_options(db), "people": people})
+
+
+@router.get("/documents/folders.json", name="admin_documents_folders")
+async def admin_documents_folders(request: Request, db: AsyncSession = Depends(get_db), church: str = Query("")):
+    """Every folder of a library (flat, with parent ids) for the Move picker."""
+    from app.core import documents as docs
+    from app.models.document import DocumentFolder
+
+    admin, hq_id = await _doc_ctx(request, db)
+    if not admin:
+        return _doc_err("Sign in again.", 401)
+    lib = _to_int(church) if is_super_role(admin.role) and _to_int(church) else docs.church_of(admin, hq_id)
+    rows = (await db.execute(select(DocumentFolder).where(DocumentFolder.branch_id == lib).order_by(DocumentFolder.name))).scalars().all()
+    return JSONResponse({"folders": [{"id": f.id, "name": f.name, "parent_id": f.parent_id} for f in rows]})
+
+
+@router.post("/documents/upload", name="admin_documents_upload")
+async def admin_documents_upload(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import documents as docs
+    from app.models.document import Document, DocumentFolder, DocumentVersion
+
+    admin, hq_id = await _doc_ctx(request, db)
+    if not admin:
+        return _doc_err("Sign in again.", 401)
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None or not getattr(upload, "filename", ""):
+        return _doc_err("Choose a file.")
+    church = docs.church_of(admin, hq_id)
+    if is_super_role(admin.role) and _to_int(form.get("church")):
+        church = _to_int(form.get("church"))
+    folder_id = _to_int(form.get("folder_id"))
+    if folder_id:
+        f = await db.get(DocumentFolder, folder_id)
+        if not f or f.branch_id != church:
+            return _doc_err("That folder is not in this library.")
+    visibility = str(form.get("visibility") or "church")
+    if visibility not in docs.VISIBILITY:
+        visibility = "church"
+    try:
+        rel, name, ext, mime, size = await docs.save_upload(upload)
+    except ValueError as e:
+        return _doc_err(str(e))
+    title = str(form.get("title") or "").strip()[:255] or os.path.splitext(name)[0][:255]
+    d = Document(branch_id=church, folder_id=folder_id, owner_id=admin.id, title=title, filename=name, ext=ext, mime=mime, size=size,
+                 stored_path=rel, version=1, visibility=visibility, description=str(form.get("description") or "").strip()[:5000] or None,
+                 tags=",".join(t.strip()[:40] for t in str(form.get("tags") or "").split(",") if t.strip())[:500] or None)
+    db.add(d)
+    await db.flush()
+    db.add(DocumentVersion(document_id=d.id, version=1, filename=name, mime=mime, size=size, stored_path=rel, uploaded_by=admin.id))
+    await log_admin_action(db, admin.id, "document.upload", "document", d.id, {"name": name, "size": size, "visibility": visibility}, request)
+    await db.commit()
+    await db.refresh(d)
+    return JSONResponse({"ok": True, "item": _doc_json(d, access="manage")})
+
+
+@router.post("/documents/folders", name="admin_documents_folder_create")
+async def admin_documents_folder_create(request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import documents as docs
+    from app.models.document import DocumentFolder
+
+    admin, hq_id = await _doc_ctx(request, db)
+    if not admin:
+        return _doc_err("Sign in again.", 401)
+    form = await request.form()
+    name = " ".join(str(form.get("name") or "").split())[:120]
+    if not name:
+        return _doc_err("Give the folder a name.")
+    church = docs.church_of(admin, hq_id)
+    if is_super_role(admin.role) and _to_int(form.get("church")):
+        church = _to_int(form.get("church"))
+    parent = _to_int(form.get("parent_id"))
+    if parent:
+        p = await db.get(DocumentFolder, parent)
+        if not p or p.branch_id != church:
+            return _doc_err("That folder is not in this library.")
+    clash = (await db.execute(select(DocumentFolder.id).where(DocumentFolder.branch_id == church, DocumentFolder.name.ilike(name),
+                                                              DocumentFolder.parent_id == parent if parent else DocumentFolder.parent_id.is_(None)))).first()
+    if clash:
+        return _doc_err(f"There is already a folder called “{name}” here.")
+    color = str(form.get("color") or "")[:20] or None
+    f = DocumentFolder(branch_id=church, parent_id=parent, name=name, color=color, created_by=admin.id)
+    db.add(f)
+    await log_admin_action(db, admin.id, "document.folder_create", "document_folder", None, {"name": name}, request)
+    await db.commit()
+    return JSONResponse({"ok": True, "id": f.id})
+
+
+@router.post("/documents/folders/{folder_id}/rename", name="admin_documents_folder_rename")
+async def admin_documents_folder_rename(folder_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import documents as docs
+    from app.models.document import DocumentFolder
+
+    admin, hq_id = await _doc_ctx(request, db)
+    f = await db.get(DocumentFolder, folder_id) if admin else None
+    if not f or not (is_super_role(admin.role) or (f.branch_id == docs.church_of(admin, hq_id) and (f.created_by == admin.id or normalize_role(admin.role) == "branch_admin"))):
+        return _doc_err("You cannot change this folder.", 403)
+    name = " ".join(str((await request.form()).get("name") or "").split())[:120]
+    if not name:
+        return _doc_err("Give the folder a name.")
+    f.name = name
+    await db.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.post("/documents/folders/{folder_id}/delete", name="admin_documents_folder_delete")
+async def admin_documents_folder_delete(folder_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import func as _f
+
+    from app.core import documents as docs
+    from app.models.document import Document, DocumentFolder
+
+    admin, hq_id = await _doc_ctx(request, db)
+    f = await db.get(DocumentFolder, folder_id) if admin else None
+    if not f or not (is_super_role(admin.role) or (f.branch_id == docs.church_of(admin, hq_id) and (f.created_by == admin.id or normalize_role(admin.role) == "branch_admin"))):
+        return _doc_err("You cannot delete this folder.", 403)
+    inside = (await db.execute(select(_f.count()).select_from(Document).where(Document.folder_id == f.id))).scalar_one()
+    sub = (await db.execute(select(_f.count()).select_from(DocumentFolder).where(DocumentFolder.parent_id == f.id))).scalar_one()
+    if inside or sub:
+        return _doc_err("Only an empty folder can be deleted. Move or delete what is inside first (Trash counts).")
+    await db.delete(f)
+    await log_admin_action(db, admin.id, "document.folder_delete", "document_folder", folder_id, {"name": f.name}, request)
+    await db.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.get("/documents/{doc_id}.json", name="admin_documents_detail")
+async def admin_documents_detail(doc_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import documents as docs
+    from app.models.admin import Admin as _Adm, AdminAuditLog
+    from app.models.document import DocumentDelivery, DocumentRead, DocumentShare, DocumentStar, DocumentVersion
+
+    admin, hq_id = await _doc_ctx(request, db)
+    if not admin:
+        return _doc_err("Sign in again.", 401)
+    d, acc = await _doc_get(db, admin, hq_id, doc_id)
+    if not d:
+        return _doc_err("This document does not exist or is not shared with you.", 404)
+    shares = (await db.execute(select(DocumentShare).where(DocumentShare.document_id == d.id).order_by(DocumentShare.created_at))).scalars().all()
+    deliveries = (await db.execute(select(DocumentDelivery).where(DocumentDelivery.document_id == d.id).order_by(DocumentDelivery.created_at.desc()).limit(50))).scalars().all()
+    labels = await docs.labels_for(db, {s.target for s in shares} | {x.target for x in deliveries})
+    versions = (await db.execute(select(DocumentVersion).where(DocumentVersion.document_id == d.id).order_by(DocumentVersion.version.desc()))).scalars().all()
+    events = (await db.execute(select(AdminAuditLog, _Adm.full_name).join(_Adm, _Adm.id == AdminAuditLog.admin_id, isouter=True)
+                               .where(AdminAuditLog.target_type == "document", AdminAuditLog.target_id == d.id)
+                               .order_by(AdminAuditLog.created_at.desc()).limit(40))).all()
+    starred = (await db.execute(select(DocumentStar).where(DocumentStar.document_id == d.id, DocumentStar.admin_id == admin.id))).first() is not None
+    # opening a received file marks its deliveries to me as read
+    mine = docs.targets_of(admin, hq_id)
+    for x in deliveries:
+        if x.target in mine and x.sender_id != admin.id:
+            if not (await db.execute(select(DocumentRead).where(DocumentRead.delivery_id == x.id, DocumentRead.admin_id == admin.id))).first():
+                db.add(DocumentRead(delivery_id=x.id, admin_id=admin.id))
+    await db.commit()
+    reads = {}
+    if acc == "manage" and deliveries:
+        for did, n in (await db.execute(select(DocumentRead.delivery_id, func.count()).where(DocumentRead.delivery_id.in_([x.id for x in deliveries]))
+                                        .group_by(DocumentRead.delivery_id))).all():
+            reads[did] = n
+    words = {"document.upload": "uploaded", "document.view": "opened", "document.download": "downloaded", "document.share": "shared",
+             "document.unshare": "removed access", "document.send": "sent", "document.version": "uploaded a new version", "document.update": "edited the details",
+             "document.trash": "moved to Trash", "document.restore": "restored", "document.visibility": "changed who can see it"}
+    return JSONResponse({
+        "item": _doc_json(d, starred=starred, access=acc),
+        "shares": [{"target": s.target, "label": labels.get(s.target, s.target), "access": s.access} for s in shares],
+        "versions": [{"version": v.version, "filename": v.filename, "size_h": docs.human_size(v.size), "note": v.note or "",
+                      "by": v.uploader.full_name if v.uploader else "", "at": v.created_at.isoformat() + "Z"} for v in versions],
+        "deliveries": [{"to": labels.get(x.target, x.target), "from": x.sender.full_name if x.sender else "", "message": x.message or "",
+                        "at": x.created_at.isoformat() + "Z", "reads": reads.get(x.id)} for x in deliveries],
+        "activity": [{"who": who or "Someone", "what": words.get(e.action, e.action.replace("document.", "")), "at": e.created_at.isoformat() + "Z",
+                      "detail": (e.extra_data or {}).get("to") or ""} for e, who in events],
+    })
+
+
+@router.get("/documents/{doc_id}/file", name="admin_documents_file")
+async def admin_documents_file(doc_id: int, request: Request, db: AsyncSession = Depends(get_db), v: int = Query(0), inline: int = Query(0)):
+    from urllib.parse import quote
+
+    from fastapi.responses import FileResponse
+
+    from app.core import documents as docs
+    from app.models.document import DocumentVersion
+
+    admin, hq_id = await _doc_ctx(request, db)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+    d, _acc = await _doc_get(db, admin, hq_id, doc_id)
+    if not d:
+        return _doc_err("This document does not exist or is not shared with you.", 404)
+    stored, name, ext, mime = d.stored_path, d.filename, d.ext, d.mime
+    if v and v != d.version:
+        old = (await db.execute(select(DocumentVersion).where(DocumentVersion.document_id == d.id, DocumentVersion.version == v))).scalar_one_or_none()
+        if not old:
+            return _doc_err("That version does not exist.", 404)
+        stored, name, mime = old.stored_path, old.filename, old.mime
+        ext = docs.ext_of(name)
+    try:
+        path = docs.abspath(stored)
+    except ValueError:
+        return _doc_err("File not found.", 404)
+    if not os.path.isfile(path):
+        return _doc_err("The file is missing from storage.", 404)
+    show = bool(inline) and ext in docs.INLINE
+    await log_admin_action(db, admin.id, "document.view" if show else "document.download", "document", d.id, {"version": v or d.version}, request)
+    await db.commit()
+    if ext in ("txt", "md", "csv") and show:
+        mime = "text/plain; charset=utf-8"
+    disp = ("inline" if show else "attachment") + f"; filename*=UTF-8''{quote(name)}"
+    headers = {"Content-Disposition": disp, "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store"}
+    # Text opens sandboxed (no scripts, no forms). PDFs are not sandboxed: Chrome's own PDF viewer refuses to run in a
+    # sandboxed document, and it isolates the PDF itself. HTML/SVG are never served inline (not in docs.INLINE).
+    headers["Content-Security-Policy"] = ("default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'"
+                                          + ("" if ext == "pdf" else "; sandbox"))
+    return FileResponse(path, media_type=mime, headers=headers)
+
+
+@router.post("/documents/{doc_id}/update", name="admin_documents_update")
+async def admin_documents_update(doc_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import documents as docs
+    from app.models.document import DocumentFolder
+
+    admin, hq_id = await _doc_ctx(request, db)
+    if not admin:
+        return _doc_err("Sign in again.", 401)
+    d, acc = await _doc_get(db, admin, hq_id, doc_id, "edit")
+    if not d:
+        return _doc_err("You cannot edit this document.", 403)
+    form = await request.form()
+    changed = {}
+    if "title" in form:
+        t = str(form.get("title") or "").strip()[:255]
+        if not t:
+            return _doc_err("The title cannot be empty.")
+        d.title, changed["title"] = t, t
+    if "description" in form:
+        d.description = str(form.get("description") or "").strip()[:5000] or None
+    if "tags" in form:
+        d.tags = ",".join(t.strip()[:40] for t in str(form.get("tags") or "").split(",") if t.strip())[:500] or None
+    if "folder_id" in form:
+        fid = _to_int(form.get("folder_id"))
+        if fid:
+            f = await db.get(DocumentFolder, fid)
+            if not f or f.branch_id != d.branch_id:
+                return _doc_err("That folder is not in this document's library.")
+        d.folder_id, changed["folder"] = fid, fid
+    if "visibility" in form:
+        if acc != "manage":
+            return _doc_err("Only the owner can change who can see this document.", 403)
+        vis = str(form.get("visibility"))
+        if vis not in docs.VISIBILITY:
+            return _doc_err("Choose who can see it from the list.")
+        if vis != d.visibility:
+            await log_admin_action(db, admin.id, "document.visibility", "document", d.id, {"from": d.visibility, "to": vis}, request)
+        d.visibility = vis
+    if changed:
+        await log_admin_action(db, admin.id, "document.update", "document", d.id, changed, request)
+    await db.commit()
+    await db.refresh(d)
+    return JSONResponse({"ok": True, "item": _doc_json(d, access=acc)})
+
+
+@router.post("/documents/{doc_id}/version", name="admin_documents_version")
+async def admin_documents_version(doc_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import documents as docs
+    from app.models.document import DocumentVersion
+
+    admin, hq_id = await _doc_ctx(request, db)
+    if not admin:
+        return _doc_err("Sign in again.", 401)
+    d, acc = await _doc_get(db, admin, hq_id, doc_id, "edit")
+    if not d:
+        return _doc_err("You cannot edit this document.", 403)
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None or not getattr(upload, "filename", ""):
+        return _doc_err("Choose the new file.")
+    try:
+        rel, name, ext, mime, size = await docs.save_upload(upload)
+    except ValueError as e:
+        return _doc_err(str(e))
+    d.version = (d.version or 1) + 1
+    d.stored_path, d.filename, d.ext, d.mime, d.size = rel, name, ext, mime, size
+    d.updated_at = datetime.utcnow()
+    db.add(DocumentVersion(document_id=d.id, version=d.version, filename=name, mime=mime, size=size, stored_path=rel,
+                           note=str(form.get("note") or "").strip()[:300] or None, uploaded_by=admin.id))
+    await log_admin_action(db, admin.id, "document.version", "document", d.id, {"version": d.version, "name": name}, request)
+    await db.commit()
+    await db.refresh(d)
+    return JSONResponse({"ok": True, "item": _doc_json(d, access=acc)})
+
+
+@router.post("/documents/{doc_id}/share", name="admin_documents_share")
+async def admin_documents_share(doc_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core import documents as docs
+    from app.models.document import DocumentShare
+
+    admin, hq_id = await _doc_ctx(request, db)
+    if not admin:
+        return _doc_err("Sign in again.", 401)
+    d, _acc = await _doc_get(db, admin, hq_id, doc_id, "manage")
+    if not d:
+        return _doc_err("Only the owner can share this document.", 403)
+    form = await request.form()
+    target, access = str(form.get("target") or ""), str(form.get("access") or "view")
+    if not docs.target_ok(target) or access not in docs.ACCESS:
+        return _doc_err("Choose a person or office and the access.")
+    if target == f"user:{admin.id}":
+        return _doc_err("You already own this document.")
+    s = (await db.execute(select(DocumentShare).where(DocumentShare.document_id == d.id, DocumentShare.target == target))).scalar_one_or_none()
+    if s:
+        s.access = access
+    else:
+        db.add(DocumentShare(document_id=d.id, target=target, access=access, created_by=admin.id))
+    label = (await docs.labels_for(db, {target}))[target]
+    await log_admin_action(db, admin.id, "document.share", "document", d.id, {"to": label, "access": access}, request)
+    await db.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.post("/documents/{doc_id}/unshare", name="admin_documents_unshare")
+async def admin_documents_unshare(doc_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import delete as _delete
+
+    from app.core import documents as docs
+    from app.models.document import DocumentShare
+
+    admin, hq_id = await _doc_ctx(request, db)
+    if not admin:
+        return _doc_err("Sign in again.", 401)
+    d, _acc = await _doc_get(db, admin, hq_id, doc_id, "manage")
+    if not d:
+        return _doc_err("Only the owner can change sharing.", 403)
+    target = str((await request.form()).get("target") or "")
+    await db.execute(_delete(DocumentShare).where(DocumentShare.document_id == d.id, DocumentShare.target == target))
+    label = (await docs.labels_for(db, {target}))[target] if docs.target_ok(target) else target
+    await log_admin_action(db, admin.id, "document.unshare", "document", d.id, {"to": label}, request)
+    await db.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.post("/documents/{doc_id}/send", name="admin_documents_send")
+async def admin_documents_send(doc_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    """Send a file to people and/or offices: they get view access and find it in Received, with the note."""
+    from app.core import documents as docs, mailer
+    from app.models.document import DocumentDelivery, DocumentShare
+
+    admin, hq_id = await _doc_ctx(request, db)
+    if not admin:
+        return _doc_err("Sign in again.", 401)
+    d, _acc = await _doc_get(db, admin, hq_id, doc_id, "edit")
+    if not d:
+        return _doc_err("You can send a document you own or can edit.", 403)
+    form = await request.form()
+    targets = [t for t in dict.fromkeys(str(x) for x in form.getlist("targets")) if docs.target_ok(t) and t != f"user:{admin.id}"][:30]
+    if not targets:
+        return _doc_err("Choose at least one person or office.")
+    message = str(form.get("message") or "").strip()[:2000] or None
+    labels = await docs.labels_for(db, set(targets))
+    for t in targets:
+        if not (await db.execute(select(DocumentShare.id).where(DocumentShare.document_id == d.id, DocumentShare.target == t))).first():
+            db.add(DocumentShare(document_id=d.id, target=t, access="view", created_by=admin.id))
+        db.add(DocumentDelivery(document_id=d.id, sender_id=admin.id, target=t, message=message))
+        await log_admin_action(db, admin.id, "document.send", "document", d.id, {"to": labels[t]}, request)
+    await db.commit()
+    # A short notice by email when email delivery is set up (no file and no message content in the email).
+    if await mailer.can_send():
+        base = _public_base_url(request)
+        seen = set()
+        for t in targets:
+            for person in await docs.members_of(db, t, hq_id):
+                if person.id == admin.id or person.id in seen or not person.email:
+                    continue
+                seen.add(person.id)
+                mailer.fire(mailer.send_notice(
+                    person.email, f"{admin.full_name} sent you a document", base_url=base, kind="staff", heading="A document is waiting for you",
+                    paragraphs=[f"{admin.full_name} sent a document to {labels[t]}. Open the console to read it."],
+                    button=("Open Documents", base + "/admin/documents#received")))
+    return JSONResponse({"ok": True, "sent": len(targets)})
+
+
+@router.post("/documents/{doc_id}/star", name="admin_documents_star")
+async def admin_documents_star(doc_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import delete as _delete
+
+    from app.models.document import DocumentStar
+
+    admin, hq_id = await _doc_ctx(request, db)
+    if not admin:
+        return _doc_err("Sign in again.", 401)
+    d, _acc = await _doc_get(db, admin, hq_id, doc_id)
+    if not d:
+        return _doc_err("Not found.", 404)
+    on = (await request.form()).get("on") == "1"
+    await db.execute(_delete(DocumentStar).where(DocumentStar.document_id == d.id, DocumentStar.admin_id == admin.id))
+    if on:
+        db.add(DocumentStar(document_id=d.id, admin_id=admin.id))
+    await db.commit()
+    return JSONResponse({"ok": True, "starred": on})
+
+
+@router.post("/documents/{doc_id}/trash", name="admin_documents_trash")
+async def admin_documents_trash(doc_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, hq_id = await _doc_ctx(request, db)
+    if not admin:
+        return _doc_err("Sign in again.", 401)
+    d, _acc = await _doc_get(db, admin, hq_id, doc_id, "manage")
+    if not d:
+        return _doc_err("Only the owner can move this document to the Trash.", 403)
+    restore = (await request.form()).get("restore") == "1"
+    d.trashed_at = None if restore else datetime.utcnow()
+    await log_admin_action(db, admin.id, "document.restore" if restore else "document.trash", "document", d.id, {"title": d.title}, request)
+    await db.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.post("/documents/{doc_id}/delete", name="admin_documents_delete")
+async def admin_documents_delete(doc_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    """Permanently delete (only from the Trash): every version's file goes too."""
+    from app.core import documents as docs
+    from app.models.document import DocumentVersion
+
+    admin, hq_id = await _doc_ctx(request, db)
+    if not admin:
+        return _doc_err("Sign in again.", 401)
+    d, _acc = await _doc_get(db, admin, hq_id, doc_id, "manage")
+    if not d or not d.trashed_at:
+        return _doc_err("Move it to the Trash first.", 400)
+    paths = {d.stored_path} | set((await db.execute(select(DocumentVersion.stored_path).where(DocumentVersion.document_id == d.id))).scalars().all())
+    title = d.title
+    await db.delete(d)
+    await log_admin_action(db, admin.id, "document.delete", "document", doc_id, {"title": title}, request)
+    await db.commit()
+    for p in paths:
+        docs.remove_file(p)
+    return JSONResponse({"ok": True})
+
+
+async def documents_unread(db: AsyncSession, admin) -> int:
+    """Files sent to this person (or their offices) that they have not opened yet: the sidebar badge."""
+    from app.core import documents as docs
+    from app.core.hq_branch import get_hq_branch_id
+    from app.models.document import Document, DocumentDelivery, DocumentRead
+
+    try:
+        hq_id = await get_hq_branch_id(db)
+        q = (select(func.count()).select_from(DocumentDelivery).join(Document, Document.id == DocumentDelivery.document_id)
+             .where(DocumentDelivery.target.in_(docs.targets_of(admin, hq_id)), Document.trashed_at.is_(None),
+                    or_(DocumentDelivery.sender_id.is_(None), DocumentDelivery.sender_id != admin.id),
+                    ~DocumentDelivery.id.in_(select(DocumentRead.delivery_id).where(DocumentRead.admin_id == admin.id))))
+        return (await db.execute(q)).scalar_one() or 0
+    except Exception:
+        return 0

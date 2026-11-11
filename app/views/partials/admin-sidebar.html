@@ -45,6 +45,7 @@
   <nav class="admin-sidebar-scroll flex-1 overflow-y-auto py-3 px-2">
     {% if is_hod %}
       <div class="mb-2 px-1">{{ nav_item(url_for('hod_reports_index'), 'ri-file-chart-line', 'Monthly Reports', 'hod.reports') }}</div>
+      <div class="mb-2 px-1">{{ nav_item(url_for('admin_documents'), 'ri-folder-3-line', 'Documents', 'admin.documents', badges.documents, '{n} documents sent to you and not opened yet') }}</div>
       {% if can('whatsapp') %}<div class="mb-2 px-1">{{ nav_item(url_for('admin_whatsapp'), 'ri-whatsapp-line', 'WhatsApp', 'admin.whatsapp') }}</div>{% endif %}
     {% else %}
       {#- Ordered by how often each is used: daily work first, then weekly, then occasional, then setup.
@@ -54,6 +55,7 @@
       <div class="mb-1.5 px-1">
         {% if can('dashboard') %}{{ nav_item(url_for('admin_dashboard'), 'ri-dashboard-3-line', 'Dashboard', 'admin.dashboard') }}{% endif %}
         {% if can('whatsapp') %}{{ nav_item(url_for('admin_whatsapp'), 'ri-whatsapp-line', 'WhatsApp', 'admin.whatsapp') }}{% endif %}
+        {% if can('documents') %}{{ nav_item(url_for('admin_documents'), 'ri-folder-3-line', 'Documents', 'admin.documents', badges.documents, '{n} documents sent to you and not opened yet') }}{% endif %}
         {% if can('audio') %}{{ nav_item(url_for('admin_messages'), 'ri-message-3-line', 'Audio Messages', 'admin.messages', badges.messages, '{n} draft messages not yet published') }}{% endif %}
         {% if can('events') %}{{ nav_item(url_for('admin_events'), 'ri-calendar-event-line', 'Calendar', 'admin.events', badges.events, '{n} events in the next 7 days') }}{% endif %}
         {% if can('members') %}{{ nav_item(url_for('admin_members'), 'ri-team-line', 'Members', 'admin.members', badges.members, '{n} joined in the last 7 days') }}{% endif %}

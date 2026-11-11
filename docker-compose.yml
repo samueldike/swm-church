@@ -16,6 +16,7 @@ services:
       - media_files:/app/media
       - telegram_bot_api_conf:/run/swm-telegram
       - telegram_archive:/app/telegram-archive   # private: never under /app/media (served publicly)
+      - documents:/app/documents                 # private document library (Admin -> Documents)
     depends_on:
       postgres:
         condition: service_healthy
@@ -160,6 +161,7 @@ volumes:
   telegram_bot_api_data:
   telegram_bot_api_conf:
   telegram_archive:
+  documents:
   whisper_models:
   static_files:
   media_files:

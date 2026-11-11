@@ -76,3 +76,8 @@ __all__ = [
 ]
 
 from app.models.ai_knowledge import AIKnowledge, ScentAIFeedback
+
+# Document library (Admin -> Documents)
+from app.models.document import (  # noqa: E402
+    Document, DocumentDelivery, DocumentFolder, DocumentRead, DocumentShare, DocumentStar, DocumentVersion,
+)

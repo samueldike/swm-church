@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # deliberately OUTSIDE the media root, which nginx and the app serve publicly.
     # Empty = a "telegram-archive" folder next to the media root.
     TELEGRAM_ARCHIVE_DIR: str = ""
+    # Document library (Admin -> Documents): private office files, OUTSIDE the public media root, served only
+    # through a permission check. Empty = a "documents" folder next to the media root.
+    DOCUMENTS_DIR: str = ""
+    DOCUMENTS_MAX_UPLOAD_MB: int = 100
 
     # Absolute path the app writes uploads to. Must match the media volume
     # mount in every container that needs to read them (worker, nginx,
@@ -69,6 +73,15 @@ class Settings(BaseSettings):
         if self.TELEGRAM_ARCHIVE_DIR:
             return self.TELEGRAM_ARCHIVE_DIR
         return os.path.join(os.path.dirname(os.path.normpath(self.media_root)), "telegram-archive")
+
+    @property
+    def documents_dir(self) -> str:
+        """Private document library directory: never under the public media root."""
+        import os
+
+        if self.DOCUMENTS_DIR:
+            return self.DOCUMENTS_DIR
+        return os.path.join(os.path.dirname(os.path.normpath(self.media_root)), "documents")
 
     @property
     def telegram_api_base(self) -> str:
