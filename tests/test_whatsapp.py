@@ -50,32 +50,103 @@ def test_tenant_ids_are_per_church():
     assert wa.tenant(1) == "b1" and wa.tenant("12") == "b12"
 
 
-def test_deliver_reports_partial_and_waits_when_disconnected(monkeypatch):
+def _post(**kw):
+    base = dict(branch_id=4, kind="message", text="Hello", media_path=None, media_kind=None, media_name=None,
+                targets=[], result=None, status="sending", next_at=None, error=None, send_at=datetime.utcnow())
+    base.update(kw)
+    return NS(**base)
+
+
+@pytest.fixture
+def daytime(monkeypatch):
+    """Church time is 10:00 and pauses between recipients are instant."""
+    async def ten_am(_branch_id):
+        return datetime(2026, 11, 11, 10, 0)
+
+    async def no_sleep(_s):
+        return None
+
+    monkeypatch.setattr(wa, "_church_now", ten_am)
+    monkeypatch.setattr(wa.asyncio, "sleep", no_sleep)
+
+
+def test_post_to_many_drips_two_recipients_per_round_and_never_resends(monkeypatch, daytime):
+    calls = []
+
+    async def fake_call(method, path, **kw):
+        calls.append(kw.get("json"))
+        if kw["json"]["to"] == "bad@g.us":
+            raise wa.GatewayError("not a member", 400)
+        return {"ok": True}
+
+    monkeypatch.setattr(wa, "call", fake_call)
+    post = _post(targets=[{"jid": "a@g.us"}, {"jid": "bad@g.us"}, {"jid": "c@g.us"}, {"jid": "d@newsletter"}])
+    now = datetime.utcnow()
+    assert asyncio.run(wa._advance(post, now)) is False             # round 1: a ok, bad refused (noted), stop
+    assert post.result == {"a@g.us": "ok", "bad@g.us": "not a member"} and post.status == "sending"
+    assert post.next_at > now and all(c["bulk"] is True for c in calls)
+    assert asyncio.run(wa._advance(post, now)) is True              # round 2: the last two, then finished
+    assert [c["to"] for c in calls] == ["a@g.us", "bad@g.us", "c@g.us", "d@newsletter"]   # nobody twice
+    assert post.status == "partial" and "1 of 4" in post.error
+
+
+def test_safety_limit_pauses_the_post_until_it_frees_up(monkeypatch, daytime):
+    async def limited(method, path, **kw):
+        raise wa.GatewayError("Safety limit reached", 429, "2030-01-01T10:00:00.000Z")
+
+    monkeypatch.setattr(wa, "call", limited)
+    post = _post(targets=[{"jid": "a@g.us"}])
+    assert asyncio.run(wa._advance(post, datetime.utcnow())) is False
+    assert post.status == "sending" and post.next_at >= datetime(2030, 1, 1, 10, 0) and "safety" in post.error.lower()
+    assert not post.result                                          # nothing was marked as sent
+
+
+def test_disconnected_account_waits(monkeypatch, daytime):
+    async def offline(method, path, **kw):
+        raise wa.GatewayError("WhatsApp is not connected", 409)
+
+    monkeypatch.setattr(wa, "call", offline)
+    post = _post(targets=[{"jid": "a@g.us"}])
+    assert asyncio.run(wa._advance(post, datetime.utcnow())) is False and post.status == "sending"
+    post.send_at = datetime.utcnow() - timedelta(hours=7)           # waited too long: give up
+    assert asyncio.run(wa._advance(post, datetime.utcnow())) is True and post.status == "failed"
+
+
+def test_no_bulk_sending_at_night(monkeypatch):
+    async def eleven_pm(_branch_id):
+        return datetime(2026, 11, 11, 23, 0)
+
+    async def never(*a, **k):
+        raise AssertionError("must not send at night")
+
+    monkeypatch.setattr(wa, "_church_now", eleven_pm)
+    monkeypatch.setattr(wa, "call", never)
+    post = _post(targets=[{"jid": "a@g.us"}])
+    now = datetime(2026, 11, 11, 22, 0)
+    assert asyncio.run(wa._advance(post, now)) is False
+    assert post.next_at == now + timedelta(hours=8) and "07:00" in post.error   # 23:00 -> 07:00 church time
+    assert wa.quiet_until(datetime(2026, 11, 11, 6, 30)) == datetime(2026, 11, 11, 7, 0)
+    assert wa.quiet_until(datetime(2026, 11, 11, 12, 0)) is None
+
+
+def test_status_post_goes_out_once(monkeypatch, daytime):
     calls = []
 
     async def fake_call(method, path, **kw):
         calls.append((path, kw.get("json")))
-        to = (kw.get("json") or {}).get("to")
-        if to == "bad@g.us":
-            raise wa.GatewayError("not a member", 400)
-        if to == "offline@c.us":
-            raise wa.GatewayError("WhatsApp is not connected", 409)
         return {"ok": True}
 
     monkeypatch.setattr(wa, "call", fake_call)
-    post = NS(branch_id=4, kind="message", text="Hello", media_path=None, media_kind=None, media_name=None,
-              targets=[{"jid": "a@g.us"}, {"jid": "bad@g.us"}])
-    status, result, error = asyncio.run(wa.deliver(post))
-    assert status == "partial" and result["a@g.us"] == "ok" and "1 of 2" in error
-    assert calls[0][0] == "/sessions/b4/send"
+    post = _post(kind="status", text="Sunday!")
+    assert asyncio.run(wa._advance(post, datetime.utcnow())) is True and post.status == "sent"
+    assert calls == [("/sessions/b4/status", {"kind": "text", "text": "Sunday!", "file": None, "caption": "Sunday!"})]
 
-    post.targets = [{"jid": "offline@c.us"}]
-    with pytest.raises(wa.GatewayError):            # 409 propagates so the post waits and is retried
-        asyncio.run(wa.deliver(post))
 
-    status_post = NS(branch_id=4, kind="status", text="Sunday!", media_path=None, media_kind=None, media_name=None, targets=[])
-    assert asyncio.run(wa.deliver(status_post))[0] == "sent"
-    assert calls[-1][0] == "/sessions/b4/status" and calls[-1][1]["kind"] == "text"
+def test_name_personalisation():
+    assert wa.personalise("Hi {name}, see you Sunday!", "Grace Okafor") == "Hi Grace, see you Sunday!"
+    assert wa.personalise("Hi {name}, see you Sunday!", "+234 803 000 0000") == "Hi, see you Sunday!"
+    assert wa.personalise("Hi {name}!", "~Ben") == "Hi Ben!"
+    assert wa.personalise("No token here", "Ann") == "No token here"
 
 
 def test_gateway_off_means_a_clear_message(monkeypatch):

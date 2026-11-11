@@ -8393,6 +8393,9 @@ _WA_RELAY = (
     ("POST", re.compile(r"groups/[^/]+/action")),
     ("POST", re.compile(r"send-extra")),
     ("POST", re.compile(r"people")),
+    ("GET", re.compile(r"guard")),
+    ("POST", re.compile(r"guard/resume")),
+    ("POST", re.compile(r"check-targets")),
     ("POST", re.compile(r"me")),
 )
 _WA_AUDITED = {"delete", "clear", "block", "unblock", "leave", "add", "remove", "promote", "demote", "subject", "description", "announce", "revoke"}
@@ -8407,6 +8410,10 @@ async def admin_whatsapp_api(path: str, request: Request, db: AsyncSession = Dep
         return JSONResponse({"error": "Not allowed"}, status_code=403)
     if not any(m == request.method and rx.fullmatch(path) for m, rx in _WA_RELAY):
         return JSONResponse({"error": "Not found"}, status_code=404)
+    from app.core.access import normalize_role as _norm_role
+
+    if path == "guard/resume" and _norm_role(admin.role) not in ("super_admin", "branch_admin"):
+        return JSONResponse({"error": "Only the HQ Administrator or the branch admin can resume sending early."}, status_code=403)
     target = f"/sessions/{wa.tenant(branch_id)}/" + "/".join(_wa_quote(seg) for seg in path.split("/"))
     body = None
     if request.method == "POST":
@@ -8422,7 +8429,7 @@ async def admin_whatsapp_api(path: str, request: Request, db: AsyncSession = Dep
     except wa.GatewayError as e:
         return _wa_json_error(e)
     action = str((body or {}).get("action") or "")
-    if request.method == "POST" and (action in _WA_AUDITED or path == "me"):
+    if request.method == "POST" and (action in _WA_AUDITED or path in ("me", "guard/resume")):
         detail = {"path": path.split("/")[0], "action": action or path}
         await log_admin_action(db, admin.id, f"whatsapp.{detail['path']}.{detail['action']}", "branch", branch_id, detail, request)
         await db.commit()
@@ -8565,6 +8572,29 @@ async def admin_whatsapp_post_create(request: Request, db: AsyncSession = Depend
         targets = []
     if kind == "message" and not targets:
         return JSONResponse({"error": "Choose at least one chat, group or channel."}, status_code=400)
+    # ── anti-ban rules (app/core/whatsapp.py; the gateway adds per-account limits) ──
+    if kind == "message":
+        people = [t for t in targets if wa.is_person(t["jid"])]
+        if len(targets) > wa.MAX_TARGETS:
+            return JSONResponse({"error": f"For the number's safety, one post can go to at most {wa.MAX_TARGETS} chats. "
+                                          "Split it, or post once in a group or channel that reaches everyone."}, status_code=400)
+        if len(people) > wa.MAX_PEOPLE:
+            return JSONResponse({"error": f"For the number's safety, one post can go to at most {wa.MAX_PEOPLE} individual people "
+                                          f"(you chose {len(people)}). WhatsApp bans numbers that message many people one by one; "
+                                          "use a group or channel for announcements."}, status_code=400)
+        if people:
+            try:
+                chk = await wa.call("POST", f"/sessions/{wa.tenant(branch_id)}/check-targets", json={"jids": [t["jid"] for t in people]}, timeout=60)
+            except wa.GatewayError as e:
+                return JSONResponse({"error": f"Could not check the recipients first: {e}"}, status_code=e.status or 502)
+            cold = [t for t in people if (chk.get("targets") or {}).get(t["jid"]) == "cold"]
+            if cold:
+                names = ", ".join((t.get("name") or t["jid"].split("@")[0]) for t in cold[:6]) + (" …" if len(cold) > 6 else "")
+                many = len(cold) != 1
+                msg = ("Not sent, to protect the number: " + names + (" have" if many else " has") + " never chatted with this account and "
+                       + ("are" if many else "is") + " not a saved contact. Messages to strangers are the main reason WhatsApp bans numbers. Remove "
+                       + ("them" if many else "it") + ", or ask them to message the church first.")
+                return JSONResponse({"error": msg, "cold": [t["jid"] for t in cold]}, status_code=400)
     when_raw = str(form.get("send_at") or "").strip()
     if when_raw:
         try:
@@ -8592,10 +8622,16 @@ async def admin_whatsapp_post_create(request: Request, db: AsyncSession = Depend
     await log_admin_action(db, admin.id, "whatsapp.post", "whatsapp_post", post.id, {"kind": kind, "targets": len(targets), "scheduled": bool(when_raw)}, request)
     await db.commit()
     if not when_raw:
-        # Send straight away rather than waiting for the scheduler's next tick.
-        await wa.process_due()
-        await db.refresh(post)
-    return JSONResponse({"ok": True, "id": post.id, "status": post.status, "error": post.error})
+        # Start now in the background: the post drips out (a few recipients at a time, with pauses), it is never
+        # sent all at once inside this request.
+        import asyncio as _asyncio
+
+        _asyncio.get_running_loop().create_task(wa.process_due())
+    n = len(targets) if kind == "message" else 1
+    minutes = max(1, round(n * 14 / 60)) if kind == "message" else 0
+    note = (f"Sending gradually to {n} chat{'s' if n != 1 else ''}, with pauses like a person (about {minutes} minute{'s' if minutes != 1 else ''}). "
+            "Follow it under Scheduled." if kind == "message" and not when_raw else None)
+    return JSONResponse({"ok": True, "id": post.id, "status": post.status, "error": post.error, "note": note})
 
 
 @router.get("/whatsapp/posts.json", name="admin_whatsapp_posts")
@@ -8617,7 +8653,10 @@ async def admin_whatsapp_posts(request: Request, db: AsyncSession = Depends(get_
     return JSONResponse({"posts": [{
         "id": p.id, "kind": p.kind, "text": (p.text or "")[:280], "targets": [t.get("name") or t.get("jid") for t in (p.targets or [])],
         "media": p.media_name, "media_kind": p.media_kind, "when": local(p.send_at), "status": p.status, "error": p.error,
-        "by": p.author.full_name if p.author else None, "can_cancel": p.status == "pending"} for p in rows]})
+        "by": p.author.full_name if p.author else None, "can_cancel": p.status in ("pending", "sending"),
+        "total": len(p.targets or []) if p.kind == "message" else 1,
+        "done": sum(1 for v in (p.result or {}).values() if v == "ok") if p.kind == "message" else int(p.status == "sent"),
+        "next": local(p.next_at) if p.status == "sending" and p.next_at else None} for p in rows]})
 
 
 @router.post("/whatsapp/posts/{post_id}/cancel", name="admin_whatsapp_post_cancel")
@@ -8629,7 +8668,9 @@ async def admin_whatsapp_post_cancel(post_id: int, request: Request, db: AsyncSe
     admin, branch_id = await _wa_guard(request, db)
     if not admin:
         return JSONResponse({"error": "Not allowed"}, status_code=403)
-    res = await db.execute(_update(WhatsAppPost).where(WhatsAppPost.id == post_id, WhatsAppPost.branch_id == branch_id, WhatsAppPost.status == "pending").values(status="cancelled"))
+    # A post that is still dripping out can be stopped too: nobody else gets it.
+    res = await db.execute(_update(WhatsAppPost).where(WhatsAppPost.id == post_id, WhatsAppPost.branch_id == branch_id,
+                                                       WhatsAppPost.status.in_(("pending", "sending"))).values(status="cancelled", next_at=None))
     await db.commit()
     if res.rowcount != 1:
         return JSONResponse({"error": "That post has already been sent or cancelled."}, status_code=409)

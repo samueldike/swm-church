@@ -9,6 +9,7 @@ import * as registry from './registry.js';
 import * as S from './sessions.js';
 import { postStatus } from './status.js';
 import { registerWeb, toVoice, withReactions } from './web.js';
+import * as G from './guard.js';
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
@@ -27,7 +28,7 @@ const wrap = fn => async (req, res) => {
   try { await fn(req, res); } catch (e) {
     const msg = String(e?.message || e);
     log.warn({ path: req.path, err: msg.slice(0, 300) }, 'request failed');
-    if (!res.headersSent) res.status(e.status || 500).json({ error: msg.slice(0, 400) });
+    if (!res.headersSent) res.status(e.status || 500).json({ error: msg.slice(0, 400), retryAt: e.retryAt || undefined });
   }
 };
 const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, r) => setTimeout(() => r(new Error(`${what} timed out`)), ms))]);
@@ -50,6 +51,15 @@ const mediaPath = p => {
   if (!full.startsWith(path.resolve(config.mediaRoot) + path.sep)) { const e = new Error('bad media path'); e.status = 400; throw e; }
   return full;
 };
+/** First message to someone? [] for an existing chat, ['new'] for a saved contact, ['cold'] for anyone else. */
+async function firstContact(c, jid) {
+  if (!jid.endsWith('@c.us')) return [];
+  const ch = await withTimeout(c.getChatById(jid), 8000, 'chat').catch(() => null);
+  if (ch && (ch.t || ch.lastReceivedKey)) return [];
+  const k = await withTimeout(c.getContact(jid), 8000, 'contact').catch(() => null);
+  return [k?.isMyContact ? 'new' : 'cold'];
+}
+
 // A chat's display name. Groups often have only groupMetadata.subject filled in; never fall back to a group id.
 const name = c => {
   const id = S.widToString(c?.id);
@@ -215,7 +225,11 @@ app.post('/sessions/:id/groups', wrap(async (req, res) => {
   const members = [...new Set((req.body?.participants || []).map(toJid))];
   if (!title) return res.status(400).json({ error: 'Give the group a name.' });
   if (!members.length) return res.status(400).json({ error: 'Add at least one member.' });
-  const r = await withTimeout(c.createGroup(title, members), 60000, 'createGroup');
+  G.check(req.params.id, ['group_create'], 1, { risky: true });
+  G.check(req.params.id, ['group_add'], members.length, { risky: true });
+  let r;
+  try { r = await withTimeout(c.createGroup(title, members), 60000, 'createGroup'); } catch (e) { G.failure(req.params.id, e?.message); throw e; }
+  G.record(req.params.id, ['group_create']); G.record(req.params.id, ['group_add'], members.length);
   const gid = S.widToString(r?.gid || r?.groupInfo?.id || r?.id || r?.wid) || null;
   S.bump(req.params.id);
   res.json({ ok: true, jid: gid });
@@ -227,7 +241,13 @@ app.post('/sessions/:id/send', wrap(async (req, res) => {
   const c = await needClient(req.params.id);
   const { text = '', file, kind, filename, quotedId } = req.body || {};
   const jid = toJid(req.body?.to);
+  const bulk = !!req.body?.bulk;
+  const first = await firstContact(c, jid);
+  const kinds = ['msg', ...(bulk ? ['bulk'] : []), ...first];
+  G.check(req.params.id, kinds, 1, { risky: bulk || first.length > 0 });
+  if (bulk) await G.typeLikeAPerson(c, jid, text);
   let result;
+  try {
   if (file) {
     const p = mediaPath(file);
     const fname = filename || path.basename(p);
@@ -240,6 +260,8 @@ app.post('/sessions/:id/send', wrap(async (req, res) => {
     if (!String(text).trim()) return res.status(400).json({ error: 'Type a message first.' });
     result = await c.sendText(jid, String(text), quotedId ? { quotedMsg: quotedId } : {});
   }
+  } catch (e) { G.failure(req.params.id, e?.message); throw e; }
+  G.record(req.params.id, kinds);
   S.bump(req.params.id);
   res.json({ ok: true, id: S.widToString(result?.id) || null, to: jid });
 }));
@@ -255,7 +277,10 @@ app.post('/sessions/:id/check-number', wrap(async (req, res) => {
 app.post('/sessions/:id/status', wrap(async (req, res) => {
   const c = await needClient(req.params.id);
   const { kind = 'text', text = '', file, caption = '' } = req.body || {};
-  const r = await postStatus(c, kind, kind === 'text' ? String(text) : mediaPath(file), caption || text);
+  G.check(req.params.id, ['status'], 1, { risky: true });
+  let r;
+  try { r = await postStatus(c, kind, kind === 'text' ? String(text) : mediaPath(file), caption || text); } catch (e) { G.failure(req.params.id, e?.message); throw e; }
+  G.record(req.params.id, ['status']);
   S.bump(req.params.id);
   res.json({ ok: true, id: r?.id || null });
 }));
@@ -270,9 +295,22 @@ app.get('/sessions/:id/targets', wrap(async (req, res) => {
   res.json({ groups: map(groups), channels: map(channels) });
 }));
 
-registerWeb(app, { wrap, needClient, withTimeout, toJid, mediaPath, name, shapeMessage });
+// ─── safety (anti-ban) ───
+app.get('/sessions/:id/guard', wrap(async (req, res) => res.json(G.usage(req.params.id))));
+app.post('/sessions/:id/guard/resume', wrap(async (req, res) => { G.resume(req.params.id); res.json({ ok: true }); }));
+// Who would get a FIRST message from this account? (Post to many refuses numbers that are not saved contacts.)
+app.post('/sessions/:id/check-targets', wrap(async (req, res) => {
+  const c = await needClient(req.params.id);
+  const jids = [...new Set((req.body?.jids || []).map(String))].slice(0, 300);
+  const out = {};
+  await Promise.all(jids.map(async j => { const f = await firstContact(c, j).catch(() => []); out[j] = f[0] || 'known'; }));
+  res.json({ targets: out });
+}));
+
+registerWeb(app, { wrap, needClient, withTimeout, toJid, mediaPath, name, shapeMessage, G, firstContact });
 
 await registry.load();
+await G.load();
 const server = app.listen(config.port, () => log.info({ port: config.port }, 'whatsapp gateway listening'));
 void S.restoreAll();
 const stop = async () => { server.close(); await S.shutdown(); process.exit(0); };

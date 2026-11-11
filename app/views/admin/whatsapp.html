@@ -5,7 +5,7 @@
 {% block topbar_icon %}ri-whatsapp-line{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="{{ url_for('static', path='css/whatsapp-web.css') }}?v=4">
+<link rel="stylesheet" href="{{ url_for('static', path='css/whatsapp-web.css') }}?v=5">
 {% endblock %}
 
 {% block content %}
@@ -188,7 +188,9 @@
               <div id="wa-targets" class="wx-suggest" role="listbox" hidden></div>
             </div>
           </div>
-          <label><span>Message</span><textarea class="wx-input" data-richtext="off" name="text" rows="4" placeholder="Write your message"></textarea></label>
+          <div class="wx-safety" id="wa-safety" aria-live="polite"></div>
+          <label><span class="wx-msg-lbl">Message <button type="button" class="wx-token" id="wa-name-token" title="Each person sees their own first name">+ Insert {name}</button></span>
+            <textarea class="wx-input" data-richtext="off" name="text" rows="4" placeholder="Write your message. Tip: start with &quot;Hi {name},&quot;"></textarea></label>
           <div class="wx-file"><span class="wx-file-lbl">Photo, video or file (optional)</span>
             <label class="wx-btn ghost"><i class="ri-attachment-2"></i><span>Choose a file</span><input type="file" name="file" hidden></label>
             <span class="wx-file-chip" hidden><img alt="" hidden><i class="ri-file-text-line"></i><span class="nm"></span><button type="button" class="ic" data-file-x aria-label="Remove the file"><i class="ri-close-line"></i></button></span></div>
@@ -224,6 +226,7 @@
           <button type="button" class="wx-set-item" id="wx-set-notify" role="switch" aria-checked="false"><i class="ri-notification-3-line"></i><span>Desktop notifications<small>Show new messages while this page is open</small></span><span class="wx-toggle"></span></button>
           <button type="button" class="wx-set-item" id="wx-set-sound" role="switch" aria-checked="true"><i class="ri-volume-up-line"></i><span>Sounds<small>Play a sound for new messages</small></span><span class="wx-toggle"></span></button>
           <button type="button" class="wx-set-item" id="wx-set-enter" role="switch" aria-checked="true"><i class="ri-corner-down-left-line"></i><span>Enter is send<small>Shift + Enter adds a new line</small></span><span class="wx-toggle"></span></button>
+          <button type="button" class="wx-set-item" id="wx-set-safety"><i class="ri-shield-star-line"></i><span>Safety limits<small id="wx-set-safety-sub">Protects this number from being banned by WhatsApp</small></span><i class="ri-arrow-right-s-line" style="margin-left:auto"></i></button>
           <div class="wx-set-item"><i class="ri-smartphone-line"></i><span>Linked number<small id="wx-set-phone">—</small></span></div>
           <div class="wx-set-item"><i class="ri-time-line"></i><span>Linked since<small id="wx-set-since">—</small></span></div>
           <div class="wx-set-item"><i class="ri-shield-check-line"></i><span>Stays linked<small>Through restarts and updates, until someone logs out here or removes it under Linked devices on the phone.</small></span></div>
@@ -336,6 +339,6 @@
 {% endblock %}
 
 {% block extra_body %}
-<script src="{{ url_for('static', path='js/whatsapp-web.js') }}?v=4"></script>
+<script src="{{ url_for('static', path='js/whatsapp-web.js') }}?v=5"></script>
 <script>window.SWMWhatsApp && window.SWMWhatsApp.init();</script>
 {% endblock %}

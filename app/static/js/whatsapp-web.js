@@ -275,6 +275,27 @@
       else prefs.notify = false;
       savePrefs(); paintPrefs();
     }, sig);
+    function paintSafetySub() {
+      const el = $('wx-set-safety-sub'); if (!el || !guard) return;
+      el.textContent = guard.pausedUntil ? `Paused until ${new Date(guard.pausedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: ${guard.pauseReason}` : `On · today ${guard.used.msg.day} of ${guard.limits.msg.day} messages`;
+      el.style.color = guard.pausedUntil ? '#ea0038' : '';
+    }
+    $('wx-set-safety').addEventListener('click', async () => {
+      await loadGuard(); if (!guard) { toast('Could not load the safety limits.'); return; }
+      const order = ['msg', 'bulk', 'new', 'cold', 'forward', 'status', 'group_create', 'group_add'];
+      const rows = order.map((k) => Object.entries(guard.limits[k]).map(([w, max]) => {
+        const n = guard.used[k][w], pct = Math.min(100, Math.round(100 * n / max));
+        return `<tr><td>${esc(guard.labels[k])}</td><td style="white-space:nowrap">per ${w}</td><td style="width:34%"><div class="wx-meter"><i class="${pct >= 100 ? 'full' : pct >= 75 ? 'hot' : ''}" style="width:${pct}%"></i></div></td><td style="white-space:nowrap;text-align:right">${n} / ${max}</td></tr>`;
+      }).join('')).join('');
+      const html = `<p style="margin-bottom:10px">WhatsApp bans numbers that behave like bulk senders. These limits keep this account looking like a person. They cover everything sent from the console.</p>
+        ${guard.pausedUntil ? `<p class="wx-err" style="margin-bottom:10px">Paused until ${new Date(guard.pausedUntil).toLocaleString()}: ${esc(guard.pauseReason)}. Bulk sending and first messages wait; replies to existing chats still work.</p>` : ''}
+        <table class="wx-limits" style="width:100%">${rows}</table>
+        <p style="margin-top:12px;font-size:13px;color:var(--wx-ink3)">Also: Post to many sends a few chats at a time with pauses, holds from 21:00 to 07:00, takes at most 50 chats (25 people), never messages numbers that are not saved contacts and never chatted, and stops by itself if WhatsApp pushes back.</p>`;
+      const v = await dialog({ title: 'Safety limits', html, buttons: guard.pausedUntil ? [{ label: 'Resume now', ghost: true, value: 'resume' }, { label: 'OK', value: null }] : [{ label: 'OK', value: null }] });
+      if (v === 'resume' && await confirmBox('Resume sending now?', 'Only do this if you know why WhatsApp pushed back. Resuming too early can get the number banned.', 'Resume', true)) {
+        try { await api('guard/resume', {}); toast('Sending resumed'); loadGuard(); } catch (e) { toast(e.message); }
+      }
+    }, sig);
     $('wx-set-sound').addEventListener('click', () => { prefs.sound = !prefs.sound; savePrefs(); paintPrefs(); }, sig);
     $('wx-set-enter').addEventListener('click', () => { prefs.enter = !prefs.enter; savePrefs(); paintPrefs(); }, sig);
     let audioCtx = null;
@@ -303,6 +324,7 @@
       if (v === 'scheduled') loadPosts();
       if (v === 'starred') loadStarred();
       if (v === 'settings' || v === 'profile') loadMe();
+      if (v === 'settings') loadGuard();
     }
     app.addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b && app.contains(b)) { e.preventDefault(); go(b.dataset.go); } }, sig);
 
@@ -1315,7 +1337,7 @@
     const picked = new Map();
     const tq = $('wa-target-q'), tbox = $('wa-targets');
     async function loadTargets() {
-      renderPicked();
+      renderPicked(); loadGuard();
       if (targets) return;
       try {
         const [t] = await Promise.all([getJSON('/targets.json'), loadContacts().catch(() => null)]);
@@ -1331,9 +1353,52 @@
       } catch (e) { tbox.innerHTML = `<p class="wx-note">${esc(e.message)}</p>`; }
     }
     function renderPicked() {
-      $('wa-picked').innerHTML = [...picked.values()].map((t) => `<span class="wx-pill">${av(t.jid, t.name, t.kind)}${esc(t.name)}<button type="button" data-unpick="${esc(t.jid)}" aria-label="Remove ${esc(t.name)}"><i class="ri-close-line"></i></button></span>`).join('');
+      $('wa-picked').innerHTML = [...picked.values()].map((t) => `<span class="wx-pill ${firstOf.get(t.jid) === 'cold' ? 'cold' : ''}" title="${firstOf.get(t.jid) === 'cold' ? 'Never chatted with this number and not a saved contact: will be refused' : ''}">${av(t.jid, t.name, t.kind)}${firstOf.get(t.jid) === 'cold' ? '<i class="ri-error-warning-fill"></i>' : ''}${esc(t.name)}<button type="button" data-unpick="${esc(t.jid)}" aria-label="Remove ${esc(t.name)}"><i class="ri-close-line"></i></button></span>`).join('');
       lazyAv($('wa-picked'));
       $('wa-to-lbl').textContent = picked.size ? `Send to (${picked.size})` : 'Send to';
+      checkPeople(); renderSafety();
+    }
+    // ── anti-ban: who would get a FIRST message, today's usage, and a plain-language safety summary ──
+    const firstOf = new Map();             // jid -> 'known' | 'new' | 'cold'
+    let guard = null, checkT = null;
+    const isPerson = (jid) => /@(c\.us|lid|s\.whatsapp\.net)$/.test(jid);
+    function checkPeople() {
+      clearTimeout(checkT);
+      const need = [...picked.keys()].filter((j) => isPerson(j) && !firstOf.has(j));
+      if (!need.length) return;
+      checkT = setTimeout(async () => {
+        try { const r = await api('check-targets', { jids: need }); Object.entries(r.targets || {}).forEach(([j, v]) => firstOf.set(j, v)); renderPicked(); } catch (_) {}
+      }, 300);
+    }
+    async function loadGuard() { try { guard = await api('guard'); } catch (_) { guard = null; } renderSafety(); paintSafetySub(); }
+    const churchHour = () => { try { return Number(new Date().toLocaleString('en-GB', { timeZone: root.dataset.tz || undefined, hour: '2-digit', hour12: false })); } catch (_) { return new Date().getHours(); } };
+    function renderSafety() {
+      const box = $('wa-safety'); if (!box) return;
+      const list = [...picked.values()];
+      const people = list.filter((t) => isPerson(t.jid)), groups = list.filter((t) => t.jid.endsWith('@g.us')), chans = list.filter((t) => t.jid.endsWith('@newsletter'));
+      const cold = people.filter((t) => firstOf.get(t.jid) === 'cold'), fresh = people.filter((t) => firstOf.get(t.jid) === 'new');
+      const text = postForm.querySelector('[name=text]').value, later = postForm.querySelector('[name=when]:checked')?.value === 'later';
+      const rows = [];
+      const row = (cls, icon, html) => rows.push(`<div class="wx-safe-row ${cls}"><i class="${icon}"></i><span>${html}</span></div>`);
+      if (list.length) {
+        const parts = [groups.length && `${groups.length} group${groups.length > 1 ? 's' : ''}`, chans.length && `${chans.length} channel${chans.length > 1 ? 's' : ''}`, people.length && `${people.length} ${people.length > 1 ? 'people' : 'person'}`].filter(Boolean);
+        const mins = Math.max(1, Math.round(list.length * 14 / 60));
+        row('', 'ri-time-line', `<b>${parts.join(' · ')}</b>. Goes out gradually, a few at a time with pauses like a person: about ${mins} minute${mins > 1 ? 's' : ''}.`);
+      }
+      if (list.length > 50) row('bad', 'ri-close-circle-fill', `At most <b>50</b> chats per post. Remove ${list.length - 50}.`);
+      if (people.length > 25) row('bad', 'ri-close-circle-fill', `At most <b>25 individual people</b> per post (you have ${people.length}). For announcements use a group or channel: one message reaches everyone safely.`);
+      if (cold.length) row('bad', 'ri-close-circle-fill', `<b>${cold.length}</b> ${cold.length > 1 ? 'have' : 'has'} never chatted with this number and ${cold.length > 1 ? 'are' : 'is'} not saved (marked red). Messages to strangers are the main reason WhatsApp bans numbers, so they will be refused.`);
+      if (fresh.length) row('warn', 'ri-error-warning-fill', `${fresh.length} saved contact${fresh.length > 1 ? 's have' : ' has'} no chat with this number yet. First messages are limited to a few per hour.`);
+      if (people.length >= 2 && /https?:\/\//i.test(text)) row('warn', 'ri-link', 'A link sent to many people one by one looks like spam to WhatsApp. Prefer sharing links in a group or channel.');
+      if (people.length >= 2 && text && !text.includes('{name}')) row('', 'ri-user-smile-line', 'Tip: add <b>{name}</b> so each person gets their own greeting. Identical messages to many people look like spam.');
+      const h = churchHour();
+      if (list.length && !later && (h >= 21 || h < 7)) row('warn', 'ri-moon-line', 'It is night at the church: sending starts at 07:00 (no bulk messages between 21:00 and 07:00).');
+      if (guard?.pausedUntil) row('bad', 'ri-hand', `Sending is paused for safety until ${new Date(guard.pausedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: ${esc(guard.pauseReason || '')}. It will continue by itself.`);
+      if (guard && list.length) {
+        const u = guard.used, l = guard.limits;
+        row('', 'ri-shield-check-line', `Today: ${u.bulk.day} of ${l.bulk.day} Post-to-many messages · ${u.new.day} of ${l.new.day} first messages · ${u.msg.hour} of ${l.msg.hour} messages this hour.`);
+      }
+      box.innerHTML = rows.length ? `<div class="wx-safe-box">${rows.join('')}</div>` : '';
     }
     function suggest() {
       const raw = tq.value.trim();
@@ -1390,7 +1455,8 @@
         if (r.status === 'failed') throw new Error(r.error || 'It could not be sent.');
         form.reset(); form.querySelector('[name=send_at]').hidden = true; if (kind === 'message') { picked.clear(); renderPicked(); }
         err.hidden = false; err.className = 'wa-error wx-ok';
-        err.textContent = r.status === 'pending' ? (fd.get('send_at') ? 'Scheduled. You can see it under Scheduled.' : `Waiting to send: ${r.error || ''}`) : r.status === 'partial' ? `Sent, but some could not be delivered: ${r.error}` : 'Sent.';
+        err.textContent = r.note || (fd.get('send_at') ? 'Scheduled. You can follow it under Scheduled.' : (kind === 'status' ? 'Posting your status…' : 'Queued. You can follow it under Scheduled.'));
+        if (kind === 'message') loadGuard();
         if (kind === 'status') setTimeout(loadStatuses, 3000);
       } catch (e2) { err.hidden = false; err.textContent = e2.message; }
       finally { btn.disabled = false; }
@@ -1406,7 +1472,15 @@
     });
     const postForm = $('wa-post'), statusForm = $('wa-status');
     whenToggle(postForm); whenToggle(statusForm);
+    postForm.addEventListener('input', () => renderSafety(), sig);
+    postForm.addEventListener('change', () => renderSafety(), sig);
+    $('wa-name-token').addEventListener('click', () => {
+      const ta = postForm.querySelector('[name=text]'), at = ta.selectionStart ?? ta.value.length;
+      ta.value = ta.value.slice(0, at) + '{name}' + ta.value.slice(ta.selectionEnd ?? at); ta.focus(); ta.selectionStart = ta.selectionEnd = at + 6; renderSafety();
+    }, sig);
     postForm.addEventListener('submit', (e) => { e.preventDefault(); if (!picked.size) { const err = postForm.querySelector('.wa-error'); err.hidden = false; err.className = 'wa-error wx-err'; err.textContent = 'Choose at least one chat, group, channel or contact.'; tq.focus(); return; }
+      const ppl = [...picked.keys()].filter(isPerson);
+      if (picked.size > 50 || ppl.length > 25 || ppl.some((j) => firstOf.get(j) === 'cold')) { renderSafety(); $('wa-safety').scrollIntoView({ block: 'nearest' }); const err = postForm.querySelector('.wa-error'); err.hidden = false; err.className = 'wa-error wx-err'; err.textContent = 'Fix the items in red first: they would put the number at risk of a WhatsApp ban.'; return; }
       if (!postForm.querySelector('[name=text]').value.trim() && !postForm.querySelector('[name=file]').files.length) { const err = postForm.querySelector('.wa-error'); err.hidden = false; err.className = 'wa-error wx-err'; err.textContent = 'Write a message or attach a file.'; return; }
       submitPost(postForm, 'message'); }, sig);
     statusForm.addEventListener('submit', (e) => { e.preventDefault(); submitPost(statusForm, 'status'); }, sig);
@@ -1414,15 +1488,19 @@
     async function loadPosts() {
       try { const { posts } = await getJSON('/posts.json');
         $('wa-posts').innerHTML = posts.length ? posts.map((p) => { const [label, cls] = badge[p.status] || [p.status, 'badge-neut'];
+          const pct = p.total ? Math.round(100 * p.done / p.total) : 0;
+          const prog = p.kind === 'message' && (p.status === 'sending' || p.status === 'partial') ? `<div class="wx-progress"><div class="wx-meter"><i style="width:${pct}%"></i></div><small style="display:inline">${p.done} of ${p.total} sent${p.next && p.status === 'sending' ? ' · next ' + esc(p.next.split(', ').pop()) : ''}</small></div>` : '';
           return `<div class="wx-hit" style="display:flex;gap:12px;align-items:flex-start"><i class="${p.kind === 'status' ? 'ri-donut-chart-line' : 'ri-send-plane-line'}" style="font-size:20px;color:var(--wx-green)"></i><div style="flex:1;min-width:0">
             <b style="font-weight:600">${p.kind === 'status' ? 'Status' : 'To ' + esc(p.targets.slice(0, 4).join(', ')) + (p.targets.length > 4 ? ` and ${p.targets.length - 4} more` : '')}</b>
             <span>${esc(p.text) || (p.media ? '<i>' + esc(p.media) + '</i>' : '')}</span>
-            <small>${esc(p.when)}${p.by ? ' · ' + esc(p.by) : ''}${p.error ? ' · ' + esc(p.error) : ''}</small></div>
-            <div style="display:grid;gap:6px;justify-items:end"><span class="badge ${cls}">${label}</span>${p.can_cancel ? `<button type="button" class="wx-btn ghost" style="height:30px;padding:0 12px" data-cancel="${p.id}">Cancel</button>` : ''}</div></div>`; }).join('')
+            <small>${esc(p.when)}${p.by ? ' · ' + esc(p.by) : ''}${p.error ? ' · ' + esc(p.error) : ''}</small>${prog}</div>
+            <div style="display:grid;gap:6px;justify-items:end"><span class="badge ${cls}">${label}</span>${p.can_cancel ? `<button type="button" class="wx-btn ghost" style="height:30px;padding:0 12px" data-cancel="${p.id}">${p.status === 'sending' ? 'Stop' : 'Cancel'}</button>` : ''}</div></div>`; }).join('')
           : '<p class="wx-note">Nothing scheduled or sent yet.</p>';
       } catch (e) { $('wa-posts').innerHTML = `<p class="wx-note">${esc(e.message)}</p>`; }
     }
-    $('wa-posts').addEventListener('click', async (e) => { const b = e.target.closest('[data-cancel]'); if (!b) return; try { await post(`/posts/${b.dataset.cancel}/cancel`, {}); loadPosts(); } catch (err) { toast(err.message); } }, sig);
+    $('wa-posts').addEventListener('click', async (e) => { const b = e.target.closest('[data-cancel]'); if (!b) return;
+      if (b.textContent === 'Stop' && !await confirmBox('Stop this post?', 'Chats that already got it keep it; nobody else will receive it.', 'Stop', true)) return;
+      try { await post(`/posts/${b.dataset.cancel}/cancel`, {}); loadPosts(); } catch (err) { toast(err.message); } }, sig);
 
     // ── live updates ──
     function onActivity() {

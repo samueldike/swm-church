@@ -29,6 +29,8 @@ class WhatsAppPost(Base):
     result: Mapped[dict | None] = mapped_column(JSON)                   # per-target outcome
     error: Mapped[str | None] = mapped_column(Text)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime)
+    next_at: Mapped[datetime | None] = mapped_column(DateTime)           # drip-sending: next recipients not before (UTC)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime)      # a worker is sending this post
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.utcnow())
 
     branch = relationship("Branch", lazy="selectin")

@@ -75,6 +75,8 @@ _ADDED_COLUMNS = [
     ("admins", "session_version", "INTEGER DEFAULT 0"),
     ("admins", "must_change_password", "BOOLEAN DEFAULT FALSE"),
     ("admins", "whatsapp_access", "VARCHAR(10)"),
+    ("whatsapp_posts", "next_at", "TIMESTAMP"),
+    ("whatsapp_posts", "locked_until", "TIMESTAMP"),
     ("stories", "categories", "TEXT"),
     ("stories", "tags", "TEXT"),
     ("stories", "trashed_status", "VARCHAR(20)"),

@@ -35,7 +35,15 @@ export async function withReactions(c, shaped, raw, withTimeout) {
 }
 
 export function registerWeb(app, h) {
-  const { wrap, needClient, withTimeout, toJid, mediaPath, name, shapeMessage } = h;
+  const { wrap, needClient, withTimeout, toJid, mediaPath, name, shapeMessage, G, firstContact } = h;
+  // Run a send through the anti-ban guard: refuse past the limits, count it, and let failures pull the brake.
+  async function guarded(sid, kinds, n, risky, fn) {
+    G.check(sid, kinds, n, { risky });
+    let r;
+    try { r = await fn(); } catch (e) { G.failure(sid, e?.message); throw e; }
+    G.record(sid, kinds, n);
+    return r;
+  }
   const ev = (c, fn, ...args) => withTimeout(c.page.evaluate(fn, ...args), 30000, 'WhatsApp Web');
   const ok = (req, res, extra = {}) => { S.bump(req.params.id); res.json({ ok: true, ...extra }); };
   const bad = (msg, status = 400) => Object.assign(new Error(msg), { status });
@@ -120,7 +128,10 @@ export function registerWeb(app, h) {
         const to = [...new Set((Array.isArray(value) ? value : [value]).filter(Boolean).map(toJid))].slice(0, 5);
         if (!to.length) throw bad('Choose who to forward to.');
         const ids = Array.isArray(id) ? id : [id];
-        for (const t of to) for (const m of ids) await c.forwardMessage(t, m);
+        for (const t of to) {
+          const first = await firstContact(c, t);
+          for (const m of ids) await guarded(req.params.id, ['msg', 'forward', ...first], 1, first.length > 0, () => c.forwardMessage(t, m));
+        }
         break;
       }
       case 'votes': {
@@ -330,7 +341,7 @@ export function registerWeb(app, h) {
     switch (action) {
       case 'subject': if (!String(value || '').trim()) throw bad('Type the group name.'); await c.setGroupSubject(jid, String(value).trim().slice(0, 100)); break;
       case 'description': await c.setGroupDescription(jid, String(value || '').slice(0, 2048)); break;
-      case 'add': await c.addParticipant(jid, people()); break;
+      case 'add': { const list = people(); await guarded(req.params.id, ['group_add'], list.length, true, () => c.addParticipant(jid, list)); break; }
       case 'remove': await c.removeParticipant(jid, people()); break;
       case 'promote': await c.promoteParticipant(jid, people()); break;
       case 'demote': await c.demoteParticipant(jid, people()); break;
@@ -348,7 +359,10 @@ export function registerWeb(app, h) {
     const c = await needClient(req.params.id);
     const { kind } = req.body || {};
     const to = toJid(req.body?.to);
+    const first = await firstContact(c, to);
+    G.check(req.params.id, ['msg', ...first], 1, { risky: first.length > 0 });
     let r;
+    try {
     if (kind === 'poll') {
       const q = String(req.body.question || '').trim().slice(0, 255);
       const choices = [...new Set((req.body.options || []).map(o => String(o).trim().slice(0, 100)).filter(Boolean))].slice(0, 12);
@@ -361,6 +375,8 @@ export function registerWeb(app, h) {
     } else if (kind === 'contact') {
       r = await c.sendContactVcard(to, toJid(req.body.contact), String(req.body.name || '').slice(0, 100));
     } else throw bad('Unknown kind.');
+    } catch (e) { if (e.status !== 400) G.failure(req.params.id, e?.message); throw e; }
+    G.record(req.params.id, ['msg', ...first]);
     ok(req, res, { id: S.widToString(r?.id) || null });
   }));
 }

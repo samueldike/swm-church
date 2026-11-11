@@ -13,8 +13,10 @@ Access
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+import random
 import re
 from datetime import datetime, timedelta
 
@@ -27,6 +29,14 @@ logger = logging.getLogger(__name__)
 
 GRANTABLE_ROLES = (HOD, RESIDENT_PASTOR)
 WAIT_FOR_CONNECTION = timedelta(hours=6)      # a due post waits this long for a disconnected account
+
+# ─── anti-ban rules for Post to many (the gateway adds hard per-account limits: whatsapp-gateway/src/guard.js) ───
+MAX_TARGETS = 50              # recipients in one post
+MAX_PEOPLE = 25               # of which individual people (groups and channels reach many with one message)
+PER_TICK = 2                  # recipients sent per scheduler round (every ~20 s) ...
+GAP_SECONDS = (8, 20)         # ... with a random human-like pause between them
+QUIET_HOURS = (21, 7)         # no Post-to-many sending from 21:00 to 07:00 church time
+NAME_TOKEN = "{name}"
 
 
 def is_media_department(name: str | None) -> bool:
@@ -94,9 +104,10 @@ def tenant(branch_id: int) -> str:
 
 # ─── gateway client ───
 class GatewayError(Exception):
-    def __init__(self, message: str, status: int = 502):
+    def __init__(self, message: str, status: int = 502, retry_at: str | None = None):
         super().__init__(message)
         self.status = status
+        self.retry_at = retry_at
 
 
 def _base() -> str:
@@ -121,7 +132,12 @@ async def call(method: str, path: str, *, json: dict | None = None, params: dict
             raise GatewayError(_err(r), r.status_code)
         return r
     if r.status_code >= 400:
-        raise GatewayError(_err(r), r.status_code)
+        retry = None
+        try:
+            retry = r.json().get("retryAt")
+        except Exception:
+            pass
+        raise GatewayError(_err(r), r.status_code, retry)
     return r.json()
 
 
@@ -133,25 +149,56 @@ def _err(r) -> str:
 
 
 # ─── scheduled posts ───
-async def deliver(post) -> tuple[str, dict, str | None]:
-    """Send one post now. Returns (status, per-target result, error)."""
+def personalise(text: str, name: str | None) -> str:
+    """{name} becomes the recipient's first name (or nothing): every person gets a slightly different message."""
+    if NAME_TOKEN not in (text or ""):
+        return text or ""
+    clean = (name or "").strip()
+    first = "" if not clean or re.fullmatch(r"[+\d\s()-]+", clean) else clean.lstrip("~+ ").split(" ")[0]
+    out = (text or "").replace(NAME_TOKEN, first)
+    out = re.sub(r"[ \t]{2,}", " ", out)
+    return re.sub(r"[ \t]+([,!.?])", r"\1", out)
+
+
+def is_person(jid: str) -> bool:
+    return jid.endswith("@c.us") or jid.endswith("@s.whatsapp.net") or jid.endswith("@lid")
+
+
+async def _church_now(branch_id: int) -> datetime:
+    """Church wall-clock time now (for the quiet hours)."""
+    from app.core import geo
+    from app.core.platform import platform_timezone
+    from app.database import async_session
+    from app.models.branch import Branch
+
+    async with async_session() as db:
+        b = await db.get(Branch, branch_id)
+        tz = (b.timezone if b and b.timezone else None) or await platform_timezone(db)
+    return datetime.now(geo.zone(tz)).replace(tzinfo=None)
+
+
+def quiet_until(local_now: datetime) -> datetime | None:
+    """If it is night at the church, the local time sending may start again; else None."""
+    start, end = QUIET_HOURS
+    if local_now.hour >= start:
+        return (local_now + timedelta(days=1)).replace(hour=end, minute=0, second=0, microsecond=0)
+    if local_now.hour < end:
+        return local_now.replace(hour=end, minute=0, second=0, microsecond=0)
+    return None
+
+
+async def _send_status(post) -> tuple[str, dict, str | None]:
     sid = tenant(post.branch_id)
-    if post.kind == "status":
-        kind = post.media_kind if post.media_kind in ("image", "video") else "text"
-        await call("POST", f"/sessions/{sid}/status", json={"kind": kind, "text": post.text or "", "file": post.media_path, "caption": post.text or ""}, timeout=240)
-        return "sent", {"status": "ok"}, None
-    results, failed = {}, 0
-    for t in post.targets or []:
-        jid = t.get("jid") if isinstance(t, dict) else str(t)
-        try:
-            await call("POST", f"/sessions/{sid}/send", json={"to": jid, "text": post.text or "", "file": post.media_path,
-                                                             "kind": post.media_kind, "filename": post.media_name}, timeout=180)
-            results[jid] = "ok"
-        except GatewayError as e:
-            if e.status in (409, 503):
-                raise
-            results[jid] = str(e)[:300]
-            failed += 1
+    kind = post.media_kind if post.media_kind in ("image", "video") else "text"
+    await call("POST", f"/sessions/{sid}/status", json={"kind": kind, "text": post.text or "", "file": post.media_path, "caption": post.text or ""}, timeout=240)
+    return "sent", {"status": "ok"}, None
+
+
+def _jid(t) -> str:
+    return t.get("jid") if isinstance(t, dict) else str(t)
+
+
+def _final(results: dict, failed: int) -> tuple[str, dict, str | None]:
     if not results:
         return "failed", results, "No recipients were chosen."
     if failed == 0:
@@ -160,7 +207,15 @@ async def deliver(post) -> tuple[str, dict, str | None]:
 
 
 async def process_due(now: datetime | None = None) -> int:
-    """Send every post whose time has come (called by app/core/scheduler.py). Rows are claimed atomically."""
+    """Send due posts gradually (called by app/core/scheduler.py every ~20 s).
+
+    Anti-ban: a message post sends at most PER_TICK recipients per round with a random pause between them,
+    then waits (next_at) before the next ones; it holds during the church's quiet hours, and when the gateway
+    says a safety limit is reached it waits until that limit frees up. Recipients already done are never sent
+    again. Rows are locked (locked_until) so several workers never send the same post twice.
+    """
+    from sqlalchemy import or_
+
     from app.database import async_session
     from app.models.whatsapp import WhatsAppPost
 
@@ -169,28 +224,117 @@ async def process_due(now: datetime | None = None) -> int:
     now = now or datetime.utcnow()
     done = 0
     async with async_session() as db:
-        ids = [i for (i,) in (await db.execute(select(WhatsAppPost.id).where(WhatsAppPost.status == "pending", WhatsAppPost.send_at <= now).order_by(WhatsAppPost.send_at).limit(20))).all()]
+        ids = [i for (i,) in (await db.execute(
+            select(WhatsAppPost.id).where(
+                or_(
+                    (WhatsAppPost.status == "pending") & (WhatsAppPost.send_at <= now),
+                    (WhatsAppPost.status == "sending") & or_(WhatsAppPost.next_at.is_(None), WhatsAppPost.next_at <= now),
+                ),
+                or_(WhatsAppPost.locked_until.is_(None), WhatsAppPost.locked_until < now),
+            ).order_by(WhatsAppPost.send_at).limit(10))).all()]
     for pid in ids:
         async with async_session() as db:
-            claimed = await db.execute(update(WhatsAppPost).where(WhatsAppPost.id == pid, WhatsAppPost.status == "pending").values(status="sending"))
+            claimed = await db.execute(update(WhatsAppPost).where(
+                WhatsAppPost.id == pid, WhatsAppPost.status.in_(("pending", "sending")),
+                or_(WhatsAppPost.locked_until.is_(None), WhatsAppPost.locked_until < now),
+            ).values(status="sending", locked_until=now + timedelta(seconds=120)))
             await db.commit()
             if claimed.rowcount != 1:
                 continue
             post = (await db.execute(select(WhatsAppPost).where(WhatsAppPost.id == pid))).scalar_one()
             try:
-                status, result, error = await deliver(post)
-            except GatewayError as e:
-                if e.status in (409, 503) and now - post.send_at < WAIT_FOR_CONNECTION:
-                    post.status, post.error = "pending", f"Waiting: {e}"           # retried on the next tick
-                else:
-                    post.status, post.error = "failed", str(e)[:500]
-                await db.commit()
-                continue
+                finished = await _advance(post, now)
             except Exception as e:  # never let one post stop the loop
                 logger.exception("whatsapp post %s failed", pid)
-                status, result, error = "failed", {}, str(e)[:500]
-            post.status, post.result, post.error = status, result, error
-            post.sent_at = datetime.utcnow()
+                post.status, post.error, finished = "failed", str(e)[:500], True
+            post.locked_until = None
+            with db.no_autoflush:      # someone pressed Stop while this round was sending: keep it stopped
+                current = (await db.execute(select(WhatsAppPost.status).where(WhatsAppPost.id == pid).execution_options(populate_existing=False))).scalar()
+            if current == "cancelled":
+                post.status, post.next_at = "cancelled", None
+                finished = False
+            if finished:
+                post.sent_at = datetime.utcnow()
+                done += 1
             await db.commit()
-            done += 1
     return done
+
+
+async def _advance(post, now: datetime) -> bool:
+    """One round of a post. Returns True when the post is finished (sent / partial / failed)."""
+    if post.kind == "status":
+        try:
+            post.status, post.result, post.error = await _send_status(post)
+        except GatewayError as e:
+            return _wait_or_fail(post, e, now)
+        return True
+    sid = tenant(post.branch_id)
+    local_now = await _church_now(post.branch_id)
+    quiet = quiet_until(local_now)
+    if quiet:
+        post.status = "sending"
+        post.next_at = now + (quiet - local_now)
+        post.error = f"Waiting for daytime: sending resumes at {quiet:%H:%M} church time (no bulk messages at night)."
+        return False
+    results = dict(post.result or {})
+    todo = [t for t in (post.targets or []) if _jid(t) not in results]
+    sent_now = 0
+    for t in todo[:PER_TICK]:
+        jid = _jid(t)
+        if sent_now:
+            await asyncio.sleep(random.uniform(*GAP_SECONDS))
+        try:
+            await call("POST", f"/sessions/{sid}/send", json={
+                "to": jid, "text": personalise(post.text, t.get("name") if isinstance(t, dict) else ""),
+                "file": post.media_path, "kind": post.media_kind, "filename": post.media_name, "bulk": True}, timeout=180)
+            results[jid] = "ok"
+            sent_now += 1
+        except GatewayError as e:
+            post.result = results
+            return _wait_or_fail(post, e, now)
+        except Exception as e:  # one bad recipient never stops the others
+            results[jid] = str(e)[:300]
+    post.result = results
+    if len(results) < len(post.targets or []):
+        post.status = "sending"
+        post.next_at = now + timedelta(seconds=random.uniform(*GAP_SECONDS))
+        post.error = None
+        return False
+    failed = sum(1 for v in results.values() if v != "ok")
+    post.status, post.result, post.error = _final(results, failed)
+    return True
+
+
+def _wait_or_fail(post, e: GatewayError, now: datetime) -> bool:
+    """A gateway refusal: wait (safety limit, disconnected) or give up. Returns True if the post is finished."""
+    if e.status == 429:                          # anti-ban limit or brake: wait until it frees up
+        retry = None
+        if e.retry_at:
+            try:
+                retry = datetime.fromisoformat(str(e.retry_at).replace("Z", "+00:00")).replace(tzinfo=None)
+            except ValueError:
+                retry = None
+        post.status = "sending"
+        post.next_at = max(retry or now, now) + timedelta(seconds=random.uniform(30, 90))
+        post.error = f"Paused for safety: {e}"
+        return False
+    if e.status in (409, 503) and now - post.send_at < WAIT_FOR_CONNECTION:
+        post.status = "sending"
+        post.next_at = now + timedelta(minutes=2)
+        post.error = f"Waiting: {e}"
+        return False
+    if e.status in (409, 503) or post.kind != "message":
+        post.status, post.error = "failed", str(e)[:500]
+        return True
+    # a refusal for this one recipient (e.g. not on WhatsApp): note it and carry on next round
+    results = dict(post.result or {})
+    todo = [t for t in (post.targets or []) if _jid(t) not in results]
+    if todo:
+        results[_jid(todo[0])] = str(e)[:300]
+    post.result = results
+    if len(results) < len(post.targets or []):
+        post.status, post.next_at = "sending", now + timedelta(seconds=random.uniform(*GAP_SECONDS))
+        return False
+    failed = sum(1 for v in results.values() if v != "ok")
+    post.status, post.result, post.error = _final(results, failed)
+    return True

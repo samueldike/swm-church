@@ -449,3 +449,26 @@ html.dark .wx-file-lbl { color: var(--wx-green); }
 .wx-av.sm > i, .wx-suggest .wx-av > i { font-size: 24px; }
 .wx-pill .wx-av > i { font-size: 15px; }
 .wx-av.lg > i { font-size: 110px; }
+
+/* anti-ban safety panel (Post to many) and limits */
+.wx-safety { display: grid; gap: 8px; }
+.wx-safety:empty { display: none; }
+.wx-safe-box { border-radius: 10px; padding: 10px 12px; background: var(--wx-panel); font-size: 13.5px; color: var(--wx-ink2); display: grid; gap: 6px; }
+.wx-safe-box b { color: var(--wx-ink); font-weight: 600; }
+.wx-safe-row { display: flex; gap: 8px; align-items: flex-start; }
+.wx-safe-row i { font-size: 17px; line-height: 19px; flex: none; color: var(--wx-green-d); }
+.wx-safe-row.warn i { color: #c77700; } .wx-safe-row.bad i { color: #ea0038; }
+.wx-safe-row.bad { color: #ea0038; }
+html.dark .wx-safe-row.warn i { color: #ffbc38; }
+.wx-pill.cold { background: #fde3e8; color: #b00030; }
+html.dark .wx-pill.cold { background: #4a1420; color: #ffb3c1; }
+.wx-msg-lbl { display: flex !important; align-items: center; justify-content: space-between; }
+.wx-token { font-size: 12.5px; color: var(--wx-green-d); border: 1px solid var(--wx-line2); border-radius: 12px; padding: 1px 9px; }
+.wx-token:hover { background: var(--wx-hover); }
+.wx-meter { height: 6px; border-radius: 3px; background: var(--wx-line); overflow: hidden; }
+.wx-meter i { display: block; height: 100%; background: var(--wx-green); }
+.wx-meter i.hot { background: #c77700; } .wx-meter i.full { background: #ea0038; }
+.wx-limits td, .wx-limits th { padding: 6px 4px; text-align: left; font-size: 13.5px; vertical-align: middle; }
+.wx-limits th { color: var(--wx-ink3); font-weight: 500; }
+.wx-progress { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.wx-progress .wx-meter { flex: 1; max-width: 220px; }
