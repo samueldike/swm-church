@@ -9,7 +9,7 @@
   {{ page_header(
       "Members",
       "Congregation registry" ~ (" across all branches" if is_super else " for your branch"),
-      actions=('<a href="' ~ url_for('admin_members_export') ~ '?q=' ~ (search or '')|urlencode ~ '&branch_id=' ~ (filter_branch_id or '') ~ '&country=' ~ (filter_country or '') ~ '" class="btn btn-secondary" data-turbo="false"><i class="ri-download-2-line"></i>Export CSV</a> '
+      actions=('<a href="' ~ url_for('admin_members_export') ~ '?q=' ~ (search or '')|urlencode ~ '&branch_id=' ~ (filter_branch_id or '') ~ '&country=' ~ (filter_country or '') ~ '&department_id=' ~ (filter_department_id or '') ~ '" class="btn btn-secondary" data-turbo="false"><i class="ri-download-2-line"></i>Export CSV</a> '
                ~ '<a href="' ~ url_for('admin_members_import_page') ~ '" class="btn btn-secondary"><i class="ri-upload-2-line"></i>Import</a> '
                ~ '<a href="' ~ url_for('admin_members_create_page') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add member</a>'),
       audit=[('Records', pagination.total), ('Scope', 'All branches' if is_super else admin_branch_name), ('Page', pagination.page ~ ' / ' ~ pagination.pages)]
@@ -36,8 +36,15 @@
       {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if filter_branch_id == b.id|string else '' }}>{{ b.name }}{{ ' (HQ)' if b.is_hq else '' }}</option>{% endfor %}
     </select>
   {% endif %}
+  {% if departments %}
+    <select name="department_id" onchange="this.form.submit()" aria-label="Filter by department" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
+      <option value="">All departments</option>
+      {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if filter_department_id == d.id|string else '' }}>{{ d.name }}</option>{% endfor %}
+      <option value="none" {{ 'selected' if filter_department_id == 'none' else '' }}>In no department</option>
+    </select>
+  {% endif %}
   <button type="submit" class="btn btn-secondary btn-sm">Search</button>
-  {% if search or filter_branch_id or filter_country %}<a href="{{ url_for('admin_members') }}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
+  {% if search or filter_branch_id or filter_country or filter_department_id %}<a href="{{ url_for('admin_members') }}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
 </form>
 
 <div class="panel-flush">
@@ -45,7 +52,7 @@
     <div class="overflow-x-auto">
       <table class="dtable dtable-responsive">
         <thead>
-          <tr><th>Member</th><th>Reference</th><th>Branch</th><th>Phone</th><th>Status</th><th class="text-right">Actions</th></tr>
+          <tr><th>Member</th><th>Reference</th><th>Branch</th><th>Departments</th><th>Phone</th><th>Status</th><th class="text-right">Actions</th></tr>
         </thead>
         <tbody>
           {% for m in members %}
@@ -57,6 +64,11 @@
               </td>
               <td data-label="Reference" class="font-mono text-xs text-ink-2">ID-{{ m.id }}</td>
               <td data-label="Branch">{{ m.branch.name if m.branch else '—' }}{% if m.country_code %}<span class="block text-[12px] text-ink-3">Lives in {{ [m.city, region_name(m.region_code), country_name(m.country_code)]|select|join(', ') }}</span>{% endif %}</td>
+              <td data-label="Departments" class="text-[12.5px]">
+                {% for d in m.departments[:3] %}<a href="{{ url_for('admin_members') }}?department_id={{ d.id }}" class="inline-block mr-1 mb-1 rounded-full bg-sunken px-2 py-0.5 text-ink-2 no-underline hover:text-gold-text">{{ d.name }}</a>{% endfor %}
+                {% if m.departments|length > 3 %}<span class="text-ink-3" title="{{ m.departments[3:]|map(attribute='name')|join(', ') }}">+{{ m.departments|length - 3 }}</span>{% endif %}
+                {% if not m.departments %}<span class="text-ink-3">—</span>{% endif %}
+              </td>
               <td data-label="Phone" class="font-mono text-xs">{{ (m.phone|phone) or '—' }}</td>
               <td data-label="Status">{{ badge((m.membership_status or 'active')|capitalize, 'ok' if (m.membership_status or 'active') == 'active' else 'neut') }}</td>
               <td data-label="Actions" class="text-right whitespace-nowrap">

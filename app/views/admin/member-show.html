@@ -47,6 +47,7 @@
           ('Email', member.email, true),
           ('Phone', member.phone, true),
           ('Gender', (member.gender or '')|capitalize, false),
+          ('Departments', member.departments|map(attribute='name')|join(', '), false),
           ('Date of birth', member.date_of_birth.isoformat() if member.date_of_birth else '', true),
           ('Joined ministry', member.joined_at.isoformat() if member.joined_at else '', true),
           ('Last updated', member.updated_at.strftime('%Y-%m-%d %H:%M') if member.updated_at else '', true),

@@ -22,8 +22,11 @@
         </div>
         <h3 class="text-[14.5px] font-semibold text-ink">{{ d.name }}</h3>
         <p class="text-[12px] text-ink-3 leading-relaxed mt-1 flex-grow">{{ d.description or 'No description.' }}</p>
+        {% set n = member_counts.get(d.id, 0) %}
         <div class="flex items-center gap-2 mt-4 pt-3 border-t border-line">
           <a href="{{ url_for('admin_departments_edit_page', department_id=d.id) }}" class="btn btn-secondary btn-sm"><i class="ri-edit-line"></i>Edit</a>
+          {% if can('members') %}<a href="{{ url_for('admin_members') }}?department_id={{ d.id }}" class="btn btn-ghost btn-sm"><i class="ri-team-line"></i>{{ n }} member{{ '' if n == 1 else 's' }}</a>
+          {% else %}<span class="text-[12px] text-ink-3 ml-1"><i class="ri-team-line"></i> {{ n }} member{{ '' if n == 1 else 's' }}</span>{% endif %}
         </div>
       </div>
     {% endfor %}

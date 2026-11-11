@@ -1,9 +1,18 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, ForeignKey, String, Text
+from sqlalchemy import Column, Date, ForeignKey, Integer, String, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+# A member can serve in several departments (choir, ushering, media...). Departments are shared by HQ and every
+# branch; which church a member belongs to stays Member.branch_id. Rows go with the member or the department.
+member_departments = Table(
+    "member_departments",
+    Base.metadata,
+    Column("member_id", Integer, ForeignKey("members.id", ondelete="CASCADE"), primary_key=True),
+    Column("department_id", Integer, ForeignKey("departments.id", ondelete="CASCADE"), primary_key=True, index=True),
+)
 
 
 class Member(Base):
@@ -33,6 +42,8 @@ class Member(Base):
     )
 
     branch = relationship("Branch", back_populates="members", lazy="selectin")
+    departments = relationship("Department", secondary=member_departments, lazy="selectin",
+                               order_by="Department.name", passive_deletes=True)
 
     @property
     def full_name(self) -> str:

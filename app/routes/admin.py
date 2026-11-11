@@ -1129,15 +1129,15 @@ async def admin_dashboard_metrics(request: Request, db: AsyncSession = Depends(g
 
 @router.get("/members", name="admin_members")
 async def admin_members(request: Request, db: AsyncSession = Depends(get_db), q: str = Query(""), page: int = Query(1, ge=1),
-                        branch_id: str = Query(""), country: str = Query("")):
+                        branch_id: str = Query(""), country: str = Query(""), department_id: str = Query("")):
     admin = await _get_admin(request)
     if not admin:
         return RedirectResponse(url="/admin", status_code=303)
 
-    query, sees_all = _members_query(admin, q, branch_id, country)
+    query, sees_all = _members_query(admin, q, branch_id, country, department_id)
     from app.models.branch import Branch
     pagination = await paginate(db, query, page=page, per_page=20)
-    kw = dict(q=q, branch_id=branch_id, country=country)
+    kw = dict(q=q, branch_id=branch_id, country=country, department_id=department_id)
     pagination["prev_url"] = _qs("/admin/members", page=page - 1, **kw) if pagination["has_prev"] else None
     pagination["next_url"] = _qs("/admin/members", page=page + 1, **kw) if pagination["has_next"] else None
     branches, country_options = [], []
@@ -1151,11 +1151,32 @@ async def admin_members(request: Request, db: AsyncSession = Depends(get_db), q:
     return await render_template(request, "admin/members.html", {
         "_db": db, "members": pagination["items"], "pagination": pagination, "search": q,
         "filter_branch_id": branch_id, "filter_country": country.upper(), "branches": branches, "country_options": country_options,
+        "filter_department_id": department_id, "departments": await _department_choices(db),
         "title": "Members", "headerIcon": "ri-team-line", **ctx,
     })
 
 
-def _members_query(admin, q: str, branch_id: str, country: str):
+async def _department_choices(db: AsyncSession, member=None) -> list:
+    """Departments a member can be put in: the active ones, plus any retired one they are already in."""
+    from app.models.department import Department
+
+    rows = list((await db.execute(select(Department).order_by(Department.name))).scalars().all())
+    keep = {d.id for d in (member.departments if member else [])}
+    return [d for d in rows if d.is_active or d.id in keep]
+
+
+async def _set_member_departments(db: AsyncSession, member, raw_ids) -> None:
+    """Replace a member's departments with the chosen ones (unknown ids and newly picked retired ones are ignored)."""
+    allowed = {d.id: d for d in await _department_choices(db, member)}
+    ids = []
+    for v in raw_ids or []:
+        i = _to_int(v)
+        if i in allowed and i not in ids:
+            ids.append(i)
+    member.departments = [allowed[i] for i in ids]
+
+
+def _members_query(admin, q: str, branch_id: str, country: str, department_id: str = ""):
     """The member list's query: own branch only, unless HQ Administrator (or an HQ account with no branch)."""
     from sqlalchemy.orm import selectinload
 
@@ -1175,19 +1196,27 @@ def _members_query(admin, q: str, branch_id: str, country: str):
         pattern = f"%{q}%"
         query = query.where(or_(Member.first_name.ilike(pattern), Member.last_name.ilike(pattern), Member.email.ilike(pattern),
                                 Member.phone.ilike(pattern), Member.city.ilike(pattern)))
+    if department_id == "none":
+        from app.models.member import member_departments
+
+        query = query.where(~Member.id.in_(select(member_departments.c.member_id)))
+    elif _to_int(department_id):
+        from app.models.member import member_departments
+
+        query = query.where(Member.id.in_(select(member_departments.c.member_id).where(member_departments.c.department_id == _to_int(department_id))))
     return query.order_by(Member.created_at.desc()), sees_all
 
 
 @router.get("/members/export", name="admin_members_export")
 async def admin_members_export(request: Request, db: AsyncSession = Depends(get_db), q: str = Query(""),
-                               branch_id: str = Query(""), country: str = Query("")):
+                               branch_id: str = Query(""), country: str = Query(""), department_id: str = Query("")):
     """Members as CSV, with the list's own filters and branch scope (cells are formula-safe: _csv_response)."""
     from app.core import geo
 
     admin = await _get_admin(request)
     if not admin:
         return RedirectResponse(url="/admin", status_code=303)
-    query, _ = _members_query(admin, q, branch_id, country)
+    query, _ = _members_query(admin, q, branch_id, country, department_id)
     rows = (await db.execute(query)).scalars().all()
     await log_admin_action(db, admin.id, "members.export", "member", None, {"rows": len(rows), "q": q[:60], "branch": branch_id, "country": country}, request)
     await db.commit()
@@ -1195,10 +1224,10 @@ async def admin_members_export(request: Request, db: AsyncSession = Depends(get_
     return _csv_response(
         f"members-{stamp}.csv",
         ["First name", "Last name", "Email", "Phone", "Gender", "Date of birth", "Country", "Region", "City",
-         "Branch", "Membership status", "Joined", "Notes", "Added"],
+         "Branch", "Departments", "Membership status", "Joined", "Notes", "Added"],
         [[m.first_name, m.last_name, m.email or "", m.phone or "", m.gender or "",
           m.date_of_birth.isoformat() if m.date_of_birth else "", geo.country_name(m.country_code) if m.country_code else "",
-          m.region_code or "", m.city or "", m.branch.name if m.branch else "", m.membership_status or "",
+          m.region_code or "", m.city or "", m.branch.name if m.branch else "", "; ".join(d.name for d in m.departments), m.membership_status or "",
           m.joined_at.isoformat() if m.joined_at else "", (m.notes or "").replace("\r", " ").replace("\n", " "),
           m.created_at.strftime("%Y-%m-%d") if m.created_at else ""] for m in rows])
 
@@ -1211,7 +1240,7 @@ async def admin_members_create_page(request: Request, db: AsyncSession = Depends
 
     ctx = await _admin_context(request, db, "admin.members")
     return await render_template(request, "admin/member-form.html", {
-        "_db": db, "member": None,
+        "_db": db, "member": None, "departments": await _department_choices(db),
         "title": "New Member", "headerIcon": "ri-team-line", **ctx,
     })
 
@@ -1239,7 +1268,7 @@ async def admin_members_edit_page(member_id: int, request: Request, db: AsyncSes
 
     ctx = await _admin_context(request, db, "admin.members")
     return await render_template(request, "admin/member-form.html", {
-        "_db": db, "member": member, "branches": branches,
+        "_db": db, "member": member, "branches": branches, "departments": await _department_choices(db, member),
         "title": "Edit Member", "headerIcon": "ri-team-line", **ctx,
     })
 
@@ -1301,6 +1330,7 @@ async def admin_members_store(
     first_name: str = Form(...), last_name: str = Form(...),
     email: str = Form(""), phone: str = Form(""), gender: str = Form(""),
     country_code: str = Form(""), region_code: str = Form(""), city: str = Form(""),
+    department_ids: list[str] = Form([]),
 ):
     admin = await _get_admin(request)
     if not admin:
@@ -1320,6 +1350,8 @@ async def admin_members_store(
     )
     if err := await _apply_member_location(db, member, country_code, region_code, city):
         return _redirect(request, "/admin/members/create", err, "error")
+    member.departments = []
+    await _set_member_departments(db, member, department_ids)
     db.add(member)
     await db.flush()
     return _redirect(request, "/admin/members", "Member added successfully.")
@@ -1333,8 +1365,8 @@ async def admin_members_import_template(request: Request):
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["first_name", "last_name", "email", "phone", "gender", "date_of_birth", "country", "state_region", "city"])
-    writer.writerow(["John", "Doe", "john@example.com", "08012345678", "male", "1990-01-15", "Nigeria", "Ebonyi", "Abakaliki"])
+    writer.writerow(["first_name", "last_name", "email", "phone", "gender", "date_of_birth", "country", "state_region", "city", "departments"])
+    writer.writerow(["John", "Doe", "john@example.com", "08012345678", "male", "1990-01-15", "Nigeria", "Ebonyi", "Abakaliki", "Choir; Ushering"])
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),
@@ -1380,6 +1412,9 @@ async def admin_members_import(
     from app.core import geo, lists
     from app.models.member import Member
 
+    from app.models.department import Department
+
+    by_name = {d.name.strip().lower(): d for d in (await db.execute(select(Department).where(Department.is_active == True))).scalars()}  # noqa: E712
     content = (await file.read()).decode("utf-8-sig", errors="replace")    # -sig: Excel's byte-order mark
     reader = csv.DictReader(io.StringIO(content))
     home = await _branch_country(db, admin.branch_id)
@@ -1409,11 +1444,21 @@ async def admin_members_import(
                 dob = datetime.fromisoformat(row["date_of_birth"]).date()
             except ValueError:
                 note("date_of_birth (use YYYY-MM-DD)", row["date_of_birth"])
+        depts = []
+        for name in re.split(r"[;|]", row.get("departments") or ""):
+            name = name.strip()
+            if not name:
+                continue
+            d = by_name.get(name.lower())
+            if d and d not in depts:
+                depts.append(d)
+            elif not d:
+                note("departments", name)
         db.add(Member(
             first_name=row["first_name"][:255], last_name=row["last_name"][:255],
             email=row.get("email") or None, phone=geo.normalize_phone(row.get("phone"), cc or home) or None,
             gender=gnd, date_of_birth=dob, country_code=cc, region_code=rc,
-            city=await _canonical_city(db, rc, row.get("city")), branch_id=admin.branch_id,
+            city=await _canonical_city(db, rc, row.get("city")), branch_id=admin.branch_id, departments=depts,
         ))
         count += 1
     await db.flush()
@@ -2428,13 +2473,21 @@ async def admin_departments(request: Request, db: AsyncSession = Depends(get_db)
     if not admin:
         return RedirectResponse(url="/admin", status_code=303)
 
+    from sqlalchemy import func as _f
+
     from app.models.department import Department
+    from app.models.member import Member, member_departments
     result = await db.execute(select(Department).order_by(Department.name))
     departments = list(result.scalars().all())
+    count_q = (select(member_departments.c.department_id, _f.count())
+               .join(Member, Member.id == member_departments.c.member_id).group_by(member_departments.c.department_id))
+    if not (admin.role == "super_admin" or not admin.branch_id):
+        count_q = count_q.where(Member.branch_id == admin.branch_id)
+    member_counts = dict((await db.execute(count_q)).all())
 
     ctx = await _admin_context(request, db, "admin.departments")
     return await render_template(request, "admin/departments.html", {
-        "_db": db, "departments": departments,
+        "_db": db, "departments": departments, "member_counts": member_counts,
         "title": "Departments", "headerIcon": "ri-building-2-line", **ctx,
     })
 
@@ -4689,6 +4742,7 @@ async def admin_members_update(
     date_of_birth: str = Form(""), joined_at: str = Form(""),
     notes: str = Form(""), branch_id: int = Form(None),
     country_code: str = Form(""), region_code: str = Form(""), city: str = Form(""),
+    department_ids: list[str] = Form([]), departments_shown: str = Form(""),
 ):
     admin = await _get_admin(request)
     if not admin:
@@ -4731,6 +4785,8 @@ async def admin_members_update(
 
     if admin.role == "super_admin" and branch_id:
         member.branch_id = branch_id
+    if departments_shown == "1":             # the checklist was on the form: an empty list means "no departments"
+        await _set_member_departments(db, member, department_ids)
 
     await db.flush()
     return _redirect(request, "/admin/members", "Member updated successfully.")
