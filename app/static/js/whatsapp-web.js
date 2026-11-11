@@ -290,7 +290,7 @@
       const html = `<p style="margin-bottom:10px">WhatsApp bans numbers that behave like bulk senders. These limits keep this account looking like a person. They cover everything sent from the console.</p>
         ${guard.pausedUntil ? `<p class="wx-err" style="margin-bottom:10px">Paused until ${new Date(guard.pausedUntil).toLocaleString()}: ${esc(guard.pauseReason)}. Bulk sending and first messages wait; replies to existing chats still work.</p>` : ''}
         <table class="wx-limits" style="width:100%">${rows}</table>
-        <p style="margin-top:12px;font-size:13px;color:var(--wx-ink3)">Also: Post to many sends a few chats at a time with pauses, holds from 21:00 to 07:00, takes at most 50 chats (25 people), never messages numbers that are not saved contacts and never chatted, and stops by itself if WhatsApp pushes back.</p>`;
+        <p style="margin-top:12px;font-size:13px;color:var(--wx-ink3)">Also: Post to many sends a few chats at a time with pauses, at whatever time you choose, takes at most 50 chats (25 people), never messages numbers that are not saved contacts and never chatted, and stops by itself if WhatsApp pushes back.</p>`;
       const v = await dialog({ title: 'Safety limits', html, buttons: guard.pausedUntil ? [{ label: 'Resume now', ghost: true, value: 'resume' }, { label: 'OK', value: null }] : [{ label: 'OK', value: null }] });
       if (v === 'resume' && await confirmBox('Resume sending now?', 'Only do this if you know why WhatsApp pushed back. Resuming too early can get the number banned.', 'Resume', true)) {
         try { await api('guard/resume', {}); toast('Sending resumed'); loadGuard(); } catch (e) { toast(e.message); }
@@ -1371,13 +1371,12 @@
       }, 300);
     }
     async function loadGuard() { try { guard = await api('guard'); } catch (_) { guard = null; } renderSafety(); paintSafetySub(); }
-    const churchHour = () => { try { return Number(new Date().toLocaleString('en-GB', { timeZone: root.dataset.tz || undefined, hour: '2-digit', hour12: false })); } catch (_) { return new Date().getHours(); } };
     function renderSafety() {
       const box = $('wa-safety'); if (!box) return;
       const list = [...picked.values()];
       const people = list.filter((t) => isPerson(t.jid)), groups = list.filter((t) => t.jid.endsWith('@g.us')), chans = list.filter((t) => t.jid.endsWith('@newsletter'));
       const cold = people.filter((t) => firstOf.get(t.jid) === 'cold'), fresh = people.filter((t) => firstOf.get(t.jid) === 'new');
-      const text = postForm.querySelector('[name=text]').value, later = postForm.querySelector('[name=when]:checked')?.value === 'later';
+      const text = postForm.querySelector('[name=text]').value;
       const rows = [];
       const row = (cls, icon, html) => rows.push(`<div class="wx-safe-row ${cls}"><i class="${icon}"></i><span>${html}</span></div>`);
       if (list.length) {
@@ -1391,8 +1390,6 @@
       if (fresh.length) row('warn', 'ri-error-warning-fill', `${fresh.length} saved contact${fresh.length > 1 ? 's have' : ' has'} no chat with this number yet. First messages are limited to a few per hour.`);
       if (people.length >= 2 && /https?:\/\//i.test(text)) row('warn', 'ri-link', 'A link sent to many people one by one looks like spam to WhatsApp. Prefer sharing links in a group or channel.');
       if (people.length >= 2 && text && !text.includes('{name}')) row('', 'ri-user-smile-line', 'Tip: add <b>{name}</b> so each person gets their own greeting. Identical messages to many people look like spam.');
-      const h = churchHour();
-      if (list.length && !later && (h >= 21 || h < 7)) row('warn', 'ri-moon-line', 'It is night at the church: sending starts at 07:00 (no bulk messages between 21:00 and 07:00).');
       if (guard?.pausedUntil) row('bad', 'ri-hand', `Sending is paused for safety until ${new Date(guard.pausedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: ${esc(guard.pauseReason || '')}. It will continue by itself.`);
       if (guard && list.length) {
         const u = guard.used, l = guard.limits;

@@ -35,7 +35,6 @@ MAX_TARGETS = 50              # recipients in one post
 MAX_PEOPLE = 25               # of which individual people (groups and channels reach many with one message)
 PER_TICK = 2                  # recipients sent per scheduler round (every ~20 s) ...
 GAP_SECONDS = (8, 20)         # ... with a random human-like pause between them
-QUIET_HOURS = (21, 7)         # no Post-to-many sending from 21:00 to 07:00 church time
 NAME_TOKEN = "{name}"
 
 
@@ -164,29 +163,6 @@ def is_person(jid: str) -> bool:
     return jid.endswith("@c.us") or jid.endswith("@s.whatsapp.net") or jid.endswith("@lid")
 
 
-async def _church_now(branch_id: int) -> datetime:
-    """Church wall-clock time now (for the quiet hours)."""
-    from app.core import geo
-    from app.core.platform import platform_timezone
-    from app.database import async_session
-    from app.models.branch import Branch
-
-    async with async_session() as db:
-        b = await db.get(Branch, branch_id)
-        tz = (b.timezone if b and b.timezone else None) or await platform_timezone(db)
-    return datetime.now(geo.zone(tz)).replace(tzinfo=None)
-
-
-def quiet_until(local_now: datetime) -> datetime | None:
-    """If it is night at the church, the local time sending may start again; else None."""
-    start, end = QUIET_HOURS
-    if local_now.hour >= start:
-        return (local_now + timedelta(days=1)).replace(hour=end, minute=0, second=0, microsecond=0)
-    if local_now.hour < end:
-        return local_now.replace(hour=end, minute=0, second=0, microsecond=0)
-    return None
-
-
 async def _send_status(post) -> tuple[str, dict, str | None]:
     sid = tenant(post.branch_id)
     kind = post.media_kind if post.media_kind in ("image", "video") else "text"
@@ -210,8 +186,8 @@ async def process_due(now: datetime | None = None) -> int:
     """Send due posts gradually (called by app/core/scheduler.py every ~20 s).
 
     Anti-ban: a message post sends at most PER_TICK recipients per round with a random pause between them,
-    then waits (next_at) before the next ones; it holds during the church's quiet hours, and when the gateway
-    says a safety limit is reached it waits until that limit frees up. Recipients already done are never sent
+    then waits (next_at) before the next ones; it goes out whenever the sender chose (day or night), and when
+    the gateway says a safety limit is reached it waits until that limit frees up. Recipients already done are never sent
     again. Rows are locked (locked_until) so several workers never send the same post twice.
     """
     from sqlalchemy import or_
@@ -269,13 +245,6 @@ async def _advance(post, now: datetime) -> bool:
             return _wait_or_fail(post, e, now)
         return True
     sid = tenant(post.branch_id)
-    local_now = await _church_now(post.branch_id)
-    quiet = quiet_until(local_now)
-    if quiet:
-        post.status = "sending"
-        post.next_at = now + (quiet - local_now)
-        post.error = f"Waiting for daytime: sending resumes at {quiet:%H:%M} church time (no bulk messages at night)."
-        return False
     results = dict(post.result or {})
     todo = [t for t in (post.targets or []) if _jid(t) not in results]
     sent_now = 0

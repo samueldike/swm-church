@@ -58,19 +58,15 @@ def _post(**kw):
 
 
 @pytest.fixture
-def daytime(monkeypatch):
-    """Church time is 10:00 and pauses between recipients are instant."""
-    async def ten_am(_branch_id):
-        return datetime(2026, 11, 11, 10, 0)
-
+def instant(monkeypatch):
+    """Pauses between recipients are instant in tests."""
     async def no_sleep(_s):
         return None
 
-    monkeypatch.setattr(wa, "_church_now", ten_am)
     monkeypatch.setattr(wa.asyncio, "sleep", no_sleep)
 
 
-def test_post_to_many_drips_two_recipients_per_round_and_never_resends(monkeypatch, daytime):
+def test_post_to_many_drips_two_recipients_per_round_and_never_resends(monkeypatch, instant):
     calls = []
 
     async def fake_call(method, path, **kw):
@@ -90,7 +86,7 @@ def test_post_to_many_drips_two_recipients_per_round_and_never_resends(monkeypat
     assert post.status == "partial" and "1 of 4" in post.error
 
 
-def test_safety_limit_pauses_the_post_until_it_frees_up(monkeypatch, daytime):
+def test_safety_limit_pauses_the_post_until_it_frees_up(monkeypatch, instant):
     async def limited(method, path, **kw):
         raise wa.GatewayError("Safety limit reached", 429, "2030-01-01T10:00:00.000Z")
 
@@ -101,7 +97,7 @@ def test_safety_limit_pauses_the_post_until_it_frees_up(monkeypatch, daytime):
     assert not post.result                                          # nothing was marked as sent
 
 
-def test_disconnected_account_waits(monkeypatch, daytime):
+def test_disconnected_account_waits(monkeypatch, instant):
     async def offline(method, path, **kw):
         raise wa.GatewayError("WhatsApp is not connected", 409)
 
@@ -112,24 +108,21 @@ def test_disconnected_account_waits(monkeypatch, daytime):
     assert asyncio.run(wa._advance(post, datetime.utcnow())) is True and post.status == "failed"
 
 
-def test_no_bulk_sending_at_night(monkeypatch):
-    async def eleven_pm(_branch_id):
-        return datetime(2026, 11, 11, 23, 0)
+def test_sends_at_any_hour_the_sender_chooses(monkeypatch, instant):
+    sent = []
 
-    async def never(*a, **k):
-        raise AssertionError("must not send at night")
+    async def fake_call(method, path, **kw):
+        sent.append(kw["json"]["to"])
+        return {"ok": True}
 
-    monkeypatch.setattr(wa, "_church_now", eleven_pm)
-    monkeypatch.setattr(wa, "call", never)
+    monkeypatch.setattr(wa, "call", fake_call)
     post = _post(targets=[{"jid": "a@g.us"}])
-    now = datetime(2026, 11, 11, 22, 0)
-    assert asyncio.run(wa._advance(post, now)) is False
-    assert post.next_at == now + timedelta(hours=8) and "07:00" in post.error   # 23:00 -> 07:00 church time
-    assert wa.quiet_until(datetime(2026, 11, 11, 6, 30)) == datetime(2026, 11, 11, 7, 0)
-    assert wa.quiet_until(datetime(2026, 11, 11, 12, 0)) is None
+    assert asyncio.run(wa._advance(post, datetime(2026, 11, 11, 23, 30))) is True   # 23:30: goes out, no night hold
+    assert sent == ["a@g.us"] and post.status == "sent"
+    assert not hasattr(wa, "QUIET_HOURS")
 
 
-def test_status_post_goes_out_once(monkeypatch, daytime):
+def test_status_post_goes_out_once(monkeypatch, instant):
     calls = []
 
     async def fake_call(method, path, **kw):
