@@ -1,0 +1,129 @@
+# PRODUCTION compose file (swm.tutapis.com, /opt/swm). The server's .env sets COMPOSE_FILE=docker-compose.prod.yml,
+# so every plain `docker compose ...` there uses this file. docker-compose.yml is the self-contained variant
+# (named volumes + its own nginx/certbot) for a fresh server.
+# Here: data lives in folders under /opt/swm (bind mounts), the host's nginx proxies to 127.0.0.1:8085.
+# Private folders (telegram-archive/, documents/) are never served by nginx and are excluded from the image (.dockerignore).
+
+services:
+  app:
+    build: .
+    image: swm-app:latest
+    container_name: swm-app
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8085:8000"
+    volumes:
+      - ./app/media:/app/media
+      - ./app/static/images:/app/app/static/images
+      - telegram_bot_api_conf:/run/swm-telegram
+      - ./telegram-archive:/app/telegram-archive
+      - ./documents:/app/documents          # private document library (Admin -> Documents): never served by nginx
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - swm-net
+
+  worker:
+    image: swm-app:latest
+    container_name: swm-worker
+    restart: unless-stopped
+    env_file: .env
+    command: celery -A app.celery_app worker -l info -c 4
+    volumes:
+      - ./app/media:/app/media
+      - ./telegram-archive:/app/telegram-archive
+    depends_on:
+      - app
+    networks:
+      - swm-net
+
+  # Speech-to-text (Whisper on the CPU, ~3GB per loaded model): its own queue, ONE job at a
+  # time, memory-capped, so transcriptions never starve Telegram sends or the website.
+  transcriber:
+    image: swm-app:latest
+    container_name: swm-transcriber
+    restart: unless-stopped
+    env_file: .env
+    command: celery -A app.celery_app worker -Q transcription -c 1 -n transcriber@%h -l info
+    mem_limit: 5g
+    volumes:
+      - ./app/media:/app/media
+      - ./telegram-archive:/app/telegram-archive
+      - ./whisper-models:/root/.cache/huggingface
+    depends_on:
+      - app
+    networks:
+      - swm-net
+
+  beat:
+    image: swm-app:latest
+    container_name: swm-beat
+    restart: unless-stopped
+    env_file: .env
+    command: celery -A app.celery_app beat -l info
+    depends_on:
+      - app
+    networks:
+      - swm-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: swm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: swm_db
+      POSTGRES_USER: swm_user
+      POSTGRES_PASSWORD: swm_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U swm_user -d swm_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - swm-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: swm-redis
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - swm-net
+
+  # Self-hosted Bot API (--local): 2000MB uploads instead of the cloud's 50MB.
+  # Its App api_id/api_hash are saved by the HQ Administrator in Settings -> Audio
+  # distribution (encrypted). The app writes them to telegram_bot_api_conf; the
+  # entrypoint starts/restarts the server from there and idles until they exist.
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    container_name: swm-telegram-bot-api
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/swm/entrypoint.sh"]
+    environment:
+      TELEGRAM_LOCAL: "1"
+    volumes:
+      - telegram_bot_api_data:/var/lib/telegram-bot-api
+      - telegram_bot_api_conf:/run/swm-telegram:ro
+      - ./deploy/telegram-bot-api/entrypoint.sh:/swm/entrypoint.sh:ro
+      - ./app/media:/app/media:ro
+    networks:
+      - swm-net
+
+volumes:
+  telegram_bot_api_data:
+  telegram_bot_api_conf:
+  postgres_data:
+
+networks:
+  swm-net:
+    driver: bridge

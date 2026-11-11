@@ -20,6 +20,10 @@ FastAPI + async SQLAlchemy + Postgres (asyncpg) + Jinja2 + Celery/Redis. Python 
 - Auth: `app/core/auth.py` reads `admin_session_timeout_minutes` from settings_cache, not hardcoded 1800.
 - Uploads: whitelist `.jpg/.jpeg/.png/.webp/.gif` for images, audio `mp3/wav/m4a/...` max `TELEGRAM_MAX_UPLOAD_MB` (2000MB) images 5MB; use `slugify` + suffix for branch/department/story slugs.
 
+## Production server (swm.tutapis.com)
+- `/opt/swm` runs **`docker-compose.prod.yml`** (its `.env` sets `COMPOSE_FILE=docker-compose.prod.yml`): bind-mounted folders (`app/media`, `telegram-archive`, `documents`), app on `127.0.0.1:8085` behind the host's nginx. `docker-compose.yml` is the self-contained variant for a fresh server. Change the prod file in git, never by hand on the server.
+- Deploy: `git pull --ff-only && docker compose build app && docker compose up -d --no-deps app`. The WhatsApp gateway has its own file (`-f whatsapp-gateway/docker-compose.yml`).
+
 ## Gotchas
 - Postgres columns are `TIMESTAMP WITHOUT TIME ZONE` (naive). Always compare with naive `datetime.utcnow()`, not `timezone.utc` aware, else asyncpg `can't subtract offset-naive` error (see metrics).
 - Sermon `status` is lowercase `published/draft`; form sends capitalized `Published` — lower it.
@@ -95,7 +99,7 @@ FastAPI + async SQLAlchemy + Postgres (asyncpg) + Jinja2 + Celery/Redis. Python 
 
 ## Documents (office library, /admin/documents)
 - Every console user (all roles, HODs too: permission `documents`). Models `app/models/document.py`; rules `app/core/documents.py`; routes are the `# ─── Documents` section at the end of `admin.py`; UI `admin/documents.html` + `static/js/documents.js` + `static/css/documents.css`.
-- Files live in `settings.documents_dir` (`/app/documents`, Docker volume `documents`), **never under MEDIA_ROOT**, and are served only by `admin_documents_file` after `access_of()`. Allowed types: `documents.TYPES` (no programs, scripts, HTML or SVG); only `INLINE` types open in the browser (text sandboxed); max `DOCUMENTS_MAX_UPLOAD_MB` (100).
+- Files live in `settings.documents_dir` (`/app/documents`; production: the `/opt/swm/documents` folder, `docker-compose.prod.yml`), **never under MEDIA_ROOT** and never in the image (`.dockerignore`), and are served only by `admin_documents_file` after `access_of()`. Allowed types: `documents.TYPES` (no programs, scripts, HTML or SVG); only `INLINE` types open in the browser (text sandboxed); max `DOCUMENTS_MAX_UPLOAD_MB` (100).
 - Who sees a file: owner; `visibility` `church` (same church, `church_of`) / `everyone`; explicit `DocumentShare` to `user:<id>`, `role:<hq role>`, `office:<branch id>` (branch admin + Resident Pastor; HQ: HQ Administrator), `hods:<branch id>`; the HQ Administrator sees everything except `private`. `edit` lets someone rename, add notes/tags, move and upload versions; only the owner (or HQ Administrator) shares, changes visibility, trashes and deletes. Use `visible_condition()` for lists and `access_of()` for one file: never write a new check.
 - "Send" = view share + `DocumentDelivery` (Received box, note, per-person `DocumentRead`, sidebar badge `documents_unread`); an email notice goes only when `mailer.can_send()`. Activity is the audit log (`target_type="document"`). Tests: `tests/test_documents.py`.
 

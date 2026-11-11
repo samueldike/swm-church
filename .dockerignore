@@ -21,6 +21,11 @@ swm-backup/
 whisper-models/
 telegram-archive/
 app/telegram-archive/
+# private document library (Admin -> Documents): office files must never be baked into an image
+documents/
+app/documents/
+# uploaded at runtime into the server's bind-mounted folder
+app/static/images/ministers/
 app/media/*
 !app/media/.gitkeep
 media_files/
