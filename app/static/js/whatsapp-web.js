@@ -376,6 +376,7 @@
         const more = rank(contacts.filter((c) => !inList.has(c.jid)), needle, (c) => [c.name, c.pushname, c.phone], 40);
         if (more.length) html += '<p class="wx-sec">Contacts</p>' + more.map((c) => rowHTML({ jid: c.jid, name: c.name, kind: 'user' }, { sub: c.pushname && c.pushname !== c.name ? '~' + c.pushname : '+' + c.phone, noMenu: true, hl: needle })).join('');
       }
+      if (needle && !contacts) html += '<p class="wx-note">Searching contacts…</p>';
       if (!list.length && !html) html = `<p class="wx-note">${needle ? 'No chats, contacts or messages found' : filter === 'unread' ? 'No unread chats' : filter === 'favourites' ? 'Add chats to Favourites from the chat menu (˅).' : filter === 'groups' ? 'No groups' : 'No chats yet'}</p>`;
       box.innerHTML = html; lazyAv(box);
     }
@@ -617,7 +618,7 @@
         if (d !== lastDay) { html += `<div class="wx-day"><span>${esc(d)}</span></div>`; lastDay = d; lastKey = ''; }
         if (i === unreadFrom && unreadFrom > 0) { html += `<div class="wx-unread-line" id="wx-unread-line"><span>${unreadAtOpen} unread message${unreadAtOpen === 1 ? '' : 's'}</span></div>`; lastKey = ''; }
         const key = (m.fromMe ? 'me' : m.author || 'x');
-        html += bubble(m, key !== lastKey); lastKey = key;
+        html += bubble(m, key !== lastKey).replace('<div class="wx-m ', `<div data-day="${esc(d)}" class="wx-m `); lastKey = key;
       });
       if (!msgs.length) html += `<div class="wx-sys"><span><i class="ri-lock-fill"></i> Messages are end-to-end encrypted. No one outside of this chat, not even WhatsApp, can read or listen to them.</span></div>`;
       box.innerHTML = html; lazyAv(box);
@@ -633,7 +634,17 @@
     }
     let unseenBelow = 0;
     function updateDown() { const show = !atBottom(); $('wx-down').hidden = !show; if (!show) unseenBelow = 0; $('wx-down-n').hidden = !unseenBelow; $('wx-down-n').textContent = unseenBelow; }
-    box.addEventListener('scroll', () => { updateDown(); if (box.scrollTop < 60 && hasOlder && !loadingOlder) loadOlder(); }, sig);
+    let dayTimer = null;
+    function floatDay() {
+      const chip = $('wx-float-day'); if (!chip) return;
+      const top = box.getBoundingClientRect().top + 8;
+      const first = [...box.querySelectorAll('.wx-m')].find((el) => el.getBoundingClientRect().bottom > top + 30);
+      const sep = [...box.querySelectorAll('.wx-day')].find((el) => Math.abs(el.getBoundingClientRect().top - top) < 34);
+      if (!first || sep) { chip.hidden = true; return; }
+      chip.querySelector('span').textContent = first.dataset.day || ''; chip.hidden = false;
+      clearTimeout(dayTimer); dayTimer = setTimeout(() => { chip.hidden = true; }, 1400);
+    }
+    box.addEventListener('scroll', () => { updateDown(); floatDay(); if (box.scrollTop < 60 && hasOlder && !loadingOlder) loadOlder(); }, sig);
     $('wx-down').addEventListener('click', () => { if (aroundMode) { aroundMode = false; refreshOpen(true); } else box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' }); }, sig);
 
     const readOnly = () => { const c = chatOf(openJid); return !!(c && c.readOnly) || kindOf(openJid || '') === 'channel' || !!(info && info.kind === 'group' && info.announce && !info.iAmAdmin); };
@@ -1293,7 +1304,8 @@
       if (targets) return;
       try {
         const [t] = await Promise.all([getJSON('/targets.json'), loadContacts().catch(() => null)]);
-        const seen = new Set();
+        const seen = new Set(), chatName = new Map(chats.map((c) => [c.jid, c.name]));
+        [t.groups, t.channels].forEach((l) => (l || []).forEach((x) => { if (chatName.get(x.jid)) x.name = chatName.get(x.jid); }));
         targets = [
           ...(t.groups || []).map((x) => ({ ...x, kind: 'group', label: 'Group' })),
           ...(t.channels || []).map((x) => ({ ...x, kind: 'channel', label: 'Channel' })),

@@ -50,7 +50,13 @@ const mediaPath = p => {
   if (!full.startsWith(path.resolve(config.mediaRoot) + path.sep)) { const e = new Error('bad media path'); e.status = 400; throw e; }
   return full;
 };
-const name = c => (c?.name || c?.formattedTitle || c?.contact?.name || c?.contact?.pushname || c?.contact?.formattedName || S.phoneFromJid(S.widToString(c?.id)) || '').trim();
+// A chat's display name. Groups often have only groupMetadata.subject filled in; never fall back to a group id.
+const name = c => {
+  const id = S.widToString(c?.id);
+  const n = c?.name || c?.groupMetadata?.subject || c?.formattedTitle || c?.contact?.name || c?.contact?.verifiedName || c?.contact?.pushname || c?.contact?.formattedName || '';
+  if (n && String(n).trim() && !(id.endsWith('@g.us') && /^\d+$/.test(String(n).trim()))) return String(n).trim();
+  return id.endsWith('@c.us') ? '+' + S.phoneFromJid(id) : '';
+};
 
 // ─── session control ───
 app.get('/sessions/:id', wrap(async (req, res) => {
@@ -260,7 +266,7 @@ app.get('/sessions/:id/targets', wrap(async (req, res) => {
     withTimeout(c.listChats({ onlyGroups: true }), 25000, 'groups').catch(() => []),
     withTimeout(c.listChats({ onlyNewsletter: true }), 25000, 'channels').catch(() => []),
   ]);
-  const map = list => list.map(x => ({ jid: S.widToString(x.id), name: name(x) })).filter(x => x.jid).sort((a, b) => a.name.localeCompare(b.name));
+  const map = list => list.map(x => ({ jid: S.widToString(x.id), name: name(x) })).filter(x => x.jid && x.name).sort((a, b) => a.name.localeCompare(b.name));
   res.json({ groups: map(groups), channels: map(channels) });
 }));
 

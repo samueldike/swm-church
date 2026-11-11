@@ -5,7 +5,7 @@
 {% block topbar_icon %}ri-whatsapp-line{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" href="{{ url_for('static', path='css/whatsapp-web.css') }}?v=3">
+<link rel="stylesheet" href="{{ url_for('static', path='css/whatsapp-web.css') }}?v=4">
 {% endblock %}
 
 {% block content %}
@@ -262,6 +262,7 @@
           <button type="button" class="ic" id="wx-head-menu" title="Menu" aria-label="Menu"><i class="ri-more-2-fill"></i></button>
         </header>
         <div class="wx-msgs" id="wx-msgs" aria-live="polite"></div>
+        <div class="wx-float-day" id="wx-float-day" hidden aria-hidden="true"><span></span></div>
         <button type="button" class="wx-down" id="wx-down" aria-label="Scroll to the newest message" hidden><i class="ri-arrow-down-s-line"></i><b id="wx-down-n" hidden></b></button>
         <div class="wx-bar" id="wx-bar">
           <div class="wx-reply" id="wx-reply" hidden><div class="wx-quote" id="wx-reply-q"></div><button type="button" class="ic" id="wx-reply-x" aria-label="Cancel"><i class="ri-close-line"></i></button></div>
@@ -335,6 +336,6 @@
 {% endblock %}
 
 {% block extra_body %}
-<script src="{{ url_for('static', path='js/whatsapp-web.js') }}?v=2"></script>
+<script src="{{ url_for('static', path='js/whatsapp-web.js') }}?v=3"></script>
 <script>window.SWMWhatsApp && window.SWMWhatsApp.init();</script>
 {% endblock %}

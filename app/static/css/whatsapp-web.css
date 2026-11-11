@@ -163,7 +163,9 @@ html.dark .wx-field > span { color: var(--wx-green); }
   background-image: radial-gradient(var(--wx-doodle) 1.2px, transparent 1.3px), radial-gradient(var(--wx-doodle) 1.2px, transparent 1.3px);
   background-size: 26px 26px; background-position: 0 0, 13px 13px; }
 .wx-msgs::-webkit-scrollbar { width: 6px; } .wx-msgs::-webkit-scrollbar-thumb { background: rgba(0,0,0,.2); }
-.wx-day { display: flex; justify-content: center; margin: 10px 0; position: sticky; top: 4px; z-index: 1; }
+.wx-day { display: flex; justify-content: center; margin: 10px 0; }
+.wx-float-day { position: absolute; top: 70px; left: 0; right: 0; display: flex; justify-content: center; pointer-events: none; z-index: 3; }
+.wx-float-day span { background: var(--wx-chip); color: var(--wx-ink3); font-size: 12.5px; padding: 5px 12px; border-radius: 8px; box-shadow: 0 1px .5px rgba(11,20,26,.13); text-transform: uppercase; }
 .wx-day span { background: var(--wx-chip); color: var(--wx-ink3); font-size: 12.5px; padding: 5px 12px; border-radius: 8px; box-shadow: 0 1px .5px rgba(11,20,26,.13); text-transform: uppercase; }
 .wx-unread-line { display: flex; justify-content: center; margin: 10px -7%; background: rgba(255,255,255,.25); padding: 5px 0; }
 .wx-unread-line span { background: var(--wx-chip); color: var(--wx-ink3); font-size: 12.5px; padding: 5px 26px; border-radius: 16px; }
