@@ -9,7 +9,8 @@
   {{ page_header(
       "Members",
       "Congregation registry" ~ (" across all branches" if is_super else " for your branch"),
-      actions=('<a href="' ~ url_for('admin_members_import_page') ~ '" class="btn btn-secondary"><i class="ri-upload-2-line"></i>Import</a> '
+      actions=('<a href="' ~ url_for('admin_members_export') ~ '?q=' ~ (search or '')|urlencode ~ '&branch_id=' ~ (filter_branch_id or '') ~ '&country=' ~ (filter_country or '') ~ '" class="btn btn-secondary" data-turbo="false"><i class="ri-download-2-line"></i>Export CSV</a> '
+               ~ '<a href="' ~ url_for('admin_members_import_page') ~ '" class="btn btn-secondary"><i class="ri-upload-2-line"></i>Import</a> '
                ~ '<a href="' ~ url_for('admin_members_create_page') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add member</a>'),
       audit=[('Records', pagination.total), ('Scope', 'All branches' if is_super else admin_branch_name), ('Page', pagination.page ~ ' / ' ~ pagination.pages)]
   ) }}

@@ -26,7 +26,12 @@ class PasswordChangeRequired(Exception):
     """The signed-in account is using a temporary/default password and must set its own first."""
 
 
+class TwoStepRequired(Exception):
+    """Two-step sign-in is required for every console account and this one has not turned it on yet."""
+
+
 _PASSWORD_PAGES = ("/admin/profile", "/admin/profile/password")
+_TWOSTEP_PAGES = ("/admin/profile", "/admin/profile/password", "/admin/profile/two-step")
 
 
 async def admin_policy(request: Request) -> None:
@@ -37,6 +42,16 @@ async def admin_policy(request: Request) -> None:
         who = await get_current_admin(request)
         if who is not None and getattr(who, "must_change_password", False):
             raise PasswordChangeRequired()
+    if path.rstrip("/") not in _TWOSTEP_PAGES:
+        who = await get_current_admin(request)
+        if who is not None and not getattr(who, "totp_secret", None):
+            from app.core.settings_cache import get_setting
+            from app.database import async_session
+
+            async with async_session() as db:
+                required = (await get_setting(db, "enable_admin_2fa", "0")) == "1"
+            if required:
+                raise TwoStepRequired()
     perm = required_permission(request.method, path)
     if perm is None:
         return

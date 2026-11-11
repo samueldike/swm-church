@@ -102,7 +102,8 @@ def home_for(role: str | None) -> str:
 # ─── path policy ─────────────────────────────────────────────────────
 
 # Paths reachable without a signed-in admin (the route itself handles the redirect).
-OPEN_PREFIXES = ("/admin/login", "/admin/logout", "/admin/invitation/", "/admin/hod/invitation/")
+OPEN_PREFIXES = ("/admin/login", "/admin/logout", "/admin/invitation/", "/admin/hod/invitation/",
+                 "/admin/two-step", "/admin/forgot-password", "/admin/reset-password/")
 
 # (regex on the path AFTER /admin, permission, methods or None for all) - first match wins.
 _RULES: list[tuple[re.Pattern, str, tuple[str, ...] | None]] = [

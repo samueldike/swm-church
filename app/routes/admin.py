@@ -97,6 +97,15 @@ async def _message_form_ctx(db, admin) -> dict:
     }
 
 
+async def _invite_note(email: str) -> str:
+    """How the invitation reaches the person: by email when it can really be sent, otherwise only by the copied link."""
+    from app.core import mailer
+
+    if await mailer.can_send(email):
+        return "and emailed"
+    return "but not emailed (email delivery is not set up in Settings, so share the invite link)"
+
+
 def _email_invitation(request: Request, *, email: str, name: str | None, role_line: str, path: str, inviter: str) -> None:
     """Email an invitation link (best effort: the "Copy invite link" button keeps working when email is not set up)."""
     from app.core import mailer
@@ -390,6 +399,9 @@ async def admin_login_page(request: Request, db: AsyncSession = Depends(get_db))
     flash_messages = request.session.pop("flash_messages", [])
     site_name = await _get_site_name(db)
 
+    from app.core import mailer
+    from app.core.admin_security import setting_on
+
     return await render_template(request, "admin/login.html", {
         "_db": db,
         "siteName": site_name,
@@ -397,6 +409,8 @@ async def admin_login_page(request: Request, db: AsyncSession = Depends(get_db))
         "flash_messages": flash_messages,
         "adminThemeCss": "",
         "error_messages": {},
+        "allow_remember": await setting_on(db, "allow_admin_remember_me"),
+        "can_reset": await mailer.can_send(),
     })
 
 
@@ -405,6 +419,7 @@ async def admin_login_submit(
     request: Request,
     email: str = Form(""),
     password: str = Form(""),
+    form_remember: str = Form("", alias="remember"),
     db: AsyncSession = Depends(get_db),
 ):
     from app.models.admin import Admin
@@ -444,16 +459,182 @@ async def admin_login_submit(
         request.session["flash_error"] = "Your account has been deactivated."
         return RedirectResponse(url="/admin", status_code=303)
 
-    login_admin(request, admin.id, admin.session_version)
+    from app.core.admin_security import setting_on
 
-    await log_admin_action(
-        db, admin_id=admin.id, action="auth.login.success",
-        request=request,
-    )
+    remember = form_remember == "1" and await setting_on(db, "allow_admin_remember_me")
+    if admin.totp_secret:
+        # Password is right; the authenticator code comes next. Nothing is signed in until it is checked.
+        request.session.clear()
+        request.session["pending_2fa"] = {"id": admin.id, "sv": admin.session_version or 0, "remember": remember,
+                                          "at": datetime.utcnow().isoformat()}
+        return RedirectResponse(url="/admin/two-step", status_code=303)
+    return await _finish_login(request, db, admin, remember)
 
+
+async def _finish_login(request: Request, db: AsyncSession, admin, remember: bool):
+    login_admin(request, admin.id, admin.session_version, remember=remember)
+    await log_admin_action(db, admin_id=admin.id, action="auth.login.success", request=request,
+                           metadata={"remember": True} if remember else None)
     if admin.role == "hod":
         return RedirectResponse(url="/admin/hod/reports", status_code=303)
     return RedirectResponse(url="/admin/dashboard", status_code=303)
+
+
+def _pending_2fa(request: Request) -> dict | None:
+    p = request.session.get("pending_2fa")
+    if not p:
+        return None
+    try:
+        if datetime.utcnow() - datetime.fromisoformat(p["at"]) > timedelta(minutes=10):
+            request.session.pop("pending_2fa", None)
+            return None
+    except (KeyError, ValueError):
+        return None
+    return p
+
+
+@router.get("/two-step", name="admin_two_step")
+async def admin_two_step_page(request: Request, db: AsyncSession = Depends(get_db)):
+    if not _pending_2fa(request):
+        request.session["flash_error"] = "Sign in again: the two-step check timed out."
+        return RedirectResponse(url="/admin", status_code=303)
+    return await render_template(request, "admin/two-step.html", {
+        "_db": db, "siteName": await _get_site_name(db), "adminThemeCss": "",
+        "flash_error": request.session.pop("flash_error", None), "error_messages": {}})
+
+
+@router.post("/two-step", name="admin_two_step_submit")
+async def admin_two_step_submit(request: Request, db: AsyncSession = Depends(get_db), code: str = Form("")):
+    from app.core import admin_security as sec, throttle
+    from app.models.admin import Admin as AdminModel
+
+    p = _pending_2fa(request)
+    if not p:
+        request.session["flash_error"] = "Sign in again: the two-step check timed out."
+        return RedirectResponse(url="/admin", status_code=303)
+    key = f"2fa:{p['id']}"
+    wait = throttle.is_blocked(key, limit=6)
+    if wait:
+        request.session["flash_error"] = f"Too many wrong codes. Try again in {max(1, wait // 60)} minute(s)."
+        return RedirectResponse(url="/admin/two-step", status_code=303)
+    admin = await db.get(AdminModel, p["id"])
+    if not admin or not admin.is_active or (admin.session_version or 0) != p["sv"] or not admin.totp_secret:
+        request.session.clear()
+        request.session["flash_error"] = "Sign in again."
+        return RedirectResponse(url="/admin", status_code=303)
+    secret = sec.read_secret(admin.totp_secret)
+    ok = bool(secret) and sec.verify_code(secret, code)
+    used_recovery = False
+    if not ok:
+        left = sec.use_recovery_code(admin.totp_recovery, code)
+        if left is not None:
+            admin.totp_recovery, ok, used_recovery = left, True, True
+    if not ok:
+        throttle.record_failure(key)
+        await log_admin_action(db, admin_id=admin.id, action="auth.2fa.failed", request=request)
+        await db.commit()
+        request.session["flash_error"] = "That code is not right. Use the 6-digit code from your authenticator app, or a recovery code."
+        return RedirectResponse(url="/admin/two-step", status_code=303)
+    throttle.clear(key)
+    request.session.pop("pending_2fa", None)
+    if used_recovery:
+        await log_admin_action(db, admin_id=admin.id, action="auth.2fa.recovery_code_used", request=request,
+                               metadata={"left": sec.recovery_left(admin.totp_recovery)})
+    response = await _finish_login(request, db, admin, bool(p.get("remember")))
+    if used_recovery:
+        left_n = sec.recovery_left(admin.totp_recovery)
+        request.session["flash_messages"] = [{"type": "info", "message": f"You signed in with a recovery code. {left_n} left: make new ones under My Profile."}]
+    return response
+
+
+# ─── forgot password (only offered when email delivery is set up) ───
+@router.get("/forgot-password", name="admin_forgot_password")
+async def admin_forgot_password_page(request: Request, db: AsyncSession = Depends(get_db)):
+    return await render_template(request, "admin/forgot-password.html", {
+        "_db": db, "siteName": await _get_site_name(db), "adminThemeCss": "", "error_messages": {},
+        "flash_error": request.session.pop("flash_error", None), "sent": request.session.pop("reset_sent", None)})
+
+
+@router.post("/forgot-password", name="admin_forgot_password_submit")
+async def admin_forgot_password_submit(request: Request, db: AsyncSession = Depends(get_db), email: str = Form("")):
+    from app.core import admin_security as sec, mailer, throttle
+    from app.core.client_ip import client_ip as _ip
+    from app.models.admin import Admin as AdminModel
+
+    if not await mailer.can_send():
+        request.session["flash_error"] = "Password reset by email is not available yet. Ask the HQ Administrator to reset your password."
+        return RedirectResponse(url="/admin/forgot-password", status_code=303)
+    addr = email.strip().lower()[:255]
+    key_ip, key_mail = f"reset:ip:{_ip(request)}", f"reset:email:{addr}"
+    if throttle.is_blocked(key_ip, limit=10, window=3600) or throttle.is_blocked(key_mail, limit=3, window=3600):
+        request.session["flash_error"] = "Too many requests. Try again in an hour."
+        return RedirectResponse(url="/admin/forgot-password", status_code=303)
+    throttle.record_failure(key_ip, window=3600)
+    throttle.record_failure(key_mail, window=3600)
+    admin = (await db.execute(select(AdminModel).where(AdminModel.email == addr))).scalar_one_or_none()
+    if admin and admin.is_active:
+        base = _public_base_url(request)
+        link = base + "/admin/reset-password/" + sec.reset_token(admin.id, admin.session_version or 0)
+        await mailer.send_notice(
+            admin.email, "Reset your console password", base_url=base, kind="password_reset", heading="Reset your password",
+            paragraphs=[f"Hello {admin.full_name.split()[0] if admin.full_name else ''}, someone asked to reset the password of your console account.",
+                        "Use the button below within one hour. If it was not you, ignore this email: your password stays the same."],
+            button=("Choose a new password", link), footnote="For your safety this link works once and expires after one hour.")
+        await log_admin_action(db, admin_id=admin.id, action="auth.password_reset.requested", request=request)
+        await db.commit()
+    # Same answer whether or not the address exists (no account discovery).
+    request.session["reset_sent"] = addr
+    return RedirectResponse(url="/admin/forgot-password", status_code=303)
+
+
+async def _reset_target(db: AsyncSession, token: str):
+    from app.core import admin_security as sec
+    from app.models.admin import Admin as AdminModel
+
+    data = sec.read_reset_token(token)
+    if not data:
+        return None
+    admin = await db.get(AdminModel, data[0])
+    if not admin or not admin.is_active or (admin.session_version or 0) != data[1]:
+        return None                                   # used already, password changed, or account switched off
+    return admin
+
+
+@router.get("/reset-password/{token}", name="admin_reset_password")
+async def admin_reset_password_page(token: str, request: Request, db: AsyncSession = Depends(get_db)):
+    from app.core.admin_security import password_rules, setting_on
+
+    admin = await _reset_target(db, token)
+    if not admin:
+        request.session["flash_error"] = "That reset link has expired or was already used. Ask for a new one."
+        return RedirectResponse(url="/admin/forgot-password", status_code=303)
+    return await render_template(request, "admin/reset-password.html", {
+        "_db": db, "siteName": await _get_site_name(db), "adminThemeCss": "", "token": token, "email": admin.email,
+        "rules": password_rules(await setting_on(db, "enforce_strong_passwords")), "error_messages": {}})
+
+
+@router.post("/reset-password/{token}", name="admin_reset_password_submit")
+async def admin_reset_password_submit(token: str, request: Request, db: AsyncSession = Depends(get_db),
+                                      password: str = Form(""), password_confirmation: str = Form("")):
+    from app.core.admin_security import password_problem, password_rules, setting_on
+
+    admin = await _reset_target(db, token)
+    if not admin:
+        request.session["flash_error"] = "That reset link has expired or was already used. Ask for a new one."
+        return RedirectResponse(url="/admin/forgot-password", status_code=303)
+    problem = "Passwords do not match." if password != password_confirmation else await password_problem(db, password, admin.email)
+    if problem:
+        return await render_template(request, "admin/reset-password.html", {
+            "_db": db, "siteName": await _get_site_name(db), "adminThemeCss": "", "token": token, "email": admin.email,
+            "rules": password_rules(await setting_on(db, "enforce_strong_passwords")), "error_messages": {"password": [problem]}})
+    admin.password_hash = hash_password(password)
+    admin.must_change_password = False
+    admin.session_version = (admin.session_version or 0) + 1      # signs out every other session and kills this link
+    await log_admin_action(db, admin_id=admin.id, action="auth.password_reset.done", request=request)
+    await db.commit()
+    request.session.clear()
+    request.session["flash_messages"] = [{"type": "success", "message": "Password changed. Sign in with your new password."}]
+    return RedirectResponse(url="/admin", status_code=303)
 
 
 @router.post("/logout", name="admin_logout")
@@ -512,10 +693,12 @@ async def admin_invitation_accept(
             "error_messages": {"password": ["Passwords do not match."]},
         })
 
-    if len(password) < 8:
+    from app.core.admin_security import password_problem as _pw_problem
+
+    if (_problem := await _pw_problem(db, password, invitation.email)):
         return await render_template(request, "admin/invitation-accept.html", {
             "_db": db, "invitation": invitation, "token": token,
-            "error_messages": {"password": ["Password must be at least 8 characters."]},
+            "error_messages": {"password": [_problem]},
         })
     if await _value_taken(db, Admin.email, invitation.email):
         return await render_template(request, "admin/invitation-accept.html", {
@@ -951,26 +1134,8 @@ async def admin_members(request: Request, db: AsyncSession = Depends(get_db), q:
     if not admin:
         return RedirectResponse(url="/admin", status_code=303)
 
+    query, sees_all = _members_query(admin, q, branch_id, country)
     from app.models.branch import Branch
-    from app.models.member import Member
-    from sqlalchemy.orm import selectinload
-    query = select(Member).options(selectinload(Member.branch))
-
-    sees_all = admin.role == "super_admin" or not admin.branch_id
-    if not sees_all:
-        query = query.where(Member.branch_id == admin.branch_id)
-    else:
-        if _to_int(branch_id):
-            query = query.where(Member.branch_id == _to_int(branch_id))
-        if country:
-            query = query.where(Member.branch_id.in_(select(Branch.id).where(Branch.country_code == country.upper())))
-
-    if q:
-        pattern = f"%{q}%"
-        query = query.where(or_(Member.first_name.ilike(pattern), Member.last_name.ilike(pattern), Member.email.ilike(pattern),
-                                Member.phone.ilike(pattern), Member.city.ilike(pattern)))
-
-    query = query.order_by(Member.created_at.desc())
     pagination = await paginate(db, query, page=page, per_page=20)
     kw = dict(q=q, branch_id=branch_id, country=country)
     pagination["prev_url"] = _qs("/admin/members", page=page - 1, **kw) if pagination["has_prev"] else None
@@ -988,6 +1153,54 @@ async def admin_members(request: Request, db: AsyncSession = Depends(get_db), q:
         "filter_branch_id": branch_id, "filter_country": country.upper(), "branches": branches, "country_options": country_options,
         "title": "Members", "headerIcon": "ri-team-line", **ctx,
     })
+
+
+def _members_query(admin, q: str, branch_id: str, country: str):
+    """The member list's query: own branch only, unless HQ Administrator (or an HQ account with no branch)."""
+    from sqlalchemy.orm import selectinload
+
+    from app.models.branch import Branch
+    from app.models.member import Member
+
+    query = select(Member).options(selectinload(Member.branch))
+    sees_all = admin.role == "super_admin" or not admin.branch_id
+    if not sees_all:
+        query = query.where(Member.branch_id == admin.branch_id)
+    else:
+        if _to_int(branch_id):
+            query = query.where(Member.branch_id == _to_int(branch_id))
+        if country:
+            query = query.where(Member.branch_id.in_(select(Branch.id).where(Branch.country_code == country.upper())))
+    if q:
+        pattern = f"%{q}%"
+        query = query.where(or_(Member.first_name.ilike(pattern), Member.last_name.ilike(pattern), Member.email.ilike(pattern),
+                                Member.phone.ilike(pattern), Member.city.ilike(pattern)))
+    return query.order_by(Member.created_at.desc()), sees_all
+
+
+@router.get("/members/export", name="admin_members_export")
+async def admin_members_export(request: Request, db: AsyncSession = Depends(get_db), q: str = Query(""),
+                               branch_id: str = Query(""), country: str = Query("")):
+    """Members as CSV, with the list's own filters and branch scope (cells are formula-safe: _csv_response)."""
+    from app.core import geo
+
+    admin = await _get_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+    query, _ = _members_query(admin, q, branch_id, country)
+    rows = (await db.execute(query)).scalars().all()
+    await log_admin_action(db, admin.id, "members.export", "member", None, {"rows": len(rows), "q": q[:60], "branch": branch_id, "country": country}, request)
+    await db.commit()
+    stamp = datetime.utcnow().strftime("%Y%m%d")
+    return _csv_response(
+        f"members-{stamp}.csv",
+        ["First name", "Last name", "Email", "Phone", "Gender", "Date of birth", "Country", "Region", "City",
+         "Branch", "Membership status", "Joined", "Notes", "Added"],
+        [[m.first_name, m.last_name, m.email or "", m.phone or "", m.gender or "",
+          m.date_of_birth.isoformat() if m.date_of_birth else "", geo.country_name(m.country_code) if m.country_code else "",
+          m.region_code or "", m.city or "", m.branch.name if m.branch else "", m.membership_status or "",
+          m.joined_at.isoformat() if m.joined_at else "", (m.notes or "").replace("\r", " ").replace("\n", " "),
+          m.created_at.strftime("%Y-%m-%d") if m.created_at else ""] for m in rows])
 
 
 @router.get("/members/create", name="admin_members_create_page")
@@ -1346,7 +1559,7 @@ async def admin_hods_invite(
     db.add(invitation)
     await db.flush()
     _email_invitation(request, email=invitation.email, name=invitation.name, role_line=f"serve as head of a department at {target_branch.name}", path=f"/admin/hod/invitation/{token}", inviter=admin.full_name)
-    return _redirect(request, "/admin/hods", "Invitation created and emailed. You can also copy the invite link under Recent invitations.")
+    return _redirect(request, "/admin/hods", f"Invitation created {await _invite_note(invitation.email)}. Copy the invite link under Recent invitations.")
 
 
 # ─── HarvestTrack ──────────────────────────────────────────────────
@@ -1983,8 +2196,10 @@ async def admin_admins_store(
     if password:
         if password != password_confirmation:
             return _redirect(request, "/admin/admins/create", "Passwords do not match.", "error")
-        if len(password) < 8:
-            return _redirect(request, "/admin/admins/create", "Password must be at least 8 characters.", "error")
+        from app.core.admin_security import password_problem as _pw_problem
+
+        if (_problem := await _pw_problem(db, password, email_clean)):
+            return _redirect(request, "/admin/admins/create", _problem, "error")
     else:
         # No password supplied: generate an unguessable one; use "Reset password" to set a real one.
         password = secrets.token_urlsafe(12)
@@ -2490,7 +2705,7 @@ async def admin_branches_store(
         _email_invitation(request, email=_inv.email, name=_inv.name, role_line=f"administer {branch.name}", path=f"/admin/invitation/{_inv.token}", inviter=admin.full_name)
         return _redirect(
             request, f"/admin/branches/{branch.id}",
-            "Branch created and the invitation emailed. You can also copy the invite link under Admin invitations.",
+            f"Branch created. Its admin invitation was created {await _invite_note(_inv.email)}. Copy the invite link under Admin invitations.",
         )
     return _redirect(request, "/admin/branches", "Branch created successfully.")
 
@@ -3670,6 +3885,19 @@ async def admin_settings_update(request: Request, db: AsyncSession = Depends(get
     for _k in ("whatsappChannelUrl", "telegramJoinUrl", "faithStatementUrl", "plausibleSrc", "siteUrl"):
         if _k in settings_dict:
             settings_dict[_k] = _sc.safe_https(settings_dict[_k]) if settings_dict[_k].strip() else ""
+    from app.core import admin_security as _sec
+    if "audit_log_retention_days" in settings_dict:
+        try:
+            _days = int(str(settings_dict["audit_log_retention_days"]).strip())
+        except ValueError:
+            _days = _sec.RETENTION_DEFAULT
+        settings_dict["audit_log_retention_days"] = str(max(_sec.RETENTION_MIN, min(_sec.RETENTION_MAX, _days)))
+    for _flag in ("enforce_strong_passwords", "enable_admin_2fa", "allow_admin_remember_me"):
+        if _flag in settings_dict:
+            settings_dict[_flag] = "1" if str(settings_dict[_flag]) == "1" else "0"
+    if settings_dict.get("enable_admin_2fa") == "1" and not admin.totp_secret:
+        settings_dict["enable_admin_2fa"] = "0"
+        request.session["flash_messages"] = [{"type": "error", "message": "Turn on two-step sign-in for your own account (My Profile) before requiring it for everyone, so you cannot lock yourself out."}]
     if "plausibleDomain" in settings_dict:
         settings_dict["plausibleDomain"] = re.sub(r"[^a-zA-Z0-9.\-]", "", settings_dict["plausibleDomain"])[:120]
     accounts_list = [church_accounts[i] for i in sorted(church_accounts)]
@@ -4083,8 +4311,110 @@ async def admin_profile(request: Request, db: AsyncSession = Depends(get_db)):
     ctx = await _admin_context(request, db, "admin.profile")
     return await render_template(request, "admin/profile.html", {
         "_db": db, "error_messages": {},
-        "title": "My Profile", "headerIcon": "ri-user-line", **ctx,
+        "title": "My Profile", "headerIcon": "ri-user-line", **ctx, **(await _security_ctx(db, admin)),
     })
+
+
+async def _security_ctx(db: AsyncSession, admin) -> dict:
+    from app.core import admin_security as sec
+
+    strong = await sec.setting_on(db, "enforce_strong_passwords")
+    return {"twofa_on": bool(admin.totp_secret), "twofa_required": await sec.setting_on(db, "enable_admin_2fa"),
+            "twofa_codes_left": sec.recovery_left(admin.totp_recovery), "password_rules": sec.password_rules(strong)}
+
+
+@router.get("/profile/two-step", name="admin_profile_2fa_setup")
+async def admin_profile_2fa_setup(request: Request, db: AsyncSession = Depends(get_db)):
+    """Step 1 of turning on two-step sign-in: show the QR code for a new secret (kept in the session until confirmed)."""
+    from app.core import admin_security as sec
+
+    admin = await _get_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+    if admin.totp_secret:
+        return _redirect(request, "/admin/profile", "Two-step sign-in is already on.", "info")
+    secret = request.session.get("twofa_setup") or sec.new_secret()
+    request.session["twofa_setup"] = secret
+    uri = sec.otpauth_uri(secret, admin.email, await _get_site_name(db))
+    ctx = await _admin_context(request, db, "admin.profile")
+    return await render_template(request, "admin/two-step-setup.html", {
+        "_db": db, "qr_svg": sec.qr_svg(uri), "secret": " ".join(secret[i:i + 4] for i in range(0, len(secret), 4)),
+        "title": "Two-step sign-in", "headerIcon": "ri-shield-keyhole-line", **ctx})
+
+
+@router.post("/profile/two-step", name="admin_profile_2fa_confirm")
+async def admin_profile_2fa_confirm(request: Request, db: AsyncSession = Depends(get_db), code: str = Form("")):
+    from app.core import admin_security as sec
+
+    admin = await _get_admin(request)
+    if not admin:
+        return RedirectResponse(url="/admin", status_code=303)
+    secret = request.session.get("twofa_setup")
+    if not secret:
+        return RedirectResponse(url="/admin/profile/two-step", status_code=303)
+    if not sec.verify_code(secret, code):
+        return _redirect(request, "/admin/profile/two-step", "That code is not right. Check the time on your phone and try the newest code.", "error")
+    plain, hashed = sec.new_recovery_codes()
+    admin.totp_secret, admin.totp_recovery = sec.store_secret(secret), hashed
+    request.session.pop("twofa_setup", None)
+    await log_admin_action(db, admin.id, "auth.2fa.enabled", "admin", admin.id, None, request)
+    await db.commit()
+    ctx = await _admin_context(request, db, "admin.profile")
+    return await render_template(request, "admin/two-step-codes.html", {
+        "_db": db, "codes": plain, "first": True, "title": "Recovery codes", "headerIcon": "ri-shield-keyhole-line", **ctx})
+
+
+@router.post("/profile/two-step/codes", name="admin_profile_2fa_codes")
+async def admin_profile_2fa_codes(request: Request, db: AsyncSession = Depends(get_db), password: str = Form("")):
+    from app.core import admin_security as sec
+
+    admin = await _get_admin(request)
+    if not admin or not admin.totp_secret:
+        return RedirectResponse(url="/admin/profile", status_code=303)
+    if not verify_password(password, admin.password_hash):
+        return _redirect(request, "/admin/profile", "Your password is not right.", "error")
+    plain, hashed = sec.new_recovery_codes()
+    admin.totp_recovery = hashed
+    await log_admin_action(db, admin.id, "auth.2fa.recovery_codes_renewed", "admin", admin.id, None, request)
+    await db.commit()
+    ctx = await _admin_context(request, db, "admin.profile")
+    return await render_template(request, "admin/two-step-codes.html", {
+        "_db": db, "codes": plain, "first": False, "title": "Recovery codes", "headerIcon": "ri-shield-keyhole-line", **ctx})
+
+
+@router.post("/profile/two-step/off", name="admin_profile_2fa_off")
+async def admin_profile_2fa_off(request: Request, db: AsyncSession = Depends(get_db), password: str = Form("")):
+    from app.core import admin_security as sec
+
+    admin = await _get_admin(request)
+    if not admin or not admin.totp_secret:
+        return RedirectResponse(url="/admin/profile", status_code=303)
+    if await sec.setting_on(db, "enable_admin_2fa"):
+        return _redirect(request, "/admin/profile", "Two-step sign-in is required for every console account, so it cannot be turned off.", "error")
+    if not verify_password(password, admin.password_hash):
+        return _redirect(request, "/admin/profile", "Your password is not right.", "error")
+    admin.totp_secret, admin.totp_recovery = None, None
+    await log_admin_action(db, admin.id, "auth.2fa.disabled", "admin", admin.id, None, request)
+    await db.commit()
+    return _redirect(request, "/admin/profile", "Two-step sign-in is off for your account.")
+
+
+@router.post("/admins/{admin_id}/two-step/reset", name="admin_admins_2fa_reset")
+async def admin_admins_2fa_reset(admin_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    """HQ Administrator: someone lost their phone and their recovery codes. They set it up again at next sign-in."""
+    from app.models.admin import Admin as AdminModel
+
+    admin = await _get_admin(request)
+    if not admin or admin.role != "super_admin":
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    target = await db.get(AdminModel, admin_id)
+    if not target:
+        return _redirect(request, "/admin/admins", "That account no longer exists.", "error")
+    target.totp_secret, target.totp_recovery = None, None
+    target.session_version = (target.session_version or 0) + 1
+    await log_admin_action(db, admin.id, "auth.2fa.reset_by_admin", "admin", target.id, {"email": target.email}, request)
+    await db.commit()
+    return _redirect(request, f"/admin/admins/{admin_id}/edit", f"Two-step sign-in was reset for {target.full_name}. They sign in with their password and set it up again.")
 
 
 @router.post("/profile", name="admin_profile_update")
@@ -4125,28 +4455,30 @@ async def admin_profile_password_update(
         ctx = await _admin_context(request, db, "admin.profile")
         return await render_template(request, "admin/profile.html", {
             "_db": db, "error_messages": {"current_password": ["Current password is incorrect."]},
-            "title": "My Profile", "headerIcon": "ri-user-line", **ctx,
+            "title": "My Profile", "headerIcon": "ri-user-line", **ctx, **(await _security_ctx(db, admin)),
         })
 
     if password != password_confirmation:
         ctx = await _admin_context(request, db, "admin.profile")
         return await render_template(request, "admin/profile.html", {
             "_db": db, "error_messages": {"password": ["Passwords do not match."]},
-            "title": "My Profile", "headerIcon": "ri-user-line", **ctx,
+            "title": "My Profile", "headerIcon": "ri-user-line", **ctx, **(await _security_ctx(db, admin)),
         })
 
-    if len(password) < 8:
+    from app.core.admin_security import password_problem as _pw_problem
+
+    if (_problem := await _pw_problem(db, password, admin.email)):
         ctx = await _admin_context(request, db, "admin.profile")
         return await render_template(request, "admin/profile.html", {
-            "_db": db, "error_messages": {"password": ["Password must be at least 8 characters."]},
-            "title": "My Profile", "headerIcon": "ri-user-line", **ctx,
+            "_db": db, "error_messages": {"password": [_problem]},
+            "title": "My Profile", "headerIcon": "ri-user-line", **ctx, **(await _security_ctx(db, admin)),
         })
 
     if verify_password(password, admin.password_hash):
         ctx = await _admin_context(request, db, "admin.profile")
         return await render_template(request, "admin/profile.html", {
             "_db": db, "error_messages": {"password": ["Choose a password you have not used just now."]},
-            "title": "My Profile", "headerIcon": "ri-user-line", **ctx,
+            "title": "My Profile", "headerIcon": "ri-user-line", **ctx, **(await _security_ctx(db, admin)),
         })
     from app.models.admin import Admin as _AdminRow
     row = (await db.execute(select(_AdminRow).where(_AdminRow.id == admin.id))).scalar_one()
@@ -4315,8 +4647,10 @@ async def hod_invitation_accept(
     if not invitation:
         return RedirectResponse(url="/admin", status_code=303)
 
+    from app.core.admin_security import password_problem as _pw_problem
+
     problem = ("Passwords do not match." if password != password_confirmation
-               else "Password must be at least 8 characters." if len(password) < 8
+               else await _pw_problem(db, password, invitation.email) if await _pw_problem(db, password, invitation.email)
                else "An account with this email already exists. Sign in instead, or ask your branch office for help."
                if await _value_taken(db, Admin.email, invitation.email) else None)
     if problem:
@@ -4498,8 +4832,10 @@ async def admin_admins_reset_password(
 
     if password != password_confirmation:
         return _redirect(request, "/admin/admins", "Passwords do not match.", "error")
-    if len(password) < 8:
-        return _redirect(request, "/admin/admins", "Password must be at least 8 characters.", "error")
+    from app.core.admin_security import password_problem as _pw_problem
+
+    if (_problem := await _pw_problem(db, password)):
+        return _redirect(request, "/admin/admins", _problem, "error")
 
     from app.models.admin import Admin as AdminModel
     result = await db.execute(select(AdminModel).where(AdminModel.id == admin_id))
@@ -5254,8 +5590,10 @@ async def admin_hods_update(
     if password:
         if password != password_confirmation:
             return _redirect(request, "/admin/hods", "Passwords do not match.", "error")
-        if len(password) < 8:
-            return _redirect(request, "/admin/hods", "Password must be at least 8 characters.", "error")
+        from app.core.admin_security import password_problem as _pw_problem
+
+        if (_problem := await _pw_problem(db, password, hod.email)):
+            return _redirect(request, "/admin/hods", _problem, "error")
         hod.password_hash = hash_password(password)
         hod.must_change_password = True
         hod.session_version = (hod.session_version or 0) + 1
@@ -5279,7 +5617,7 @@ async def admin_hod_invitations_resend(invitation_id: int, request: Request, db:
         invitation.expires_at = datetime.utcnow() + timedelta(days=7)
         await db.flush()
         _email_invitation(request, email=invitation.email, name=invitation.name, role_line="serve as head of a department", path=f"/admin/hod/invitation/{invitation.token}", inviter=admin.full_name)
-    return _redirect(request, "/admin/hods", "Invitation renewed for 7 days and emailed again. You can also copy the invite link.")
+    return _redirect(request, "/admin/hods", f"Invitation renewed for 7 days {await _invite_note(invitation.email)}. You can copy the invite link.")
 
 
 # ─── Branches: View, Update, Invitation Resend ───────────────────
@@ -5437,7 +5775,7 @@ async def admin_branch_invitations_resend(
         await db.flush()
         _b = await _load_branch(db, branch_id)
         _email_invitation(request, email=invitation.email, name=invitation.name, role_line=f"administer {_b.name if _b else 'a branch'}", path=f"/admin/invitation/{invitation.token}", inviter=admin.full_name)
-    return _redirect(request, f"/admin/branches/{branch_id}", "Invitation renewed for 7 days and emailed again. You can also copy the invite link.")
+    return _redirect(request, f"/admin/branches/{branch_id}", f"Invitation renewed for 7 days {await _invite_note(invitation.email)}. You can copy the invite link.")
 
 
 # ─── Unit Reports: Show & Update ─────────────────────────────────

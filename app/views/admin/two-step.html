@@ -1,0 +1,15 @@
+{% extends "admin/_auth-card.html" %}
+{% block page_title %}Two-step sign-in{% endblock %}
+{% block card_title %}Enter your sign-in code{% endblock %}
+{% block card %}
+<p class="text-[13.5px] text-ink-2 mb-4">Open your authenticator app (Google Authenticator, Microsoft Authenticator, Authy…) and type the 6-digit code for this console. Lost your phone? Type one of your recovery codes instead.</p>
+<form method="POST" action="{{ url_for('admin_two_step_submit') }}" class="flex flex-col gap-4" data-turbo="false" data-no-loading>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div>
+    <label for="code" class="field-label">Code</label>
+    <input id="code" name="code" required autofocus autocomplete="one-time-code" inputmode="numeric" maxlength="20"
+           class="field-input field-mono" style="font-size:22px;letter-spacing:.3em;text-align:center" placeholder="123456">
+  </div>
+  <button type="submit" class="btn btn-primary btn-lg w-full mt-1">Verify and sign in</button>
+</form>
+{% endblock %}

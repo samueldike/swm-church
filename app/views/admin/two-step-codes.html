@@ -1,0 +1,20 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header with context %}
+{% block title %}Recovery codes | {{ siteName }}{% endblock %}
+{% block topbar_title %}My Profile{% endblock %}
+{% block topbar_subtitle %}Recovery codes{% endblock %}
+{% block topbar_icon %}ri-shield-keyhole-line{% endblock %}
+{% block page_header %}{{ page_header("Two-step sign-in is on" if first else "New recovery codes", "Save these codes now: they are shown only once") }}{% endblock %}
+{% block content %}
+<div class="panel max-w-2xl flex flex-col gap-4">
+  <p class="text-[13.5px] text-ink-2">If you lose your phone, sign in with your password and type <b>one</b> of these codes instead of the app's code. Each code works once.{% if not first %} Your old codes no longer work.{% endif %}</p>
+  <div id="codes" class="grid grid-cols-2 gap-2 rounded-lg border border-line bg-sunken p-4 font-mono text-[15px] text-ink">
+    {% for c in codes %}<span>{{ c }}</span>{% endfor %}
+  </div>
+  <div class="flex flex-wrap gap-2">
+    <button type="button" class="btn btn-secondary" data-copy="{{ codes | join('\n') }}"><i class="ri-file-copy-line"></i>Copy codes</button>
+    <button type="button" class="btn btn-secondary" onclick="window.print()"><i class="ri-printer-line"></i>Print</button>
+    <a href="{{ url_for('admin_profile') }}" class="btn btn-primary"><i class="ri-check-line"></i>I have saved them</a>
+  </div>
+</div>
+{% endblock %}

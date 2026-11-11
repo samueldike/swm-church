@@ -361,17 +361,17 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {{ field('Session timeout (minutes)', 'admin_session_timeout_minutes', value=S.get('admin_session_timeout_minutes') or '30', type='number', mono=True, hint='Administrators are signed out after this period of inactivity (5–1440).') }}
         </div>
-        <div class="rounded-md border border-line bg-sunken p-3.5">
-          <p class="mono-label mb-2">Not yet enforced</p>
-          <p class="text-[12px] text-ink-3 mb-3">These controls are stored for future use but the console does not enforce them yet, so they are read-only.</p>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 opacity-70">
-            <div><label class="field-label">Audit log retention (days)</label><input value="{{ S.get('audit_log_retention_days') or '365' }}" disabled class="field-input field-mono"></div>
-            <div class="flex flex-col gap-2 justify-end text-[12.5px] text-ink-2">
-              <label class="flex items-center gap-2"><input type="checkbox" disabled {{ 'checked' if S.get('enforce_strong_passwords') == '1' else '' }} class="field-checkbox">Enforce strong passwords</label>
-              <label class="flex items-center gap-2"><input type="checkbox" disabled {{ 'checked' if S.get('enable_admin_2fa') == '1' else '' }} class="field-checkbox">Two-factor authentication</label>
-              <label class="flex items-center gap-2"><input type="checkbox" disabled {{ 'checked' if S.get('allow_admin_remember_me') == '1' else '' }} class="field-checkbox">Allow “remember me”</label>
-            </div>
-          </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {{ field('Audit log retention (days)', 'audit_log_retention_days', value=S.get('audit_log_retention_days') or '365', type='number', mono=True, hint='Activity and security log entries older than this are deleted each night (30–3650).') }}
+        </div>
+        <div class="flex flex-col gap-3 text-[13px] text-ink-2">
+          {# A hidden 0 before each box: an unticked box then saves "off" (the last value wins). #}
+          <label class="flex items-start gap-2.5"><input type="hidden" name="enforce_strong_passwords" value="0"><input type="checkbox" name="enforce_strong_passwords" value="1" {{ 'checked' if S.get('enforce_strong_passwords') == '1' else '' }} class="field-checkbox mt-0.5">
+            <span><b class="text-ink">Require strong passwords</b><br><span class="text-ink-3 text-[12.5px]">New console passwords need 12+ characters with letters and numbers, not a common password. Off: at least 8 characters. Applies the next time someone sets a password.</span></span></label>
+          <label class="flex items-start gap-2.5"><input type="hidden" name="enable_admin_2fa" value="0"><input type="checkbox" name="enable_admin_2fa" value="1" {{ 'checked' if S.get('enable_admin_2fa') == '1' else '' }} class="field-checkbox mt-0.5">
+            <span><b class="text-ink">Require two-step sign-in for everyone</b><br><span class="text-ink-3 text-[12.5px]">Every console account must add an authenticator app (sent to My Profile until they do). Turn it on for your own account first. Anyone can already turn it on for themselves under My Profile.</span></span></label>
+          <label class="flex items-start gap-2.5"><input type="hidden" name="allow_admin_remember_me" value="0"><input type="checkbox" name="allow_admin_remember_me" value="1" {{ 'checked' if S.get('allow_admin_remember_me') == '1' else '' }} class="field-checkbox mt-0.5">
+            <span><b class="text-ink">Allow “Keep me signed in for 30 days”</b><br><span class="text-ink-3 text-[12.5px]">The sign-in page offers it; that device then skips the inactivity sign-out for 30 days. Turning this off ends it on every device.</span></span></label>
         </div>
       </section>
 

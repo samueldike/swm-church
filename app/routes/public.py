@@ -1220,7 +1220,7 @@ async def contact_store(
         request,
         "/contact",
         "Thank you for reaching out! We will get back to you shortly."
-        + (" A confirmation has been emailed to you." if mailer.valid_email(inquiry.email) else ""),
+        + (" A confirmation has been emailed to you." if await mailer.can_send(inquiry.email) else ""),
     )
 
 
@@ -1579,9 +1579,6 @@ async def sitemap(request: Request):
     return await render_template(request, "pages/sitemap.html")
 
 
-@router.get("/coming-soon", name="coming_soon")
-async def coming_soon(request: Request):
-    return await render_template(request, "pages/coming-soon.html")
 
 
 @router.get("/stories", name="stories")

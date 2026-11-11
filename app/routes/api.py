@@ -455,54 +455,11 @@ async def delete_event(event_id: int, request: Request, db: AsyncSession = Depen
 # ===========================================================================
 
 @router.post("/harvesttrack/register")
-async def ht_register(request: Request, db: AsyncSession = Depends(get_db)):
-    from app.models.harvest import HarvestWorker
-
-    try:
-        body = await request.json()
-    except Exception:
-        return _error("Invalid JSON body")
-
-    from app.core import throttle
-
-    reg_key = f"ht-register:{_client_ip(request)}"
-    if throttle.is_blocked(reg_key, limit=10, window=3600):
-        return _error("Too many registrations from this address. Try again later.", 429)
-    throttle.record_failure(reg_key, window=3600)
-
-    full_name = (body.get("full_name") or "").strip()
-    email = (body.get("email") or "").strip().lower()
-    password = body.get("password") or ""
-
-    if not full_name:
-        return _error("Full name is required")
-    if len(full_name) > 255 or len(email) > 255 or "@" not in email:
-        return _error("Please provide a valid name and email")
-    if not email:
-        return _error("Email is required")
-    if len(password) < 6:
-        return _error("Password must be at least 6 characters")
-
-    existing = await db.execute(
-        select(HarvestWorker).where(HarvestWorker.email == email)
-    )
-    if existing.scalar_one_or_none():
-        return _error("An account with this email already exists", 409)
-
-    from app.core import geo
-    from app.core.platform import church_country
-
-    worker = HarvestWorker(
-        full_name=full_name,
-        email=email,
-        phone=geo.normalize_phone(body.get("phone"), await church_country(db, body.get("branch_id") if isinstance(body.get("branch_id"), int) else None)) or None,
-        password_hash=hash_password(password),
-        branch_id=body.get("branch_id"),
-    )
-    db.add(worker)
-    await db.flush()
-
-    return _json(_serialize_worker(worker), 201)
+async def ht_register(request: Request):
+    """Closed: public self-registration let anyone create an active field-worker login for any branch.
+    Workers are created by the church office (Admin -> HarvestTrack -> Workers -> Add worker), which also sets
+    their branch and team."""
+    return _error("Accounts are created by your church office. Ask your HarvestTrack coordinator for a login.", 403)
 
 
 @router.post("/harvesttrack/login")

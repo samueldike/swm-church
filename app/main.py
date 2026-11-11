@@ -67,7 +67,7 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=settings.SECRET_KEY,
     session_cookie="swm_session",
-    max_age=60 * 60 * 24,
+    max_age=60 * 60 * 24 * 30,      # 30 days: needed by "Keep me signed in"; everyone else is still signed out after the inactivity timeout
     same_site="lax",
     https_only=not settings.is_development,
 )
@@ -99,7 +99,7 @@ app.mount(
 app.mount("/media", StaticFiles(directory=_media_dir), name="media")
 
 from app.core.csrf import CSRFError, csrf_protect
-from app.core.policy import AccessDenied, PasswordChangeRequired, admin_policy
+from app.core.policy import AccessDenied, PasswordChangeRequired, TwoStepRequired, admin_policy
 from app.routes.public import router as public_router
 
 # Every browser form POST/PUT/DELETE must carry the session's csrf_token
@@ -227,6 +227,18 @@ async def password_change_required_handler(request, exc):
         return JSONResponse({"error": message}, status_code=403)
     request.session["flash_messages"] = [{"type": "error", "message": message}]
     return RedirectResponse(url="/admin/profile", status_code=303)
+
+
+@app.exception_handler(TwoStepRequired)
+async def two_step_required_handler(request, exc):
+    from fastapi.responses import JSONResponse, RedirectResponse
+
+    message = "Turn on two-step sign-in for your account before you continue (it is required for every console account)."
+    accept = request.headers.get("accept", "")
+    if request.url.path.endswith(("/metrics", "/status")) or ("application/json" in accept and "text/html" not in accept):
+        return JSONResponse({"error": message}, status_code=403)
+    request.session["flash_messages"] = [{"type": "error", "message": message}]
+    return RedirectResponse(url="/admin/profile/two-step", status_code=303)
 
 
 @app.exception_handler(CSRFError)

@@ -62,6 +62,15 @@ async def get_config() -> MailConfig | None:
     return MailConfig(key, frm, (s.get("resend_from_name") or s.get("siteName") or "").strip())
 
 
+async def can_send(to: str | None = None) -> bool:
+    """Would an email actually go out now? Use it before telling anyone "we emailed you"."""
+    if os.environ.get("SWM_EMAIL_DRY_RUN") == "1":
+        return False
+    if to is not None and (not valid_email(to) or is_reserved(to)):
+        return False
+    return await get_config() is not None
+
+
 async def _log(to: str, subject: str, kind: str, status: str, error: str | None = None, provider_id: str | None = None) -> None:
     from app.models.engagement import EmailLog
 

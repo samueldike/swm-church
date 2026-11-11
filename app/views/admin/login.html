@@ -58,6 +58,12 @@
         <input id="password" name="password" type="password" required autocomplete="current-password"
                class="field-input field-mono">
       </div>
+      {% if allow_remember or can_reset %}
+      <div class="flex items-center justify-between gap-3 text-[13px]">
+        {% if allow_remember %}<label class="flex items-center gap-2 text-ink-2 cursor-pointer"><input type="checkbox" name="remember" value="1" class="field-checkbox"> Keep me signed in for 30 days</label>{% else %}<span></span>{% endif %}
+        {% if can_reset %}<a href="{{ url_for('admin_forgot_password') }}" class="text-gold-text font-semibold">Forgot password?</a>{% endif %}
+      </div>
+      {% endif %}
       <button type="submit" class="btn btn-primary btn-lg w-full mt-1">Sign in to console</button>
     </form>
 

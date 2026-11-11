@@ -1,0 +1,44 @@
+{#- Shared shell for the pages around signing in (two-step code, forgot / reset password): same card as the
+    sign-in page. Child templates set `card_title` / `card_sub` and fill the `card` block. -#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>{% block page_title %}Sign in{% endblock %} | {{ siteName }}</title>
+<link rel="icon" href="/static/brand/swm-logo-128.png" type="image/png"/>
+{% include "partials/admin-head-assets.html" %}
+{% include "partials/admin-theme.html" %}
+</head>
+<body class="m-0 bg-paper text-ink font-sans antialiased">
+<main class="min-h-screen flex items-center justify-center px-4 sm:px-6 py-10"
+      style="background-image:radial-gradient(circle at 1px 1px, var(--color-line) 1px, transparent 0); background-size:28px 28px;">
+  <div class="w-full max-w-md bg-surface rounded-lg border border-line shadow-sm p-7 sm:p-9">
+    <div class="flex items-center gap-3 mb-7">
+      <img src="/static/brand/swm-logo-128.png" alt="" width="44" height="44" class="w-11 h-11 rounded-full object-contain bg-white border border-line flex-shrink-0">
+      <div class="min-w-0">
+        <h1 class="text-[15px] font-semibold text-ink">{% block card_title %}{% endblock %}</h1>
+        <p class="text-xs text-ink-3 truncate">{{ siteName }} &middot; Administration Console</p>
+      </div>
+    </div>
+    {% if flash_error %}
+      <div class="rounded-md bg-bad-bg border border-[#e6c9c5] text-bad text-[13px] px-3.5 py-2.5 mb-4 flex items-start gap-2">
+        <i class="ri-error-warning-line flex-shrink-0 mt-0.5"></i><span>{{ flash_error }}</span>
+      </div>
+    {% endif %}
+    {% for key, errs in (error_messages or {}).items() %}{% for err in errs %}
+      <div class="rounded-md bg-bad-bg border border-[#e6c9c5] text-bad text-[13px] px-3.5 py-2.5 mb-4 flex items-start gap-2">
+        <i class="ri-error-warning-line flex-shrink-0 mt-0.5"></i><span>{{ err }}</span>
+      </div>
+    {% endfor %}{% endfor %}
+    {% block card %}{% endblock %}
+    <div class="mt-7 pt-4 border-t border-line flex items-center justify-between gap-2">
+      <a href="{{ url_for('admin_login') }}" class="text-[12.5px] text-gold-text font-semibold"><i class="ri-arrow-left-line"></i> Back to sign in</a>
+      <span class="text-[12px] text-ink-3"><i class="ri-lock-line"></i> Activity is logged.</span>
+    </div>
+  </div>
+</main>
+<script src="{{ url_for('static', path='js/turbo.es2017-umd.js') }}" defer></script>
+<script src="{{ url_for('static', path='js/live-actions.js') }}?v=2" defer></script>
+</body>
+</html>

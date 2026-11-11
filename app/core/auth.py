@@ -30,8 +30,25 @@ async def get_current_admin(request: Request):
     if not request.session.get("admin_authenticated"):
         return None
 
+    remember_until = request.session.get("admin_remember_until")
+    remembered = False
+    if remember_until:
+        try:
+            from app.core.settings_cache import get_setting as _gs
+            from app.database import async_session as _s2
+
+            async with _s2() as _db2:
+                allowed = (await _gs(_db2, "allow_admin_remember_me", "0")) == "1"
+            remembered = allowed and datetime.now(timezone.utc) < datetime.fromisoformat(remember_until)
+        except Exception:
+            remembered = False
+        if not remembered:
+            request.session.pop("admin_remember_until", None)
+
     last_activity = request.session.get("admin_last_activity_at")
-    if last_activity:
+    if last_activity and remembered:
+        request.session["admin_last_activity_at"] = datetime.now(timezone.utc).isoformat()
+    elif last_activity:
         if isinstance(last_activity, str):
             last_activity = datetime.fromisoformat(last_activity)
         try:
@@ -85,11 +102,16 @@ async def require_super_admin(request: Request):
     return admin
 
 
-def login_admin(request: Request, admin_id: int, session_version: int = 0) -> None:
+def login_admin(request: Request, admin_id: int, session_version: int = 0, remember: bool = False) -> None:
+    from datetime import timedelta
+
+    request.session.pop("pending_2fa", None)
     request.session["admin_id"] = admin_id
     request.session["admin_sv"] = session_version or 0
     request.session["admin_authenticated"] = True
     request.session["admin_last_activity_at"] = datetime.now(timezone.utc).isoformat()
+    if remember:          # "Keep me signed in": no inactivity sign-out on this device for 30 days
+        request.session["admin_remember_until"] = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
 
 
 def logout_admin(request: Request) -> None:

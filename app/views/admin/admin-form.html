@@ -96,6 +96,16 @@
         <div><button type="submit" class="btn btn-secondary"><i class="ri-key-2-line"></i>Reset password</button></div>
       </form>
     </div>
+    {% if target.totp_secret %}
+    <div class="panel">
+      <h2 class="text-[14px] font-semibold text-ink mb-1">Two-step sign-in</h2>
+      <p class="text-[12px] text-ink-3 mb-4">On for this account. If they lost their phone and their recovery codes, reset it: they sign in with their password and set it up again.</p>
+      <form method="POST" action="{{ url_for('admin_admins_2fa_reset', admin_id=target.id) }}" onsubmit="return confirm('Reset two-step sign-in for this administrator?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-secondary"><i class="ri-shield-keyhole-line"></i>Reset two-step sign-in</button>
+      </form>
+    </div>
+    {% endif %}
   {% endif %}
 </div>
 {% endblock %}

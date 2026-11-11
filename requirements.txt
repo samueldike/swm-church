@@ -37,3 +37,7 @@ phonenumbers==9.0.41
 tzdata==2026.5
 
 pypdf==6.21.4
+
+# Two-step sign-in for the admin console (app/core/admin_security.py): TOTP codes and a locally drawn QR code
+pyotp==2.9.0
+segno==1.6.1

@@ -1,0 +1,33 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header with context %}
+{% block title %}Two-step sign-in | {{ siteName }}{% endblock %}
+{% block topbar_title %}My Profile{% endblock %}
+{% block topbar_subtitle %}Two-step sign-in{% endblock %}
+{% block topbar_icon %}ri-shield-keyhole-line{% endblock %}
+{% block page_header %}{{ page_header("Turn on two-step sign-in", "After your password, the console will also ask for a code from your phone") }}{% endblock %}
+{% block content %}
+<div class="panel max-w-3xl">
+  <div class="grid grid-cols-1 sm:grid-cols-[230px_1fr] gap-6 items-start">
+    <div class="flex flex-col items-center gap-2">
+      <div class="rounded-lg border border-line bg-white p-2" style="width:220px" aria-label="QR code to scan with your authenticator app">{{ qr_svg | safe }}</div>
+      <p class="text-[12px] text-ink-3 text-center">Can't scan? Type this key:</p>
+      <code class="font-mono text-[13px] text-ink text-center break-all">{{ secret }}</code>
+    </div>
+    <div class="flex flex-col gap-4">
+      <ol class="list-decimal pl-5 flex flex-col gap-2 text-[13.5px] text-ink-2">
+        <li>Install an authenticator app on your phone: <b>Google Authenticator</b>, <b>Microsoft Authenticator</b> or <b>Authy</b>.</li>
+        <li>In the app, add an account and scan the QR code.</li>
+        <li>Type the 6-digit code the app shows, to confirm it works.</li>
+      </ol>
+      <form method="POST" action="{{ url_for('admin_profile_2fa_confirm') }}" class="flex flex-col gap-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label class="max-w-xs"><span class="field-label">6-digit code</span>
+          <input name="code" required autocomplete="one-time-code" inputmode="numeric" maxlength="7" class="field-input field-mono" style="font-size:20px;letter-spacing:.3em" placeholder="123456"></label>
+        <div class="flex gap-2"><button type="submit" class="btn btn-primary"><i class="ri-shield-check-line"></i>Confirm and turn on</button>
+          <a href="{{ url_for('admin_profile') }}" class="btn btn-secondary">Not now</a></div>
+      </form>
+      <p class="text-[12.5px] text-ink-3">Next you will get recovery codes, for when you do not have your phone. Keep them somewhere safe.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

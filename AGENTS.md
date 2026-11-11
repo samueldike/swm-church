@@ -50,7 +50,7 @@ FastAPI + async SQLAlchemy + Postgres (asyncpg) + Jinja2 + Celery/Redis. Python 
   `@apply` cannot chain custom classes; use `class="btn btn-primary"` in HTML.
 - Tables use `dtable dtable-responsive` with `data-label` on each `<td>` (stacked cards <768px). Inline scripts re-run on Turbo visits: use the AbortController pattern.
 - CSRF is a router dependency (`app/core/csrf.py`, wired in `app/main.py` for public + admin routers); `/api` is exempt. Fetch uploads must send `csrf_token` in the body or `X-CSRF-Token`.
-- No emails are ever sent: invitations are shared via "Copy invite link" (`data-copy`). The admin theme (presets/custom) is real via `_admin_theme_css`. Settings toggles not yet enforced (2FA, strong passwords, remember-me, audit retention) are shown read-only.
+- Emails go out only when Resend is set up (Settings → Email delivery); invitations are ALSO shared via "Copy invite link" (`data-copy`). Never tell a person "we emailed you" without `await mailer.can_send(to)`. The admin theme (presets/custom) is real via `_admin_theme_css`. Settings toggles not yet enforced (2FA, strong passwords, remember-me, audit retention) are shown read-only.
 - HOD routes live under `/admin/hod/...`.
 
 ## Secrets & API keys

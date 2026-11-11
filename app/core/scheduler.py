@@ -139,7 +139,10 @@ async def process_campaigns() -> int:
 
 
 async def housekeeping() -> None:
-    """Daily tidy-up: reminders after their event, old email log rows, old analytics counters."""
+    """Daily tidy-up: reminders after their event, old email log rows, old analytics counters, and audit-log rows
+    older than Settings -> Admin security -> Audit log retention (default 365 days)."""
+    from app.core.admin_security import retention_days
+    from app.models.admin import AdminAuditLog
     from app.models.engagement import AnalyticsCounter, EmailLog, EventReminder
     from app.models.event import Event
 
@@ -150,6 +153,8 @@ async def housekeeping() -> None:
         await db.execute(delete(EventReminder).where(EventReminder.status.in_(("sent", "failed")), EventReminder.sent_at < datetime.utcnow() - timedelta(days=3)))
         await db.execute(delete(EmailLog).where(EmailLog.created_at < datetime.utcnow() - timedelta(days=180)))
         await db.execute(delete(AnalyticsCounter).where(AnalyticsCounter.day < (datetime.utcnow() - timedelta(days=800)).date()))
+        keep = await retention_days(db)
+        await db.execute(delete(AdminAuditLog).where(AdminAuditLog.created_at < datetime.utcnow() - timedelta(days=keep)))
         await db.commit()
 
 

@@ -32,6 +32,9 @@ class Admin(Base):
     # WhatsApp feature override (app/core/whatsapp.py:can_use): "grant", "deny" or empty for the default
     # (HQ Administrator and the Media department's HOD have it; HODs and Resident Pastors can be granted it).
     whatsapp_access: Mapped[str | None] = mapped_column(String(10))
+    # Two-step sign-in (app/core/admin_security.py): Fernet-encrypted TOTP secret and hashed one-time recovery codes
+    totp_secret: Mapped[str | None] = mapped_column(String(255))
+    totp_recovery: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.utcnow()
     )

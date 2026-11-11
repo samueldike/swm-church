@@ -47,11 +47,40 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         {{ field('Current password', 'current_password', type='password', mono=True, required=True, autocomplete='current-password') }}
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {{ field('New password', 'password', type='password', mono=True, required=True, hint='At least 8 characters.', autocomplete='new-password') }}
+          {{ field('New password', 'password', type='password', mono=True, required=True, hint=password_rules or 'At least 8 characters.', autocomplete='new-password') }}
           {{ field('Confirm new password', 'password_confirmation', type='password', mono=True, required=True, autocomplete='new-password') }}
         </div>
         <div><button type="submit" class="btn btn-secondary"><i class="ri-lock-password-line"></i>Update password</button></div>
       </form>
+    </div>
+
+    <div class="panel" id="two-step">
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h2 class="text-[14px] font-semibold text-ink">Two-step sign-in</h2>
+          <p class="text-[12.5px] text-ink-3 mt-0.5">After your password, the console also asks for a code from an authenticator app on your phone.{% if twofa_required %} Required for every console account.{% endif %}</p>
+        </div>
+        {% if twofa_on %}<span class="badge badge-ok">On</span>{% else %}<span class="badge {{ 'badge-bad' if twofa_required else 'badge-neut' }}">Off</span>{% endif %}
+      </div>
+      {% if not twofa_on %}
+        <a href="{{ url_for('admin_profile_2fa_setup') }}" class="btn btn-primary"><i class="ri-shield-keyhole-line"></i>Turn on two-step sign-in</a>
+      {% else %}
+        <p class="text-[13px] text-ink-2 mb-3">Recovery codes left: <b>{{ twofa_codes_left }}</b>{% if twofa_codes_left <= 3 %} <span class="text-bad">— make new ones</span>{% endif %}</p>
+        <div class="flex flex-wrap gap-3 items-end">
+          <form method="POST" action="{{ url_for('admin_profile_2fa_codes') }}" class="flex flex-wrap gap-2 items-end">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label><span class="field-label">Your password</span><input type="password" name="password" required autocomplete="current-password" class="field-input field-mono" style="width:200px"></label>
+            <button type="submit" class="btn btn-secondary"><i class="ri-refresh-line"></i>New recovery codes</button>
+          </form>
+          {% if not twofa_required %}
+          <form method="POST" action="{{ url_for('admin_profile_2fa_off') }}" class="flex flex-wrap gap-2 items-end" onsubmit="return confirm('Turn off two-step sign-in for your account?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label><span class="field-label">Your password</span><input type="password" name="password" required autocomplete="current-password" class="field-input field-mono" style="width:200px"></label>
+            <button type="submit" class="btn btn-danger"><i class="ri-shield-line"></i>Turn off</button>
+          </form>
+          {% endif %}
+        </div>
+      {% endif %}
     </div>
   </div>
 </div>

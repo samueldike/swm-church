@@ -172,7 +172,8 @@ async def visit_store(
         details=details, button=("Get directions", d["directions"]) if d["directions"] else None, reply_to=d["email"] or (site.get("siteContactEmail") or None)))
     mailer.fire(mailer.notify_staff(church_id, "Someone is planning to visit", base_url=base, kind="staff", heading="A visitor is planning to visit",
                                     paragraphs=[f"A new visit plan for {d['name']} is waiting in Inquiries. Please welcome them."], link_path="/admin/inquiries"))
-    request.session["visit_thanks"] = {"name": name.split()[0], "branch": d["name"], "when": when_txt, "subscribed": subscribed, "emailed": True}
+    request.session["visit_thanks"] = {"name": name.split()[0], "branch": d["name"], "when": when_txt, "subscribed": subscribed,
+                                       "emailed": await mailer.can_send(email)}
     return pub._redirect(request, "/visit/thanks")
 
 
@@ -598,7 +599,8 @@ async def give_transfer_notice(
                                                "Your gift is a seed sown in God’s house — thank you for your generosity."],
                                    details=[("Amount", geo.format_money(value, currency)), ("For", g.giving_type), ("Reference", g.reference)] + ([("Bank reference", bank_ref.strip()[:120])] if bank_ref.strip() else []),
                                    footnote="If any of this is wrong, reply to this email and tell us."))
-    return pub._redirect(request, "/give", "Thank you — we have noted your transfer and emailed you a confirmation. Finance will confirm it against our statement.")
+    sent = " and emailed you a confirmation" if await mailer.can_send(email) else ""
+    return pub._redirect(request, "/give", f"Thank you — we have noted your transfer{sent}. Finance will confirm it against our statement.")
 
 
 # ══════════════════════════════════════════════════════════════════════════
