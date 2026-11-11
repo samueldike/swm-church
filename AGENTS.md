@@ -50,7 +50,7 @@ FastAPI + async SQLAlchemy + Postgres (asyncpg) + Jinja2 + Celery/Redis. Python 
   `@apply` cannot chain custom classes; use `class="btn btn-primary"` in HTML.
 - Tables use `dtable dtable-responsive` with `data-label` on each `<td>` (stacked cards <768px). Inline scripts re-run on Turbo visits: use the AbortController pattern.
 - CSRF is a router dependency (`app/core/csrf.py`, wired in `app/main.py` for public + admin routers); `/api` is exempt. Fetch uploads must send `csrf_token` in the body or `X-CSRF-Token`.
-- Emails go out only when Resend is set up (Settings → Email delivery); invitations are ALSO shared via "Copy invite link" (`data-copy`). Never tell a person "we emailed you" without `await mailer.can_send(to)`. The admin theme (presets/custom) is real via `_admin_theme_css`. Settings toggles not yet enforced (2FA, strong passwords, remember-me, audit retention) are shown read-only.
+- Emails go out only when Resend is set up (Settings → Email delivery); invitations are ALSO shared via "Copy invite link" (`data-copy`). Never tell a person "we emailed you" without `await mailer.can_send(to)`. The admin theme (presets/custom) is real via `_admin_theme_css`. Admin security (`app/core/admin_security.py`) is enforced: two-step sign-in (TOTP + recovery codes, optional per account, `enable_admin_2fa` requires it; `/admin/two-step` after the password), `enforce_strong_passwords` via `password_problem()` wherever a console password is set, `allow_admin_remember_me` (30-day session, cookie max_age 30 days), `audit_log_retention_days` pruned nightly; "Forgot password?" (`/admin/forgot-password`, signed 1-hour links that die on use) shows only when `mailer.can_send()`.
 - HOD routes live under `/admin/hod/...`.
 
 ## Secrets & API keys
