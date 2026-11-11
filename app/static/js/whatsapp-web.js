@@ -58,10 +58,23 @@
       if (qs.every((w) => t.includes(w))) return 30;
       return 0;
     }
+    // Lookalikes: when nothing matches every word, fall back to names matching SOME of the words (best first).
+    function partialScore(text, query) {
+      const words = norm(text).split(' '), qs = norm(query).split(' ').filter((w) => w.length >= 2);
+      if (!qs.length) return 0;
+      const ini = words.map((w) => w[0]).join('');
+      const hit = qs.filter((w) => words.some((x) => x.startsWith(w)) || (w.length >= 2 && subseq(ini, w)) || (w.length >= 4 && words.some((x) => x.startsWith(w.slice(0, 3))))).length;
+      return hit ? Math.round(20 * hit / qs.length) : 0;
+    }
+    let lastPartial = false;
     function rank(list, query, fields, limit = 300) {
+      lastPartial = false;
       if (!String(query || '').trim()) return list.slice(0, limit);
-      return list.map((x, i) => [x, Math.max(0, ...fields(x).map((f) => score(f, query))), i]).filter((r) => r[1] > 0)
+      const run = (fn) => list.map((x, i) => [x, Math.max(0, ...fields(x).map((f) => fn(f, query))), i]).filter((r) => r[1] > 0)
         .sort((a, b) => (b[1] - a[1]) || (a[2] - b[2])).slice(0, limit).map((r) => r[0]);
+      const strict = run(score);
+      if (strict.length || /^[+\d\s()-]+$/.test(String(query).trim())) return strict;
+      const loose = run(partialScore); lastPartial = loose.length > 0; return loose;
     }
     // highlight the matched word starts in a name
     function hl(name, query) {
@@ -366,15 +379,16 @@
       const box = $('wx-chatlist'), needle = $('wx-q').value.trim().toLowerCase();
       let list = chats;
       if (filter === 'favourites') list = list.filter((c) => favs.has(c.jid));
-      if (needle) list = rank(list, needle, (c) => [c.name, num(c.jid)]);
+      let similar = false;
+      if (needle) { list = rank(list, needle, (c) => [c.name, num(c.jid)]); similar = lastPartial; }
       let html = '';
       if (!needle && filter === 'all' && archivedCount) html += `<button type="button" class="wx-archived" data-go="archived"><i class="ri-inbox-archive-line"></i><span>Archived</span><b>${archivedCount}</b></button>`;
-      if (needle) html += list.length ? '<p class="wx-sec">Chats</p>' : '';
+      if (needle) html += list.length ? `<p class="wx-sec">${similar ? `No exact match · similar chats` : 'Chats'}</p>` : '';
       html += list.map((c) => rowHTML(c, needle ? { hl: needle } : {})).join('');
       if (needle && contacts) {
         const inList = new Set(list.map((c) => c.jid));
         const more = rank(contacts.filter((c) => !inList.has(c.jid)), needle, (c) => [c.name, c.pushname, c.phone], 40);
-        if (more.length) html += '<p class="wx-sec">Contacts</p>' + more.map((c) => rowHTML({ jid: c.jid, name: c.name, kind: 'user' }, { sub: c.pushname && c.pushname !== c.name ? '~' + c.pushname : '+' + c.phone, noMenu: true, hl: needle })).join('');
+        if (more.length) html += `<p class="wx-sec">${lastPartial ? 'Similar contacts' : 'Contacts'}</p>` + more.map((c) => rowHTML({ jid: c.jid, name: c.name, kind: 'user' }, { sub: c.pushname && c.pushname !== c.name ? '~' + c.pushname : '+' + c.phone, noMenu: true, hl: needle })).join('');
       }
       if (needle && !contacts) html += '<p class="wx-note">Searching contacts…</p>';
       if (!list.length && !html) html = `<p class="wx-note">${needle ? 'No chats, contacts or messages found' : filter === 'unread' ? 'No unread chats' : filter === 'favourites' ? 'Add chats to Favourites from the chat menu (˅).' : filter === 'groups' ? 'No groups' : 'No chats yet'}</p>`;
@@ -495,10 +509,11 @@
       }
       if (!contacts) { box.innerHTML = html + '<p class="wx-note">Loading contacts…</p>'; lazyAv(box); return; }
       const list = ql ? rank(contacts, raw, (c) => [c.name, c.pushname, c.phone], 200) : contacts;
+      const similarNC = ql && lastPartial;
       const isNumber = d.length >= 7 && /^[+\d\s()-]+$/.test(raw);
       if (isNumber && !list.some((c) => c.phone === d)) html += `<p class="wx-sec">Phone number</p><div id="wx-nc-num"><p class="wx-note">Checking +${esc(d)} on WhatsApp…</p></div>`;
       if (list.length) {
-        html += `<p class="wx-sec">${ql ? 'Contacts' : 'Contacts on WhatsApp'}</p>`;
+        html += `<p class="wx-sec">${ql ? (similarNC ? `No exact match for '${esc(raw)}' · similar contacts` : 'Contacts') : 'Contacts on WhatsApp'}</p>`;
         let letter = '';
         list.slice(0, ql ? 200 : 3000).forEach((c) => {
           const L = (c.name[0] || '#').toUpperCase(), key = /\p{L}/u.test(L) ? L : '#';
@@ -1325,10 +1340,11 @@
       if (!targets) { tbox.innerHTML = '<p class="wx-note">Loading your chats, groups, channels and contacts…</p>'; tbox.hidden = false; tq.setAttribute('aria-expanded', 'true'); return; }
       const pool = targets.filter((t) => !picked.has(t.jid));
       sugg = raw ? rank(pool, raw, (t) => [t.name, t.pushname, t.phone], 40) : pool.filter((t) => t.kind !== 'user' || t.label === 'Chat').slice(0, 12);
+      const similar = raw && lastPartial;
       const d = raw.replace(/\D/g, '');
       if (d.length >= 7 && /^[+\d\s()-]+$/.test(raw) && !sugg.some((t) => t.phone === d)) sugg.unshift({ jid: d + '@c.us', name: '+' + d, kind: 'user', label: 'Number' });
       activeIdx = 0;
-      tbox.innerHTML = (raw ? '' : '<p class="wx-sec" style="padding:8px 16px 4px">Groups, channels and recent chats</p>') + (sugg.length ? sugg.map((t, i) => `<div class="wx-row ${i === 0 ? 'is-active' : ''}" role="option" aria-selected="${i === 0}" data-sug="${i}">${av(t.jid, t.name, t.kind)}
+      tbox.innerHTML = (raw ? (similar ? `<p class="wx-sec" style="padding:8px 16px 4px">No exact match for '${esc(raw)}' · similar names</p>` : '') : '<p class="wx-sec" style="padding:8px 16px 4px">Groups, channels and recent chats</p>') + (sugg.length ? sugg.map((t, i) => `<div class="wx-row ${i === 0 ? 'is-active' : ''}" role="option" aria-selected="${i === 0}" data-sug="${i}">${av(t.jid, t.name, t.kind)}
           <div class="wx-row-mid"><div class="wx-row-top"><span class="wx-row-name">${raw ? hl(t.name, raw) : esc(t.name)}</span><span class="kind">${t.label}</span></div>
           ${t.label === 'Contact' || t.label === 'Number' ? `<div class="wx-row-bot"><span class="wx-row-last">${t.phone ? '+' + esc(t.phone) : ''}</span></div>` : ''}</div></div>`).join('')
         : `<p class="wx-note">No chat, group, channel or contact matches '${esc(raw)}'.</p>`);
