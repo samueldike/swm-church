@@ -122,3 +122,20 @@
   .vc-player.vertical { max-height: 70vh; }
 }
 .vc-mt { margin-top: 14px; }
+/* Form controls: visible boxes (the admin theme styles controls per page). */
+.vc input[type=text], .vc input[type=url], .vc input[type=number], .vc select, .vc textarea {
+  width: 100%; border: 1px solid var(--vc-line2); border-radius: 8px; background: var(--vc-surface); color: var(--vc-ink);
+  font-size: 13.5px; font-weight: 400; padding: 0 11px; min-height: 38px; outline: none; transition: border-color .15s, box-shadow .15s; }
+.vc textarea { padding: 8px 11px; }
+.vc select { padding-right: 28px; }
+.vc input:focus, .vc select:focus, .vc textarea:focus { border-color: var(--vc-gold); box-shadow: 0 0 0 3px var(--vc-gold-tint); }
+.vc input::placeholder, .vc textarea::placeholder { color: var(--vc-ink3); opacity: .8; }
+.vc-yt summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 12px 16px; flex-wrap: wrap; font-size: 13.5px; }
+.vc-yt summary::-webkit-details-marker { display: none; }
+.vc-yt summary > .ri-youtube-line { color: #e1251b; font-size: 18px; }
+.vc-yt-why { font-size: 12.5px; }
+.vc-yt-body { padding: 0 16px 14px; font-size: 13px; line-height: 1.55; color: var(--vc-ink2); }
+.vc-yt-body ol { margin: 0 0 8px 18px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.vc-yt-body p { margin: 0 0 10px; font-size: 12.5px; }
+.vc-yt-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.vc-yt-actions input[type=file] { font-size: 12.5px; max-width: 260px; }

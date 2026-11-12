@@ -10432,10 +10432,47 @@ async def admin_clipper(request: Request, db: AsyncSession = Depends(get_db)):
     if not sees_every_church(admin):
         q = q.where(ClipProject.branch_id == church)
     projects = (await db.execute(q)).scalars().all()
+    youtube = None
+    if sees_every_church(admin):
+        from app.core.settings_cache import get_secret_status
+
+        youtube = (await get_secret_status(db)).get("clipper_youtube_cookies") or {"state": "unset"}
     ctx = await _admin_context(request, db, "admin.clipper")
     return await render_template(request, "admin/clipper.html", {
-        "projects": projects, "stale": pipeline.stale, "disk": pipeline.disk_summary(),
+        "projects": projects, "stale": pipeline.stale, "disk": pipeline.disk_summary(), "youtube": youtube,
         "title": "Video Clipper", **ctx})
+
+
+@router.post("/clipper/youtube-access", name="admin_clipper_youtube")
+async def admin_clipper_youtube(request: Request, db: AsyncSession = Depends(get_db)):
+    """HQ Administrator only: save (encrypted) or remove the YouTube cookies.txt yt-dlp signs in with."""
+    admin, church = await _clip_ctx(request, db)
+    from app.core.clipper.options import sees_every_church
+
+    if not admin or church is None or not sees_every_church(admin):
+        return _redirect(request, "/admin/clipper", "Only the HQ Administrator can change YouTube access.", "error")
+    from app.core.clipper import media
+    from app.core.settings_cache import update_settings
+
+    form = await request.form()
+    if form.get("clear") == "1":
+        await update_settings(db, {"clipper_youtube_cookies": ""})
+        await log_admin_action(db, admin.id, "clipper.youtube_access", "setting", None, {"action": "removed"}, request)
+        await db.commit()
+        return _redirect(request, "/admin/clipper", "YouTube access removed.", "success")
+    upload = form.get("cookies")
+    text = ""
+    if upload is not None and hasattr(upload, "read"):
+        raw = await upload.read(512 * 1024 + 1)
+        if len(raw) > 512 * 1024:
+            return _redirect(request, "/admin/clipper", "That file is too large to be a cookies.txt export.", "error")
+        text = raw.decode("utf-8", "replace")
+    if not media.valid_cookies(text):
+        return _redirect(request, "/admin/clipper", "That is not a YouTube cookies.txt export. Export it from a browser that is signed in to YouTube (Netscape format).", "error")
+    await update_settings(db, {"clipper_youtube_cookies": text})
+    await log_admin_action(db, admin.id, "clipper.youtube_access", "setting", None, {"action": "saved"}, request)
+    await db.commit()
+    return _redirect(request, "/admin/clipper", "YouTube access saved. YouTube links will now download with it.", "success")
 
 
 @router.get("/clipper/new", response_class=HTMLResponse, name="admin_clipper_new")

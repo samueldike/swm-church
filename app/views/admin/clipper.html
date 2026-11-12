@@ -17,6 +17,37 @@
     <div class="vc-alert bad" role="alert"><i class="ri-hard-drive-2-line"></i><span>The server has {{ (disk.free / 1024 ** 3)|round(1) }} GB of free space left. Delete projects you no longer need so new videos can be processed.</span></div>
   {% endif %}
 
+  {% if youtube is not none %}
+  <details class="vc-panel vc-yt" {{ 'open' if youtube.state == 'unset' and not projects else '' }}>
+    <summary><i class="ri-youtube-line"></i><b>YouTube access</b>
+      {% if youtube.state == 'set' %}<span class="vc-pill ok"><i class="ri-check-line"></i>Connected</span>
+      {% elif youtube.state == 'unreadable' %}<span class="vc-pill bad">Saved but unreadable</span>
+      {% else %}<span class="vc-pill">Not connected</span>{% endif %}
+      <span class="vc-muted vc-yt-why">YouTube refuses servers unless they download as a signed-in viewer.</span></summary>
+    <div class="vc-yt-body">
+      <ol>
+        <li>In Chrome or Edge, sign in to YouTube with a church Google account (a separate account, not anyone's personal one, is safest).</li>
+        <li>Add the browser extension <b>Get cookies.txt LOCALLY</b>, open youtube.com, and export the cookies (Netscape format).</li>
+        <li>Upload that file here. It is stored encrypted and used only to download the links you clip.</li>
+      </ol>
+      <p class="vc-muted">Sign-ins expire after some weeks. When YouTube links start failing, export and upload a fresh file. Uploading the video file always works without this.</p>
+      <div class="vc-yt-actions">
+        <form method="post" action="{{ url_for('admin_clipper_youtube') }}" enctype="multipart/form-data" class="vc-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="file" name="cookies" accept=".txt,text/plain" required>
+          <button type="submit" class="btn btn-primary btn-sm"><i class="ri-upload-2-line"></i>{{ 'Replace' if youtube.state == 'set' else 'Save' }} cookies.txt</button>
+        </form>
+        {% if youtube.state != 'unset' %}
+        <form method="post" action="{{ url_for('admin_clipper_youtube') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="clear" value="1">
+          <button type="submit" class="btn btn-ghost btn-sm"><i class="ri-link-unlink"></i>Remove</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </details>
+  {% endif %}
+
   {% if projects %}
   <div class="vc-grid">
     {% for p in projects %}

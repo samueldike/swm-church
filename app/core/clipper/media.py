@@ -130,25 +130,42 @@ def valid_url(url: str) -> bool:
     return bool(url) and len(url) <= 2000 and _URL_OK.match(url.strip()) is not None
 
 
+def is_youtube(url: str) -> bool:
+    return re.search(r"(^|\.|//)(youtube\.com|youtu\.be)(/|$)", (url or "").lower()) is not None
+
+
+def valid_cookies(text: str) -> bool:
+    """A Netscape cookies.txt that holds YouTube/Google cookies (what browser exporters write)."""
+    lines = [l.removeprefix("#HttpOnly_") for l in (text or "").splitlines()]
+    lines = [l for l in lines if l.strip() and not l.startswith("#")]
+    good = [l for l in lines if l.count("\t") >= 6 and (".youtube.com" in l or ".google.com" in l)]
+    return len(good) >= 3
+
+
 def download(url: str, dest: Path, *, start: float | None = None, end: float | None = None,
-             max_height: int = 1080, progress=None) -> str:
+             max_height: int = 1080, cookies: str | None = None, progress=None) -> str:
     """Fetch ``url`` (YouTube, Facebook, Vimeo, a direct .mp4 link...) into ``dest`` as mp4. Returns its title.
 
-    With ``start``/``end`` only that part is fetched, which is much quicker for a long service.
+    With ``start``/``end`` only that part is kept. The whole file is fetched at full speed and cut here with a
+    stream copy: yt-dlp's ranged download pipes through ffmpeg at about real time, so 15 minutes took 15 minutes.
     """
     work = dest.parent / "incoming"
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True, exist_ok=True)
     fmt = (f"bv*[height<={max_height}][vcodec^=avc1]+ba[ext=m4a]/bv*[height<={max_height}]+ba/"
            f"b[height<={max_height}]/bv*+ba/b")
-    cmd = ["yt-dlp", "--no-playlist", "--no-progress", "--newline", "--no-warnings", "-f", fmt,
+    cmd = ["yt-dlp", "--no-playlist", "--newline", "--no-warnings", "-f", fmt,
            "--merge-output-format", "mp4", "--restrict-filenames", "--print", "before_dl:TITLE %(title)s",
            "--progress-template", "download:PROGRESS %(progress._percent_str)s",
-           "-o", str(work / "source.%(ext)s"), "--retries", "5", "--fragment-retries", "10"]
-    if start is not None or end is not None:
-        a = f"{start or 0:.0f}"
-        b = f"{end:.0f}" if end is not None else "inf"
-        cmd += ["--download-sections", f"*{a}-{b}", "--force-keyframes-at-cuts"]
+           "-o", str(work / "source.%(ext)s"), "--retries", "5", "--fragment-retries", "10",
+           "--concurrent-fragments", "4"]
+    cookie_file = None
+    if cookies:
+        # yt-dlp may write refreshed cookies back; the file lives only for this download.
+        cookie_file = work / "cookies.txt"
+        cookie_file.write_text(cookies, encoding="utf-8")
+        os.chmod(cookie_file, 0o600)
+        cmd += ["--cookies", str(cookie_file)]
     cmd.append(url.strip())
 
     title = ""
@@ -169,12 +186,19 @@ def download(url: str, dest: Path, *, start: float | None = None, end: float | N
         elif line:
             tail = (tail + [line])[-8:]
     code = proc.wait()
+    if cookie_file is not None:
+        cookie_file.unlink(missing_ok=True)
     if code != 0:
         text = " ".join(tail)
         logger.warning("yt-dlp failed for %s: %s", url, text[-600:])
-        if "Sign in to confirm" in text or "not a bot" in text:
-            raise ClipperError("YouTube refused this server's request (it asks the server to sign in). "
-                               "Download the video and upload the file instead.")
+        if "Sign in to confirm" in text or "not a bot" in text or "cookies" in text.lower() and is_youtube(url):
+            shutil.rmtree(work, ignore_errors=True)
+            if cookies:
+                raise ClipperError("YouTube refused the saved sign-in (it has probably expired). The HQ Administrator "
+                                   "can save fresh YouTube cookies under Video Clipper → YouTube access, or upload the "
+                                   "video file instead.")
+            raise ClipperError("YouTube refused this server (it asks for a signed-in viewer). The HQ Administrator can "
+                               "connect YouTube under Video Clipper → YouTube access, or upload the video file instead.")
         if "Private video" in text or "members-only" in text or "This video is private" in text:
             raise ClipperError("That video is private. Upload the file instead.")
         if "is not a valid URL" in text or "Unsupported URL" in text:
@@ -186,7 +210,9 @@ def download(url: str, dest: Path, *, start: float | None = None, end: float | N
     if not files:
         raise ClipperError("The download finished but no video file arrived.")
     got = files[0]
-    if got.suffix.lower() != ".mp4":
+    if start is not None or end is not None:
+        trim_upload(got, dest, start, end)
+    elif got.suffix.lower() != ".mp4":
         remux(got, dest)
     else:
         got.replace(dest)
@@ -232,21 +258,68 @@ def extract_audio(src: Path, dest: Path) -> None:
          str(dest)], timeout=3 * 3600)
 
 
-def silence_map(audio: Path, *, noise_db: int = -32, min_len: float = 0.3) -> list[list[float]]:
-    """Every pause of at least ``min_len`` seconds as [start, end], from the audio itself."""
-    proc = subprocess.run(
-        ["ffmpeg", "-v", "info", "-nostats", "-i", str(audio), "-af",
-         f"silencedetect=noise={noise_db}dB:d={min_len}", "-f", "null", "-"],
-        capture_output=True, text=True, timeout=3 * 3600)
+FRAME_SEC = 0.02
+
+
+def frame_levels(audio: Path) -> "list[float]":
+    """Loudness (dB RMS) of every 20 ms frame of a 16 kHz mono 16-bit WAV, read in chunks."""
+    import wave
+
+    import numpy as np
+
+    out = []
+    with wave.open(str(audio), "rb") as wf:
+        rate = wf.getframerate()
+        hop = max(1, int(rate * FRAME_SEC))
+        chunk = hop * 3000                      # one minute at a time
+        rest = np.zeros(0, dtype=np.float32)
+        while True:
+            raw = wf.readframes(chunk)
+            if not raw:
+                break
+            data = np.concatenate([rest, np.frombuffer(raw, dtype="<i2").astype(np.float32)])
+            n = len(data) // hop
+            if n:
+                frames = data[: n * hop].reshape(n, hop)
+                rms = np.sqrt(np.mean(frames * frames, axis=1)) + 1e-3
+                out.append(20 * np.log10(rms / 32768.0))
+            rest = data[n * hop:]
+    return np.concatenate(out).tolist() if out else []
+
+
+def silences_from_levels(levels: list[float], *, min_len: float = 0.3) -> list[list[float]]:
+    """Pauses relative to THIS recording: below a threshold set between its noise floor and its speech level.
+
+    A fixed threshold fails on real church recordings: room noise, a hum or a music bed sits above -32 dB, so
+    ffmpeg's silencedetect found no pause at all in a typical service.
+    """
+    import numpy as np
+
+    if not levels:
+        return []
+    db = np.asarray(levels, dtype=np.float32)
+    floor = float(np.percentile(db, 6))
+    speech = float(np.percentile(db, 80))
+    if speech - floor < 8:                      # no usable contrast (music throughout, or near silence)
+        return []
+    threshold = floor + max(5.0, (speech - floor) * 0.32)
+    quiet = db < threshold
     gaps: list[list[float]] = []
-    start = None
-    for line in (proc.stderr or "").splitlines():
-        m = re.search(r"silence_start: (-?[\d.]+)", line)
-        if m:
-            start = max(0.0, float(m.group(1)))
-            continue
-        m = re.search(r"silence_end: ([\d.]+)", line)
-        if m and start is not None:
-            gaps.append([round(start, 3), round(float(m.group(1)), 3)])
-            start = None
+    need = int(round(min_len / FRAME_SEC))
+    k, n = 0, len(quiet)
+    while k < n:
+        if quiet[k]:
+            j = k
+            while j < n and quiet[j]:
+                j += 1
+            if j - k >= need:
+                gaps.append([round(k * FRAME_SEC, 3), round(j * FRAME_SEC, 3)])
+            k = j
+        else:
+            k += 1
     return gaps
+
+
+def silence_map(audio: Path, *, min_len: float = 0.3) -> list[list[float]]:
+    """Every pause of at least ``min_len`` seconds as [start, end], measured from the audio itself."""
+    return silences_from_levels(frame_levels(audio), min_len=min_len)

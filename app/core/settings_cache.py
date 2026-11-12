@@ -17,6 +17,7 @@ ENCRYPTED_SETTING_KEYS = {
     "openrouter_api_key",
     "groq_api_key",
     "gemini_api_key",
+    "clipper_youtube_cookies",    # Video Clipper: a signed-in browser's YouTube cookies.txt (yt-dlp --cookies)
 }
 _ENC_PREFIX = "enc:v1:"
 

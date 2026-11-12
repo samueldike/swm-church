@@ -94,9 +94,10 @@ async def fetch(project_id: int) -> bool:
             raise ClipperError("The server is short of disk space. Delete old projects, then try again.")
         await _update(project_id, status="fetching", stage="Getting the video", progress=0.0, error=None)
         if p.source_kind == "url":
+            cookies = await youtube_cookies() if media.is_youtube(p.source_url or "") else None
             title = await _in_thread(project_id, media.download, p.source_url or "", src,
                                      start=st.get("range_start"), end=st.get("range_end"),
-                                     max_height=1080, stage="Downloading the video")
+                                     max_height=1080, cookies=cookies or None, stage="Downloading the video")
             if title and not p.title:
                 await _update(project_id, title=title[:255])
         else:
@@ -163,6 +164,13 @@ async def transcribe(project_id: int) -> bool:
         logger.exception("Clipper transcription failed for project %s", project_id)
         await _fail(project_id, "Transcribing the video failed unexpectedly. Please try again.")
     return False
+
+
+async def youtube_cookies() -> str:
+    from app.core.settings_cache import get_setting
+
+    async with async_session() as db:
+        return (await get_setting(db, "clipper_youtube_cookies", "")).strip()
 
 
 async def _hotwords() -> str:
