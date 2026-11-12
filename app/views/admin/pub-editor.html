@@ -55,7 +55,7 @@
   .ed-pop { position: absolute; z-index: 30; background: var(--color-surface, #fff); border: 1px solid var(--color-line-2, #d8d3c6); border-radius: 8px; padding: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.14); display: none; }
   .ed-pop.open { display: block; }
   /* Print-template chooser */
-  dialog.tp { border: 0; padding: 0; border-radius: 12px; width: min(760px, calc(100vw - 24px)); max-height: calc(100vh - 32px); background: var(--color-surface, #fff); color: var(--color-ink, #1a1a1a); box-shadow: 0 24px 64px rgba(0,0,0,.28); }
+  dialog.tp { position: fixed; inset: 0; margin: auto; height: fit-content; border: 0; padding: 0; border-radius: 12px; width: min(760px, calc(100vw - 24px)); max-height: calc(100vh - 32px); background: var(--color-surface, #fff); color: var(--color-ink, #1a1a1a); box-shadow: 0 24px 64px rgba(0,0,0,.28); }
   dialog.tp::backdrop { background: rgba(20,18,14,.45); }
   .tp-in { display: flex; flex-direction: column; max-height: calc(100vh - 32px); }
   .tp-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; padding: 18px 20px 12px; border-bottom: 1px solid var(--color-line, #e4e0d6); }
@@ -219,8 +219,8 @@
   {#- Print templates (app/core/devotional_templates.py). A thumbnail is page 1 of the real PDF. -#}
   <dialog id="ed-tpl" class="tp" aria-labelledby="ed-tpl-h"
           data-thumb="{{ url_for('admin_pubs_template_thumb', kind=kind, pub_id=pub.id, key='__KEY__') }}"
-          data-export="{{ url_for('admin_pubs_export_template', kind=kind, pub_id=pub.id) }}">
-    <form method="dialog" class="tp-in" id="ed-tpl-form">
+          data-export-url="{{ url_for('admin_pubs_export_template', kind=kind, pub_id=pub.id) }}">
+    <form class="tp-in" id="ed-tpl-form" data-turbo="false" onsubmit="return false">
       <header class="tp-head">
         <div><h2 id="ed-tpl-h">Export with a print template</h2>
           <p>Each day of the devotional is laid out on its own book page, from the document as last saved.</p></div>
@@ -255,7 +255,7 @@
       <footer class="tp-foot">
         <span class="tp-msg" id="ed-tpl-msg" role="status" aria-live="polite"></span>
         <button type="button" class="btn btn-secondary btn-sm" id="ed-tpl-cancel">Cancel</button>
-        <button type="submit" class="btn btn-primary btn-sm" id="ed-tpl-go"><i class="ri-file-pdf-line"></i>Export PDF</button>
+        <button type="button" class="btn btn-primary btn-sm" id="ed-tpl-go"><i class="ri-file-pdf-line"></i>Export PDF</button>
       </footer>
     </form>
   </dialog>
@@ -604,7 +604,7 @@
     $('ed-tpl-x').addEventListener('click', close, opt);
     $('ed-tpl-cancel').addEventListener('click', close, opt);
     form.addEventListener('change', (e) => { if (['trim', 'reading', 'two_year_plan'].includes(e.target.name)) loadThumbs(); }, opt);
-    form.addEventListener('submit', async (e) => {
+    $('ed-tpl-go').addEventListener('click', async (e) => {
       e.preventDefault();
       const go = $('ed-tpl-go');
       msg.classList.remove('err');
@@ -614,11 +614,11 @@
       const fail = (text) => { msg.textContent = text || 'The designed PDF could not be made. Please try again.'; msg.classList.add('err'); };
       try {
         const body = params();
-        const res = await fetch(tpl.dataset.export, { method: 'POST', credentials: 'same-origin', body,
+        const res = await fetch(tpl.dataset.exportUrl, { method: 'POST', credentials: 'same-origin', body,
           headers: { 'X-CSRF-Token': shell.dataset.csrf } });
         const start = await res.json().catch(() => ({}));
         if (!res.ok || !start.ok) { fail(start.error); return; }
-        const statusUrl = tpl.dataset.export + '/' + encodeURIComponent(start.job);
+        const statusUrl = tpl.dataset.exportUrl + '/' + encodeURIComponent(start.job);
         // Poll until the server has laid out every page (a year takes a minute or two).
         for (;;) {
           await new Promise((r) => setTimeout(r, 1500));
