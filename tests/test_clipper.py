@@ -106,7 +106,7 @@ def test_cold_open_must_be_later_in_the_body_and_short():
 
 def test_plan_welds_neighbours_and_puts_the_teaser_first():
     units = _units(10)
-    plan = editorial.plan_from_edl(units, [{"i": 2, "role": "setup"}, {"i": 3, "role": "point"}, {"i": 5, "role": "payoff"}], [6], 3)
+    plan = editorial.plan_from_edl(units, [{"i": 2, "role": "setup"}, {"i": 3, "role": "point"}, {"i": 5, "role": "payoff"}], [4, 6], 3)
     assert plan[0]["cold_open"] and plan[0]["w0"] == units[3].w0
     assert plan[1]["ids"] == [2, 3] and plan[1]["w1"] == units[3].w1
     assert plan[2]["ids"] == [5]

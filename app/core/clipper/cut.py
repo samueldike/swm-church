@@ -30,37 +30,50 @@ def _kept(words: list[list], w0: int, w1: int, *, opening: bool) -> list[int]:
     return idx
 
 
-def _gap_between(gaps: list[list[float]], starts: list[float], a_end: float, b_start: float) -> list[float] | None:
-    """A measured silence of at least PAUSE seconds lying between two consecutive words."""
-    k = bisect.bisect_left(starts, a_end - 0.6)
-    while k < len(gaps) and gaps[k][0] < b_start:
-        g = gaps[k]
-        if g[1] - g[0] >= PAUSE and g[1] > a_end - 0.6 and g[0] < b_start + 0.25:
-            return g
-        k += 1
-    return None
+def true_words(words: list[list], gaps: list[list[float]]) -> list[list]:
+    """Word timings corrected against the measured silences.
+
+    Whisper often stretches the word before a pause (its end runs on) or the word after it (its start comes
+    early) right across the silence. A silence covering the start or end of a word moves that edge; one lying
+    inside a word keeps the longer side, which is where the word is really spoken.
+    """
+    if not gaps:
+        return words
+    starts = [g[0] for g in gaps]
+    out = []
+    for w in words:
+        s, e = w[0], w[1]
+        k = max(0, bisect.bisect_left(starts, s) - 1)
+        while k < len(gaps) and gaps[k][0] < e:
+            g0, g1 = gaps[k]
+            k += 1
+            if g1 - g0 < PAUSE or g1 <= s or g0 >= e:
+                continue
+            if g0 <= s + 0.05 and g1 < e - 0.08:          # silence over its start
+                s = g1
+            elif g1 >= e - 0.05 and g0 > s + 0.08:        # silence over its end
+                e = g0
+            elif g0 > s and g1 < e:                       # silence inside it: keep the longer side
+                if g0 - s >= e - g1:
+                    e = g0
+                else:
+                    s = g1
+        out.append([round(s, 3), round(max(e, s + 0.05), 3), w[2]])
+    return out
 
 
-def piece_spans(words: list[list], idx: list[int], gaps: list[list[float]], starts: list[float]) -> list[list[float]]:
-    """Continuous-speech spans for the kept words, padded, cut at pauses."""
+def piece_spans(words: list[list], idx: list[int]) -> list[list[float]]:
+    """Continuous-speech spans for the kept words (timings already corrected), padded, cut at pauses."""
     if not idx:
         return []
     spans: list[list[float]] = []
     cur_s, cur_e = words[idx[0]][0], words[idx[0]][1]
     for p, k in zip(idx, idx[1:]):
         s, e = words[k][0], words[k][1]
-        split_at = None
-        if k != p + 1:
-            split_at = (cur_e, s)                       # a dropped filler between them: always cut it out
-        elif s - cur_e >= PAUSE:
-            split_at = (cur_e, s)
-        else:
-            g = _gap_between(gaps, starts, words[p][1], s) if gaps else None
-            if g and g[0] > words[p][0] + 0.1:
-                split_at = (min(cur_e, g[0]), max(s, g[1] - 0.04))
-        if split_at:
-            spans.append([cur_s, split_at[0]])
-            cur_s, cur_e = split_at[1], max(e, split_at[1] + 0.05)
+        # A dropped filler between them is always cut out; otherwise a pause of PAUSE seconds or more.
+        if k != p + 1 or s - cur_e >= PAUSE:
+            spans.append([cur_s, cur_e])
+            cur_s, cur_e = s, e
         else:
             cur_e = max(cur_e, e)
     spans.append([cur_s, cur_e])
@@ -101,13 +114,12 @@ def nudged(plan: list[dict], words: list[list], nudge_start: float, nudge_end: f
 def build_cut(plan: list[dict], words: list[list], gaps: list[list[float]], *, floor: float = 0.0,
               nudge_start: float = 0.0, nudge_end: float = 0.0) -> dict:
     plan = nudged(plan, words, nudge_start, nudge_end)
-    gaps = sorted(gaps or [])
-    starts = [g[0] for g in gaps]
+    words = true_words(words, sorted(gaps or []))
     played = [p for p in plan if not p.get("spare")]
     spares = [p for p in plan if p.get("spare")]
 
     def spans_for(p, opening):
-        return piece_spans(words, _kept(words, p["w0"], p["w1"], opening=opening), gaps, starts)
+        return piece_spans(words, _kept(words, p["w0"], p["w1"], opening=opening))
 
     pieces = [spans_for(p, n == 0) for n, p in enumerate(played)]
     origin = list(range(len(pieces)))      # which planned piece each entry is (spares: the piece they follow)
