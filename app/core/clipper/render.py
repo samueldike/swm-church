@@ -78,10 +78,10 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
             ass_file.write_text(captions.ass(words, style=caption_style, width=ow, height=oh), encoding="utf-8")
             esc = str(ass_file).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
             fonts = captions.fonts_dir().replace("\\", "/").replace(":", "\\:")
-            cmd += ["-vf", f"subtitles='{esc}':fontsdir='{fonts}'", "-c:v", "libx264", "-preset", "medium",
+            cmd += ["-vf", f"subtitles='{esc}':fontsdir='{fonts}'", "-c:v", "libx264", "-preset", "fast",
                     "-crf", "20", "-pix_fmt", "yuv420p"]
         else:
-            cmd += ["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p"]
+            cmd += ["-c:v", "libx264", "-preset", "fast", "-crf", "20", "-pix_fmt", "yuv420p"]
         cmd += ["-af", "loudnorm=I=-14:TP=-1.5:LRA=11", "-c:a", "aac", "-b:a", "160k", "-ar", "48000",
                 "-movflags", "+faststart", str(tmp_out)]
         run(cmd, timeout=1800)

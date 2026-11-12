@@ -212,3 +212,45 @@ def test_bold_captions_highlight_each_word_in_turn_and_srt_is_valid():
 def test_caption_text_cannot_inject_override_tags():
     text = captions.ass([[0, 1, "{\\pos(0,0)}hi"]], style="clean", width=1080, height=1920)
     assert "{\\pos" not in text
+
+
+# ─── sources ──────────────────────────────────────────────────────────
+
+def test_youtube_links_and_cookie_files():
+    from app.core.clipper import media
+
+    assert media.is_youtube("https://www.youtube.com/watch?v=abc")
+    assert media.is_youtube("https://youtu.be/abc")
+    assert media.is_youtube("https://m.youtube.com/live/abc")
+    assert not media.is_youtube("https://notyoutube.com/watch")
+    assert not media.is_youtube("https://archive.org/download/x.mp4")
+    good = "# Netscape HTTP Cookie File\n" + "\n".join(
+        f"{'#HttpOnly_' if k % 2 else ''}.youtube.com\tTRUE\t/\tTRUE\t1999999999\tNAME{k}\tvalue{k}" for k in range(4))
+    assert media.valid_cookies(good)
+    assert not media.valid_cookies("hello world")
+    assert not media.valid_cookies(".example.com\tTRUE\t/\tTRUE\t0\ta\tb\n" * 5)
+
+
+def test_silences_are_found_relative_to_the_recording():
+    from app.core.clipper import media
+
+    # A noisy room: floor at -30 dB, speech at -10 dB; pauses of 0.5 s at 2 s and 6 s.
+    levels = [-10.0] * 400
+    for start in (100, 300):
+        levels[start:start + 25] = [-30.0] * 25
+    gaps = media.silences_from_levels(levels)
+    assert gaps == [[2.0, 2.5], [6.0, 6.5]]
+    assert media.silences_from_levels([-20.0] * 400) == []       # music throughout: no contrast, no cuts
+
+
+def test_a_leaning_sentence_gets_back_what_it_leans_on():
+    units = _units(20, secs=5.0)
+    units[7].text = "He says, a genuine son of Israel."
+    units[4].text = "And so he convinced Nathanael to come."
+    f = editorial.fit_short(units, {"edl": [{"i": 4}, {"i": 5}, {"i": 7}, {"i": 8}]}, floor=10, target=60)
+    ids = [x["i"] for x in f["edl"]]
+    assert 6 in ids                    # the line "He says" refers back to is put back
+    assert ids[0] == 3                 # the opening "And so he..." gets its antecedent
+    # Not when it would blow the length.
+    g = editorial.fit_short(units, {"edl": [{"i": 4}, {"i": 5}, {"i": 7}, {"i": 8}]}, floor=10, target=20)
+    assert g["length"] <= 20 * 1.08 * 1.1 + 1e-6

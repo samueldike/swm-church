@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 SAMPLE_FPS = 6.0
 DETECT_WIDTH = 480
-DEAD_ZONE = 0.22          # of the crop width, either side of centre: the subject may move this far before a pan
+DEAD_ZONE = 0.12          # of the crop width, either side of centre: the subject may move this far before a pan
 MAX_SPEED = 0.42          # pan speed, in frame widths per second
 SCENE_CUT = 38.0          # mean absolute grey difference between samples that marks a cut in the source
 MAX_KEYS = 70
@@ -119,8 +119,13 @@ def camera_path(track: list[tuple[float, float | None, bool]], crop_w: float, *,
     lo, hi = half, 1 - half
     dz = crop_w * DEAD_ZONE
     keys: list[tuple[float, float]] = []
+    # Every segment starts on a jump cut of the edit, so the camera may re-frame there for free; it keeps the
+    # previous segment's position only when the speaker is still inside the dead zone (no needless micro-jump).
     c = min(hi, max(lo, smooth[0]))
+    if start_x is not None and abs(min(hi, max(lo, start_x)) - c) <= dz:
+        c = min(hi, max(lo, start_x))
     prev_t = track[0][0]
+    panning = False
     keys.append((prev_t, c))
     for (t, _x, cut), want in zip(track, smooth):
         dt = max(0.0, t - prev_t)
@@ -128,10 +133,12 @@ def camera_path(track: list[tuple[float, float | None, bool]], crop_w: float, *,
         if cut and abs(want - c) > dz:
             keys.append((max(prev_t, t - 0.001), c))
             c = want
-        elif abs(want - c) > dz:
+        elif abs(want - c) > dz or (panning and abs(want - c) > dz * 0.2):
+            panning = True
             step = MAX_SPEED * dt
-            goal = want - dz * 0.35 if want > c else want + dz * 0.35
-            c = c + max(-step, min(step, goal - c))
+            c = c + max(-step, min(step, want - c))      # pan until the speaker is centred again
+        else:
+            panning = False
         keys.append((t, c))
         prev_t = t
     if duration is not None and keys[-1][0] < duration:

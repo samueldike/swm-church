@@ -142,7 +142,9 @@ def compose_prompt(units_text: str, *, count: int, floor: float, target: float, 
     else:
         body_rule = (f"- THE BODY (\"edl\") is ONE passage of the video: consecutive sentences in source order. Inside the passage you "
                      f"may leave out a digression, a repetition or a stumble (up to {PASSAGE_MAX_SKIP} sentences in a row), but never "
-                     "reorder sentences and never join two distant parts of the video.")
+                     "reorder sentences and never join two distant parts of the video. Leave a sentence out ONLY when what "
+                     "follows still makes complete sense without it: never when a later sentence refers back to it "
+                     "(\"he says\", \"this\", \"that verse\", \"as I said\").")
     return f"""The ENTIRE {label} video{f' "{title}"' if title else ''} is below as a numbered list of sentences in source order. Each line reads: [id] where-it-is seconds-it-plays | the words.
 {note}
 Build {'ONE short' if count == 1 else f'up to {count} shorts'}.
@@ -156,6 +158,7 @@ How a short is built:
   * "opening":"natural" when the body's first sentence already stops the scroll (a bold claim, a question, a striking line). Use this whenever it is true.
   * "opening":"cold_open" when the body starts with complete sense but no grip, and a stronger 2-8 second line sits LATER in the body: put that line's id in "cold_open". It plays first as a teaser, then the body plays from its start through that line in its place. Never add one just because you can.
 - LENGTH: the seconds after each id are how long that sentence plays with pauses removed. Add them up (a cold open line counts twice). Every short must total {lower:.0f}-{upper:.0f} seconds; aim for about {aim:.0f}.
+- THE FIRST SENTENCE must stand on its own. It must not lean on anything said before the short: no "he", "she", "they", "it" or "this" whose person or thing is not named inside the short, and no "so", "and", "but", "also" carrying on an earlier thought. If the natural start leans back, start a sentence earlier or choose another start.
 - It must make complete sense with zero context. Every "this", "that", "he", "so", "but" must point to something still in the short. If a sentence needs an earlier one, include that one or leave both out. A Bible verse that is read must be read whole.
 - Never change what the speaker meant: keep qualifications, negations and who said what. Never join sentences into a claim the speaker did not make.
 - End on a landed payoff: a conclusion, a declaration, a punchline. Never end mid-thought or on a question the short does not answer.
@@ -355,7 +358,44 @@ def fit_short(units: list[Unit], short: dict, *, floor: float, target: float, st
                 edl.insert(0, {"i": before, "role": "setup"})
                 taken.add(before)
                 grew = True
+    if style != "assembled":
+        edl = repair_references(units, edl, upper=upper, used=used, cold=cold)
     return {"edl": edl, "cold_open": cold, "length": round(length(), 2)}
+
+
+LEANING = {"he", "she", "they", "it", "this", "that", "these", "those", "so", "and", "but", "also", "then",
+           "there", "him", "her", "them", "his", "its", "their", "which", "because", "or"}
+
+
+def _leans_back(text: str) -> bool:
+    import re
+
+    first = re.sub(r"[^\w']", "", (text or "").split(" ", 1)[0].lower())
+    return first in LEANING
+
+
+def repair_references(units: list[Unit], edl: list[dict], *, upper: float, used: set[int], cold) -> list[dict]:
+    """Put back what a sentence leans on: a skipped sentence before a "He says..." / "This...", and the sentence
+    before a short that opens leaning back ("And so he..."), while the length still fits. Deterministic, so a
+    short never depends on the AI noticing it."""
+    def length(e):
+        return sum(units[x["i"]].speech for x in e) + (units[cold].speech if cold is not None else 0)
+
+    edl = list(edl)
+    k = 1
+    while k < len(edl):
+        a, b = edl[k - 1]["i"], edl[k]["i"]
+        if a < b - 1 and _leans_back(units[b].text):
+            fill = [{"i": j, "role": "point"} for j in range(a + 1, b) if j not in used]
+            if len(fill) == b - a - 1 and length(edl) + sum(units[x["i"]].speech for x in fill) <= upper * 1.1:
+                edl[k:k] = fill
+                k += len(fill)
+        k += 1
+    first = edl[0]["i"] if edl else 0
+    if edl and first > 0 and _leans_back(units[first].text) and first - 1 not in used \
+            and length(edl) + units[first - 1].speech <= upper * 1.1:
+        edl.insert(0, {"i": first - 1, "role": "setup"})
+    return edl
 
 
 def spare_ids(units: list[Unit], edl: list[dict], extra, used: set[int]) -> list[int]:
@@ -419,7 +459,18 @@ async def review(units: list[Unit], shorts: list[dict], *, brief: str, floor: fl
                        if 0 <= j < len(units) and j not in inside})
         teaser = (f"COLD OPEN, plays first and again in its place below:\n  [{s['cold_open']}] {units[s['cold_open']].text}\n"
                   if s.get("cold_open") is not None else "No cold open: the body opens the short.\n")
-        body = "\n".join(f"  [{x['i']}] {units[x['i']].speech:.1f}s ({x['role']}) {units[x['i']].text}" for x in s["edl"])
+        # The reviewer sees what was said just before the short and every sentence left out inside it, so a
+        # leaning first line ("And so he...") or a dangling "He says" after a skipped line is caught.
+        lines, prev = [], None
+        if s["edl"] and s["edl"][0]["i"] > 0:
+            j = s["edl"][0]["i"] - 1
+            lines.append(f"  (said just before the short, NOT in it: [{j}] {units[j].text})")
+        for x in s["edl"]:
+            if prev is not None and prev < x["i"] - 1 and x["i"] - prev <= 6:
+                lines += [f"  (left out here: [{j}] {units[j].text})" for j in range(prev + 1, x["i"])]
+            lines.append(f"  [{x['i']}] {units[x['i']].speech:.1f}s ({x['role']}) {units[x['i']].text}")
+            prev = x["i"]
+        body = "\n".join(lines)
         around = "\n".join(f"  [{j}] {units[j].speech:.1f}s | {units[j].text}" for j in near) or "  (none)"
         blocks.append(f"SHORT {k}: {s['length']:.0f}s, idea: {s.get('idea') or '(none given)'}\n"
                       f"Value it claims: {s.get('value') or '(none stated)'}\n{teaser}Body, in playing order:\n{body}\n"
@@ -430,7 +481,7 @@ async def review(units: list[Unit], shorts: list[dict], *, brief: str, floor: fl
 {f'What the video is:{chr(10)}{brief}{chr(10)}' if brief else ''}
 Check every short on three things:
 1. VALUE: does it drive home a concrete piece of value for this audience? Lively or quotable but empty is a reject.
-2. SENSE: does it play as one complete, self-contained piece: every reference resolved, nothing that misrepresents the speaker, a landed ending, no Bible verse cut off?
+2. SENSE: does it play as one complete, self-contained piece: every reference resolved, nothing that misrepresents the speaker, a landed ending, no Bible verse cut off? Check the FIRST sentence against what was said just before the short: if it leans on it ("he", "this", "so..."), revise. Check every "left out here" line: if a sentence after it refers back to it, put it back (revise the edl).
 3. HOOK: would the first two seconds stop a scroller? Remove a cold open that does not earn its place ("cold_open": null); add one (a 2-8 second line later in the body) only when the natural start would lose the viewer.
 
 For each short decide:

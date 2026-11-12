@@ -59,13 +59,13 @@ def ass(words: list[list], *, style: str, width: int, height: int) -> str:
     vertical = height > width
     base = min(width, height)
     if style == "bold":
-        size = round(base * (0.082 if vertical else 0.072))
+        size = round(base * (0.108 if vertical else 0.085))
         margin_v = round(height * (0.24 if vertical else 0.12))
         styles = (f"Style: Main,Poppins ExtraBold,{size},{WHITE},{WHITE},{BLACK},&H96000000,0,0,0,0,100,100,0,0,1,"
                   f"{max(3, round(size * 0.075))},{max(1, round(size * 0.04))},2,60,60,{margin_v},1")
-        groups = _group(words, 3, 18)
+        groups = _group(words, 3, 16)
     else:
-        size = round(base * (0.052 if vertical else 0.05))
+        size = round(base * (0.062 if vertical else 0.055))
         margin_v = round(height * (0.16 if vertical else 0.08))
         styles = (f"Style: Main,Poppins SemiBold,{size},{WHITE},{WHITE},&H8C000000,&H8C000000,0,0,0,0,100,100,0,0,3,"
                   f"{max(4, round(size * 0.22))},0,2,80,80,{margin_v},1")
