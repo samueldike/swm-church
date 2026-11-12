@@ -321,3 +321,38 @@ def generate_contents_task(self, publication_id: int):
     from app.core.publications import run_contents
 
     _run(run_contents(publication_id))
+
+
+# ─── Video Clipper (app/core/clipper/) ─────────────────────────────
+# fetch -> transcribe (on the "transcription" queue, sharing the loaded Whisper model) -> compose -> render.
+# Each stage queues the next only when it succeeded; a failure is recorded on the project.
+
+@celery_app.task(bind=True, max_retries=0, acks_late=False)
+def clip_fetch_task(self, project_id: int):
+    from app.core.clipper import pipeline
+
+    if _run(pipeline.fetch(project_id)):
+        clip_transcribe_task.apply_async((project_id,))
+
+
+@celery_app.task(bind=True, max_retries=0, acks_late=False)
+def clip_transcribe_task(self, project_id: int):
+    from app.core.clipper import pipeline
+
+    if _run(pipeline.transcribe(project_id)):
+        clip_compose_task.apply_async((project_id,))
+
+
+@celery_app.task(bind=True, max_retries=0, acks_late=False)
+def clip_compose_task(self, project_id: int, more: int | None = None):
+    from app.core.clipper import pipeline
+
+    if _run(pipeline.compose(project_id, more=more)):
+        clip_render_task.apply_async((project_id,))
+
+
+@celery_app.task(bind=True, max_retries=0, acks_late=False)
+def clip_render_task(self, project_id: int):
+    from app.core.clipper import pipeline
+
+    _run(pipeline.render_queued(project_id))

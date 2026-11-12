@@ -1,0 +1,60 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header with context %}
+{% block title %}Video Clipper | {{ siteName }}{% endblock %}
+{% block topbar_title %}Video Clipper{% endblock %}
+{% block topbar_subtitle %}Long videos into ready-to-post shorts{% endblock %}
+{% block topbar_icon %}ri-scissors-cut-line{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=1">{% endblock %}
+
+{% block page_header %}
+  {{ page_header("Video Clipper", "Give it a service, a teaching or a podcast. It listens to every word, finds the moments that stand on their own, and cuts them into vertical shorts with captions, ready for Reels, TikTok, Shorts and WhatsApp Status.",
+      actions='<a href="' ~ url_for('admin_clipper_new') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>New video</a>') }}
+{% endblock %}
+
+{% block content %}
+<div class="vc flex flex-col gap-4">
+  {% if disk.free and disk.free < 12 * 1024 ** 3 %}
+    <div class="vc-alert bad" role="alert"><i class="ri-hard-drive-2-line"></i><span>The server has {{ (disk.free / 1024 ** 3)|round(1) }} GB of free space left. Delete projects you no longer need so new videos can be processed.</span></div>
+  {% endif %}
+
+  {% if projects %}
+  <div class="vc-grid">
+    {% for p in projects %}
+      {% set ready = p.shorts|selectattr('status', 'equalto', 'ready')|list %}
+      {% set is_stale = stale(p) %}
+      <a class="vc-panel vc-card" href="{{ url_for('admin_clipper_show', project_id=p.id) }}">
+        <div class="vc-card-media">
+          {% if ready %}<img src="/admin/clipper/{{ p.id }}/shorts/{{ ready[0].id }}/thumb.jpg" alt="" loading="lazy">{% else %}<i class="ri ri-film-line" aria-hidden="true"></i>{% endif %}
+          {% if p.status == 'ready' %}<span class="vc-pill ok"><i class="ri-check-line"></i>{{ ready|length }} short{{ '' if ready|length == 1 else 's' }}</span>
+          {% elif p.status == 'failed' %}<span class="vc-pill bad"><i class="ri-error-warning-line"></i>Needs attention</span>
+          {% elif is_stale %}<span class="vc-pill bad"><i class="ri-pause-line"></i>Stopped</span>
+          {% else %}<span class="vc-pill run"><i class="ri-loader-4-line vc-spin"></i>{{ p.stage or 'Working' }}</span>{% endif %}
+        </div>
+        <div class="vc-card-body">
+          <div class="vc-card-title">{{ p.title or p.source_name or 'Untitled video' }}</div>
+          <div class="vc-card-meta">
+            <span><i class="ri-calendar-line"></i> {{ p.created_at.strftime('%d %b %Y') }}</span>
+            {% if p.duration %}<span><i class="ri-time-line"></i> {{ (p.duration // 60)|int }} min</span>{% endif %}
+            {% if is_super and p.branch %}<span><i class="ri-building-4-line"></i> {{ p.branch.name }}</span>{% endif %}
+          </div>
+          {% if p.busy and not is_stale %}<div class="vc-bar" aria-hidden="true"><i style="width: {{ ((p.progress or 0) * 100)|round(0) }}%"></i></div>{% endif %}
+        </div>
+      </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="vc-panel vc-empty">
+    <i class="ri ri-scissors-cut-line" aria-hidden="true"></i>
+    <h2>Turn one message into a week of shorts</h2>
+    <p>Paste a YouTube or Facebook link, or upload the recording. The clipper does what an editor would: finds the strongest moments, cuts out the pauses, follows the preacher in a vertical frame and adds captions.</p>
+    <a href="{{ url_for('admin_clipper_new') }}" class="btn btn-primary"><i class="ri-add-line"></i>Clip your first video</a>
+  </div>
+  <div class="vc-steps">
+    <div class="vc-panel vc-step"><i class="ri ri-ear-line"></i><div><b>Listens to every word</b>Each word is timed, so cuts land between words, never inside one.</div></div>
+    <div class="vc-panel vc-step"><i class="ri ri-lightbulb-flash-line"></i><div><b>Picks moments with a point</b>Only moments that make sense alone and leave the viewer with something.</div></div>
+    <div class="vc-panel vc-step"><i class="ri ri-focus-3-line"></i><div><b>Follows the speaker</b>A steady camera keeps the preacher in the vertical frame.</div></div>
+    <div class="vc-panel vc-step"><i class="ri ri-closed-captioning-line"></i><div><b>Captions word by word</b>Most people watch muted. Every short also comes with an .srt file.</div></div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

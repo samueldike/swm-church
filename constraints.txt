@@ -56,6 +56,7 @@ MarkupSafe==3.0.4
 mdurl==0.1.2
 numpy==2.5.4
 onnxruntime==1.31.0
+opencv-python-headless==5.0.0.93
 openpyxl==3.1.5
 orjson==3.13.0
 packaging==26.3
@@ -116,4 +117,5 @@ wcwidth==0.9.3
 weasyprint==70.0
 webencodings==0.6.1
 websockets==17.3
+yt-dlp==2026.10.26
 zopfli==0.4.3

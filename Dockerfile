@@ -17,7 +17,8 @@ WORKDIR /app
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc libpq-dev \
-        libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core && \
+        libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 fonts-dejavu-core \
+        ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 
 # constraints.txt pins every package (not just the direct ones) so a rebuild cannot pull a new major version.

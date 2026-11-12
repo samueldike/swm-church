@@ -1,0 +1,109 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header with context %}
+{% block title %}New video | Video Clipper | {{ siteName }}{% endblock %}
+{% block topbar_title %}Video Clipper{% endblock %}
+{% block topbar_subtitle %}New video{% endblock %}
+{% block topbar_icon %}ri-scissors-cut-line{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=1">{% endblock %}
+
+{% block page_header %}
+  {{ page_header("New video", "Choose the video, how many shorts you want and how they should look. You can leave the page while it works.",
+      actions='<a href="' ~ url_for('admin_clipper') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All videos</a>') }}
+{% endblock %}
+
+{% block content %}
+<div class="vc">
+<form id="vc-form" class="vc-form" data-create="{{ url_for('admin_clipper_create') }}" data-max-mb="{{ max_mb }}" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="source_kind" value="url">
+
+  {% if not ai_ready %}
+  <div class="vc-alert bad" role="alert"><i class="ri-key-2-line"></i><span>No AI key is saved, so the clipper cannot choose moments yet. The HQ Administrator adds one under Settings → AI drafting.</span></div>
+  {% endif %}
+
+  <section class="vc-panel vc-section">
+    <h2><i class="ri-film-line"></i>The video</h2>
+    <p>A link to YouTube, Facebook, Vimeo or a direct video file, or upload the recording from your computer.</p>
+    <div class="vc-tabs" role="tablist">
+      <button type="button" role="tab" aria-selected="true" data-tab="url"><i class="ri-links-line"></i>Paste a link</button>
+      <button type="button" role="tab" aria-selected="false" data-tab="upload"><i class="ri-upload-cloud-2-line"></i>Upload a file</button>
+    </div>
+    <div data-pane="url" class="flex flex-col gap-3">
+      <label class="vc-field">Video link
+        <input type="url" name="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
+        <small>YouTube sometimes refuses servers. If the link fails, download the video and upload it instead.</small>
+      </label>
+    </div>
+    <div data-pane="upload" hidden>
+      <input type="file" id="vc-file" accept="video/*,.mp4,.mov,.mkv,.webm,.avi,.m4v" hidden>
+      <div class="vc-drop" id="vc-drop" tabindex="0" role="button" aria-label="Choose a video file">
+        <i class="ri ri-upload-cloud-2-line" aria-hidden="true"></i>
+        <b id="vc-file-name">Choose a video, or drop it here</b>
+        <span>MP4, MOV, MKV, WEBM or AVI, up to {{ (max_mb / 1000)|round(1) }} GB</span>
+      </div>
+    </div>
+    <div class="vc-row vc-mt">
+      <label class="vc-field">Title <small>Optional. Taken from the link when left blank.</small>
+        <input type="text" name="title" maxlength="200" placeholder="e.g. Sunday Service, 9 November"></label>
+      <label class="vc-field">It is a
+        <select name="content_type">{% for k, v in opt.CONTENT_TYPES.items() %}<option value="{{ k }}" {{ 'selected' if k == defaults.content_type }}>{{ v }}</option>{% endfor %}</select></label>
+      <label class="vc-field">Language spoken
+        <select name="language">{% for k, v in opt.LANGUAGES.items() %}<option value="{{ k }}" {{ 'selected' if k == defaults.language }}>{{ v }}</option>{% endfor %}</select></label>
+    </div>
+    <div class="vc-row vc-mt">
+      <label class="vc-field">Only this part: from <small>Optional. Skip the worship and announcements: give the time the message starts.</small>
+        <input type="text" name="range_start" placeholder="e.g. 45:00" inputmode="numeric" autocomplete="off"></label>
+      <label class="vc-field">to <small>And where it ends, e.g. 1:40:00. Shorter parts are quicker.</small>
+        <input type="text" name="range_end" placeholder="e.g. 1:40:00" inputmode="numeric" autocomplete="off"></label>
+    </div>
+  </section>
+
+  <section class="vc-panel vc-section">
+    <h2><i class="ri-magic-line"></i>The shorts</h2>
+    <p>The editor returns fewer when the video does not have that many strong moments.</p>
+    <div class="vc-row">
+      <label class="vc-field">How many
+        <select name="count">{% for n in range(1, 16) %}<option value="{{ n }}" {{ 'selected' if n == defaults.count }}>{{ n }}</option>{% endfor %}</select></label>
+      <label class="vc-field">Length of each
+        <select name="length">{% for k, v in opt.LENGTHS.items() %}<option value="{{ k }}" {{ 'selected' if k == defaults.length }}>{{ v[0] }} to {{ v[1] }} seconds</option>{% endfor %}</select></label>
+    </div>
+    <div class="vc-field vc-mt">How each short is built
+      <div class="vc-choice">
+        <label><input type="radio" name="style" value="passage" checked>One passage<small>A stretch of the message as it was preached, tidied up. Most natural.</small></label>
+        <label><input type="radio" name="style" value="assembled">Edited from across the video<small>Lines from different parts joined into one point. Bolder, more like a trailer.</small></label>
+      </div>
+    </div>
+  </section>
+
+  <section class="vc-panel vc-section">
+    <h2><i class="ri-layout-4-line"></i>How they look</h2>
+    <p>You can change these for any single short later.</p>
+    <div class="vc-field">Shape
+      <div class="vc-choice">
+        {% for k, v in opt.FORMATS.items() %}<label><input type="radio" name="format" value="{{ k }}" {{ 'checked' if k == defaults.format }}>{{ v.label.split(' (')[0] }}<small>{{ v.label.split(' (')[1].rstrip(')') if ' (' in v.label else '' }}</small></label>{% endfor %}
+      </div>
+    </div>
+    <div class="vc-row vc-mt">
+      <label class="vc-field">Framing
+        <select name="framing">{% for k, v in opt.FRAMINGS.items() %}<option value="{{ k }}" {{ 'selected' if k == defaults.framing }}>{{ v }}</option>{% endfor %}</select></label>
+      <label class="vc-field">Captions
+        <select name="caption_style">{% for k, v in opt.CAPTION_STYLES.items() %}<option value="{{ k }}" {{ 'selected' if k == defaults.caption_style }}>{{ v }}</option>{% endfor %}</select></label>
+      <label class="vc-field">Quality
+        <select name="quality">{% for k, v in opt.QUALITIES.items() %}<option value="{{ k }}" {{ 'selected' if k == defaults.quality }}>{{ v }}</option>{% endfor %}</select></label>
+    </div>
+  </section>
+
+  <div class="vc-foot">
+    <span class="vc-msg" id="vc-msg" role="status" aria-live="polite"></span>
+    <div class="vc-upbar" id="vc-upbar"><div class="vc-bar"><i id="vc-upfill" style="width:0%"></i></div></div>
+    <a href="{{ url_for('admin_clipper') }}" class="btn btn-secondary">Cancel</a>
+    <button type="submit" class="btn btn-primary" id="vc-go" {{ 'disabled' if not ai_ready }}><i class="ri-scissors-cut-line"></i>Start clipping</button>
+  </div>
+</form>
+</div>
+{% endblock %}
+
+{% block extra_body %}
+<script src="{{ url_for('static', path='js/clipper.js') }}?v=1"></script>
+<script>window.SWMClipper && window.SWMClipper.form();</script>
+{% endblock %}

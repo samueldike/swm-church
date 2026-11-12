@@ -51,6 +51,7 @@
       <div class="mb-2 px-1">{{ nav_item(url_for('hod_reports_index'), 'ri-file-chart-line', 'Monthly Reports', 'hod.reports') }}</div>
       <div class="mb-2 px-1">{{ nav_item(url_for('admin_documents'), 'ri-folder-3-line', 'Documents', 'admin.documents', badges.documents, '{n} documents sent to you and not opened yet') }}</div>
       {% if can('whatsapp') %}<div class="mb-2 px-1">{{ nav_item(url_for('admin_whatsapp'), 'ri-whatsapp-line', 'WhatsApp', 'admin.whatsapp') }}</div>{% endif %}
+      {% if can('clipper') %}<div class="mb-2 px-1">{{ nav_item(url_for('admin_clipper'), 'ri-scissors-cut-line', 'Video Clipper', 'admin.clipper') }}</div>{% endif %}
     {% else %}
       {#- Ordered by how often each is used: daily work first, then weekly, then occasional, then setup.
           Spacing separates the groups (no headings). Every item keeps its own permission check. -#}
@@ -73,6 +74,7 @@
         {% if can('donations') %}{{ nav_item(url_for('admin_donations'), 'ri-hand-coin-line', 'Donations', 'admin.donations') }}{% endif %}
         {% if can('reports') %}{{ nav_item(url_for('admin_unit_reports'), 'ri-file-chart-line', 'Unit Reports', 'admin.unit-reports', badges.unit_reports, '{n} department reports waiting for your comment') }}{% endif %}
         {% if can('branch_reports') %}{{ nav_item(url_for('admin_branch_reports'), 'ri-file-list-3-line', ('Branch Reports' if admin.role in ['super_admin', 'hq_pastoral'] else 'Reports to HQ'), 'admin.branch-reports', badges.branch_reports, ('{n} reports waiting for HQ to acknowledge' if admin.role in ['super_admin', 'hq_pastoral'] else '{n}')) }}{% endif %}
+        {% if can('clipper') %}{{ nav_item(url_for('admin_clipper'), 'ri-scissors-cut-line', 'Video Clipper', 'admin.clipper') }}{% endif %}
         {% if can('media') %}{{ nav_item(url_for('admin_blog'), 'ri-article-line', 'Blog', 'admin.blog') }}
         {{ nav_item(url_for('admin_program_flyers'), 'ri-gallery-upload-line', 'Program Flyers', 'admin.program-flyers') }}{% endif %}
         {% if can('audio') %}{{ nav_item(url_for('admin_transcriptions'), 'ri-file-text-line', 'Transcriptions', 'admin.transcriptions') }}{% endif %}

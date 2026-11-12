@@ -32,9 +32,9 @@ reportlab==5.1.0
 # Designed devotional PDFs (app/core/devotional_templates.py); pango is installed in the Dockerfile
 weasyprint==70.0
 pypdfium2==5.15.2
-# Designed devotional PDFs (app/core/devotional_templates.py); needs pango in the Dockerfile
-weasyprint==70.0
-pypdfium2==5.15.2
+# Video Clipper (app/core/clipper/): links via yt-dlp (keep it current: sites change), face tracking via OpenCV
+yt-dlp==2026.10.26
+opencv-python-headless==5.0.0.93
 telethon==1.44.0
 pycountry==26.2.16
 babel==2.18.0

@@ -23,6 +23,14 @@ celery_app.conf.update(
     broker_transport_options={"visibility_timeout": 12 * 3600},
     # Whisper is heavy (one ~3GB model per process): transcriptions go to their own queue,
     # served one at a time by the "transcriber" worker, so they never starve Telegram sends.
-    task_routes={"app.tasks.transcribe_audio_task": {"queue": "transcription"}},
+    task_routes={
+        "app.tasks.transcribe_audio_task": {"queue": "transcription"},
+        # Video Clipper: whisper on the transcription worker (one loaded model, one job at a time); downloads,
+        # AI calls and ffmpeg renders on the single-slot "clipper" worker so they never starve the website.
+        "app.tasks.clip_transcribe_task": {"queue": "transcription"},
+        "app.tasks.clip_fetch_task": {"queue": "clipper"},
+        "app.tasks.clip_compose_task": {"queue": "clipper"},
+        "app.tasks.clip_render_task": {"queue": "clipper"},
+    },
     beat_schedule={},
 )

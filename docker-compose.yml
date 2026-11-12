@@ -17,6 +17,7 @@ services:
       - telegram_bot_api_conf:/run/swm-telegram
       - telegram_archive:/app/telegram-archive   # private: never under /app/media (served publicly)
       - documents:/app/documents                 # private document library (Admin -> Documents)
+      - clipper:/app/clipper                     # Video Clipper: private source videos and shorts
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,6 +59,24 @@ services:
       - media_files:/app/media
       - telegram_archive:/app/telegram-archive
       - whisper_models:/root/.cache/huggingface    # the model is downloaded once, not on every rebuild
+      - clipper:/app/clipper                     # Video Clipper: private source videos and shorts
+    depends_on:
+      - app
+    networks:
+      - swm-net
+
+  # Video Clipper (Admin -> Video Clipper): downloads, AI editing and ffmpeg renders, ONE job at a time and
+  # CPU-capped so a long render never slows the website. Whisper for it runs on the transcriber above.
+  clipper:
+    image: swm-app:latest
+    container_name: swm-clipper
+    restart: unless-stopped
+    env_file: .env
+    command: celery -A app.celery_app worker -Q clipper -c 1 -n clipper@%h -l info
+    cpus: 3
+    mem_limit: 3g
+    volumes:
+      - clipper:/app/clipper                 # private: source videos and shorts
     depends_on:
       - app
     networks:
@@ -162,6 +181,7 @@ volumes:
   telegram_bot_api_conf:
   telegram_archive:
   documents:
+  clipper:
   whisper_models:
   static_files:
   media_files:

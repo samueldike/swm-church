@@ -81,3 +81,6 @@ from app.models.ai_knowledge import AIKnowledge, ScentAIFeedback
 from app.models.document import (  # noqa: E402
     Document, DocumentDelivery, DocumentFolder, DocumentRead, DocumentShare, DocumentStar, DocumentVersion,
 )
+
+# Video Clipper (Admin -> Video Clipper)
+from app.models.clipper import ClipProject, ClipShort  # noqa: E402,F401

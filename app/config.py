@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     # through a permission check. Empty = a "documents" folder next to the media root.
     DOCUMENTS_DIR: str = ""
     DOCUMENTS_MAX_UPLOAD_MB: int = 100
+    # Video Clipper (Admin -> Video Clipper): source videos and finished shorts, OUTSIDE the public media root,
+    # served only through a permission check. Empty = a "clipper" folder next to the media root.
+    CLIPPER_DIR: str = ""
+    CLIPPER_MAX_UPLOAD_MB: int = 4000
+    # Sources (the long videos) are deleted this many days after a project finishes; shorts are kept.
+    CLIPPER_KEEP_SOURCE_DAYS: int = 14
 
     # Absolute path the app writes uploads to. Must match the media volume
     # mount in every container that needs to read them (worker, nginx,
@@ -82,6 +88,15 @@ class Settings(BaseSettings):
         if self.DOCUMENTS_DIR:
             return self.DOCUMENTS_DIR
         return os.path.join(os.path.dirname(os.path.normpath(self.media_root)), "documents")
+
+    @property
+    def clipper_dir(self) -> str:
+        """Private Video Clipper directory: never under the public media root."""
+        import os
+
+        if self.CLIPPER_DIR:
+            return self.CLIPPER_DIR
+        return os.path.join(os.path.dirname(os.path.normpath(self.media_root)), "clipper")
 
     @property
     def telegram_api_base(self) -> str:

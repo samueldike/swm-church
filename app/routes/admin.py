@@ -361,8 +361,16 @@ async def _admin_context(request: Request, db: AsyncSession, active_page: str = 
         whatsapp_ok = await _wa_can_use(db, admin)
     except Exception:
         whatsapp_ok = False
+    from app.core.clipper.options import allowed as _clip_allowed
+    from app.core.whatsapp import department_name as _dept_name
+
+    try:
+        clipper_ok = _clip_allowed(admin.role, await _dept_name(db, admin) if normalize_role(admin.role) == "hod" else None)
+    except Exception:
+        clipper_ok = False
+    _special = {"whatsapp": whatsapp_ok, "clipper": clipper_ok}
     return {
-        "can": (lambda perm, _r=admin.role, _wa=whatsapp_ok: _wa if perm == "whatsapp" else has_perm(_r, perm)),
+        "can": (lambda perm, _r=admin.role, _s=_special: _s[perm] if perm in _s else has_perm(_r, perm)),
         "role_name": (lambda r: ROLE_LABELS.get(normalize_role(r), r or "")),
         "admin_branch_id": branch_id,
         "admin": admin,
@@ -10333,3 +10341,423 @@ async def documents_unread(db: AsyncSession, admin) -> int:
         return (await db.execute(q)).scalar_one() or 0
     except Exception:
         return 0
+
+
+# ─── Video Clipper ───────────────────────────────────────────────────
+# Long videos -> ready-to-post shorts (app/core/clipper/). Who: app/core/clipper/options.py:allowed (HQ Administrator,
+# branch administrators, HQ Media, the HOD of a Media department), enforced by policy.py for /admin/clipper*.
+# A project belongs to a church; only the HQ Administrator sees every church's projects. Files are private
+# (settings.clipper_dir) and served only here.
+
+async def _clip_ctx(request, db):
+    admin = await _get_admin(request)
+    if not admin:
+        return None, None
+    from app.core.clipper.options import can_use
+
+    if not await can_use(db, admin):
+        return admin, None
+    from app.core.documents import church_of
+
+    return admin, church_of(admin, await get_hq_branch_id(db))
+
+
+async def _clip_project(db, admin, church: int, project_id: int):
+    from app.core.clipper.options import sees_every_church
+    from app.models.clipper import ClipProject
+
+    p = (await db.execute(select(ClipProject).where(ClipProject.id == project_id))).scalar_one_or_none()
+    if p is None or (not sees_every_church(admin) and p.branch_id != church):
+        return None
+    return p
+
+
+def _clip_short(p, short_id: int):
+    return next((s for s in p.shorts if s.id == short_id), None)
+
+
+async def _clip_enqueue(task, *args) -> bool:
+    from app.core.jobs import enqueue
+
+    return await enqueue(task, *args)
+
+
+def _clip_json_short(p, s) -> dict:
+    from app.core.clipper import media
+    from app.core.clipper.options import clock
+
+    ready = s.status == "ready" and media.short_file(p.id, s.id, "mp4").exists()
+    base = f"/admin/clipper/{p.id}/shorts/{s.id}"
+    stamp = int(s.rendered_at.timestamp()) if s.rendered_at else 0
+    pieces = [x for x in (s.plan or []) if not x.get("spare")]
+    offset = float((p.settings or {}).get("range_start") or 0)
+    body = [x for x in pieces if not x.get("cold_open")]
+    return {
+        "id": s.id, "title": s.title, "caption": s.caption or "", "value": s.value or "", "score": s.score,
+        "origin": s.origin, "status": s.status, "error": s.error or "", "length": round(s.length or 0, 1),
+        "format": s.format, "quality": s.quality, "framing": s.framing, "caption_style": s.caption_style,
+        "nudge_start": s.nudge_start or 0, "nudge_end": s.nudge_end or 0, "starred": bool(s.starred),
+        "from": clock(body[0]["start"] + offset) if body else "", "to": clock(body[-1]["end"] + offset) if body else "",
+        "pieces": len(body), "cold_open": any(x.get("cold_open") for x in pieces),
+        "transcript": " ".join(x.get("text", "") for x in body)[:4000],
+        "video": f"{base}/video.mp4?v={stamp}" if ready else "",
+        "thumb": f"{base}/thumb.jpg?v={stamp}" if ready else "",
+        "download": f"{base}/video.mp4?download=1" if ready else "",
+        "srt": f"{base}/captions.srt" if ready else "",
+    }
+
+
+def _clip_json_project(p) -> dict:
+    from app.core.clipper import pipeline
+
+    stale = pipeline.stale(p)
+    return {"id": p.id, "title": p.title or "Untitled video", "status": "stalled" if stale else p.status,
+            "stage": p.stage or "", "progress": round(p.progress or 0, 3), "error": p.error or "",
+            "busy": p.busy and not stale, "shorts": [_clip_json_short(p, s) for s in p.shorts],
+            "source_gone": bool(p.source_deleted_at)}
+
+
+@router.get("/clipper", response_class=HTMLResponse, name="admin_clipper")
+async def admin_clipper(request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin:
+        return RedirectResponse(url="/admin/login", status_code=303)
+    if church is None:
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from app.core.clipper import pipeline
+    from app.core.clipper.options import sees_every_church
+    from app.models.clipper import ClipProject
+
+    q = select(ClipProject).order_by(ClipProject.created_at.desc()).limit(200)
+    if not sees_every_church(admin):
+        q = q.where(ClipProject.branch_id == church)
+    projects = (await db.execute(q)).scalars().all()
+    ctx = await _admin_context(request, db, "admin.clipper")
+    return await render_template(request, "admin/clipper.html", {
+        "projects": projects, "stale": pipeline.stale, "disk": pipeline.disk_summary(),
+        "title": "Video Clipper", **ctx})
+
+
+@router.get("/clipper/new", response_class=HTMLResponse, name="admin_clipper_new")
+async def admin_clipper_new(request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin:
+        return RedirectResponse(url="/admin/login", status_code=303)
+    if church is None:
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from app.config import settings as app_settings
+    from app.core import ai
+    from app.core.clipper import options
+
+    ctx = await _admin_context(request, db, "admin.clipper")
+    return await render_template(request, "admin/clipper-form.html", {
+        "opt": options, "defaults": options.DEFAULTS, "max_mb": app_settings.CLIPPER_MAX_UPLOAD_MB,
+        "ai_ready": await ai.is_configured(), "title": "New video", **ctx})
+
+
+@router.post("/clipper/create", name="admin_clipper_create")
+async def admin_clipper_create(request: Request, db: AsyncSession = Depends(get_db)):
+    """Start a project. A link starts at once; an upload creates the project and waits for /upload."""
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None:
+        return JSONResponse({"ok": False, "error": "You cannot use the Video Clipper."}, status_code=403)
+    from app.core import ai
+    from app.core.clipper import media, options
+    from app.models.clipper import ClipProject
+    from app.tasks import clip_fetch_task
+
+    form = await request.form()
+    st, problems = options.clean_settings(form)
+    kind = "upload" if form.get("source_kind") == "upload" else "url"
+    url = (form.get("url") or "").strip()
+    if kind == "url" and not media.valid_url(url):
+        problems.append("Paste the full link to the video (it starts with https://).")
+    if kind == "upload" and not (form.get("file_name") or "").strip():
+        problems.append("Choose the video file to upload.")
+    if not await ai.is_configured():
+        problems.append("No AI key is saved yet. The HQ Administrator adds one in Settings → AI drafting.")
+    if not media.enough_disk():
+        problems.append("The server is short of disk space. Delete old projects first.")
+    if problems:
+        return JSONResponse({"ok": False, "error": " ".join(problems)}, status_code=400)
+    p = ClipProject(branch_id=church, created_by=admin.id, title=(form.get("title") or "").strip()[:255],
+                    source_kind=kind, source_url=url if kind == "url" else None,
+                    source_name=(form.get("file_name") or "").strip()[:255] or None, settings=st,
+                    status="queued", stage=("Waiting for the upload" if kind == "upload" else "Waiting to start"))
+    db.add(p)
+    await db.flush()
+    await log_admin_action(db, admin.id, "clipper.create", "clip_project", p.id, {"kind": kind}, request)
+    await db.commit()
+    if kind == "url" and not await _clip_enqueue(clip_fetch_task, p.id):
+        p.status, p.error = "failed", "The job queue is not reachable. Please try again in a minute."
+        await db.commit()
+    return JSONResponse({"ok": True, "id": p.id, "url": f"/admin/clipper/{p.id}",
+                         "upload": f"/admin/clipper/{p.id}/upload" if kind == "upload" else ""})
+
+
+_CLIP_VIDEO_EXT = ("mp4", "mov", "m4v", "mkv", "webm", "avi", "mpeg", "mpg", "3gp", "ts", "mts", "wmv", "flv")
+
+
+@router.post("/clipper/{project_id}/upload", name="admin_clipper_upload")
+async def admin_clipper_upload(project_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    """The video file as the raw request body, streamed straight to disk (no copy in memory or /tmp)."""
+    admin, church = await _clip_ctx(request, db)
+    p = await _clip_project(db, admin, church, project_id) if church is not None else None
+    if not p or p.source_kind != "upload" or p.status != "queued":
+        return JSONResponse({"ok": False, "error": "This upload is not expected."}, status_code=404)
+    import os
+
+    from app.config import settings as app_settings
+    from app.core.clipper import media
+    from app.tasks import clip_fetch_task
+
+    ext = os.path.splitext(p.source_name or "")[1].lower().lstrip(".")
+    if ext not in _CLIP_VIDEO_EXT:
+        p.status, p.error = "failed", "That is not a video file the clipper can read."
+        await db.commit()
+        return JSONResponse({"ok": False, "error": "Upload a video file (MP4, MOV, MKV, WEBM, AVI...)."}, status_code=400)
+    limit = app_settings.CLIPPER_MAX_UPLOAD_MB * 1024 * 1024
+    dest = media.project_dir(p.id) / f"upload.{ext}"
+    size = 0
+    problem = ""
+    try:
+        with open(dest, "wb") as f:
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > limit:
+                    problem = f"The file is larger than {app_settings.CLIPPER_MAX_UPLOAD_MB} MB."
+                    break
+                f.write(chunk)
+    except Exception:
+        logging.getLogger(__name__).exception("Clipper upload failed for project %s", p.id)
+        problem = "The upload was interrupted. Please try again."
+    if not problem and size < 1024:
+        problem = "The file arrived empty. Please try again."
+    if problem:
+        dest.unlink(missing_ok=True)
+        p.status, p.error = "failed", problem
+        await db.commit()
+        return JSONResponse({"ok": False, "error": problem}, status_code=400)
+    p.stage, p.size_bytes = "Waiting to start", size
+    await db.commit()
+    if not await _clip_enqueue(clip_fetch_task, p.id):
+        p.status, p.error = "failed", "The job queue is not reachable. Please try again in a minute."
+        await db.commit()
+    return JSONResponse({"ok": True, "url": f"/admin/clipper/{p.id}"})
+
+
+@router.get("/clipper/{project_id}", response_class=HTMLResponse, name="admin_clipper_show")
+async def admin_clipper_show(project_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin:
+        return RedirectResponse(url="/admin/login", status_code=303)
+    p = await _clip_project(db, admin, church, project_id) if church is not None else None
+    if not p:
+        return _redirect(request, "/admin/clipper", "That project was not found.", "error")
+    from app.core.clipper import options
+
+    ctx = await _admin_context(request, db, "admin.clipper")
+    return await render_template(request, "admin/clipper-show.html", {
+        "p": p, "data": _clip_json_project(p), "opt": options, "st": {**options.DEFAULTS, **(p.settings or {})},
+        "title": p.title or "Video", **ctx})
+
+
+@router.get("/clipper/{project_id}/status.json", name="admin_clipper_status")
+async def admin_clipper_status(project_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    p = await _clip_project(db, admin, church, project_id) if church is not None else None
+    if not p:
+        return JSONResponse({"ok": False}, status_code=404)
+    return JSONResponse({"ok": True, **_clip_json_project(p)})
+
+
+@router.get("/clipper/{project_id}/shorts/{short_id}/{name}", name="admin_clipper_file")
+async def admin_clipper_file(project_id: int, short_id: int, name: str, request: Request, db: AsyncSession = Depends(get_db)):
+    from fastapi.responses import FileResponse, Response
+    from slugify import slugify
+
+    from app.core.clipper import media
+
+    admin, church = await _clip_ctx(request, db)
+    p = await _clip_project(db, admin, church, project_id) if church is not None else None
+    s = _clip_short(p, short_id) if p else None
+    kinds = {"video.mp4": ("mp4", "video/mp4"), "thumb.jpg": ("jpg", "image/jpeg"),
+             "captions.srt": ("srt", "application/x-subrip")}
+    if not s or name not in kinds:
+        return Response(status_code=404)
+    ext, mime = kinds[name]
+    path = media.short_file(p.id, s.id, ext)
+    if not path.exists():
+        return Response(status_code=404)
+    headers = {"Cache-Control": "private, max-age=600"}
+    if request.query_params.get("download") or ext == "srt":
+        fname = f"{slugify(s.title or 'short')[:60] or 'short'}.{ext}"
+        headers["Content-Disposition"] = f'attachment; filename="{fname}"'
+    return FileResponse(str(path), media_type=mime, headers=headers)
+
+
+@router.post("/clipper/{project_id}/shorts/{short_id}/update", name="admin_clipper_short_update")
+async def admin_clipper_short_update(project_id: int, short_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    p = await _clip_project(db, admin, church, project_id) if church is not None else None
+    s = _clip_short(p, short_id) if p else None
+    if not s:
+        return JSONResponse({"ok": False, "error": "That short was not found."}, status_code=404)
+    from app.core.clipper import options
+    from app.tasks import clip_render_task
+
+    form = await request.form()
+    if "title" in form:
+        s.title = (form.get("title") or "").strip()[:255] or s.title
+    if "caption" in form:
+        s.caption = (form.get("caption") or "").strip()[:2000]
+    if "starred" in form:
+        s.starred = form.get("starred") == "1"
+    rerender = False
+    tables = {"format": options.FORMATS, "quality": options.QUALITIES, "framing": options.FRAMINGS,
+              "caption_style": options.CAPTION_STYLES}
+    for key, table in tables.items():
+        if key in form:
+            val = form.get(key)
+            if key == "quality":
+                val = int(val) if str(val).isdigit() else None
+            if val in table and val != getattr(s, key):
+                setattr(s, key, val)
+                rerender = True
+    for key in ("nudge_start", "nudge_end"):
+        if key in form:
+            try:
+                val = max(-30.0, min(30.0, float(form.get(key) or 0)))
+            except ValueError:
+                continue
+            if abs(val - (getattr(s, key) or 0)) > 0.01:
+                setattr(s, key, val)
+                rerender = True
+    if rerender:
+        if p.source_deleted_at:
+            await db.rollback()
+            return JSONResponse({"ok": False, "error": "The source video has been removed, so this short can no longer be re-cut."}, status_code=400)
+        if p.busy and p.status != "rendering":
+            await db.rollback()
+            return JSONResponse({"ok": False, "error": "This project is still working. Try again when it has finished."}, status_code=409)
+        s.status, s.error = "queued", None
+        p.status, p.stage, p.progress, p.error = "rendering", "Cutting the shorts", 0.0, None
+    await db.commit()
+    if rerender:
+        await _clip_enqueue(clip_render_task, p.id)
+    return JSONResponse({"ok": True, "rerender": rerender, "short": _clip_json_short(p, s)})
+
+
+@router.post("/clipper/{project_id}/shorts/{short_id}/delete", name="admin_clipper_short_delete")
+async def admin_clipper_short_delete(project_id: int, short_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    p = await _clip_project(db, admin, church, project_id) if church is not None else None
+    s = _clip_short(p, short_id) if p else None
+    if not s:
+        return JSONResponse({"ok": False, "error": "That short was not found."}, status_code=404)
+    if s.status == "rendering":
+        return JSONResponse({"ok": False, "error": "Wait until this short has been cut."}, status_code=409)
+    from app.core.clipper import media
+
+    for ext in ("mp4", "jpg", "srt"):
+        media.short_file(p.id, s.id, ext).unlink(missing_ok=True)
+    await db.delete(s)
+    await db.commit()
+    return JSONResponse({"ok": True})
+
+
+@router.post("/clipper/{project_id}/more", name="admin_clipper_more")
+async def admin_clipper_more(project_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    p = await _clip_project(db, admin, church, project_id) if church is not None else None
+    if not p:
+        return JSONResponse({"ok": False, "error": "That project was not found."}, status_code=404)
+    from app.core.clipper import media
+    from app.tasks import clip_compose_task
+
+    if p.busy or not media.words_path(p.id).exists() or p.source_deleted_at:
+        return JSONResponse({"ok": False, "error": "More shorts can be made once the project is ready and its video is still kept."}, status_code=409)
+    form = await request.form()
+    try:
+        count = max(1, min(10, int(form.get("count") or 3)))
+    except ValueError:
+        count = 3
+    p.status, p.stage, p.progress, p.error, p.heartbeat_at = "composing", "Looking for more moments", 0.0, None, datetime.utcnow()
+    await db.commit()
+    await _clip_enqueue(clip_compose_task, p.id, count)
+    return JSONResponse({"ok": True})
+
+
+@router.post("/clipper/{project_id}/manual", name="admin_clipper_manual")
+async def admin_clipper_manual(project_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    p = await _clip_project(db, admin, church, project_id) if church is not None else None
+    if not p:
+        return JSONResponse({"ok": False, "error": "That project was not found."}, status_code=404)
+    from app.core.clipper import media, options, pipeline
+    from app.tasks import clip_render_task
+
+    if p.busy or not media.words_path(p.id).exists() or p.source_deleted_at:
+        return JSONResponse({"ok": False, "error": "Make a clip once the project is ready and its video is still kept."}, status_code=409)
+    form = await request.form()
+    start, end = options.parse_clock(form.get("start")), options.parse_clock(form.get("end"))
+    if start is None or end is None or end - start < 3 or end - start > 600:
+        return JSONResponse({"ok": False, "error": "Give a start and an end like 12:30 and 13:45 (3 seconds to 10 minutes)."}, status_code=400)
+    # Times are read off the original video; when only a part was fetched, the stored source starts at range_start.
+    offset = float((p.settings or {}).get("range_start") or 0)
+    sid = await pipeline.manual_short(p.id, max(0.0, start - offset), end - offset)
+    if not sid:
+        return JSONResponse({"ok": False, "error": "Nothing is said between those times."}, status_code=400)
+    await _clip_enqueue(clip_render_task, p.id)
+    return JSONResponse({"ok": True})
+
+
+@router.post("/clipper/{project_id}/retry", name="admin_clipper_retry")
+async def admin_clipper_retry(project_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    p = await _clip_project(db, admin, church, project_id) if church is not None else None
+    if not p:
+        return JSONResponse({"ok": False, "error": "That project was not found."}, status_code=404)
+    from app.core.clipper import media, pipeline
+    from app.tasks import clip_compose_task, clip_fetch_task, clip_render_task, clip_transcribe_task
+
+    if p.busy and not pipeline.stale(p):
+        return JSONResponse({"ok": False, "error": "This project is still working."}, status_code=409)
+    if p.source_deleted_at:
+        return JSONResponse({"ok": False, "error": "The source video has been removed. Start a new project."}, status_code=409)
+    if any(s.status in ("queued", "rendering") for s in p.shorts):
+        for s in p.shorts:
+            if s.status == "rendering":
+                s.status = "queued"
+        task, label, status = clip_render_task, "Cutting the shorts", "rendering"
+    else:
+        stage = pipeline.resume_stage(p.id)
+        if (stage == "fetch" and p.source_kind == "upload" and not list(media.project_dir(p.id).glob("upload.*"))
+                and not media.source_path(p.id).exists()):
+            return JSONResponse({"ok": False, "error": "The uploaded file is gone. Start a new project and upload it again."}, status_code=409)
+        task, label, status = {
+            "fetch": (clip_fetch_task, "Getting the video", "queued"),
+            "transcribe": (clip_transcribe_task, "Waiting for the speech recogniser", "transcribing"),
+            "compose": (clip_compose_task, "Waiting for the editor", "composing"),
+        }[stage]
+        if stage == "compose" and p.shorts:
+            task, label, status = clip_render_task, "Cutting the shorts", "rendering"
+    p.status, p.stage, p.progress, p.error, p.heartbeat_at = status, label, 0.0, None, datetime.utcnow()
+    await db.commit()
+    await _clip_enqueue(task, p.id)
+    return JSONResponse({"ok": True})
+
+
+@router.post("/clipper/{project_id}/delete", name="admin_clipper_delete")
+async def admin_clipper_delete(project_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    p = await _clip_project(db, admin, church, project_id) if church is not None else None
+    if not p:
+        return _redirect(request, "/admin/clipper", "That project was not found.", "error")
+    from app.core.clipper import media
+
+    media.remove_project_files(p.id)
+    await log_admin_action(db, admin.id, "clipper.delete", "clip_project", p.id, {"title": p.title}, request)
+    await db.delete(p)
+    await db.commit()
+    return _redirect(request, "/admin/clipper", "The project and its shorts were deleted.", "success")

@@ -29,3 +29,6 @@ app/static/images/ministers/
 app/media/*
 !app/media/.gitkeep
 media_files/
+# Video Clipper working files (source videos, shorts): runtime data, never in git or the image
+/clipper/
+/app/clipper/

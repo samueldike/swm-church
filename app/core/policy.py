@@ -69,6 +69,17 @@ async def admin_policy(request: Request) -> None:
             logger.warning("Access denied: admin=%s role=%s %s %s needs whatsapp", admin.id, admin.role, request.method, path)
             raise AccessDenied(admin.role, perm)
         return
+    if perm == "clipper":
+        # Video Clipper: HQ Administrator, branch administrators, HQ Media and the Media HOD (app/core/clipper/options.py).
+        from app.core.clipper.options import can_use as clipper_can_use
+        from app.database import async_session
+
+        async with async_session() as db:
+            ok = await clipper_can_use(db, admin)
+        if not ok:
+            logger.warning("Access denied: admin=%s role=%s %s %s needs clipper", admin.id, admin.role, request.method, path)
+            raise AccessDenied(admin.role, perm)
+        return
     if not has_perm(admin.role, perm):
         logger.warning("Access denied: admin=%s role=%s %s %s needs %s", admin.id, admin.role, request.method, path, perm)
         raise AccessDenied(admin.role, perm)

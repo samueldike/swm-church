@@ -1,0 +1,60 @@
+{% extends "layouts/admin_base.html" %}
+{% block title %}{{ p.title or 'Video' }} | Video Clipper | {{ siteName }}{% endblock %}
+{% block topbar_title %}Video Clipper{% endblock %}
+{% block topbar_subtitle %}{{ p.title or 'Video' }}{% endblock %}
+{% block topbar_icon %}ri-scissors-cut-line{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=1">{% endblock %}
+
+{% block content %}
+{#- Rendered from JSON by app/static/js/clipper.js, which polls status.json while the project works. -#}
+<div class="vc flex flex-col gap-4" id="vc-show" data-id="{{ p.id }}" data-csrf="{{ csrf_token }}"
+     data-base="/admin/clipper/{{ p.id }}">
+  <script type="application/json" id="vc-data">{{ data|tojson }}</script>
+  <script type="application/json" id="vc-opts">{{ {'formats': opt.FORMATS, 'framings': opt.FRAMINGS, 'captions': opt.CAPTION_STYLES, 'qualities': opt.QUALITIES}|tojson }}</script>
+
+  <section class="vc-panel vc-head">
+    <div class="vc-head-top">
+      <a href="{{ url_for('admin_clipper') }}" class="btn btn-secondary btn-sm" aria-label="All videos"><i class="ri-arrow-left-line"></i></a>
+      <h1>{{ p.title or p.source_name or 'Untitled video' }}</h1>
+      <span id="vc-status"></span>
+    </div>
+    <div class="vc-head-meta">
+      {% if p.source_kind == 'url' and p.source_url %}<span><i class="ri-links-line"></i> <a href="{{ p.source_url }}" target="_blank" rel="noopener" class="underline">Source link</a></span>{% elif p.source_name %}<span><i class="ri-upload-cloud-2-line"></i> {{ p.source_name }}</span>{% endif %}
+      {% if p.duration %}<span><i class="ri-time-line"></i> {{ opt.clock(p.duration) }} clipped from{% if st.range_start is not none %} {{ opt.clock(st.range_start) }}{% if st.range_end is not none %} to {{ opt.clock(st.range_end) }}{% endif %}{% else %} the whole video{% endif %}</span>{% endif %}
+      <span><i class="ri-shapes-line"></i> {{ opt.LENGTHS[st.length][0] }} to {{ opt.LENGTHS[st.length][1] }} s · {{ opt.STYLES[st.style] }}</span>
+      {% if p.brief and p.brief.video and p.brief.video.niche %}<span><i class="ri-compass-3-line"></i> {{ p.brief.video.niche }}</span>{% endif %}
+      {% if p.branch %}<span><i class="ri-building-4-line"></i> {{ p.branch.name }}</span>{% endif %}
+    </div>
+    <div class="vc-progress" id="vc-progress" hidden>
+      <div class="vc-progress-label"><span id="vc-stage">Working</span><span id="vc-pct"></span></div>
+      <div class="vc-bar"><i id="vc-fill" style="width:0%"></i></div>
+      <span class="vc-muted text-[12px]">You can leave this page; the work carries on. A one-hour video usually takes 30 to 60 minutes.</span>
+    </div>
+    <div id="vc-problem" hidden></div>
+    <div class="vc-tools" id="vc-tools" hidden>
+      <form id="vc-more" class="vc-inline">
+        <select name="count" aria-label="How many more">{% for n in range(1, 11) %}<option value="{{ n }}" {{ 'selected' if n == 3 }}>{{ n }}</option>{% endfor %}</select>
+        <button type="submit" class="btn btn-secondary btn-sm"><i class="ri-sparkling-2-line"></i>Find more shorts</button>
+      </form>
+      <form id="vc-manual" class="vc-inline">
+        <input type="text" name="start" placeholder="from 12:30" aria-label="Start time" autocomplete="off">
+        <input type="text" name="end" placeholder="to 13:45" aria-label="End time" autocomplete="off">
+        <button type="submit" class="btn btn-secondary btn-sm"><i class="ri-scissors-2-line"></i>Clip these times</button>
+      </form>
+      <span class="flex-grow"></span>
+      <form method="post" action="{{ url_for('admin_clipper_delete', project_id=p.id) }}" data-confirm="Delete this video and all its shorts? This cannot be undone.">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-ghost btn-sm text-bad"><i class="ri-delete-bin-6-line"></i>Delete</button>
+      </form>
+    </div>
+  </section>
+
+  <div class="vc-shorts" id="vc-shorts"></div>
+  <div class="vc-toast" id="vc-toast" role="status" aria-live="polite"></div>
+</div>
+{% endblock %}
+
+{% block extra_body %}
+<script src="{{ url_for('static', path='js/clipper.js') }}?v=1"></script>
+<script>window.SWMClipper && window.SWMClipper.show();</script>
+{% endblock %}

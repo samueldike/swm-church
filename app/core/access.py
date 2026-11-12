@@ -139,6 +139,7 @@ _RULES: list[tuple[re.Pattern, str, tuple[str, ...] | None]] = [
     (re.compile(r"^/branch-reports(/|$)"), "branch_reports", None),
     (re.compile(r"^/branch-settings(/|$)"), "branch_settings", None),
     (re.compile(r"^/whatsapp(/|$)"), "whatsapp", None),     # per person: app/core/whatsapp.py:can_use
+    (re.compile(r"^/clipper(/|$)"), "clipper", None),       # per person: app/core/clipper/options.py:can_use
     (re.compile(r"^/access/whatsapp/\d+$"), "hods", ("POST",)),   # grant/revoke: who-for-whom is checked in the route
     (re.compile(r"^/hod/"), "hod_reports", None),
     (re.compile(r"^/(dashboard|metrics)(/|$)"), "dashboard", None),

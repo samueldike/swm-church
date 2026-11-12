@@ -156,6 +156,12 @@ async def housekeeping() -> None:
         keep = await retention_days(db)
         await db.execute(delete(AdminAuditLog).where(AdminAuditLog.created_at < datetime.utcnow() - timedelta(days=keep)))
         await db.commit()
+    try:
+        from app.core.clipper.pipeline import sweep_sources
+
+        await sweep_sources()     # Video Clipper: long source videos go after CLIPPER_KEEP_SOURCE_DAYS; shorts stay
+    except Exception:
+        logger.exception("clipper source sweep failed")
 
 
 async def _loop() -> None:

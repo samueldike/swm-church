@@ -65,3 +65,6 @@ whisper-models/
 
 # Audit screenshots are review artefacts (tens of MB); kept locally, not in git
 audit/screenshots/
+# Video Clipper working files (source videos, shorts): runtime data, never in git or the image
+/clipper/
+/app/clipper/
