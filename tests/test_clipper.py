@@ -254,3 +254,125 @@ def test_a_leaning_sentence_gets_back_what_it_leans_on():
     # Not when it would blow the length.
     g = editorial.fit_short(units, {"edl": [{"i": 4}, {"i": 5}, {"i": 7}, {"i": 8}]}, floor=10, target=20)
     assert g["length"] <= 20 * 1.08 * 1.1 + 1e-6
+
+
+# ─── speed: hosted transcription and the single-pass render ──────────
+
+from app.core.clipper import cloud_speech, render  # noqa: E402
+
+
+def test_cut_points_split_long_audio_at_the_longest_nearby_pause():
+    gaps = [[598.0, 598.3], [610.0, 612.0], [1195.0, 1199.0]]
+    pts = cloud_speech.cut_points(1800.0, gaps)
+    assert pts[0] == 0.0 and pts[-1] == 1800.0
+    assert pts[1] == 611.0          # the 2 s pause beats the 0.3 s one
+    assert pts[2] == 1197.0
+    assert all(b - a <= cloud_speech.CHUNK + cloud_speech.SEARCH for a, b in zip(pts, pts[1:]))
+    assert cloud_speech.cut_points(300.0, []) == [0.0, 300.0]
+    assert cloud_speech.cut_points(3600.0, [])[1] == 600.0   # no pauses: cut on time
+
+
+def test_punctuate_copies_segment_punctuation_onto_timed_words():
+    words = [{"word": "grace", "start": 0.0, "end": 0.4}, {"word": "is", "start": 0.4, "end": 0.5},
+             {"word": "enough", "start": 0.5, "end": 0.9}, {"word": "amen", "start": 1.2, "end": 1.5}]
+    segments = [{"text": " Grace is enough."}, {"text": " Amen!"}]
+    out = cloud_speech.punctuate(words, segments)
+    assert [w[2] for w in out] == ["Grace", "is", "enough.", "Amen!"]
+    assert out[0][:2] == [0.0, 0.4]
+    # a word the segment text spells differently keeps its own spelling, and alignment recovers after it
+    out = cloud_speech.punctuate([{"word": "uh", "start": 0, "end": .1}, {"word": "faith", "start": .2, "end": .5}],
+                                 [{"text": "Faith."}])
+    assert [w[2] for w in out] == ["uh", "Faith."]
+    assert speech.build_units(cloud_speech.punctuate(words, segments))[0].text == "Grace is enough."
+
+
+def test_render_clusters_share_one_input_for_nearby_segments():
+    segs = [[100.0, 104.0], [104.6, 110.0], [300.0, 305.0], [111.0, 115.0]]
+    assert render.clusters(segs) == [[0, 1, 3], [2]]
+
+
+def test_render_graph_is_one_encode_with_concat_captions_and_loudness():
+    segs = [[100.0, 104.0], [104.6, 110.0], [300.0, 305.0]]
+    vfs = ["crop=w=270:h=480:x='10':y=0,scale=1080:1920,setsar=1"] * 2 + [
+        "split[a][b];[a]scale=1080:1920,boxblur=24:3[bg];[b]scale=1080:1920[fg];[bg][fg]overlay=0:0,setsar=1"]
+    inputs, g = render.graph(segs, vfs, 30, subtitles="subtitles='x.ass'")
+    assert inputs == [(99.0, 11.5), (299.0, 6.5)]
+    assert "[0:v]split=2[sv0][sv1]" in g and "[0:a]asplit=2[sa0][sa1]" in g
+    assert "trim=start=1.000:end=5.000" in g and "trim=start=5.600:end=11.000" in g
+    assert "[2:v]" not in g and "[1:v]trim=start=1.000:end=6.000" in g
+    assert "split[xa2][xb2]" in g and "[xbg2][xfg2]overlay" in g and "[a]" not in g and "[bg]" not in g
+    labels = re.findall(r"\[([a-z]+\d+)\]", g)
+    outs = [x for x in labels if labels.count(x) != 2]
+    assert not outs, outs        # every label is written once and read once
+    assert "concat=n=3:v=1:a=1[vc][ac]" in g
+    assert "[vc]subtitles='x.ass'[vo]" in g and "loudnorm=I=-14" in g
+    _, g2 = render.graph(segs[:1], vfs[:1], 30, subtitles=None)
+    assert "[vc]null[vo]" in g2
+
+
+def test_captions_are_off_unless_turned_on():
+    assert options.DEFAULTS["caption_style"] == "none"
+    st, _ = options.clean_settings({"format": "square"})
+    assert st["caption_style"] == "none" and st["format"] == "square"
+    st, _ = options.clean_settings({"caption_style": "bold"})
+    assert st["caption_style"] == "bold"
+
+
+def _tone(tmp_path, seconds=3):
+    import shutil
+    import subprocess
+
+    if not shutil.which("ffmpeg"):
+        import pytest
+        pytest.skip("ffmpeg is not installed here")
+    wav = tmp_path / "a.wav"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", f"sine=f=440:d={seconds}", "-ac", "1", "-ar",
+                    "16000", "-c:a", "pcm_s16le", str(wav)], check=True)
+    return wav
+
+
+def test_hosted_transcription_sends_pieces_and_shifts_word_times(tmp_path, monkeypatch):
+    wav = _tone(tmp_path)
+    sent = []
+
+    class Reply:
+        status_code = 200
+        headers = {}
+        text = ""
+
+        def json(self):
+            return {"segments": [{"text": " Hello there, church."}],
+                    "words": [{"word": "hello", "start": 0.1, "end": 0.4}, {"word": "there", "start": 0.5, "end": 0.8},
+                              {"word": "church", "start": 0.9, "end": 1.4}]}
+
+    def fake_post(url, headers=None, data=None, files=None, timeout=None):
+        sent.append((url, headers, dict(data), files["file"][0]))
+        return Reply()
+
+    monkeypatch.setattr(cloud_speech.httpx, "post", fake_post)
+    monkeypatch.setattr(cloud_speech, "cut_points", lambda duration, gaps: [0.0, 1.5, 3.0])
+    words = cloud_speech.transcribe_words(wav, key="gsk_test", duration=3.0, gaps=[], language="pcm", hotwords="Scent of Water")
+    assert len(sent) == 2 and sent[0][0] == cloud_speech.URL
+    assert sent[0][1]["Authorization"] == "Bearer gsk_test"
+    assert sent[0][2]["model"] == "whisper-large-v3-turbo" and sent[0][2]["language"] == "en"
+    assert sent[0][2]["response_format"] == "verbose_json" and sent[0][2]["prompt"] == "Scent of Water"
+    assert [w[2] for w in words] == ["Hello", "there,", "church.", "Hello", "there,", "church."]
+    assert words[3][0] == 1.6                       # second piece shifted by its start
+    assert not list(tmp_path.glob("groq_*"))        # pieces cleaned up
+
+
+def test_hosted_transcription_refused_key_falls_back(tmp_path, monkeypatch):
+    import pytest
+
+    wav = _tone(tmp_path)
+
+    class Refused:
+        status_code = 401
+        headers = {}
+        text = "invalid api key"
+
+    monkeypatch.setattr(cloud_speech.httpx, "post", lambda *a, **k: Refused())
+    with pytest.raises(cloud_speech.CloudUnavailable):
+        cloud_speech.transcribe_words(wav, key="bad", duration=3.0, gaps=[])
+    with pytest.raises(cloud_speech.CloudUnavailable):
+        cloud_speech.transcribe_words(wav, key="", duration=3.0, gaps=[])

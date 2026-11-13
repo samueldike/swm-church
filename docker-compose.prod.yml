@@ -61,15 +61,18 @@ services:
     networks:
       - swm-net
 
-  # Video Clipper (Admin -> Video Clipper): downloads, AI editing and ffmpeg renders, ONE job at a time and
-  # CPU-capped so a long render never slows the website. Whisper for it runs on the transcriber above.
+  # Video Clipper (Admin -> Video Clipper): downloads, AI editing and ffmpeg renders, one project at a time (two
+  # shorts render side by side). It may use 5 cores when they are free, but at a quarter of the normal CPU
+  # priority (cpu_shares), so the website always wins when both are busy. Speech goes to Groq when a key is
+  # saved, otherwise to the local Whisper on the transcriber above.
   clipper:
     image: swm-app:latest
     container_name: swm-clipper
     restart: unless-stopped
     env_file: .env
     command: celery -A app.celery_app worker -Q clipper -c 1 -n clipper@%h -l info
-    cpus: 3
+    cpus: 5
+    cpu_shares: 256
     mem_limit: 3g
     volumes:
       - ./clipper:/app/clipper              # private: source videos and shorts, never served by nginx

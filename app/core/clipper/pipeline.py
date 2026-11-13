@@ -329,8 +329,11 @@ async def manual_short(project_id: int, start: float, end: float) -> int | None:
 
 # ─── 4. render ────────────────────────────────────────────────────────
 
+RENDER_PARALLEL = 2   # shorts cut at the same time (the clipper container may use 5 cores)
+
+
 async def render_queued(project_id: int) -> None:
-    """Render every queued short of the project, one at a time; then the project is ready."""
+    """Render every queued short of the project, two at a time; each appears as soon as it is ready."""
     from app.core.clipper import cut, render, speech
 
     p = await _load(project_id)
@@ -346,36 +349,47 @@ async def render_queued(project_id: int) -> None:
     info = _info(project_id)
     queue = [s for s in p.shorts if s.status == "queued"]
     done_before = len([s for s in p.shorts if s.status in ("ready", "failed")])
-    total = len(queue) + done_before
-    for n, s in enumerate(queue):
-        await _short_update(s.id, status="rendering", error=None)
-        label = f"Cutting short {done_before + n + 1} of {total}"
-        await _update(project_id, status="rendering", stage=label, progress=(done_before + n) / max(1, total))
-        try:
-            the_cut = cut.build_cut(s.plan or [], words, gaps, floor=floor if s.origin == "ai" else 0.0,
-                                    nudge_start=s.nudge_start or 0.0, nudge_end=s.nudge_end or 0.0)
-            out = media.short_file(project_id, s.id, "mp4")
+    total = max(1, len(queue) + done_before)
+    share: dict[int, float] = {s.id: 0.0 for s in queue}
+    finished = [done_before]
+    await _update(project_id, status="rendering", progress=done_before / total,
+                  stage=f"Cutting {len(queue)} short{'s' if len(queue) != 1 else ''}")
 
-            def work(progress):
-                return render.render(src=media.source_path(project_id), info=info, segments=the_cut["segments"],
-                                     words=the_cut["words"], out=out, fmt=s.format, quality=s.quality,
-                                     framing=s.framing, caption_style=s.caption_style, progress=progress)
+    def one(s, progress):
+        the_cut = cut.build_cut(s.plan or [], words, gaps, floor=floor if s.origin == "ai" else 0.0,
+                                nudge_start=s.nudge_start or 0.0, nudge_end=s.nudge_end or 0.0)
+        result = render.render(src=media.source_path(project_id), info=info, segments=the_cut["segments"],
+                               words=the_cut["words"], out=media.short_file(project_id, s.id, "mp4"), fmt=s.format,
+                               quality=s.quality, framing=s.framing, caption_style=s.caption_style, progress=progress)
+        return the_cut, result
 
-            base = (done_before + n) / max(1, total)
+    sem = asyncio.Semaphore(RENDER_PARALLEL)
 
-            def scaled(fn):
-                def run_it(progress):
-                    return fn(lambda f: progress(base + f / max(1, total), label))
-                return run_it
+    async def run_short(s):
+        async with sem:
+            await _short_update(s.id, status="rendering", error=None)
+            try:
+                the_cut, result = await asyncio.to_thread(one, s, lambda f, sid=s.id: share.__setitem__(sid, float(f)))
+                await _short_update(s.id, status="ready", segments=the_cut["segments"], length=result["length"],
+                                    rendered_at=datetime.utcnow(), error=None)
+            except ClipperError as exc:
+                await _short_update(s.id, status="failed", error=str(exc)[:1000])
+            except Exception:
+                logger.exception("Clipper render failed for short %s", s.id)
+                await _short_update(s.id, status="failed", error="This short could not be cut. Try again.")
+            finally:
+                share[s.id] = 1.0
+                finished[0] += 1
 
-            result = await _in_thread(project_id, scaled(work), stage=label)
-            await _short_update(s.id, status="ready", segments=the_cut["segments"], length=result["length"],
-                                rendered_at=datetime.utcnow(), error=None)
-        except ClipperError as exc:
-            await _short_update(s.id, status="failed", error=str(exc)[:1000])
-        except Exception:
-            logger.exception("Clipper render failed for short %s", s.id)
-            await _short_update(s.id, status="failed", error="This short could not be cut. Try again.")
+    jobs = asyncio.gather(*(run_short(s) for s in queue))
+    task = asyncio.ensure_future(jobs)
+    while not task.done():
+        await asyncio.wait({task}, timeout=3)
+        if not task.done():
+            ready = finished[0]
+            await _update(project_id, progress=min(0.99, (done_before + sum(share.values())) / total),
+                          stage=f"Cutting the shorts: {ready} of {total} ready")
+    task.result()
     await _update(project_id, status="ready", stage=None, progress=1.0, finished_at=datetime.utcnow())
 
 

@@ -28,7 +28,7 @@
     <div class="vc-progress" id="vc-progress" hidden>
       <div class="vc-progress-label"><span id="vc-stage">Working</span><span id="vc-pct"></span></div>
       <div class="vc-bar"><i id="vc-fill" style="width:0%"></i></div>
-      <span class="vc-muted text-[12px]">You can leave this page; the work carries on. Writing down every word takes about as long as the video itself; a one-hour message is ready in roughly an hour and a half.</span>
+      <span class="vc-muted text-[12px]">You can leave this page; the work carries on. {% if fast_listen %}Shorts appear one by one as they are cut; a one-hour message takes a few minutes.{% else %}Without fast transcription, writing down every word takes about as long as the video itself. The HQ Administrator can switch on fast transcription by saving a Groq key under Settings → AI drafting.{% endif %}</span>
     </div>
     <div id="vc-problem" hidden></div>
     <div class="vc-tools" id="vc-tools" hidden>

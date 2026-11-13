@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 CLUSTER_GAP = 40.0    # segments closer than this read from one input (decoding the gap is cheaper than a seek)
 LEAD = 1.0            # seconds decoded before a cluster's first segment
+PRESET = "veryfast"    # x264 speed/size trade-off for the one encode
+CRF = "20"
 
 
 def _fps(src_fps: float) -> int:
@@ -42,7 +44,7 @@ def clusters(segments: list[list[float]], gap: float = CLUSTER_GAP) -> list[list
 def _scoped(vf: str, n: int) -> str:
     """Give a segment's filter-chain labels (the blurred-background split) names of their own."""
     for label in ("bg", "fg", "a", "b"):
-        vf = vf.replace(f"[{label}]", f"[{label}{n}]")
+        vf = vf.replace(f"[{label}]", f"[x{label}{n}]")
     return vf
 
 
@@ -76,11 +78,11 @@ def graph(segments: list[list[float]], vfs: list[str], fps: int, *, subtitles: s
         d = max(0.05, e - s)
         fade = min(0.012, d / 4)
         lines.append(f"[{vlab[n]}]trim=start={a:.3f}:end={b:.3f},setpts=PTS-STARTPTS,{_scoped(vfs[n], n)},"
-                     f"fps={fps},format=yuv420p[v{n}]")
+                     f"fps={fps},format=yuv420p[vseg{n}]")
         lines.append(f"[{alab[n]}]atrim=start={a:.3f}:end={b:.3f},asetpts=PTS-STARTPTS,aresample=48000,"
                      f"aformat=channel_layouts=stereo,afade=t=in:st=0:d={fade:.3f},"
-                     f"afade=t=out:st={max(0.0, d - fade):.3f}:d={fade:.3f}[a{n}]")
-    joined = "".join(f"[v{n}][a{n}]" for n in range(len(segments)))
+                     f"afade=t=out:st={max(0.0, d - fade):.3f}:d={fade:.3f}[aseg{n}]")
+    joined = "".join(f"[vseg{n}][aseg{n}]" for n in range(len(segments)))
     lines.append(f"{joined}concat=n={len(segments)}:v=1:a=1[vc][ac]")
     lines.append(f"[vc]{subtitles}[vo]" if subtitles else "[vc]null[vo]")
     lines.append("[ac]loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000[ao]")
@@ -175,7 +177,7 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
         for seek, dur in inputs:
             cmd += ["-ss", f"{seek:.3f}", "-t", f"{dur:.3f}", "-i", str(src)]
         cmd += ["-/filter_complex", str(script), "-map", "[vo]", "-map", "[ao]",
-                "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+                "-c:v", "libx264", "-preset", PRESET, "-crf", CRF, "-pix_fmt", "yuv420p",
                 "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-movflags", "+faststart", str(tmp_out)]
         start_share = 0.25 if track else 0.02
         _encode(cmd, length, lambda f: report(start_share + (0.97 - start_share) * f))

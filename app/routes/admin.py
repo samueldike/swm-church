@@ -10362,6 +10362,12 @@ async def _clip_ctx(request, db):
     return admin, church_of(admin, await get_hq_branch_id(db))
 
 
+async def _clip_groq_key() -> str:
+    from app.core.clipper.pipeline import groq_key
+
+    return await groq_key()
+
+
 async def _clip_project(db, admin, church: int, project_id: int):
     from app.core.clipper.options import sees_every_church
     from app.models.clipper import ClipProject
@@ -10489,7 +10495,7 @@ async def admin_clipper_new(request: Request, db: AsyncSession = Depends(get_db)
     ctx = await _admin_context(request, db, "admin.clipper")
     return await render_template(request, "admin/clipper-form.html", {
         "opt": options, "defaults": options.DEFAULTS, "max_mb": app_settings.CLIPPER_MAX_UPLOAD_MB,
-        "ai_ready": await ai.is_configured(), "title": "New video", **ctx})
+        "ai_ready": await ai.is_configured(), "fast_listen": bool(await _clip_groq_key()), "title": "New video", **ctx})
 
 
 @router.post("/clipper/create", name="admin_clipper_create")
@@ -10595,7 +10601,7 @@ async def admin_clipper_show(project_id: int, request: Request, db: AsyncSession
 
     ctx = await _admin_context(request, db, "admin.clipper")
     return await render_template(request, "admin/clipper-show.html", {
-        "p": p, "data": _clip_json_project(p), "opt": options, "st": {**options.DEFAULTS, **(p.settings or {})},
+        "fast_listen": bool(await _clip_groq_key()), "p": p, "data": _clip_json_project(p), "opt": options, "st": {**options.DEFAULTS, **(p.settings or {})},
         "title": p.title or "Video", **ctx})
 
 

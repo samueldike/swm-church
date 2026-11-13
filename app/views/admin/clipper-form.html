@@ -17,6 +17,9 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="source_kind" value="url">
 
+  {% if not fast_listen %}
+  <div class="vc-alert info" role="note"><i class="ri-timer-flash-line"></i><span><b>Fast transcription is off.</b> Writing down every word runs on this server and takes about as long as the video. With a Groq key saved under Settings → AI drafting (the HQ Administrator does this once; Groq has a free tier), a one-hour message is ready in minutes.</span></div>
+  {% endif %}
   {% if not ai_ready %}
   <div class="vc-alert bad" role="alert"><i class="ri-key-2-line"></i><span>No AI key is saved, so the clipper cannot choose moments yet. The HQ Administrator adds one under Settings → AI drafting.</span></div>
   {% endif %}
