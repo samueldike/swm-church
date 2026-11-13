@@ -39,8 +39,8 @@ TEMPLATES: dict[str, dict] = {
 DEFAULT_TEMPLATE = "swm-lite"
 
 TRIMS = {
-    "a5": {"label": "A5 (148 × 210 mm)", "size": "148mm 210mm"},
-    "digest": {"label": "Digest (5.5 × 8.5 in)", "size": "5.5in 8.5in"},
+    "a5": {"label": "A5 (148 × 210 mm)", "size": "148mm 210mm", "width_mm": 148.0},
+    "digest": {"label": "Digest (5.5 × 8.5 in)", "size": "5.5in 8.5in", "width_mm": 139.7},
 }
 
 # Body sizes tried in turn until a day fits on its page (level 0 first).
@@ -338,7 +338,8 @@ def render_html(pages: list[DayPage], opts: Options, *, title: str = "", subtitl
         first_number = opts.first_page - (1 if title_page else 0)
     tpl = _env().get_template(TEMPLATES[opts.template]["file"])
     return tpl.render(
-        pages=pages, opts=opts, size=TRIMS[opts.trim]["size"], counter_start=first_number,
+        pages=pages, opts=opts, size=TRIMS[opts.trim]["size"], page_width_mm=TRIMS[opts.trim]["width_mm"],
+        counter_start=first_number,
         show_title_page=title_page,
         # WeasyPrint makes the document's first page a right-hand page; an even first number
         # belongs on the left, so swap the mirrored selectors.
