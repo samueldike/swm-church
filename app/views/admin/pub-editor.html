@@ -85,6 +85,42 @@
   .tp-foot { display: flex; align-items: center; gap: 8px; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid var(--color-line, #e4e0d6); }
   .tp-msg { margin-right: auto; font-size: 12.5px; color: var(--color-ink-3, #6b675e); }
   .tp-msg.err { color: #b42318; }
+  /* Export progress (wizard) */
+  .tp-run { padding: 22px 24px 18px; display: flex; flex-direction: column; gap: 16px; }
+  .tp-run[hidden], .tp-body[hidden] { display: none; }
+  .tp-run-top { display: flex; align-items: center; gap: 16px; }
+  .tp-run-head { flex: 1; min-width: 0; }
+  .tp-run-head h3 { font-size: 18px; font-weight: 800; margin: 0; letter-spacing: -.2px; }
+  .tp-run-head p { font-size: 13px; color: var(--color-ink-3, #6b675e); margin: 3px 0 0; }
+  .tp-pct { font-size: 34px; font-weight: 800; color: var(--color-gold, #b8891f); font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+  .tp-book { position: relative; width: 58px; height: 74px; flex: none; perspective: 300px; }
+  .tp-book i { position: absolute; inset: 0; border-radius: 3px 7px 7px 3px; background: #fff; border: 1.5px solid #cfc9bb; box-shadow: 0 6px 14px rgba(0,0,0,.12); }
+  .tp-book i:nth-child(1) { transform: translate(6px, 5px); background: #efece4; }
+  .tp-book i:nth-child(2) { transform: translate(3px, 2.5px); background: #f7f5ef; }
+  .tp-book i.flip { transform-origin: left center; background: #fff repeating-linear-gradient(transparent 0 22px, #e8e3d6 22px 23px, transparent 23px 29px); animation: tpflip 1.6s ease-in-out infinite; }
+  .tp-book b { position: absolute; top: 6px; left: 0; right: 0; text-align: center; font-size: 11px; font-weight: 800; color: #3d3d3d; z-index: 2; font-variant-numeric: tabular-nums; }
+  @keyframes tpflip { 0%, 35% { transform: rotateY(0); opacity: 1; } 70%, 100% { transform: rotateY(-160deg); opacity: .15; } }
+  .tp-meter { height: 12px; border-radius: 99px; background: var(--color-sunken, #f1eee6); overflow: hidden; box-shadow: inset 0 1px 2px rgba(0,0,0,.08); }
+  .tp-meter > i { display: block; height: 100%; width: 0; border-radius: 99px; transition: width .7s ease;
+    background-image: repeating-linear-gradient(-45deg, rgba(255,255,255,.3) 0 10px, rgba(255,255,255,0) 10px 20px), linear-gradient(90deg, #e0b23a, #b8891f);
+    background-size: 28px 28px, 100% 100%; animation: tpstripes 1s linear infinite; }
+  @keyframes tpstripes { to { background-position: 28px 0, 0 0; } }
+  .tp-run.done .tp-meter > i { animation: none; background: #15803d; }
+  .tp-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .tp-steps li { display: flex; gap: 12px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; color: var(--color-ink-3, #6b675e); transition: background .2s, color .2s; }
+  .tp-steps li b { display: block; font-size: 13.5px; }
+  .tp-steps li small { display: block; font-size: 12px; margin-top: 1px; font-variant-numeric: tabular-nums; }
+  .tp-dot { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 2px solid #d3cdbf; margin-top: 1px; display: grid; place-items: center; background: #fff; }
+  .tp-steps li.active { background: var(--color-gold-tint, #f6ecd2); color: var(--color-ink, #1a1a1a); }
+  .tp-steps li.active .tp-dot { border-color: var(--color-gold, #b8891f); border-top-color: transparent; animation: tpspin .9s linear infinite; }
+  .tp-steps li.ok { color: var(--color-ink-2, #3a3731); }
+  .tp-steps li.ok .tp-dot { border-color: #15803d; background: #15803d; }
+  .tp-steps li.ok .tp-dot::after { content: ""; width: 5px; height: 10px; border: solid #fff; border-width: 0 2.5px 2.5px 0; transform: translateY(-1px) rotate(45deg); }
+  .tp-steps li.bad { background: #fdecea; color: #b42318; }
+  .tp-steps li.bad .tp-dot { border-color: #b42318; }
+  .tp-run-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--color-ink-3, #6b675e); font-variant-numeric: tabular-nums; }
+  .tp-run.done .tp-book i.flip { animation: none; transform: none; opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .tp-book i.flip, .tp-meter > i, .tp-steps li.active .tp-dot { animation: none; } }
   .tblgrid { display: grid; grid-template-columns: repeat(8, 18px); gap: 3px; }
   .tblgrid span { width: 18px; height: 18px; border: 1px solid var(--color-line-2, #cfcabd); border-radius: 2px; }
   .tblgrid span.on { background: var(--color-gold-tint, #f6ecd2); border-color: var(--color-gold, #b8891f); }
@@ -252,8 +288,29 @@
           <p class="tp-note">{% if pub.start_date %}Dates follow the project's period (Day 1 is {{ pub.start_date.strftime('%d %b %Y') }}). {% else %}This project has no start date, so pages show “Day N” instead of a date, and no Bible reading. {% endif %}Readings run from Genesis to Revelation in order. A long day gets slightly smaller type so it fits its page.</p>
         </div>
       </div>
+      {#- Shown while the PDF is made: a wizard of the real stages, with the day being laid out. -#}
+      <div class="tp-run" id="ed-tpl-run" hidden>
+        <div class="tp-run-top">
+          <div class="tp-book" aria-hidden="true"><i></i><i></i><i class="flip"></i><b id="ed-tpl-day">1</b></div>
+          <div class="tp-run-head">
+            <h3 id="ed-tpl-title">Designing your devotional</h3>
+            <p id="ed-tpl-sub">Every day is being set on its own book page.</p>
+          </div>
+          <div class="tp-pct" id="ed-tpl-pct">0%</div>
+        </div>
+        <div class="tp-meter" role="progressbar" aria-labelledby="ed-tpl-title" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="ed-tpl-meter"><i id="ed-tpl-fill"></i></div>
+        <ol class="tp-steps">
+          <li data-step="read"><span class="tp-dot"></span><div><b>Reading your document</b><small>The devotional as last saved</small></div></li>
+          <li data-step="measure"><span class="tp-dot"></span><div><b>Fitting each day to its page</b><small id="ed-tpl-s-measure">Choosing the type size that fits</small></div></li>
+          <li data-step="render"><span class="tp-dot"></span><div><b>Printing the pages</b><small id="ed-tpl-s-render">Page numbers, dates and readings</small></div></li>
+          <li data-step="done"><span class="tp-dot"></span><div><b>Your PDF is ready</b><small id="ed-tpl-s-done">It downloads by itself</small></div></li>
+        </ol>
+        <div class="tp-run-meta"><span id="ed-tpl-elapsed">Starting</span><span id="ed-tpl-eta"></span></div>
+      </div>
       <footer class="tp-foot">
         <span class="tp-msg" id="ed-tpl-msg" role="status" aria-live="polite"></span>
+        <button type="button" class="btn btn-secondary btn-sm" id="ed-tpl-back" hidden><i class="ri-arrow-left-line"></i>Options</button>
+        <a class="btn btn-primary btn-sm" id="ed-tpl-again" hidden data-turbo="false"><i class="ri-download-2-line"></i>Download again</a>
         <button type="button" class="btn btn-secondary btn-sm" id="ed-tpl-cancel">Cancel</button>
         <button type="button" class="btn btn-primary btn-sm" id="ed-tpl-go"><i class="ri-file-pdf-line"></i>Export PDF</button>
       </footer>
@@ -604,41 +661,109 @@
     $('ed-tpl-x').addEventListener('click', close, opt);
     $('ed-tpl-cancel').addEventListener('click', close, opt);
     form.addEventListener('change', (e) => { if (['trim', 'reading', 'two_year_plan'].includes(e.target.name)) loadThumbs(); }, opt);
+    // The progress wizard follows the job's real stages (measure = fit each day, render = print the parts).
+    const run = $('ed-tpl-run'), tbody = tpl.querySelector('.tp-body');
+    const ORDER = ['read', 'measure', 'render', 'done'];
+    let running = false, current = 'read';
+    const steps = (step, { failed = false, finished = false } = {}) => {
+      current = step;
+      const at = ORDER.indexOf(step);
+      run.querySelectorAll('.tp-steps li').forEach((li) => {
+        const me = ORDER.indexOf(li.dataset.step);
+        li.classList.remove('active', 'ok', 'bad');
+        if (me < at || (finished && me === at)) li.classList.add('ok');
+        else if (me === at) li.classList.add(failed ? 'bad' : 'active');
+      });
+    };
+    const clock = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+    const showRun = (on) => {
+      run.hidden = !on; tbody.hidden = on;
+      $('ed-tpl-go').hidden = on; $('ed-tpl-cancel').hidden = on;
+      $('ed-tpl-back').hidden = true; $('ed-tpl-again').hidden = true;
+      run.classList.remove('done');
+    };
+    $('ed-tpl-back').addEventListener('click', () => { showRun(false); msg.textContent = ''; }, opt);
+    tpl.addEventListener('close', () => { if (!running) showRun(false); }, opt);
+
     $('ed-tpl-go').addEventListener('click', async (e) => {
       e.preventDefault();
-      const go = $('ed-tpl-go');
+      if (running) return;
       msg.classList.remove('err');
       if (dirty && !(await save(true))) { msg.textContent = 'Could not save your changes, so the export was cancelled.'; msg.classList.add('err'); return; }
-      go.disabled = true;
-      msg.textContent = 'Starting…';
-      const fail = (text) => { msg.textContent = text || 'The designed PDF could not be made. Please try again.'; msg.classList.add('err'); };
+      running = true;
+      showRun(true);
+      msg.textContent = 'You can close this window: the PDF still downloads when it is ready.';
+      const t0 = Date.now();
+      let pct = 0;
+      const set = (p, step, flags) => {
+        pct = Math.max(pct, Math.min(100, p));
+        $('ed-tpl-fill').style.width = pct + '%';
+        $('ed-tpl-pct').textContent = Math.round(pct) + '%';
+        $('ed-tpl-meter').setAttribute('aria-valuenow', String(Math.round(pct)));
+        steps(step, flags);
+      };
+      const tick = setInterval(() => {
+        const secs = (Date.now() - t0) / 1000;
+        $('ed-tpl-elapsed').textContent = 'Working for ' + clock(secs);
+        $('ed-tpl-eta').textContent = pct > 6 && pct < 100 ? 'about ' + clock(Math.max(1, secs * (100 - pct) / pct)) + ' left' : '';
+      }, 500);
+      const fail = (text) => {
+        set(pct, current, { failed: true });
+        $('ed-tpl-title').textContent = 'The PDF could not be made';
+        $('ed-tpl-sub').textContent = text || 'Please try again.';
+        msg.textContent = ''; $('ed-tpl-back').hidden = false;
+      };
+      $('ed-tpl-title').textContent = 'Designing your devotional';
+      $('ed-tpl-sub').textContent = 'Every day is being set on its own book page.';
+      $('ed-tpl-s-done').textContent = 'It downloads by itself';
+      $('ed-tpl-s-render').textContent = 'Page numbers, dates and readings';
+      set(2, 'read');
       try {
-        const body = params();
-        const res = await fetch(tpl.dataset.exportUrl, { method: 'POST', credentials: 'same-origin', body,
+        const res = await fetch(tpl.dataset.exportUrl, { method: 'POST', credentials: 'same-origin', body: params(),
           headers: { 'X-CSRF-Token': shell.dataset.csrf } });
         const start = await res.json().catch(() => ({}));
         if (!res.ok || !start.ok) { fail(start.error); return; }
+        const days = start.total;
         const statusUrl = tpl.dataset.exportUrl + '/' + encodeURIComponent(start.job);
-        // Poll until the server has laid out every page (a year takes a minute or two).
+        $('ed-tpl-s-measure').textContent = `Day 0 of ${days}`;
+        set(5, 'measure');
         for (;;) {
-          await new Promise((r) => setTimeout(r, 1500));
+          await new Promise((r) => setTimeout(r, 1000));
           if (ctl.signal.aborted) return;
           const st = await fetch(statusUrl, { credentials: 'same-origin' }).then((r) => r.json()).catch(() => ({}));
-          if (!st.ok) { fail(st.error); return; }
-          if (st.status === 'error') { fail(st.error); return; }
+          if (!st.ok || st.status === 'error') { fail(st.error); return; }
           if (st.status === 'done') break;
-          msg.textContent = st.stage === 'render'
-            ? 'Putting the pages together…'
-            : `Fitting each day to its page… ${st.done} of ${st.total}`;
+          if (st.stage === 'render') {
+            $('ed-tpl-day').textContent = String(days);
+            $('ed-tpl-s-measure').textContent = `All ${days} days fit their pages`;
+            $('ed-tpl-s-render').textContent = st.total > 1 ? `Part ${Math.min(st.done + 1, st.total)} of ${st.total}` : 'Setting every page';
+            set(65 + 30 * (st.done / Math.max(1, st.total)), 'render');
+          } else {
+            $('ed-tpl-day').textContent = String(Math.max(1, st.done));
+            $('ed-tpl-s-measure').textContent = `Day ${st.done} of ${st.total}`;
+            set(5 + 60 * (st.done / Math.max(1, st.total)), 'measure');
+          }
         }
-        msg.textContent = 'Done. Your PDF is downloading.';
+        const fileUrl = statusUrl + '/file';
+        set(100, 'done', { finished: true });
+        run.classList.add('done');
+        $('ed-tpl-title').textContent = 'Your devotional is ready';
+        $('ed-tpl-sub').textContent = `${days} day${days === 1 ? '' : 's'} laid out in ${clock((Date.now() - t0) / 1000)}.`;
+        $('ed-tpl-s-render').textContent = 'Done';
+        $('ed-tpl-s-done').textContent = 'Downloading now';
+        msg.textContent = '';
+        const again = $('ed-tpl-again'); again.href = fileUrl; again.hidden = false;
+        $('ed-tpl-back').hidden = false;
+        if (!tpl.open) tpl.showModal();
         const a = document.createElement('a');
-        a.href = statusUrl + '/file'; a.setAttribute('data-turbo', 'false');
+        a.href = fileUrl; a.setAttribute('data-turbo', 'false');
         document.body.appendChild(a); a.click(); a.remove();
       } catch (err) {
         fail();
       } finally {
-        go.disabled = false;
+        clearInterval(tick);
+        $('ed-tpl-eta').textContent = '';
+        running = false;
       }
     }, opt);
   }

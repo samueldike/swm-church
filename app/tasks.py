@@ -332,7 +332,23 @@ def clip_fetch_task(self, project_id: int):
     from app.core.clipper import pipeline
 
     if _run(pipeline.fetch(project_id)):
+        _clip_listen(project_id)
+
+
+def _clip_listen(project_id: int) -> None:
+    """Hosted transcription (Groq) right here when a key is saved; otherwise the local model's queue."""
+    from app.core.clipper import pipeline
+
+    outcome = _run(pipeline.transcribe_fast(project_id))
+    if outcome == "done":
+        clip_compose_task.apply_async((project_id,))
+    elif outcome == "local":
         clip_transcribe_task.apply_async((project_id,))
+
+
+@celery_app.task(bind=True, max_retries=0, acks_late=False)
+def clip_listen_task(self, project_id: int):
+    _clip_listen(project_id)
 
 
 @celery_app.task(bind=True, max_retries=0, acks_late=False)

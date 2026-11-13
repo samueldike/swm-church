@@ -3,7 +3,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}{{ p.title or 'Video' }}{% endblock %}
 {% block topbar_icon %}ri-scissors-cut-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=1">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=2">{% endblock %}
 
 {% block content %}
 {#- Rendered from JSON by app/static/js/clipper.js, which polls status.json while the project works. -#}
@@ -55,6 +55,6 @@
 {% endblock %}
 
 {% block extra_body %}
-<script src="{{ url_for('static', path='js/clipper.js') }}?v=1"></script>
+<script src="{{ url_for('static', path='js/clipper.js') }}?v=2"></script>
 <script>window.SWMClipper && window.SWMClipper.show();</script>
 {% endblock %}

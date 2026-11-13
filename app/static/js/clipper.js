@@ -35,6 +35,18 @@
       say('');
     }, opt));
 
+    // Captions are opt-in: the style choice is only sent (enabled) while the switch is on.
+    const capOn = document.getElementById('vc-cap-on');
+    const capStyles = document.getElementById('vc-cap-styles');
+    if (capOn && capStyles) {
+      const sync = () => {
+        capStyles.hidden = !capOn.checked;
+        capStyles.querySelectorAll('input').forEach((i) => { i.disabled = !capOn.checked; });
+      };
+      capOn.addEventListener('change', sync, opt);
+      sync();
+    }
+
     const pick = (fl) => {
       if (!fl) return;
       if (fl.size > maxBytes) { say(`That file is larger than ${Math.round(maxBytes / 1048576)} MB.`, true); return; }

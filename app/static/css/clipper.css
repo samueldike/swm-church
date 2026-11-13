@@ -62,6 +62,25 @@
 .vc-choice label small { font-weight: 400; color: var(--vc-ink3); font-size: 11.5px; line-height: 1.35; }
 .vc-choice input { position: absolute; left: 12px; top: 12px; width: 16px !important; height: 16px; accent-color: var(--vc-gold); margin: 0; }
 .vc-choice label:has(input:checked) { border-color: var(--vc-gold); background: var(--vc-gold-tint); }
+.vc-orient { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.vc-orient label { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 14px 10px 12px; border: 1.5px solid var(--vc-line2);
+                   border-radius: 12px; cursor: pointer; text-align: center; font-size: 13px; transition: border-color .15s, background .15s; }
+.vc-orient label small { font-size: 11.5px; color: var(--vc-ink3); line-height: 1.35; }
+.vc-orient input { position: absolute; opacity: 0; pointer-events: none; }
+.vc-orient .vc-frame { display: block; height: 64px; max-width: 100%; border: 2.5px solid var(--vc-ink3); border-radius: 6px; margin-bottom: 8px; background: var(--vc-sunken); }
+.vc-orient label:has(input:checked) { border-color: var(--vc-gold); background: var(--vc-gold-tint); }
+.vc-orient label:has(input:checked) .vc-frame { border-color: var(--vc-gold); background: #fff; }
+.vc-orient label:has(input:focus-visible) { outline: 2px solid var(--vc-gold); outline-offset: 2px; }
+@media (max-width: 520px) { .vc-orient .vc-frame { height: 46px; } .vc-orient label small { display: none; } }
+.vc-switch { display: grid; grid-template-columns: 40px 1fr; column-gap: 12px; align-items: center; cursor: pointer; font-size: 13px; }
+.vc-switch input { position: absolute; opacity: 0; }
+.vc-switch span { grid-row: span 2; width: 40px; height: 22px; border-radius: 99px; background: var(--vc-line2); position: relative; transition: background .15s; }
+.vc-switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.vc-switch input:checked + span { background: var(--vc-gold); }
+.vc-switch input:checked + span::after { transform: translateX(18px); }
+.vc-switch input:focus-visible + span { outline: 2px solid var(--vc-gold); outline-offset: 2px; }
+.vc-switch small { color: var(--vc-ink3); font-size: 12px; }
+.vc-captions .vc-choice { margin-top: 10px; padding-left: 52px; }
 .vc-foot { display: flex; align-items: center; gap: 12px; justify-content: flex-end; flex-wrap: wrap; }
 .vc-foot .vc-msg { margin-right: auto; font-size: 13px; color: var(--vc-ink3); }
 .vc-foot .vc-msg.bad { color: var(--vc-bad); }

@@ -34,9 +34,9 @@ FRAMINGS = {
     "fit": "Whole picture on a blurred background",
 }
 CAPTION_STYLES = {
+    "none": "No captions",
     "bold": "Bold, word by word",
     "clean": "Clean subtitles",
-    "none": "No captions",
 }
 LENGTHS = {
     "15-30": (15, 30),
@@ -54,7 +54,7 @@ DEFAULTS = {
     "format": "vertical",
     "quality": 1080,
     "framing": "speaker",
-    "caption_style": "bold",
+    "caption_style": "none",  # captions are opt-in (the form's "Add captions" switch)
     "language": "en",
     "range_start": None,
     "range_end": None,

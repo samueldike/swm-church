@@ -29,6 +29,7 @@ celery_app.conf.update(
         # AI calls and ffmpeg renders on the single-slot "clipper" worker so they never starve the website.
         "app.tasks.clip_transcribe_task": {"queue": "transcription"},
         "app.tasks.clip_fetch_task": {"queue": "clipper"},
+        "app.tasks.clip_listen_task": {"queue": "clipper"},
         "app.tasks.clip_compose_task": {"queue": "clipper"},
         "app.tasks.clip_render_task": {"queue": "clipper"},
     },

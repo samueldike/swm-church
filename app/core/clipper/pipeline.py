@@ -124,7 +124,7 @@ async def fetch(project_id: int) -> bool:
         await asyncio.to_thread(media.extract_audio, src, media.audio_path(project_id))
         gaps = await asyncio.to_thread(media.silence_map, media.audio_path(project_id))
         (media.project_dir(project_id) / "gaps.json").write_text(json.dumps(gaps), encoding="utf-8")
-        await _update(project_id, status="transcribing", stage="Waiting for the speech recogniser", progress=0.0)
+        await _update(project_id, status="transcribing", stage="Writing down every word", progress=0.0)
         return True
     except ClipperError as exc:
         await _fail(project_id, str(exc))
@@ -164,6 +164,56 @@ async def transcribe(project_id: int) -> bool:
         logger.exception("Clipper transcription failed for project %s", project_id)
         await _fail(project_id, "Transcribing the video failed unexpectedly. Please try again.")
     return False
+
+
+async def groq_key() -> str:
+    from app.core import ai
+
+    try:
+        return (await ai.get_config("groq")).api_key or ""
+    except Exception:
+        return ""
+
+
+async def transcribe_fast(project_id: int) -> str:
+    """Hosted transcription (Groq): "done", "failed", or "local" when the local model has to do it."""
+    from app.core.clipper import cloud_speech, speech
+
+    key = await groq_key()
+    if not key:
+        await _update(project_id, status="transcribing", stage="Waiting for the speech recogniser", progress=0.0)
+        return "local"
+    p = await _load(project_id)
+    if p is None:
+        return "failed"
+    st = _settings(p)
+    try:
+        audio = media.audio_path(project_id)
+        if not audio.exists():
+            raise ClipperError("The audio of this video is missing. Retry the project.")
+        gaps_file = media.project_dir(project_id) / "gaps.json"
+        gaps = json.loads(gaps_file.read_text(encoding="utf-8")) if gaps_file.exists() else []
+        await _update(project_id, status="transcribing", stage="Writing down every word", progress=0.0, error=None)
+        words = await _in_thread(project_id, cloud_speech.transcribe_words, audio, key=key,
+                                 duration=float(p.duration or _info(project_id).get("duration") or 0), gaps=gaps,
+                                 language=st.get("language") or None, hotwords=await _hotwords(),
+                                 stage="Writing down every word")
+        if len(words) < 40:
+            raise ClipperError("Hardly any speech was heard in this video, so there is nothing to clip.")
+        speech.save_words(media.words_path(project_id), words, gaps, {"language": st.get("language"), "engine": "groq"})
+        await _update(project_id, status="composing", stage="Waiting for the editor", progress=0.0)
+        return "done"
+    except cloud_speech.CloudUnavailable as exc:
+        logger.warning("Clipper project %s: hosted transcription unavailable (%s); using the local model", project_id, exc)
+        await _update(project_id, status="transcribing", stage="Waiting for the speech recogniser", progress=0.0)
+        return "local"
+    except ClipperError as exc:
+        await _fail(project_id, str(exc))
+    except Exception:
+        logger.exception("Clipper hosted transcription failed for project %s", project_id)
+        await _update(project_id, status="transcribing", stage="Waiting for the speech recogniser", progress=0.0)
+        return "local"
+    return "failed"
 
 
 async def youtube_cookies() -> str:

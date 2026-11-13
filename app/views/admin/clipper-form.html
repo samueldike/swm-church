@@ -4,7 +4,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}New video{% endblock %}
 {% block topbar_icon %}ri-scissors-cut-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=1">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=2">{% endblock %}
 
 {% block page_header %}
   {{ page_header("New video", "Choose the video, how many shorts you want and how they should look. You can leave the page while it works.",
@@ -20,6 +20,18 @@
   {% if not ai_ready %}
   <div class="vc-alert bad" role="alert"><i class="ri-key-2-line"></i><span>No AI key is saved, so the clipper cannot choose moments yet. The HQ Administrator adds one under Settings → AI drafting.</span></div>
   {% endif %}
+
+  <section class="vc-panel vc-section">
+    <h2><i class="ri-aspect-ratio-line"></i>Orientation</h2>
+    <p>Choose the shape first: every short is framed and cut in it from the start, so nothing has to be re-cut. You can still change one short later.</p>
+    <div class="vc-orient" role="radiogroup" aria-label="Orientation">
+      {% for k, v in opt.FORMATS.items() %}
+      <label><input type="radio" name="format" value="{{ k }}" {{ 'checked' if k == defaults.format }}>
+        <i class="vc-frame" style="aspect-ratio: {{ v.ratio[0] }} / {{ v.ratio[1] }}" aria-hidden="true"></i>
+        <b>{{ v.label.split(' (')[0] }}</b><small>{{ v.label.split(' (')[1].rstrip(')') if ' (' in v.label else '' }}</small></label>
+      {% endfor %}
+    </div>
+  </section>
 
   <section class="vc-panel vc-section">
     <h2><i class="ri-film-line"></i>The video</h2>
@@ -78,18 +90,18 @@
   <section class="vc-panel vc-section">
     <h2><i class="ri-layout-4-line"></i>How they look</h2>
     <p>You can change these for any single short later.</p>
-    <div class="vc-field">Shape
-      <div class="vc-choice">
-        {% for k, v in opt.FORMATS.items() %}<label><input type="radio" name="format" value="{{ k }}" {{ 'checked' if k == defaults.format }}>{{ v.label.split(' (')[0] }}<small>{{ v.label.split(' (')[1].rstrip(')') if ' (' in v.label else '' }}</small></label>{% endfor %}
-      </div>
-    </div>
-    <div class="vc-row vc-mt">
+    <div class="vc-row">
       <label class="vc-field">Framing
         <select name="framing">{% for k, v in opt.FRAMINGS.items() %}<option value="{{ k }}" {{ 'selected' if k == defaults.framing }}>{{ v }}</option>{% endfor %}</select></label>
-      <label class="vc-field">Captions
-        <select name="caption_style">{% for k, v in opt.CAPTION_STYLES.items() %}<option value="{{ k }}" {{ 'selected' if k == defaults.caption_style }}>{{ v }}</option>{% endfor %}</select></label>
       <label class="vc-field">Quality
         <select name="quality">{% for k, v in opt.QUALITIES.items() %}<option value="{{ k }}" {{ 'selected' if k == defaults.quality }}>{{ v }}</option>{% endfor %}</select></label>
+    </div>
+    <div class="vc-captions vc-mt">
+      <label class="vc-switch"><input type="checkbox" id="vc-cap-on" {{ 'checked' if defaults.caption_style != 'none' }}><span aria-hidden="true"></span>
+        <b>Add captions</b><small>Off by default. Turn on to burn words onto the video (an .srt file comes with every short either way).</small></label>
+      <div class="vc-choice" id="vc-cap-styles" {{ 'hidden' if defaults.caption_style == 'none' }}>
+        {% for k, v in opt.CAPTION_STYLES.items() if k != 'none' %}<label><input type="radio" name="caption_style" value="{{ k }}" {{ 'checked' if k == defaults.caption_style or (defaults.caption_style == 'none' and loop.first) }} {{ 'disabled' if defaults.caption_style == 'none' }}>{{ v }}</label>{% endfor %}
+      </div>
     </div>
   </section>
 
@@ -104,6 +116,6 @@
 {% endblock %}
 
 {% block extra_body %}
-<script src="{{ url_for('static', path='js/clipper.js') }}?v=1"></script>
+<script src="{{ url_for('static', path='js/clipper.js') }}?v=2"></script>
 <script>window.SWMClipper && window.SWMClipper.form();</script>
 {% endblock %}

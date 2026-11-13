@@ -10756,7 +10756,7 @@ async def admin_clipper_retry(project_id: int, request: Request, db: AsyncSessio
     if not p:
         return JSONResponse({"ok": False, "error": "That project was not found."}, status_code=404)
     from app.core.clipper import media, pipeline
-    from app.tasks import clip_compose_task, clip_fetch_task, clip_render_task, clip_transcribe_task
+    from app.tasks import clip_compose_task, clip_fetch_task, clip_listen_task, clip_render_task
 
     if p.busy and not pipeline.stale(p):
         return JSONResponse({"ok": False, "error": "This project is still working."}, status_code=409)
@@ -10774,7 +10774,7 @@ async def admin_clipper_retry(project_id: int, request: Request, db: AsyncSessio
             return JSONResponse({"ok": False, "error": "The uploaded file is gone. Start a new project and upload it again."}, status_code=409)
         task, label, status = {
             "fetch": (clip_fetch_task, "Getting the video", "queued"),
-            "transcribe": (clip_transcribe_task, "Waiting for the speech recogniser", "transcribing"),
+            "transcribe": (clip_listen_task, "Writing down every word", "transcribing"),
             "compose": (clip_compose_task, "Waiting for the editor", "composing"),
         }[stage]
         if stage == "compose" and p.shorts:
