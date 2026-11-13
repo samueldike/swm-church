@@ -702,7 +702,15 @@
         $('ed-tpl-meter').setAttribute('aria-valuenow', String(Math.round(pct)));
         steps(step, flags);
       };
+      // Between server updates the bar creeps towards the end of the current stage, so it never looks frozen.
+      const CAP = { read: 4, measure: 63, render: 94, done: 100 };
       const tick = setInterval(() => {
+        const cap = CAP[current] || 0;
+        if (running && pct < cap - 0.5 && !run.querySelector('.tp-steps li.bad')) {
+          pct += Math.max(0.08, (cap - pct) * 0.012);
+          $('ed-tpl-fill').style.width = pct + '%';
+          $('ed-tpl-pct').textContent = Math.round(pct) + '%';
+        }
         const secs = (Date.now() - t0) / 1000;
         $('ed-tpl-elapsed').textContent = 'Working for ' + clock(secs);
         $('ed-tpl-eta').textContent = pct > 6 && pct < 100 ? 'about ' + clock(Math.max(1, secs * (100 - pct) / pct)) + ' left' : '';
