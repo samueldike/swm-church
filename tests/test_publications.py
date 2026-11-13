@@ -195,7 +195,8 @@ def test_prompts_keep_the_ministry_wording():
     assert "I AM CONCERNED ABOUT WORD COUNT" in prompts.DEVOTIONAL_CONTENT_SYSTEM
     assert "Day 6: The Legality of Our Faith" in prompts.DEVOTIONAL_CONTENT_SYSTEM
     assert prompts.topics_system("books") is prompts.BOOK_TOPICS_SYSTEM
-    assert prompts.content_system("devotionals") is prompts.DEVOTIONAL_CONTENT_SYSTEM
+    assert prompts.content_system("devotionals").startswith(prompts.DEVOTIONAL_CONTENT_SYSTEM)
+    assert prompts.content_system("devotionals").endswith(prompts.WRITING_RULES)
 
 
 def test_unconfigured_ai_fails_clearly(monkeypatch):
