@@ -467,3 +467,48 @@ def test_retired_model_error_points_to_settings():
     msg = ai._describe_error(_cfg("groq", model="old-x"), resp)
     assert "old-x" in msg and "Refresh" in msg
     assert "retired" not in ai._describe_error(_cfg("groq"), httpx.Response(401, json={"error": {"message": "bad key"}}))
+
+
+# ─── draft rules: full scripture text, no em dashes ──────────────────
+
+from app.core.publications import dedash, draft_problems, scripture_has_text  # noqa: E402
+
+
+@pytest.mark.parametrize("line,ok", [
+    ("Mark 7:1-2 (NKJV)", False),
+    ("Mark 7:1-2", False),
+    ("1 Corinthians 13:4-7 (KJV).", False),
+    ("Mark 7:1-2; Matthew 15:1-2 (NKJV)", False),
+    ("Song of Solomon 2:15 (NKJV)", False),
+    ("'Behold the proud, His soul is not upright in him; But the just shall live by his faith.' Habakkuk 2:4 (NKJV)", True),
+    ("Now when the Pharisees came together to Him, having come from Jerusalem. Mark 7:1 (NKJV)", True),
+    ("Mark 7:1-2 (NKJV): Then the Pharisees and some of the scribes came together to Him", True),
+])
+def test_scripture_must_quote_the_verse(line, ok):
+    assert scripture_has_text(line) is ok
+
+
+def test_dedash_removes_em_dashes_but_keeps_ranges():
+    assert dedash("This is how Christ lived—He didn't focus on faults.") == "This is how Christ lived, He didn't focus on faults."
+    assert dedash("Grace — not works — saves.") == "Grace, not works, saves."
+    assert dedash("Read Genesis 36–39 and Mark 7:1-2.") == "Read Genesis 36–39 and Mark 7:1-2."
+    assert dedash("He waited -- and God answered.") == "He waited, and God answered."
+    assert dedash("Stop.— Then pray.") == "Stop. Then pray."
+
+
+def test_draft_problems_flag_reference_only_scripture_and_length():
+    short = {"body": "word " * 200, "scripture": "Mark 7:1-2 (NKJV)"}
+    assert any("only the reference" in p for p in draft_problems("devotionals", short))
+    good = {"body": "word " * 200, "scripture": "'Then the Pharisees and some of the scribes came together.' Mark 7:1 (NKJV)"}
+    assert draft_problems("devotionals", good) == []
+    assert any("too long" in p for p in draft_problems("devotionals", {**good, "body": "word " * 320}))
+    assert any("empty" in p for p in draft_problems("devotionals", {**good, "scripture": ""}))
+    assert draft_problems("books", {**good, "scripture": ""}) == []
+
+
+def test_content_prompt_carries_the_strict_rules():
+    for kind in ("devotionals", "books"):
+        system = prompts.content_system(kind)
+        assert "FULL TEXT" in system and "em dash" in system
+    assert "Habakkuk 2:4 (NKJV)" in prompts.content_json_instruction("devotionals")
+    assert "Behold the proud" in prompts.content_json_instruction("devotionals")

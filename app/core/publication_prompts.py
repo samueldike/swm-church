@@ -4,7 +4,9 @@ The devotional prompts are the ministry's own, proven by hand; they are kept
 word-for-word. Only two mechanical edits were made so they can run unattended:
 the transcript/subtopic are supplied as separate message blocks (so the
 transcript can be prompt-cached across a message's subtopics), and a JSON
-output contract is appended.
+output contract is appended. Strict rules learned from real drafts (full
+scripture text, no em dashes, no AI phrasing) follow the prompt in WRITING_RULES;
+publications.py also checks them, because a model does not always obey.
 """
 
 # ─── Daily Devotional: topics ────────────────────────────────────────
@@ -32,6 +34,29 @@ TOPICS_JSON_INSTRUCTION = (
     '"points": ["point the preacher covered", "another point"]}]}\n'
     "List the subtopics in the order they appear in the message."
 )
+
+# ─── Strict rules for every draft (devotional days and book sections) ───
+
+SCRIPTURE_RULE = (
+    "SCRIPTURE (STRICT): the scripture field must contain the FULL TEXT of the verse or verses, quoted word for "
+    "word exactly as they read in the named translation, followed by the reference and the version in brackets, "
+    "for example: 'Behold the proud, His soul is not upright in him; But the just shall live by his faith.' "
+    "Habakkuk 2:4 (NKJV). A reference on its own (such as 'Mark 7:1-2 (NKJV)') is WRONG. Quote every verse in "
+    "the range, no more than three verses. Use the translation the preacher read from; when it is unclear, use "
+    "NKJV. Never paraphrase, shorten or 'improve' the wording of a translation. If you cannot recall a "
+    "translation's exact words, quote the verse from the KJV instead and write (KJV)."
+)
+
+WRITING_RULES = """
+STRICT WRITING RULES (these override anything above):
+- """ + SCRIPTURE_RULE + """
+- Never use the em dash (—) or the en dash (–) as punctuation, anywhere. Use a full stop, a comma, a colon or brackets instead. Write it as the preacher would write it by hand.
+- Write like this preacher, not like an AI. Use the preacher's own words, phrases, illustrations and stories from the transcript. Short, plain sentences; speak to the reader directly as "you".
+- Do not use these patterns, which mark text as machine-written: "It's not just X, it's Y" / "not merely X but Y"; "Here's the thing"; "Let that sink in"; "In a world where"; "the truth is"; "Remember,"; questions you answer yourself straight away; lists of three adjectives or phrases for rhythm; ending paragraphs with a neat one-line moral.
+- Do not use these words: profound, sobering, delve, journey, tapestry, testament (except the Old or New Testament), realm (unless the preacher said it), navigate, embrace, unlock, unleash, empower, transformative, beacon, resonate, pivotal, crucial, vital (unless the preacher said it), foster, nuanced, landscape, ultimately, indeed, truly.
+- Do not open with a scene-setting line or a question to the reader. Start with the point.
+- When the body quotes another scripture, give its exact words with the reference and version in brackets, as the sample does with Isaiah 54:17."""
+
 
 # ─── Daily Devotional: content ───────────────────────────────────────
 
@@ -76,7 +101,8 @@ Prayer Point: Father, help me understand and walk confidently in both the vital 
 DEVOTIONAL_CONTENT_JSON_INSTRUCTION = (
     "Respond with ONLY a JSON object, no commentary and no code fences. Map the sample's layout onto these keys "
     "(the day number and the titles are added by the system, so do not write them):\n"
-    '{"scripture": "the scripture line with its version in brackets, e.g. Habakkuk 2:4 (NKJV), or an empty string", '
+    '{"scripture": "the full words of the verse(s), then the reference and version, e.g. \'Behold the proud, His soul is '
+    'not upright in him; But the just shall live by his faith.\' Habakkuk 2:4 (NKJV)", '
     '"paragraphs": ["paragraph one", "paragraph two"], '
     '"action_plan": "one sentence", "prayer_point": "one or two sentences"}'
 )
@@ -110,7 +136,7 @@ Rules:
 BOOK_CONTENT_JSON_INSTRUCTION = (
     "Respond with ONLY a JSON object, no commentary and no code fences (the chapter and section titles are added by "
     "the system, so do not write them):\n"
-    '{"scripture": "an opening scripture with its version in brackets, or an empty string", '
+    '{"scripture": "an opening scripture: its full words, then the reference and version in brackets; or an empty string", '
     '"paragraphs": ["paragraph one", "paragraph two"]}'
 )
 
@@ -120,7 +146,7 @@ def topics_system(kind: str) -> str:
 
 
 def content_system(kind: str) -> str:
-    return DEVOTIONAL_CONTENT_SYSTEM if kind == "devotionals" else BOOK_CONTENT_SYSTEM
+    return (DEVOTIONAL_CONTENT_SYSTEM if kind == "devotionals" else BOOK_CONTENT_SYSTEM) + "\n" + WRITING_RULES
 
 
 def content_json_instruction(kind: str) -> str:

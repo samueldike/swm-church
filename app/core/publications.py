@@ -279,6 +279,56 @@ def _subtopic_brief(main_title: str, sub: PublicationSubtopic) -> str:
     return "\n".join(lines)
 
 
+_VERSION = re.compile(r"\s*[(\[][^)\]]{1,30}[)\]]\s*[.;,]?\s*$")
+_TRAILING_REF = re.compile(
+    r"(?:[1-3]\s*)?[A-Za-z][A-Za-z .]{1,24}?\s+\d{1,3}(?::\d{1,3}(?:\s*[-–]\s*\d{1,3})?(?:\s*,\s*\d{1,3})*)?"
+    r"(?:\s*[-–]\s*\d{1,3}(?::\d{1,3})?)?\s*[.;,]?\s*$"
+)
+
+
+def scripture_has_text(scripture: str) -> bool:
+    """True when the scripture line quotes the verse, not just its reference ("Mark 7:1-2 (NKJV)")."""
+    rest = (scripture or "").strip()
+    for _ in range(4):  # "Mark 7:1-2; Matthew 15:1 (NKJV)": peel versions and references off the end
+        before = rest
+        rest = _VERSION.sub("", rest)
+        rest = _TRAILING_REF.sub("", rest).rstrip(" ;,.:")
+        if rest == before:
+            break
+    return len(re.findall(r"[A-Za-z]{2,}", rest)) >= 4
+
+
+# An em dash (or "--"), or a spaced en dash that is not a number range ("Genesis 36–39" keeps its dash).
+_DASH = re.compile(r"\s*(?:—|―|-{2,}|(?<!\d)\s[–-]\s(?!\d))\s*")
+
+
+def dedash(text: str) -> str:
+    """The ministry asked for no em dashes: they read as machine-written. "lived—He didn't" -> "lived, He didn't"."""
+    if not text:
+        return text
+    out = _DASH.sub(", ", text)
+    out = re.sub(r",\s*([,.;:!?)])", r"\1", out)
+    out = re.sub(r"([.;:!?])\s*,", r"\1", out)
+    out = re.sub(r"\(\s*,\s*", "(", out)
+    return re.sub(r"^\s*,\s*", "", out, flags=re.M)
+
+
+def draft_problems(kind: str, result: dict) -> list[str]:
+    """What a draft got wrong, phrased as instructions for one corrective rewrite."""
+    problems = []
+    wc = word_count(result["body"])
+    if kind == "devotionals" and wc > 300:
+        problems.append(f"Your draft was {wc} words, which is too long. Rewrite it at about 200 words, keeping the same message.")
+    scripture = result.get("scripture") or ""
+    if kind == "devotionals" and not scripture:
+        problems.append("The scripture field is empty. Give the day's opening scripture: its full words, then the "
+                        "reference and version in brackets.")
+    elif scripture and not scripture_has_text(scripture):
+        problems.append(f"The scripture field has only the reference ({scripture}). It must quote the FULL words of the "
+                        "verse(s) exactly as they read in that translation, followed by the reference and version in brackets.")
+    return problems
+
+
 def _parse_content(kind: str, reply: str) -> dict:
     data = ai.extract_json(reply)
     paragraphs = data.get("paragraphs")
@@ -317,21 +367,27 @@ async def _content_for_subtopic(kind: str, sub_id: int) -> None:
         reply = await ai.complete(system, blocks, max_tokens=max_tokens, cache_first_block=True)
         result = _parse_content(kind, reply)
 
-        # The brief is ~200 words; one corrective pass if the draft ran long.
-        wc = word_count(result["body"])
-        if kind == "devotionals" and wc > 300:
+        # One corrective pass when the draft ran long (the brief is ~200 words) or quoted only a reference.
+        problems = draft_problems(kind, result)
+        if problems:
             retry = await ai.complete(
                 system,
-                blocks + [f"Your previous draft was {wc} words, which is too long. Rewrite it at about 200 words, "
-                          f"keeping the same message and the same JSON shape. Previous draft:\n{reply}"],
+                blocks + ["Fix your previous draft:\n- " + "\n- ".join(problems)
+                          + f"\nKeep the same JSON shape and follow every rule. Previous draft:\n{reply}"],
                 max_tokens=max_tokens, cache_first_block=True,
             )
             try:
-                shorter = _parse_content(kind, retry)
-                if word_count(shorter["body"]) < wc:
-                    result = shorter
+                fixed = _parse_content(kind, retry)
+                after = draft_problems(kind, fixed)
+                if len(after) < len(problems) or (
+                    len(after) == len(problems) and word_count(fixed["body"]) < word_count(result["body"])
+                ):
+                    result = fixed
             except ai.AIError:
                 pass
+        for key in ("body", "action_plan", "prayer_point"):
+            if result.get(key):
+                result[key] = dedash(result[key])
     except Exception as exc:
         logger.warning("Content generation failed for subtopic %s: %s", sub_id, exc)
         async with async_session() as db:
