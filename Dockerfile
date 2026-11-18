@@ -1,3 +1,7 @@
+# Deno: the JavaScript runtime yt-dlp needs to solve YouTube's player challenges (without it YouTube
+# offers "only images", whatever cookies are given). Taken from the official image, pinned.
+FROM denoland/deno:bin-2.9.8 AS deno
+
 FROM python:3.12-slim
 
 # MEDIA_ROOT is baked in so the app and worker always share the mounted media volume,
@@ -22,6 +26,8 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # constraints.txt pins every package (not just the direct ones) so a rebuild cannot pull a new major version.
+COPY --from=deno /deno /usr/local/bin/deno
+
 COPY requirements.txt constraints.txt ./
 RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
 

@@ -205,6 +205,13 @@ def download(url: str, dest: Path, *, start: float | None = None, end: float | N
             raise ClipperError("That link is not a video page the clipper can read. Upload the file instead.")
         if "No space left" in text:
             raise ClipperError("The server's disk is full. Delete old projects, then try again.")
+        if "live event will begin" in text or "is live" in text.lower() and "premieres" not in text.lower():
+            raise ClipperError("That live stream has not finished yet. Clip it once YouTube has the full recording.")
+        if is_youtube(url) and ("Requested format is not available" in text or "Only images are available" in text):
+            # YouTube hid the video streams: the challenge solver (Deno + yt-dlp-ejs) failed or is out of date.
+            raise ClipperError("YouTube did not hand over the video this time (its player changed). Try again in a few "
+                               "minutes; if it keeps failing, the server's yt-dlp needs updating. Uploading the file "
+                               "always works.")
         raise ClipperError("The video could not be downloaded. Check the link, or upload the file instead.")
     files = sorted(work.glob("source.*"), key=lambda p: p.stat().st_size, reverse=True)
     if not files:

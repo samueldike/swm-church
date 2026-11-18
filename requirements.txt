@@ -34,6 +34,8 @@ weasyprint==70.0
 pypdfium2==5.15.2
 # Video Clipper (app/core/clipper/): links via yt-dlp (keep it current: sites change), face tracking via OpenCV
 yt-dlp==2026.10.26
+# YouTube challenge solver scripts for yt-dlp (run by Deno, installed in the Dockerfile)
+yt-dlp-ejs==0.8.0
 opencv-python-headless==5.0.0.93
 telethon==1.44.0
 pycountry==26.2.16

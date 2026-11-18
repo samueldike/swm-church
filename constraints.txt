@@ -118,4 +118,5 @@ weasyprint==70.0
 webencodings==0.6.1
 websockets==17.3
 yt-dlp==2026.10.26
+yt-dlp-ejs==0.8.0
 zopfli==0.4.3
