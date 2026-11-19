@@ -66,8 +66,8 @@ services:
     networks:
       - swm-net
 
-  # Video Clipper (Admin -> Video Clipper): downloads, AI editing and ffmpeg renders, one project at a time (two
-  # shorts render side by side). It may use 5 cores when they are free, but at a quarter of the normal CPU
+  # Video Clipper (Admin -> Video Clipper): downloads, AI editing and ffmpeg renders. Two slots: a
+  # YouTube picture downloads in one while the sound is transcribed and edited in the other (two shorts render side by side). It may use 5 cores when they are free, but at a quarter of the normal CPU
   # priority (cpu_shares), so the website always wins when both are busy. Speech goes to Groq when a key is
   # saved, otherwise to the local Whisper on the transcriber above.
   clipper:
@@ -75,10 +75,10 @@ services:
     container_name: swm-clipper
     restart: unless-stopped
     env_file: .env
-    command: celery -A app.celery_app worker -Q clipper -c 1 -n clipper@%h -l info
+    command: celery -A app.celery_app worker -Q clipper -c 2 -n clipper@%h -l info
     cpus: 5
     cpu_shares: 256
-    mem_limit: 3g
+    mem_limit: 4g
     volumes:
       - clipper:/app/clipper                 # private: source videos and shorts
     depends_on:

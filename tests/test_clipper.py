@@ -409,3 +409,43 @@ def test_local_transcription_works_in_pieces_and_resumes(tmp_path, monkeypatch):
     calls.clear()
     again = speech.transcribe_words(audio, duration=1700.0, gaps=[], partial=partial)
     assert len(calls) == 1 and again == words
+
+
+def test_review_runs_in_parallel_groups_and_maps_back_to_each_short(monkeypatch):
+    import asyncio
+
+    from app.core.clipper import editorial
+
+    seen = []
+
+    async def fake(units, shorts, **kw):
+        seen.append([s["n"] for s in shorts])
+        return [{"k": i, "verdict": "keep", "title": f"t{s['n']}"} for i, s in enumerate(shorts)]
+
+    monkeypatch.setattr(editorial, "review", fake)
+    shorts = [{"n": n, "edl": []} for n in range(7)]
+    out = asyncio.run(editorial.review_all([], shorts, brief="", floor=30, target=45, style="passage"))
+    assert seen == [[0, 1, 2], [3, 4, 5], [6]]
+    assert {r["k"]: r["title"] for r in out} == {n: f"t{n}" for n in range(7)}
+
+
+def test_sound_is_cut_accurately_and_the_picture_counts_as_ready_only_once_probed(tmp_path, monkeypatch):
+    import json
+
+    from app.core.clipper import media
+
+    got = []
+    monkeypatch.setattr(media, "run", lambda cmd, **k: got.append(cmd))
+    media.extract_audio(tmp_path / "s.m4a", tmp_path / "a.wav", 600.0, 4200.0)
+    cmd = got[0]
+    assert cmd[cmd.index("-ss") + 1] == "600.000" and cmd[cmd.index("-t") + 1] == "3600.000"
+    assert cmd.index("-ss") < cmd.index("-i")
+
+    monkeypatch.setattr(media, "project_dir", lambda pid: tmp_path)
+    monkeypatch.setattr(media, "source_path", lambda pid: tmp_path / "source.mp4")
+    assert not media.video_ready(1)
+    (tmp_path / "source.mp4").write_bytes(b"x")
+    (tmp_path / "info.json").write_text(json.dumps({"duration": 10}))
+    assert not media.video_ready(1)
+    (tmp_path / "info.json").write_text(json.dumps({"duration": 10, "width": 1280, "offset": 600}))
+    assert media.video_ready(1)

@@ -30,7 +30,7 @@ MODEL = "whisper-large-v3-turbo"
 URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 CHUNK = 600.0        # seconds per piece (FLAC 16 kHz mono: ~10 MB)
 SEARCH = 45.0        # look this far either side of a cut for the longest pause
-PARALLEL = 4
+PARALLEL = 8         # pieces cut and sent at once (a 2 3/4-hour service is 17 pieces: 3 rounds)
 ATTEMPTS = 4
 
 
@@ -124,18 +124,17 @@ def transcribe_words(audio: Path, *, key: str, duration: float, gaps: list[list[
     work = Path(tempfile.mkdtemp(prefix="groq_", dir=str(audio.parent)))
     done = [0]
     try:
-        pieces = []
-        for n, (a, b) in enumerate(spans):
-            piece = work / f"part{n:03d}.flac"
-            run(["ffmpeg", "-y", "-v", "error", "-ss", f"{a:.3f}", "-t", f"{b - a:.3f}", "-i", str(audio),
+        pieces = [(a, b, work / f"part{n:03d}.flac") for n, (a, b) in enumerate(spans)]
+
+        def one(item):
+            # Each worker cuts its own piece and sends it, so cutting overlaps with Groq's answers.
+            offset, b, piece = item
+            run(["ffmpeg", "-y", "-v", "error", "-ss", f"{offset:.3f}", "-t", f"{b - offset:.3f}", "-i", str(audio),
                  "-ac", "1", "-ar", "16000", "-c:a", "flac", str(piece)], timeout=600)
             if piece.stat().st_size > 24 * 1024 * 1024:
                 raise CloudUnavailable("A piece of the audio is too large for Groq.")
-            pieces.append((a, piece))
-
-        def one(item):
-            offset, piece = item
             data = _post(key, piece, lang, hotwords)
+            piece.unlink(missing_ok=True)
             words = punctuate(data.get("words") or [], data.get("segments") or [])
             done[0] += 1
             if progress:

@@ -65,7 +65,7 @@ def remove_project_files(project_id: int) -> None:
 
 
 def remove_source(project_id: int) -> None:
-    for p in (source_path(project_id), audio_path(project_id)):
+    for p in (source_path(project_id), audio_path(project_id), audio_src_path(project_id)):
         try:
             p.unlink()
         except FileNotFoundError:
@@ -142,23 +142,49 @@ def valid_cookies(text: str) -> bool:
     return len(good) >= 3
 
 
+def audio_src_path(project_id: int) -> Path:
+    return project_dir(project_id) / "sound.m4a"
+
+
+def video_ready(project_id: int) -> bool:
+    """The source video is on disk and probed (info.json carries its picture size)."""
+    info = project_dir(project_id) / "info.json"
+    if not source_path(project_id).exists() or not info.exists():
+        return False
+    try:
+        return bool(json.loads(info.read_text(encoding="utf-8")).get("width"))
+    except (OSError, ValueError):
+        return False
+
+
 def download(url: str, dest: Path, *, start: float | None = None, end: float | None = None,
-             max_height: int = 1080, cookies: str | None = None, progress=None) -> str:
+             max_height: int = 1080, cookies: str | None = None, progress=None, sound_only: bool = False,
+             keep_whole: bool = False) -> str:
     """Fetch ``url`` (YouTube, Facebook, Vimeo, a direct .mp4 link...) into ``dest`` as mp4. Returns its title.
 
-    With ``start``/``end`` only that part is kept. The whole file is fetched at full speed and cut here with a
-    stream copy: yt-dlp's ranged download pipes through ffmpeg at about real time, so 15 minutes took 15 minutes.
+    With ``start``/``end`` only that part is kept (unless ``keep_whole``: the caller then reads the chosen part at an
+    offset). The whole file is fetched at full speed and cut here with a stream copy: yt-dlp's ranged download pipes
+    through ffmpeg at about real time, so 15 minutes took 15 minutes. ``sound_only`` fetches just the audio track
+    (a 2 3/4-hour service: 160 MB in ~30 s, against 2.4 GB for the picture), so listening can start at once.
+
+    YouTube files are fetched as many small ranges over 16 connections (``formats=dashy``): measured on the VPS,
+    2.4 GB in 101 s against 188 s over one connection.
     """
-    work = dest.parent / "incoming"
+    work = dest.parent / ("incoming-sound" if sound_only else "incoming")
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True, exist_ok=True)
-    fmt = (f"bv*[height<={max_height}][vcodec^=avc1]+ba[ext=m4a]/bv*[height<={max_height}]+ba/"
+    fmt = ("ba[ext=m4a]/ba/b" if sound_only else
+           f"bv*[height<={max_height}][vcodec^=avc1]+ba[ext=m4a]/bv*[height<={max_height}]+ba/"
            f"b[height<={max_height}]/bv*+ba/b")
     cmd = ["yt-dlp", "--no-playlist", "--newline", "--no-warnings", "-f", fmt,
-           "--merge-output-format", "mp4", "--restrict-filenames", "--print", "before_dl:TITLE %(title)s",
+           "--restrict-filenames", "--print", "before_dl:TITLE %(title)s",
            "--progress-template", "download:PROGRESS %(progress._percent_str)s",
            "-o", str(work / "source.%(ext)s"), "--retries", "5", "--fragment-retries", "10",
-           "--concurrent-fragments", "4"]
+           "--concurrent-fragments", "16"]
+    if not sound_only:
+        cmd += ["--merge-output-format", "mp4"]
+    if is_youtube(url):
+        cmd += ["--extractor-args", "youtube:formats=dashy"]
     cookie_file = None
     if cookies:
         # yt-dlp may write refreshed cookies back; the file lives only for this download.
@@ -217,7 +243,9 @@ def download(url: str, dest: Path, *, start: float | None = None, end: float | N
     if not files:
         raise ClipperError("The download finished but no video file arrived.")
     got = files[0]
-    if start is not None or end is not None:
+    if sound_only:
+        got.replace(dest)
+    elif (start is not None or end is not None) and not keep_whole:
         trim_upload(got, dest, start, end)
     elif got.suffix.lower() != ".mp4":
         remux(got, dest)
@@ -260,9 +288,15 @@ def trim_upload(src: Path, dest: Path, start: float | None, end: float | None) -
     tmp.replace(dest)
 
 
-def extract_audio(src: Path, dest: Path) -> None:
-    run(["ffmpeg", "-y", "-v", "error", "-i", str(src), "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le",
-         str(dest)], timeout=3 * 3600)
+def extract_audio(src: Path, dest: Path, start: float | None = None, end: float | None = None) -> None:
+    """16 kHz mono WAV of ``src`` (only ``start``..``end`` when given: audio seeking is sample-accurate)."""
+    cmd = ["ffmpeg", "-y", "-v", "error"]
+    if start:
+        cmd += ["-ss", f"{start:.3f}"]
+    cmd += ["-i", str(src)]
+    if end is not None:
+        cmd += ["-t", f"{max(1.0, end - (start or 0)):.3f}"]
+    run(cmd + ["-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(dest)], timeout=3 * 3600)
 
 
 FRAME_SEC = 0.02

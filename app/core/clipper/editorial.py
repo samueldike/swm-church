@@ -14,6 +14,7 @@ Ported from VidViralPicker's compose engine and tightened:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from app.core import ai
@@ -503,6 +504,29 @@ Respond with STRICT JSON ONLY:
     return [r for r in data["reviews"] if isinstance(r, dict)]
 
 
+REVIEW_GROUP = 3     # shorts per review call; the groups are reviewed at the same time
+
+
+async def review_all(units: list[Unit], shorts: list[dict], *, brief: str, floor: float, target: float,
+                     style: str) -> list[dict] | None:
+    """``review`` in parallel groups: the answer time follows the longest group, not all twelve shorts in a row.
+    Each group gets the same instructions and brief; ``k`` is mapped back to the short's place in ``shorts``.
+    Overlap between shorts is still settled by ``apply_reviews`` (``used=others``)."""
+    groups = [list(range(i, min(i + REVIEW_GROUP, len(shorts)))) for i in range(0, len(shorts), REVIEW_GROUP)]
+    answers = await asyncio.gather(*(review(units, [shorts[k] for k in g], brief=brief, floor=floor, target=target,
+                                            style=style) for g in groups))
+    out: list[dict] = []
+    for g, reviews in zip(groups, answers):
+        for r in reviews or []:
+            try:
+                local = int(r.get("k"))
+            except (TypeError, ValueError):
+                continue
+            if 0 <= local < len(g):
+                out.append({**r, "k": g[local]})
+    return out or None
+
+
 def apply_reviews(units: list[Unit], shorts: list[dict], reviews: list[dict] | None, *, floor: float, target: float,
                   style: str) -> list[dict]:
     if not reviews:
@@ -591,7 +615,8 @@ async def make_shorts(units: list[Unit], *, count: int, floor: float, target: fl
                              "video, a different length, or the other style.")
     say("Reviewing every short as it will play", 0.7)
     brief = brief_text(video)
-    reviewed = apply_reviews(units, fitted, await review(units, fitted, brief=brief, floor=floor, target=target, style=style),
+    reviewed = apply_reviews(units, fitted, await review_all(units, fitted, brief=brief, floor=floor, target=target,
+                                                              style=style),
                              floor=floor, target=target, style=style)
     out = []
     used_final = set(taken or ())

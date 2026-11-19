@@ -135,6 +135,8 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
     crop_w = (int(src_h * ow / oh) // 2 * 2) / src_w if track else 1.0
     report = progress or (lambda f: None)
     length = sum(e - s for s, e in segments)
+    # A YouTube source is kept whole when only part of it was chosen; the words are timed from that part's start.
+    offset = float(info.get("offset") or 0.0)
 
     work = Path(tempfile.mkdtemp(prefix="clip_", dir=str(out.parent)))
     try:
@@ -144,7 +146,7 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
         if track:  # one look per group of nearby segments, then each segment takes its own samples
             for group in clusters(segments):
                 a, b = min(segments[i][0] for i in group), max(segments[i][1] for i in group)
-                samples = reframe.detect(str(src), a, b, src_w, src_h)
+                samples = reframe.detect(str(src), a + offset, b + offset, src_w, src_h)
                 for i in group:
                     looked[i] = (a, samples)
         for n, (s, e) in enumerate(segments):
@@ -175,7 +177,7 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
         tmp_out = work / "final.mp4"
         cmd = ["ffmpeg", "-y", "-v", "error"]
         for seek, dur in inputs:
-            cmd += ["-ss", f"{seek:.3f}", "-t", f"{dur:.3f}", "-i", str(src)]
+            cmd += ["-ss", f"{seek + offset:.3f}", "-t", f"{dur:.3f}", "-i", str(src)]
         cmd += ["-/filter_complex", str(script), "-map", "[vo]", "-map", "[ao]",
                 "-c:v", "libx264", "-preset", PRESET, "-crf", CRF, "-pix_fmt", "yuv420p",
                 "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-movflags", "+faststart", str(tmp_out)]

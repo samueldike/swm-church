@@ -335,9 +335,21 @@ def clip_fetch_task(self, project_id: int):
         _clip_listen(project_id)
 
 
+@celery_app.task(bind=True, max_retries=0, acks_late=False)
+def clip_video_task(self, project_id: int):
+    """The picture of a YouTube video, downloaded while the words are written down and the editor works."""
+    from app.core.clipper import pipeline
+
+    if _run(pipeline.fetch_video(project_id)):
+        clip_render_task.apply_async((project_id,))
+
+
 def _clip_listen(project_id: int) -> None:
     """Hosted transcription (Groq) right here when a key is saved; otherwise the local model's queue."""
     from app.core.clipper import pipeline
+
+    if _run(pipeline.video_needed(project_id)):
+        clip_video_task.apply_async((project_id,))   # runs in the clipper's second slot, alongside this
 
     outcome = _run(pipeline.transcribe_fast(project_id))
     if outcome == "done":

@@ -10,7 +10,7 @@ import logging
 import shutil
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 
 from app.core.clipper import media, options
 from app.core.clipper.media import ClipperError
@@ -96,6 +96,25 @@ async def fetch(project_id: int) -> bool:
         if not media.enough_disk():
             raise ClipperError("The server is short of disk space. Delete old projects, then try again.")
         await _update(project_id, status="fetching", stage="Getting the video", progress=0.0, error=None)
+        if p.source_kind == "url" and media.is_youtube(p.source_url or ""):
+            # Sound first (seconds), so listening starts now; the picture downloads alongside (fetch_video).
+            sound = media.audio_src_path(project_id)
+            title = await _in_thread(project_id, media.download, p.source_url or "", sound, sound_only=True,
+                                     cookies=(await youtube_cookies()) or None, stage="Getting the sound")
+            if title and not p.title:
+                await _update(project_id, title=title[:255])
+            await _update(project_id, stage="Listening for pauses", progress=0.9)
+            await asyncio.to_thread(media.extract_audio, sound, media.audio_path(project_id),
+                                    st.get("range_start"), st.get("range_end"))
+            sound.unlink(missing_ok=True)
+            length = float((await asyncio.to_thread(media.probe, media.audio_path(project_id))).get("duration") or 0)
+            if length < 60:
+                raise ClipperError("That video is under a minute long; there is nothing to clip from it.")
+            gaps = await asyncio.to_thread(media.silence_map, media.audio_path(project_id))
+            (media.project_dir(project_id) / "gaps.json").write_text(json.dumps(gaps), encoding="utf-8")
+            await _update(project_id, duration=length, status="transcribing", stage="Writing down every word",
+                          progress=0.0)
+            return True
         if p.source_kind == "url":
             cookies = await youtube_cookies() if media.is_youtube(p.source_url or "") else None
             title = await _in_thread(project_id, media.download, p.source_url or "", src,
@@ -338,6 +357,88 @@ async def manual_short(project_id: int, start: float, end: float) -> int | None:
 RENDER_PARALLEL = 2   # shorts cut at the same time (the clipper container may use 5 cores)
 
 
+VIDEO_LOCK = "video.lock"
+
+
+def _video_lock_fresh(project_id: int, seconds: float = 90.0) -> bool:
+    import time
+
+    lock = media.project_dir(project_id) / VIDEO_LOCK
+    try:
+        return time.time() - lock.stat().st_mtime < seconds
+    except FileNotFoundError:
+        return False
+
+
+async def video_needed(project_id: int) -> bool:
+    """A YouTube project whose picture is not on disk and is not being downloaded right now."""
+    p = await _load(project_id)
+    if p is None or p.source_kind != "url" or not media.is_youtube(p.source_url or ""):
+        return False
+    return not media.video_ready(project_id) and not _video_lock_fresh(project_id)
+
+
+async def fetch_video(project_id: int) -> bool:
+    """Download the picture while the words are being written down. True when shorts are waiting to be cut.
+
+    Runs next to the speech/editor steps, so it never writes the project's status or stage (only its heartbeat and
+    the picture's size); a failure fails the project."""
+    p = await _load(project_id)
+    if p is None or p.status == "failed":
+        return False
+    if media.video_ready(project_id):
+        return await _shorts_waiting(project_id)
+    if _video_lock_fresh(project_id, 30.0):
+        return False
+    lock = media.project_dir(project_id) / VIDEO_LOCK
+    lock.touch()
+    st = _settings(p)
+    src = media.source_path(project_id)
+    try:
+        task = asyncio.create_task(asyncio.to_thread(
+            media.download, p.source_url or "", src, start=st.get("range_start"), end=st.get("range_end"),
+            keep_whole=True, max_height=1080, cookies=(await youtube_cookies()) or None))
+        while not task.done():
+            await asyncio.wait({task}, timeout=15)
+            lock.touch()
+            await _update(project_id)
+        task.result()
+        info = await asyncio.to_thread(media.probe, src)
+        if not info["has_video"]:
+            raise ClipperError("That link has no picture. The clipper needs a video.")
+        # The words are timed from range_start (the sound was cut there); the source is kept whole and read at
+        # this offset, so there is no keyframe drift between picture and words.
+        info["offset"] = float(st.get("range_start") or 0)
+        info["duration"] = float(p.duration or info["duration"])
+        (media.project_dir(project_id) / "info.json").write_text(json.dumps(info), encoding="utf-8")
+        await _update(project_id, width=info["width"], height=info["height"], size_bytes=info["size"])
+        return await _shorts_waiting(project_id)
+    except ClipperError as exc:
+        await _fail(project_id, str(exc))
+    except Exception:
+        logger.exception("Clipper video download failed for project %s", project_id)
+        await _fail(project_id, "Downloading the video failed unexpectedly. Please try again.")
+    finally:
+        lock.unlink(missing_ok=True)
+    return False
+
+
+async def _shorts_waiting(project_id: int, statuses: tuple[str, ...] = ("queued",)) -> bool:
+    async with async_session() as db:
+        n = (await db.execute(select(func.count()).select_from(ClipShort).where(
+            ClipShort.project_id == project_id, ClipShort.status.in_(statuses)))).scalar_one()
+    return bool(n)
+
+
+async def _claim_short(short_id: int) -> bool:
+    """queued -> rendering, atomically: a second render job never cuts the same short twice."""
+    async with async_session() as db:
+        res = await db.execute(update(ClipShort).where(ClipShort.id == short_id, ClipShort.status == "queued")
+                               .values(status="rendering", error=None))
+        await db.commit()
+        return res.rowcount == 1
+
+
 async def render_queued(project_id: int) -> None:
     """Render every queued short of the project, two at a time; each appears as soon as it is ready."""
     from app.core.clipper import cut, render, speech
@@ -352,8 +453,23 @@ async def render_queued(project_id: int) -> None:
     except FileNotFoundError:
         await _fail(project_id, "The transcript of this video is missing. Retry the project.")
         return
+    if not media.video_ready(project_id):
+        if p.source_kind == "url" and media.is_youtube(p.source_url or ""):
+            # The picture is still downloading: fetch_video starts this job again when it lands.
+            await _update(project_id, status="rendering", stage="Getting the picture (almost there)", progress=0.0)
+            if await video_needed(project_id):
+                from app.tasks import clip_video_task
+
+                clip_video_task.apply_async((project_id,))
+            return
+        await _fail(project_id, "The source video is missing. Retry the project.")
+        return
     info = _info(project_id)
     queue = [s for s in p.shorts if s.status == "queued"]
+    if not queue:
+        if not any(s.status == "rendering" for s in p.shorts):
+            await _update(project_id, status="ready", stage=None, progress=1.0, finished_at=datetime.utcnow())
+        return
     done_before = len([s for s in p.shorts if s.status in ("ready", "failed")])
     total = max(1, len(queue) + done_before)
     share: dict[int, float] = {s.id: 0.0 for s in queue}
@@ -373,7 +489,9 @@ async def render_queued(project_id: int) -> None:
 
     async def run_short(s):
         async with sem:
-            await _short_update(s.id, status="rendering", error=None)
+            if not await _claim_short(s.id):
+                share[s.id] = 1.0
+                return
             try:
                 the_cut, result = await asyncio.to_thread(one, s, lambda f, sid=s.id: share.__setitem__(sid, float(f)))
                 await _short_update(s.id, status="ready", segments=the_cut["segments"], length=result["length"],
@@ -396,7 +514,8 @@ async def render_queued(project_id: int) -> None:
             await _update(project_id, progress=min(0.99, (done_before + sum(share.values())) / total),
                           stage=f"Cutting the shorts: {ready} of {total} ready")
     task.result()
-    await _update(project_id, status="ready", stage=None, progress=1.0, finished_at=datetime.utcnow())
+    if not await _shorts_waiting(project_id, ("queued", "rendering")):
+        await _update(project_id, status="ready", stage=None, progress=1.0, finished_at=datetime.utcnow())
 
 
 # ─── housekeeping ─────────────────────────────────────────────────────
