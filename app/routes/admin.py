@@ -10675,6 +10675,35 @@ async def admin_clipper_channel_disconnect(account_id: str, request: Request, db
     return _redirect(request, back, "Account removed. Posts already published stay on the platform.", "success")
 
 
+async def _clip_whatsapp(db, admin, branch_id: int) -> dict | None:
+    """The church's connected WhatsApp, when this person may post with it: its groups and channels (never one-by-one
+    messages to people: those are what gets numbers banned)."""
+    from app.core import whatsapp as wa
+    from app.core.clipper.options import sees_every_church
+
+    if not wa.configured() or not await wa.can_use(db, admin):
+        return None
+    if not sees_every_church(admin) and getattr(admin, "branch_id", None) not in (None, branch_id):
+        return None
+    try:
+        sess = await wa.call("GET", f"/sessions/{wa.tenant(branch_id)}", timeout=15)
+    except wa.GatewayError:
+        return None
+    if sess.get("status") != "connected":
+        return {"connected": False, "chats": []}
+    chats = []
+    for flt in ("channels", "groups"):
+        try:
+            got = await wa.call("GET", f"/sessions/{wa.tenant(branch_id)}/chats", params={"filter": flt, "count": 120}, timeout=60)
+        except wa.GatewayError:
+            continue
+        for c in got.get("chats") or []:
+            if c.get("readOnly"):
+                continue
+            chats.append({"jid": c.get("jid"), "name": c.get("name") or c.get("jid"), "kind": "channel" if flt == "channels" else "group"})
+    return {"connected": True, "phone": sess.get("phone") or "", "chats": chats}
+
+
 async def _clip_church_tz(db, branch_id: int | None) -> str:
     from app.core.platform import platform_timezone
     from app.models.branch import Branch
@@ -10703,8 +10732,11 @@ async def admin_clipper_publish(project_id: int, short_id: int, request: Request
         except social.SocialError as exc:
             problem = str(exc)
     ministry = await social.ministry_tags()
+    wa = await _clip_whatsapp(db, admin, p.branch_id or church)
     ctx = await _admin_context(request, db, "admin.clipper")
     return await render_template(request, "admin/clipper-publish.html", {
+        "wa": wa, "wa_caption": social.whatsapp_caption(s.title, social.with_ministry(s.caption or "", ministry), ministry),
+        "wa_status_ok": (s.length or 0) <= social.WA_STATUS_MAX_SECONDS + 0.5, "wa_status_max": social.WA_STATUS_MAX_SECONDS,
         "p": p, "s": s, "short": _clip_json_short(p, s), "accounts": accounts, "problem": problem, "key_set": key_set,
         "caption": social.with_ministry(s.caption or "", ministry), "ministry": ministry, "labels": social.LABELS,
         "icons": social.ICONS, "tiktok_privacy": social.TIKTOK_PRIVACY, "tz": await _clip_church_tz(db, p.branch_id),
@@ -10725,12 +10757,30 @@ async def admin_clipper_publish_send(project_id: int, short_id: int, request: Re
     from app.tasks import clip_publish_task
 
     form = await request.form()
-    try:
-        accounts = {a["id"]: a for a in await social.accounts(await _clip_profile(db, p.branch_id or church))}
-    except social.SocialError as exc:
-        return _redirect(request, back, str(exc), "error")
+    accounts = {}
+    if form.getlist("account"):
+        try:
+            accounts = {a["id"]: a for a in await social.accounts(await _clip_profile(db, p.branch_id or church))}
+        except social.SocialError as exc:
+            return _redirect(request, back, str(exc), "error")
     chosen = [a for a in form.getlist("account") if a in accounts]
-    if not chosen:
+    wa_targets = []
+    if form.get("wa_status") == "1" or form.getlist("wa_chat"):
+        wa = await _clip_whatsapp(db, admin, p.branch_id or church)
+        if not wa or not wa.get("connected"):
+            return _redirect(request, back, "The church's WhatsApp is not connected (or you may not post with it).", "error")
+        wa_text = (form.get("wa_text") or "").strip()[: social.WA_MESSAGE_CAPTION]
+        if form.get("wa_status") == "1":
+            if (s.length or 0) > social.WA_STATUS_MAX_SECONDS + 0.5:
+                return _redirect(request, back, f"WhatsApp Status plays at most {social.WA_STATUS_MAX_SECONDS} seconds; this short is longer. Send it to groups or channels instead.", "error")
+            wa_targets.append({"platform": "whatsapp", "kind": "status", "name": "Status",
+                               "options": {"text": wa_text[: social.WA_STATUS_CAPTION]}})
+        allowed_chats = {c["jid"]: c for c in wa["chats"]}
+        picked = [allowed_chats[j] for j in form.getlist("wa_chat") if j in allowed_chats][:50]
+        if picked:
+            wa_targets.append({"platform": "whatsapp", "kind": "message", "name": f"{len(picked)} group{'s' if len(picked) != 1 else ''}/channel{'s' if len(picked) != 1 else ''}",
+                               "options": {"text": wa_text, "chats": [{"jid": c["jid"], "name": c["name"]} for c in picked]}})
+    if not chosen and not wa_targets:
         return _redirect(request, back, "Tick at least one channel to post to.", "error")
     title = (form.get("title") or s.title or "").strip()[:200]
     caption = social.with_ministry((form.get("caption") or "").strip(), await social.ministry_tags())[: social.CAPTION_MAX]
@@ -10749,6 +10799,7 @@ async def admin_clipper_publish_send(project_id: int, short_id: int, request: Re
             opts = {"privacyLevel": form.get("tt_privacy") if form.get("tt_privacy") in social.TIKTOK_PRIVACY else "PUBLIC_TO_EVERYONE",
                     "allowComment": form.get("tt_comments") == "1", "allowDuet": form.get("tt_duet") == "1", "allowStitch": form.get("tt_stitch") == "1"}
         targets.append({"platform": a["platform"], "accountId": aid, "name": a["name"], "options": opts})
+    targets += wa_targets
     when = None
     if form.get("when") == "later":
         try:

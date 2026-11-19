@@ -604,3 +604,24 @@ def test_make_shorts_refills_until_the_count_is_met(monkeypatch):
     assert len(out) == 12 and len(rounds) >= 2
     ids = [i for s in out for i in s["ids"]]
     assert len(ids) == len(set(ids))                      # no sentence in two shorts
+
+
+def test_whatsapp_caption_is_written_for_whatsapp():
+    from app.core import social
+
+    cap = "Grace is enough for *today*. #grace matters\n#SWM #faith #church"
+    text = social.whatsapp_caption("Grace *Is* Enough", cap, ["SWM"])
+    assert text.startswith("*Grace Is Enough*\n\n")                 # WhatsApp bold title, stray marks removed
+    assert "#faith" not in text and "#church" not in text            # topic hashtags do nothing on WhatsApp
+    assert "grace matters" in text and text.endswith("\n\n#SWM")     # inline tag reads as a word; ministry tag kept
+    short = social.whatsapp_caption("T", "word " * 400, ["SWM"], limit=social.WA_STATUS_CAPTION)
+    assert len(short) <= social.WA_STATUS_CAPTION and short.endswith("#SWM")
+
+
+def test_one_status_across_platforms_and_whatsapp():
+    from app.core import social
+
+    assert social.overall([{"status": "published"}, {"status": "published"}]) == "published"
+    assert social.overall([{"status": "published"}, {"status": "failed"}]) == "partial"
+    assert social.overall([{"status": "failed"}]) == "failed"
+    assert social.overall([{"status": "scheduled"}, {"status": "published"}]) == "scheduled"

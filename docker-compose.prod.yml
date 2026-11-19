@@ -76,6 +76,7 @@ services:
     cpu_shares: 256
     mem_limit: 4g
     volumes:
+      - ./app/media:/app/media              # WhatsApp copies of shorts (the gateway reads MEDIA_ROOT/whatsapp)
       - ./clipper:/app/clipper              # private: source videos and shorts, never served by nginx
     depends_on:
       - app

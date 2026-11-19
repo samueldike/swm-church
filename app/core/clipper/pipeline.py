@@ -630,7 +630,8 @@ def disk_summary() -> dict:
 # ─── publishing (Zernio) ──────────────────────────────────────────────
 
 async def publish(post_id: int) -> None:
-    """Upload the short (captioned when its captions are on) and create the Zernio post."""
+    """Send a short to its chosen places: Zernio accounts (upload + post) and the church's own WhatsApp (a small
+    WhatsApp copy queued as WhatsApp posts, which the scheduler sends with its anti-ban pacing)."""
     import re
 
     from app.core import social
@@ -648,33 +649,91 @@ async def publish(post_id: int) -> None:
         await db.commit()
         project_id, captions_on, style = short.project_id, bool(short.captions_on), short.caption_style
         caption, title, targets, when = post.caption or "", post.title or short.title, post.targets or [], post.scheduled_for
-        tz = "UTC"
+        branch_id, author, short_id = post.branch_id, post.created_by, short.id
+    zernio = [t for t in targets if t.get("platform") != "whatsapp"]
+    whats = [t for t in targets if t.get("platform") == "whatsapp"]
+    rows: list[dict] = []
+    pid = None
     try:
-        master = media.short_file(project_id, short.id, "mp4")
+        master = media.short_file(project_id, short_id, "mp4")
         if not master.exists():
             raise social.SocialError("The short's video file is missing. Re-cut it, then publish again.")
         path = await asyncio.to_thread(render.burn, master, style) if captions_on else master
-        url = await social.upload(path)
-        tags = re.findall(r"#(\w+)", caption)
-        body = social.build_post(caption=caption, title=title, media_url=url, targets=targets,
-                                 when_utc=when.strftime("%Y-%m-%dT%H:%M:%SZ") if when else None, tz=tz, tags=tags)
-        data = await social.create_post(body)
-        status, rows = social.summarize(data)
-        if when and status not in ("published", "failed", "partial"):
-            status = "scheduled"
-        pid = str((data.get("post") or data).get("_id") or "")
+        if zernio:
+            try:
+                url = await social.upload(path)
+                body = social.build_post(caption=caption, title=title, media_url=url, targets=zernio,
+                                         when_utc=when.strftime("%Y-%m-%dT%H:%M:%SZ") if when else None, tz="UTC",
+                                         tags=re.findall(r"#(\w+)", caption))
+                data = await social.create_post(body)
+                pid = str((data.get("post") or data).get("_id") or "") or None
+                _status, zrows = social.summarize(data)
+                rows += zrows or [{"platform": t["platform"], "status": "scheduled" if when else "published", "url": "",
+                                   "error": ""} for t in zernio]
+            except social.SocialError as exc:
+                rows += [{"platform": t["platform"], "status": "failed", "url": "", "error": str(exc)[:300]} for t in zernio]
+        if whats:
+            try:
+                rows += await _queue_whatsapp(path, whats, branch_id, author, when)
+            except Exception as exc:
+                logger.exception("WhatsApp copy of post %s failed", post_id)
+                rows += [{"platform": "whatsapp", "status": "failed", "url": "", "error": f"WhatsApp: {exc}"[:300]}]
+        status = social.overall(rows)
         async with async_session() as db:
             post = await db.get(ClipPost, post_id)
-            post.status, post.results, post.zernio_post_id, post.error = status, rows, pid or None, None
-            if status in ("failed", "partial"):
-                post.error = "; ".join(f"{social.LABELS.get(r['platform'], r['platform'])}: {r['error']}"
-                                       for r in rows if r.get("error"))[:1000] or None
+            post.status, post.results, post.zernio_post_id = status, rows, pid
+            post.error = "; ".join(f"{social.LABELS.get(r['platform'], r['platform'])}: {r['error']}"
+                                   for r in rows if r.get("error"))[:1000] or None
             await db.commit()
     except social.SocialError as exc:
         await _post_failed(post_id, str(exc))
     except Exception:
         logger.exception("Publishing post %s failed", post_id)
         await _post_failed(post_id, "Publishing failed unexpectedly. Try again.")
+
+
+def _whatsapp_copy(src, dest) -> None:
+    """A WhatsApp-sized copy: 720 px on the short side, modest bitrate (a minute is ~10 MB), fast start."""
+    media.run(["ffmpeg", "-y", "-v", "error", "-i", str(src),
+               "-vf", "scale=w='if(gt(iw,ih),-2,720)':h='if(gt(iw,ih),720,-2)'",
+               "-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-maxrate", "1500k", "-bufsize", "3000k",
+               "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", str(dest)], timeout=900)
+
+
+async def _queue_whatsapp(path, whats: list[dict], branch_id: int, author: int | None, when) -> list[dict]:
+    """WhatsAppPost rows for the Status and the groups/channels (sent by app/core/whatsapp.py:process_due)."""
+    import uuid
+    from pathlib import Path
+
+    from app.core.media import media_root
+    from app.models.whatsapp import WhatsAppPost
+
+    rel = f"whatsapp/b{int(branch_id)}/clip-{uuid.uuid4().hex}.mp4"
+    dest = Path(media_root()) / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(_whatsapp_copy, path, dest)
+    rows = []
+    async with async_session() as db:
+        for t in whats:
+            opts = t.get("options") or {}
+            is_status = t.get("kind") == "status"
+            wp = WhatsAppPost(branch_id=branch_id, created_by=author, kind="status" if is_status else "message",
+                              targets=[] if is_status else (opts.get("chats") or []), text=opts.get("text") or "",
+                              media_path=rel, media_kind="video", media_name="short.mp4",
+                              send_at=when or datetime.utcnow(), status="pending")
+            db.add(wp)
+            await db.flush()
+            rows.append({"platform": "whatsapp", "status": "scheduled", "url": "", "error": "", "wa_post": wp.id,
+                         "name": t.get("name") or ""})
+        await db.commit()
+    if not when:
+        from app.core import whatsapp as wa
+
+        try:
+            await wa.process_due()            # start now; the scheduler carries on with its pacing
+        except Exception:
+            logger.exception("WhatsApp send did not start at once; the scheduler will pick it up")
+    return rows
 
 
 async def _post_failed(post_id: int, message: str) -> None:
@@ -698,18 +757,35 @@ async def refresh_posts(short_ids: list[int]) -> None:
         return
     cutoff = datetime.utcnow() - timedelta(minutes=2)
     async with async_session() as db:
+        from app.models.whatsapp import WhatsAppPost
+
         rows = (await db.execute(select(ClipPost).where(
-            ClipPost.short_id.in_(short_ids), ClipPost.zernio_post_id.is_not(None),
-            ClipPost.status.in_(("scheduled", "uploading", "partial")), ClipPost.updated_at < cutoff))).scalars().all()
+            ClipPost.short_id.in_(short_ids), ClipPost.status.in_(("scheduled", "partial"))))).scalars().all()
+        wa_state = {"sent": "published", "partial": "partial", "failed": "failed", "cancelled": "failed"}
         for post in rows[:10]:
-            if post.status == "scheduled" and post.scheduled_for and post.scheduled_for > datetime.utcnow():
-                continue
-            try:
-                status, results = social.summarize(await social.get_post(post.zernio_post_id))
-            except social.SocialError:
+            results = [dict(r) for r in (post.results or [])]
+            touched = False
+            # The church's WhatsApp: read straight from its posts (cheap, no rate limit).
+            for r in results:
+                if r.get("wa_post"):
+                    wp = await db.get(WhatsAppPost, int(r["wa_post"]))
+                    st = wa_state.get(wp.status, "scheduled") if wp else "failed"
+                    err = (wp.error or "") if wp else "The WhatsApp post was removed."
+                    if st != r.get("status") or err != r.get("error"):
+                        r.update(status=st, error=err[:300])
+                        touched = True
+            # Zernio: at most every 2 minutes, and only once the post is due.
+            due = not (post.scheduled_for and post.scheduled_for > datetime.utcnow())
+            if post.zernio_post_id and due and (post.updated_at or cutoff) <= cutoff:
+                try:
+                    _s, zrows = social.summarize(await social.get_post(post.zernio_post_id))
+                    results = [r for r in results if r.get("platform") == "whatsapp"] + zrows
+                    touched = True
+                except social.SocialError:
+                    pass
                 post.updated_at = datetime.utcnow()
-                continue
-            post.status, post.results, post.updated_at = status, results, datetime.utcnow()
-            failed = [r for r in results if r.get("error")]
-            post.error = "; ".join(f"{social.LABELS.get(r['platform'], r['platform'])}: {r['error']}" for r in failed)[:1000] or None
+            if touched:
+                post.results, post.status = results, social.overall(results)
+                failed = [r for r in results if r.get("error")]
+                post.error = "; ".join(f"{social.LABELS.get(r['platform'], r['platform'])}: {r['error']}" for r in failed)[:1000] or None
         await db.commit()

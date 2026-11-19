@@ -13,11 +13,10 @@
 
 {% block content %}
 <div class="vc">
-{% if not key_set %}
-  <div class="vc-alert info" role="note"><i class="ri-key-2-line"></i><span>Social publishing is not switched on yet. The HQ Administrator saves the Zernio API key under <b>Settings → Social publishing</b>. Until then, use Download.</span></div>
-{% elif problem %}
-  <div class="vc-alert bad" role="alert"><i class="ri-error-warning-line"></i><span>{{ problem }}</span></div>
+{% if not key_set and not (wa and wa.connected) %}
+  <div class="vc-alert info" role="note"><i class="ri-key-2-line"></i><span>Social publishing is not switched on yet. The HQ Administrator saves the Zernio API key under <b>Settings → Social publishing</b>{% if not wa %}, and the church's WhatsApp can be connected under WhatsApp{% endif %}. Until then, use Download.</span></div>
 {% else %}
+{% if problem %}<div class="vc-alert bad" role="alert"><i class="ri-error-warning-line"></i><span>{{ problem }}</span></div>{% endif %}
 <form method="post" class="vc-pub" id="vc-pub" data-turbo="false">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <div class="flex flex-col gap-2">
@@ -38,7 +37,9 @@
 
     <section class="vc-panel vc-section">
       <h2><i class="ri-share-forward-line"></i>Channels</h2>
-      {% if accounts %}
+      {% if not key_set %}
+        <p class="vc-muted text-[13px]">YouTube, TikTok, Instagram and the rest switch on when the HQ Administrator saves the Zernio key (Settings → Social publishing).</p>
+      {% elif accounts %}
       <div class="vc-targets">
         {% for a in accounts %}
         <label><input type="checkbox" name="account" value="{{ a.id }}" data-platform="{{ a.platform }}">
@@ -74,6 +75,36 @@
       </div>
     </section>
 
+    {% if wa %}
+    <section class="vc-panel vc-section">
+      <h2><i class="ri-whatsapp-line"></i>The church's WhatsApp</h2>
+      {% if not wa.connected %}
+        <p class="vc-muted text-[13px]">The church's WhatsApp is not connected right now. Link it under <a class="underline" href="{{ url_for('admin_whatsapp') }}">WhatsApp</a>.</p>
+      {% else %}
+        <div class="vc-targets">
+          <label {{ '' if wa_status_ok else 'title="WhatsApp Status plays at most ' ~ wa_status_max ~ ' seconds"' }}><input type="checkbox" name="wa_status" value="1" data-platform="whatsapp" {{ '' if wa_status_ok else 'disabled' }}>
+            <i class="ri-whatsapp-line"></i><span class="min-w-0"><b>Status</b><small>{{ 'Your contacts see it for 24 hours' if wa_status_ok else 'Only shorts up to ' ~ wa_status_max ~ ' s' }}</small></span></label>
+        </div>
+        {% if wa.chats %}
+        <details class="vc-mt" {{ 'open' if wa.chats|length <= 8 }}>
+          <summary class="text-[13px] font-semibold">Groups and channels ({{ wa.chats|length }})</summary>
+          <input type="search" class="vc-mt" placeholder="Find a group or channel" aria-label="Find a group or channel" data-wa-find>
+          <div class="vc-targets vc-mt" data-wa-list>
+            {% for c in wa.chats %}
+            <label data-name="{{ c.name|lower }}"><input type="checkbox" name="wa_chat" value="{{ c.jid }}" data-platform="whatsapp">
+              <i class="{{ 'ri-broadcast-line' if c.kind == 'channel' else 'ri-group-line' }}"></i>
+              <span class="min-w-0"><b>{{ c.name }}</b><small>{{ 'Channel' if c.kind == 'channel' else 'Group' }}</small></span></label>
+            {% endfor %}
+          </div>
+        </details>
+        {% endif %}
+        <label class="field-label vc-mt" for="vc-wa-text">WhatsApp caption <span class="vc-muted">(WhatsApp style: *bold* title, no topic hashtags)</span></label>
+        <textarea id="vc-wa-text" name="wa_text" rows="5" maxlength="3000">{{ wa_caption }}</textarea>
+        <p class="vc-muted text-[12px]">Sent from {{ wa.phone }} as a smaller video that WhatsApp plays well, a few chats at a time like a person would. Status captions are cut to 700 characters.</p>
+      {% endif %}
+    </section>
+    {% endif %}
+
     <section class="vc-panel vc-section">
       <h2><i class="ri-calendar-schedule-line"></i>When</h2>
       <div class="vc-choice" role="radiogroup" aria-label="When">
@@ -107,7 +138,7 @@
   const send = f.querySelector('#vc-send'), note = f.querySelector('#vc-send-note');
   const later = f.querySelector('#vc-later');
   const sync = () => {
-    const picked = [...f.querySelectorAll('[name=account]:checked')].map((x) => x.dataset.platform);
+    const picked = [...f.querySelectorAll('[name=account]:checked, [name=wa_status]:checked, [name=wa_chat]:checked')].map((x) => x.dataset.platform);
     f.querySelectorAll('.vc-opts').forEach((box) => { box.hidden = !picked.includes(box.dataset.for); });
     const isLater = f.querySelector('[name=when]:checked').value === 'later';
     later.hidden = !isLater;
@@ -116,9 +147,14 @@
     count.textContent = x && n > 280 ? `${n} characters: X gets a shortened version (280 max), the hashtags kept` : `${n} / 2200`;
     count.classList.toggle('over', n > 2200);
     send.disabled = !picked.length;
-    note.textContent = picked.length ? `${picked.length} channel${picked.length > 1 ? 's' : ''}` : 'Pick at least one channel.';
+    note.textContent = picked.length ? `${picked.length} place${picked.length > 1 ? 's' : ''}` : 'Pick at least one place to post.';
   };
   f.addEventListener('change', sync, o); cap.addEventListener('input', sync, o);
+  const find = f.querySelector('[data-wa-find]');
+  if (find) find.addEventListener('input', () => {
+    const q = find.value.trim().toLowerCase();
+    f.querySelectorAll('[data-wa-list] label').forEach((l) => { l.hidden = q && !l.dataset.name.includes(q); });
+  }, o);
   f.addEventListener('submit', (e) => {
     if (f.querySelector('[name=account][data-platform=tiktok]:checked') && !f.querySelector('[name=tt_consent]').checked) {
       e.preventDefault(); alert('Tick the TikTok confirmation first.'); return;

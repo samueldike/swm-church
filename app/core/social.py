@@ -39,6 +39,8 @@ PLATFORMS = [
 PLATFORM_IDS = {p[0] for p in PLATFORMS}
 LABELS = {p[0]: p[1] for p in PLATFORMS}
 ICONS = {p[0]: p[2] for p in PLATFORMS}
+# The church's own WhatsApp goes through app/core/whatsapp.py, not Zernio (labels for the screens only).
+LABELS["whatsapp"], ICONS["whatsapp"] = "WhatsApp", "ri-whatsapp-line"
 TIKTOK_PRIVACY = ["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"]
 CAPTION_MAX = 2200        # Instagram/TikTok caption ceiling; X is shortened per platform below
 X_MAX = 280
@@ -293,3 +295,42 @@ def summarize(data: dict) -> tuple[str, list[dict]]:
     elif rows and any(r["status"] == "failed" for r in rows):
         status = "partial" if any(r["status"] == "published" for r in rows) else "failed"
     return status or "scheduled", rows
+
+
+# ─── the church's own WhatsApp (app/core/whatsapp.py: Status + groups/channels, sent by the scheduler) ───
+
+WA_STATUS_MAX_SECONDS = 60      # WhatsApp Status plays at most a minute of video
+WA_STATUS_CAPTION = 700         # WhatsApp shortens longer Status captions
+WA_MESSAGE_CAPTION = 3000
+
+
+def whatsapp_caption(title: str, caption: str, ministry: list[str], *, limit: int = WA_MESSAGE_CAPTION) -> str:
+    """A caption written for WhatsApp: the title in WhatsApp bold, the words as plain text, no topic hashtags (they do
+    nothing on WhatsApp), the ministry's own hashtags kept as a sign-off (pure; tested)."""
+    lines = [ln for ln in str(caption or "").strip().split("\n")]
+    if lines and lines[-1].strip() and all(w.startswith("#") for w in lines[-1].split()):
+        lines = lines[:-1]
+    body = "\n".join(lines).strip()
+    body = re.sub(r"(?<!\w)#(\w+)", r"\1", body)                 # inline #tags read as words
+    head = re.sub(r"[*_~`]", "", str(title or "")).strip()
+    sign = " ".join("#" + t for t in ministry)
+    parts = [f"*{head}*" if head else "", body, sign]
+    text = "\n\n".join(p for p in parts if p)
+    if len(text) > limit:
+        room = limit - len(sign) - (2 if sign else 0) - 1
+        core = "\n\n".join(p for p in parts[:2] if p)
+        text = core[: max(0, room)].rsplit(" ", 1)[0] + "…" + (f"\n\n{sign}" if sign else "")
+    return text
+
+
+def overall(rows: list[dict]) -> str:
+    """One status for a publish across Zernio platforms and WhatsApp (pure; tested)."""
+    states = [r.get("status") for r in rows]
+    if not states:
+        return "scheduled"
+    if all(s == "published" for s in states):
+        return "published"
+    if any(s == "failed" for s in states):
+        return "partial" if any(s == "published" for s in states) else (
+            "failed" if all(s == "failed" for s in states) else "partial")
+    return "scheduled"
