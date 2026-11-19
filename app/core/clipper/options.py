@@ -111,6 +111,8 @@ def clean_settings(form) -> tuple[dict, list[str]]:
     for key, table in (("style", STYLES), ("format", FORMATS), ("framing", FRAMINGS),
                        ("caption_style", CAPTION_STYLES), ("language", LANGUAGES)):
         val = get(key)
+        if key == "caption_style" and val == "bold":      # the first caption design's earlier name
+            val = "pop"
         out[key] = val if val in table else DEFAULTS[key]
     try:
         q = int(get("quality") or DEFAULTS["quality"])

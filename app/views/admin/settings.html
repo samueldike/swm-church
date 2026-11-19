@@ -481,7 +481,7 @@
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {{ secret_field('Zernio API key', 'zernio_api_key', secret_status.zernio_api_key, hint='Create it at zernio.com → Dashboard → API keys.') }}
-          {{ field('Ministry hashtags', 'clipper_ministry_hashtags', value=S.get('clipper_ministry_hashtags') or '', placeholder='#ScentOfWater #SWM', hint='One or two. Every short's caption always carries them, first on the hashtag line.') }}
+          {{ field('Ministry hashtags', 'clipper_ministry_hashtags', value=S.get('clipper_ministry_hashtags') or '', placeholder='#ScentOfWater #SWM', hint="One or two. Every short's caption always carries them, first on the hashtag line.") }}
         </div>
       </section>
 

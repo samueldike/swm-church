@@ -196,13 +196,13 @@ def test_crop_expression_and_filters():
 
 # ─── captions ─────────────────────────────────────────────────────────
 
-def test_bold_captions_highlight_each_word_in_turn_and_srt_is_valid():
+def test_pop_captions_highlight_each_word_in_turn_and_srt_is_valid():
     words = _words("Faith comes by hearing, and hearing by the word of God.")
-    text = captions.ass(words, style="bold", width=1080, height=1920)
+    text = captions.ass(words, style="bold", width=1080, height=1920)          # the old name = pop
     lines = [l for l in text.splitlines() if l.startswith("Dialogue:")]
     assert len(lines) == len(words)
-    assert all(l.count("\\c&H0037C8F0") == 1 for l in lines)
-    assert "FAITH" in lines[0] and "{" not in re.sub(r"\{\\c&H[0-9A-F]+\}", "", lines[0])
+    assert all(l.count("\\c&H003AE0FF") == 1 for l in lines)                  # #FFE03A: the spoken word
+    assert "FAITH" in lines[0]
     srt = captions.srt(words)
     assert srt.startswith("1\n00:00:00,000 --> ")
     clean = captions.ass(words, style="clean", width=1080, height=1920)
@@ -314,8 +314,10 @@ def test_captions_are_off_unless_turned_on():
     assert options.DEFAULTS["caption_style"] == "none"
     st, _ = options.clean_settings({"format": "square"})
     assert st["caption_style"] == "none" and st["format"] == "square"
-    st, _ = options.clean_settings({"caption_style": "bold"})
-    assert st["caption_style"] == "bold"
+    st, _ = options.clean_settings({"caption_style": "bold"})       # the old name means the first design
+    assert st["caption_style"] == "pop"
+    st, _ = options.clean_settings({"caption_style": "glow"})
+    assert st["caption_style"] == "glow"
 
 
 def _tone(tmp_path, seconds=3):
@@ -550,3 +552,20 @@ def test_every_caption_design_makes_a_valid_ass_file_and_legacy_names_map():
         assert "{\r}" not in text or sid != "glow"
     assert captions.style_id("bold") == "pop" and captions.style_id("none") is None
     assert set(captions.public_styles()) == set(captions.STYLES)
+
+
+def test_camera_does_not_chase_a_preacher_pacing_to_and_fro():
+    import math
+
+    pace = [(t / 6, 0.5 + 0.07 * math.sin(t / 6 * 2.2), False) for t in range(120)]     # 20 s of pacing
+    keys = reframe.camera_path(pace, 0.32, duration=20)
+    xs = [c for _, c in keys]
+    assert max(xs) - min(xs) < 1e-6                     # framed as one zone: the camera never moves
+
+
+def test_camera_stays_with_its_speaker_when_someone_passes():
+    speaker = (0.5, 0.4, 0.08, 0.1, 0.9)
+    passer = (0.85, 0.4, 0.2, 0.25, 0.9)
+    samples = [{"t": n / 6, "faces": [speaker] + ([passer] if 10 <= n < 14 else []), "cut": False} for n in range(30)]
+    picked = [x for _, x, _ in reframe.choose_subject(samples, start_x=0.5)]
+    assert all(abs(x - 0.5) < 0.01 for x in picked)      # a 0.7 s walk-past never takes the frame

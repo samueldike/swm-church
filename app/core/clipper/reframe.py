@@ -1,9 +1,9 @@
 """Framing a short: a virtual camera that follows the speaker, the way a camera operator would.
 
 For each source segment, frames are sampled (``SAMPLE_FPS``), faces found with OpenCV's YuNet detector, and one
-subject chosen (the largest face, but the camera sticks with the person it is on unless someone clearly bigger
-appears). The camera then holds still while the subject stays inside a dead zone in the middle of the frame and
-pans smoothly (speed-limited) when they walk out of it; on a cut in the source video it cuts too. The camera path
+subject chosen (the camera sticks with the person it is on; someone clearly bigger takes over only after a second).
+The camera frames the zone the speaker paces in and holds still; it makes an eased move only after they stay out of
+the dead zone for a moment; on a cut in the source video it cuts too. The camera path
 becomes a piecewise-linear ffmpeg ``crop`` expression, so the render is one ffmpeg pass.
 
 ``camera_path`` and ``crop_expr`` are pure (tested); ``detect`` needs OpenCV and ffmpeg.
@@ -20,8 +20,13 @@ logger = logging.getLogger(__name__)
 
 SAMPLE_FPS = 6.0
 DETECT_WIDTH = 480
-DEAD_ZONE = 0.12          # of the crop width, either side of centre: the subject may move this far before a pan
-MAX_SPEED = 0.42          # pan speed, in frame widths per second
+DEAD_ZONE = 0.16          # of the crop width, either side of centre: the subject may move this far before a move
+MAX_SPEED = 0.42          # fastest point of a move, in frame widths per second
+DWELL = 0.8               # seconds the subject must stay outside the dead zone before the camera moves
+LOOK = 3.0                # seconds ahead the camera looks to frame where the speaker paces
+BAND = 0.55               # pacing inside this share of the crop width is framed as one zone (no move)
+MIN_MOVE = 0.7            # every move eases in and out over at least this long
+SWITCH_SAMPLES = 6        # samples in a row someone else must dominate before the camera changes person
 SCENE_CUT = 38.0          # mean absolute grey difference between samples that marks a cut in the source
 MAX_KEYS = 70
 
@@ -73,13 +78,18 @@ def detect(src: str, start: float, end: float, src_w: int, src_h: int) -> list[d
 
 
 def choose_subject(samples: list[dict], start_x: float | None = None) -> list[tuple[float, float | None, bool]]:
-    """[(t, subject centre x or None, cut)]: the person the camera is on, sample by sample."""
+    """[(t, subject centre x or None, cut)]: the person the camera is on, sample by sample.
+
+    The camera stays with the person it is on. Someone else takes over only after being clearly the main face for
+    ``SWITCH_SAMPLES`` samples in a row (a second), so a head turning or a passer-by never yanks the frame across."""
     out = []
     cur = start_x
+    rival, streak = None, 0
     for s in samples:
         faces = s["faces"]
         if s["cut"]:
             cur = None if not faces else cur
+            rival, streak = None, 0
         pick = None
         if faces:
             largest = max(faces, key=lambda f: f[2] * f[3])
@@ -89,7 +99,11 @@ def choose_subject(samples: list[dict], start_x: float | None = None) -> list[tu
                 if near:
                     stay = max(near, key=lambda f: f[2] * f[3])
                     if stay[2] * stay[3] * 1.8 >= largest[2] * largest[3]:
-                        pick = stay
+                        pick, rival, streak = stay, None, 0
+                    else:
+                        streak = streak + 1 if rival is not None and abs(rival - largest[0]) < 0.12 else 1
+                        rival = largest[0]
+                        pick = largest if streak >= SWITCH_SAMPLES else stay
         if pick is not None:
             cur = pick[0]
         out.append((s["t"], pick[0] if pick is not None else None, s["cut"]))
@@ -98,11 +112,18 @@ def choose_subject(samples: list[dict], start_x: float | None = None) -> list[tu
 
 def camera_path(track: list[tuple[float, float | None, bool]], crop_w: float, *, start_x: float | None = None,
                 duration: float | None = None) -> list[tuple[float, float]]:
-    """Keyframes (t, centre x normalised) of a camera that holds, pans smoothly, and cuts on source cuts."""
+    """Keyframes (t, centre x normalised) of a calm camera operator: holds, then makes eased moves; cuts on cuts.
+
+    * Zone framing: when the speaker paces inside a band that fits in the frame over the next ``LOOK`` seconds,
+      the camera frames the middle of that band and does not move at all.
+    * Hold, then move: it moves only after the target has been outside the dead zone for ``DWELL`` seconds (at
+      once if the speaker is about to leave the frame), and each move eases in and out (smoothstep) over at least
+      ``MIN_MOVE`` seconds, never faster than ``MAX_SPEED``. No chasing, no jitter.
+    * On a cut in the source video the camera cuts too.
+    """
     if not track:
         c = 0.5 if start_x is None else start_x
         return [(0.0, c), (duration or 0.0, c)]
-    # Fill gaps (no face) with the last known position; smooth jitter with a short median.
     xs: list[float | None] = [x for _, x, _ in track]
     known = [x for x in xs if x is not None]
     first = known[0] if known else (0.5 if start_x is None else start_x)
@@ -111,38 +132,69 @@ def camera_path(track: list[tuple[float, float | None, bool]], crop_w: float, *,
         last = x if x is not None else last
         filled.append(last)
     smooth = []
-    for k in range(len(filled)):
-        win = sorted(filled[max(0, k - 2):k + 3])
+    for k in range(len(filled)):                        # ~1.5 s median: detector noise and gestures vanish
+        win = sorted(filled[max(0, k - 4):k + 5])
         smooth.append(win[len(win) // 2])
 
+    ts = [t for t, _, _ in track]
+    cuts = [bool(c) for _, _, c in track]
+    n = len(track)
     half = crop_w / 2
     lo, hi = half, 1 - half
     dz = crop_w * DEAD_ZONE
-    keys: list[tuple[float, float]] = []
-    # Every segment starts on a jump cut of the edit, so the camera may re-frame there for free; it keeps the
-    # previous segment's position only when the speaker is still inside the dead zone (no needless micro-jump).
-    c = min(hi, max(lo, smooth[0]))
-    if start_x is not None and abs(min(hi, max(lo, start_x)) - c) <= dz:
-        c = min(hi, max(lo, start_x))
-    prev_t = track[0][0]
-    panning = False
-    keys.append((prev_t, c))
-    for (t, _x, cut), want in zip(track, smooth):
-        dt = max(0.0, t - prev_t)
-        want = min(hi, max(lo, want))
-        if cut and abs(want - c) > dz:
-            keys.append((max(prev_t, t - 0.001), c))
-            c = want
-        elif abs(want - c) > dz or (panning and abs(want - c) > dz * 0.2):
-            panning = True
-            step = MAX_SPEED * dt
-            c = c + max(-step, min(step, want - c))      # pan until the speaker is centred again
-        else:
-            panning = False
+
+    def clamp(v: float) -> float:
+        return min(hi, max(lo, v))
+
+    def desired(k: int) -> float:
+        j, a, b = k, smooth[k], smooth[k]
+        while j + 1 < n and ts[j + 1] - ts[k] <= LOOK and not cuts[j + 1]:
+            j += 1
+            a, b = min(a, smooth[j]), max(b, smooth[j])
+        return clamp((a + b) / 2 if b - a <= crop_w * BAND else smooth[k])
+
+    c = clamp(desired(0))
+    if start_x is not None and abs(clamp(start_x) - c) <= dz:
+        c = clamp(start_x)
+    keys: list[tuple[float, float]] = [(ts[0], c)]
+    away = None
+    k = 1
+    while k < n:
+        t = ts[k]
+        want = desired(k)
+        if cuts[k]:
+            if abs(want - c) > dz:
+                keys.append((max(keys[-1][0], t - 0.001), c))
+                c = want
+                keys.append((t, c))
+            away, k = None, k + 1
+            continue
+        if abs(want - c) <= dz:
+            away, k = None, k + 1
+            continue
+        away = t if away is None else away
+        leaving = abs(smooth[k] - c) > half * 0.85        # the speaker is nearly out of the frame
+        if t - away < DWELL and not leaving:
+            k += 1
+            continue
+        span = max(MIN_MOVE, 1.5 * abs(want - c) / MAX_SPEED)
         keys.append((t, c))
-        prev_t = t
-    if duration is not None and keys[-1][0] < duration:
-        keys.append((duration, c))
+        start, frm = t, c
+        for i in range(1, 9):
+            u = i / 8
+            keys.append((start + span * u, frm + (want - frm) * u * u * (3 - 2 * u)))
+        c, away = want, None
+        k += 1
+        while k < n and ts[k] < start + span and not cuts[k]:
+            k += 1
+        if k < n and cuts[k] and ts[k] < start + span:   # a source cut interrupts the move: stop it there
+            keys = [x for x in keys if x[0] < ts[k] - 0.001]
+            u = (ts[k] - 0.001 - start) / span
+            c = frm + (want - frm) * u * u * (3 - 2 * u)
+            keys.append((ts[k] - 0.001, c))
+    end = duration if duration is not None else ts[-1]
+    if keys[-1][0] < end:
+        keys.append((end, c))
     return simplify(keys)
 
 
