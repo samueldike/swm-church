@@ -3,13 +3,14 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}{{ p.title or 'Video' }}{% endblock %}
 {% block topbar_icon %}ri-scissors-cut-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=2">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=3">{% endblock %}
 
 {% block content %}
 {#- Rendered from JSON by app/static/js/clipper.js, which polls status.json while the project works. -#}
 <div class="vc flex flex-col gap-4" id="vc-show" data-id="{{ p.id }}" data-csrf="{{ csrf_token }}"
      data-base="/admin/clipper/{{ p.id }}">
   <script type="application/json" id="vc-data">{{ data|tojson }}</script>
+  <script type="application/json" id="vc-capstyles">{{ cap_styles|tojson }}</script>
   <script type="application/json" id="vc-opts">{{ {'formats': opt.FORMATS, 'framings': opt.FRAMINGS, 'captions': opt.CAPTION_STYLES, 'qualities': opt.QUALITIES}|tojson }}</script>
 
   <section class="vc-panel vc-head">
@@ -28,7 +29,7 @@
     <div class="vc-progress" id="vc-progress" hidden>
       <div class="vc-progress-label"><span id="vc-stage">Working</span><span id="vc-pct"></span></div>
       <div class="vc-bar"><i id="vc-fill" style="width:0%"></i></div>
-      <span class="vc-muted text-[12px]">You can leave this page; the work carries on. {% if fast_listen %}Shorts appear one by one as they are cut; a one-hour message takes a few minutes.{% else %}Without fast transcription, writing down every word takes about as long as the video itself. The HQ Administrator can switch on fast transcription by saving a Groq key under Settings → AI drafting.{% endif %}</span>
+      <span class="vc-muted text-[12px]">You can leave this page; the work carries on. Writing down every word takes{% if fast_listen %} a minute or two{% else %} about half as long as the part being clipped{% endif %}; then the shorts appear one by one as they are cut.</span>
     </div>
     <div id="vc-problem" hidden></div>
     <div class="vc-tools" id="vc-tools" hidden>
@@ -42,6 +43,7 @@
         <button type="submit" class="btn btn-secondary btn-sm"><i class="ri-scissors-2-line"></i>Clip these times</button>
       </form>
       <span class="flex-grow"></span>
+      <a href="{{ url_for('admin_clipper_channels') }}" class="btn btn-ghost btn-sm"><i class="ri-share-forward-line"></i>Channels</a>
       <form method="post" action="{{ url_for('admin_clipper_delete', project_id=p.id) }}" data-confirm="Delete this video and all its shorts? This cannot be undone.">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button type="submit" class="btn btn-ghost btn-sm text-bad"><i class="ri-delete-bin-6-line"></i>Delete</button>
@@ -55,6 +57,7 @@
 {% endblock %}
 
 {% block extra_body %}
-<script src="{{ url_for('static', path='js/clipper.js') }}?v=2"></script>
+<script src="{{ url_for('static', path='js/clipper-captions.js') }}?v=1"></script>
+<script src="{{ url_for('static', path='js/clipper.js') }}?v=3"></script>
 <script>window.SWMClipper && window.SWMClipper.show();</script>
 {% endblock %}

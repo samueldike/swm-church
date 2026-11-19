@@ -8,6 +8,7 @@ again for the final pass roughly halves the time a short takes.
 """
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 import subprocess
@@ -120,7 +121,7 @@ def _encode(cmd: list[str], total: float, progress=None, timeout: float = 1800) 
 
 
 def render(*, src: Path, info: dict, segments: list[list[float]], words: list[list], out: Path, fmt: str,
-           quality: int, framing: str, caption_style: str, progress=None) -> dict:
+           quality: int, framing: str, caption_style: str, progress=None, frame_x: float | None = None) -> dict:
     """Write the short to ``out`` (+ .srt and .jpg beside it). Returns {length, width, height}."""
     if not segments:
         raise ClipperError("Nothing is left to play in this short.")
@@ -131,7 +132,8 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
         raise ClipperError("The source has no picture.")
     ow, oh = reframe.output_size(fmt, quality)
     fps = _fps(float(info.get("fps") or 30))
-    track = reframe.needs_tracking(fmt, framing, src_w, src_h)
+    manual = frame_x is not None and framing != "fit"
+    track = reframe.needs_tracking(fmt, framing, src_w, src_h) and not manual
     crop_w = (int(src_h * ow / oh) // 2 * 2) / src_w if track else 1.0
     report = progress or (lambda f: None)
     length = sum(e - s for s, e in segments)
@@ -159,19 +161,18 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
                 subject = reframe.choose_subject(samples, centre)
                 keys = reframe.camera_path(subject, crop_w, start_x=centre, duration=max(0.05, e - s))
                 centre = keys[-1][1]
-            vfs.append(reframe.video_filter(fmt=fmt, quality=quality, framing=framing, src_w=src_w, src_h=src_h,
-                                            keys=keys))
+            if manual:                     # the editor's fixed crop position
+                # frame_x 0..1 = the crop from the left edge to the right edge; keys hold the crop's centre.
+                frac = min(1.0, (int(src_h * ow / oh) // 2 * 2) / src_w) if src_w else 1.0
+                fx = frac / 2 + min(1.0, max(0.0, float(frame_x))) * (1 - frac)
+                keys = [(0.0, fx), (max(0.05, e - s), fx)]
+            vfs.append(reframe.video_filter(fmt=fmt, quality=quality, framing="speaker" if manual else framing,
+                                            src_w=src_w, src_h=src_h, keys=keys))
             report(0.25 * (n + 1) / len(segments) if track else 0.02)
 
-        # 2. One encode: segments, joins, captions, loudness.
-        subs = None
-        if caption_style in ("bold", "clean") and words:
-            ass_file = work / "captions.ass"
-            ass_file.write_text(captions.ass(words, style=caption_style, width=ow, height=oh), encoding="utf-8")
-            esc = str(ass_file).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
-            fonts = captions.fonts_dir().replace("\\", "/").replace(":", "\\:")
-            subs = f"subtitles='{esc}':fontsdir='{fonts}'"
-        inputs, filters = graph(segments, vfs, fps, subtitles=subs)
+        # 2. One encode: segments, joins, loudness. The master never has captions burned in: they are drawn live
+        # in the browser and burned into a copy (``burn``) for the download and the post.
+        inputs, filters = graph(segments, vfs, fps, subtitles=None)
         script = work / "graph.txt"
         script.write_text(filters, encoding="utf-8")
         tmp_out = work / "final.mp4"
@@ -186,9 +187,46 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
         tmp_out.replace(out)
 
         out.with_suffix(".srt").write_text(captions.srt(words), encoding="utf-8")
+        out.with_suffix(".words.json").write_text(json.dumps({"words": words, "width": ow, "height": oh}),
+                                                  encoding="utf-8")
+        for old in out.parent.glob(f"{out.stem}.cap-*.mp4"):      # captioned copies of the previous cut
+            old.unlink(missing_ok=True)
         run(["ffmpeg", "-y", "-v", "error", "-ss", f"{min(1.5, length / 3):.2f}", "-i", str(out), "-frames:v", "1",
              "-vf", "scale=360:-2", "-q:v", "4", str(out.with_suffix(".jpg"))], timeout=120)
         report(1.0)
         return {"length": round(length, 2), "width": ow, "height": oh}
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def captioned_path(master: Path, style: str) -> Path:
+    return master.with_name(f"{master.stem}.cap-{style}.mp4")
+
+
+def burn(master: Path, style: str) -> Path:
+    """The master with the ``style`` captions burned in (cached beside it). Video re-encoded once, sound copied."""
+    sid = captions.style_id(style)
+    if sid is None:
+        return master
+    out = captioned_path(master, sid)
+    if out.exists() and out.stat().st_mtime >= master.stat().st_mtime:
+        return out
+    meta_file = master.with_suffix(".words.json")
+    if not meta_file.exists():
+        raise ClipperError("Re-cut this short once to add captions to it.")
+    meta = json.loads(meta_file.read_text(encoding="utf-8"))
+    work = Path(tempfile.mkdtemp(prefix="cap_", dir=str(master.parent)))
+    try:
+        ass_file = work / "captions.ass"
+        ass_file.write_text(captions.ass(meta["words"], style=sid, width=int(meta["width"]), height=int(meta["height"])),
+                            encoding="utf-8")
+        esc = str(ass_file).replace("\\", "/").replace(":", "\:").replace("'", "\'")
+        fonts = captions.fonts_dir().replace("\\", "/").replace(":", "\:")
+        tmp = work / "out.mp4"
+        run(["ffmpeg", "-y", "-v", "error", "-i", str(master), "-vf", f"subtitles='{esc}':fontsdir='{fonts}'",
+             "-c:v", "libx264", "-preset", PRESET, "-crf", CRF, "-pix_fmt", "yuv420p", "-c:a", "copy",
+             "-movflags", "+faststart", str(tmp)], timeout=900)
+        tmp.replace(out)
+        return out
     finally:
         shutil.rmtree(work, ignore_errors=True)

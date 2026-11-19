@@ -54,6 +54,7 @@
       document.getElementById('vc-file-name').textContent = `${fl.name} (${(fl.size / 1048576).toFixed(0)} MB)`;
       if (!f.title.value) f.title.value = fl.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').slice(0, 200);
       say('');
+      f.dispatchEvent(new CustomEvent('vc-file', { detail: fl }));
     };
     drop.addEventListener('click', () => fileInput.click(), opt);
     drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } }, opt);
@@ -110,6 +111,9 @@
     const csrf = root.dataset.csrf;
     const base = root.dataset.base;
     const opts = JSON.parse(document.getElementById('vc-opts').textContent);
+    const capStyles = JSON.parse(document.getElementById('vc-capstyles')?.textContent || '{}');
+    const capWords = {};      // short id -> {words, width, height}
+    const capLayers = {};     // short id -> overlay api
     let data = JSON.parse(document.getElementById('vc-data').textContent);
     const grid = document.getElementById('vc-shorts');
     const toastEl = document.getElementById('vc-toast');
@@ -125,6 +129,14 @@
     const select = (name, table, value) => `<select name="${name}">${Object.entries(table).map(([k, v]) =>
       `<option value="${esc(k)}" ${String(k) === String(value) ? 'selected' : ''}>${esc(typeof v === 'string' ? v : v.label)}</option>`).join('')}</select>`;
     const secs = (n) => `${n > 0 ? '+' : ''}${Number(n).toFixed(1)}s`;
+
+    const POST_LABEL = { queued: 'Sending', uploading: 'Sending', scheduled: 'Scheduled', published: 'Published', partial: 'Partly published', failed: 'Not published' };
+    const postsHtml = (s) => (s.posts && s.posts.length ? `<div class="vc-posts">${s.posts.map((x) => {
+      const tone = x.status === 'published' ? 'ok' : (x.status === 'failed' || x.status === 'partial' ? 'bad' : 'run');
+      const when = x.when ? `<span class="vc-muted">${esc(new Date(x.when).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }))}</span>` : '';
+      const err = x.error ? `<span class="vc-muted" title="${esc(x.error)}">${esc(x.error.slice(0, 90))}</span>` : '';
+      return `<div class="row"><span class="vc-pill ${tone}">${esc(POST_LABEL[x.status] || x.status)}</span>${x.targets.map((t) => `<i class="${esc(t.icon)}" title="${esc(t.label)}${t.name ? ': ' + esc(t.name) : ''}"></i>`).join('')}${when}${err}</div>`;
+    }).join('')}</div>` : '');
 
     function card(s) {
       const fmt = s.format || 'vertical';
@@ -143,20 +155,27 @@
           <div class="vc-title" contenteditable="true" spellcheck="true" role="textbox" aria-label="Title" data-field="title">${esc(s.title)}</div>
           ${s.value ? `<div class="vc-value"><i class="ri-lightbulb-flash-line"></i><span>${esc(s.value)}</span></div>` : ''}
           <div class="vc-meta"><span>${esc(s.from)}–${esc(s.to)}</span>${s.pieces > 1 ? `<span>${s.pieces} parts joined</span>` : ''}${s.cold_open ? '<span>opens with a teaser</span>' : ''}</div>
+          <div class="vc-capbar">
+            <label class="vc-switch" title="${s.words ? 'Show captions on this short (preview, download and post)' : 'Re-cut this short once to add captions'}"><input type="checkbox" data-cap-on ${s.captions_on ? 'checked' : ''} ${s.words ? '' : 'disabled'}><span aria-hidden="true"></span><b>Captions</b></label>
+            <div class="vc-capchips" role="group" aria-label="Caption design" aria-disabled="${!s.captions_on}">${Object.entries(capStyles).map(([k, v]) =>
+              `<button type="button" data-cap="${esc(k)}" aria-pressed="${k === s.caption_style}" title="${esc(v.hint)}">${esc(v.label)}</button>`).join('')}</div>
+          </div>
           <div class="vc-caption"><textarea data-field="caption" aria-label="Post caption" placeholder="Post caption and hashtags">${esc(s.caption)}</textarea></div>
           <div class="vc-actions">
-            ${s.download ? `<a class="btn btn-primary btn-sm" href="${esc(s.download)}" data-turbo="false" download><i class="ri-download-2-line"></i>Download</a>` : ''}
+            ${s.download ? `<a class="btn btn-primary btn-sm" href="${esc(s.download)}" data-turbo="false" download data-dl><i class="ri-download-2-line"></i>Download</a>` : ''}
+            ${s.video ? `<a class="btn btn-secondary btn-sm" href="${esc(base)}/shorts/${s.id}/publish"><i class="ri-send-plane-line"></i>Publish</a>` : ''}
+            ${s.video && !data.source_gone ? `<a class="btn btn-secondary btn-sm" href="${esc(base)}/shorts/${s.id}/edit"><i class="ri-film-line"></i>Edit</a>` : ''}
             <button type="button" class="btn btn-secondary btn-sm" data-act="copy"><i class="ri-file-copy-line"></i>Copy caption</button>
             ${s.srt ? `<a class="btn btn-ghost btn-sm" href="${esc(s.srt)}" data-turbo="false" title="Caption file for YouTube or Facebook"><i class="ri-closed-captioning-line"></i>.srt</a>` : ''}
             <button type="button" class="btn btn-ghost btn-sm" data-act="star" aria-pressed="${s.starred}" title="Mark as a favourite"><i class="${s.starred ? 'ri-star-fill' : 'ri-star-line'}"></i></button>
             <button type="button" class="btn btn-ghost btn-sm" data-act="delete" title="Delete this short"><i class="ri-delete-bin-6-line"></i></button>
           </div>
+          ${postsHtml(s)}
           <details><summary><i class="ri-text"></i>What is said</summary><div class="vc-transcript">${esc(s.transcript)}</div></details>
           ${data.source_gone ? '' : `<details><summary><i class="ri-equalizer-line"></i>Adjust and re-cut</summary>
             <form class="vc-recut" data-recut>
               <label>Shape ${select('format', opts.formats, s.format)}</label>
               <label>Framing ${select('framing', opts.framings, s.framing)}</label>
-              <label>Captions ${select('caption_style', opts.captions, s.caption_style)}</label>
               <label>Quality ${select('quality', opts.qualities, s.quality)}</label>
               <label>Start <span class="vc-nudge"><button type="button" data-n="nudge_start" data-d="-1" aria-label="Start one second earlier">−</button><output data-o="nudge_start">${secs(s.nudge_start)}</output><button type="button" data-n="nudge_start" data-d="1" aria-label="Start one second later">+</button></span></label>
               <label>End <span class="vc-nudge"><button type="button" data-n="nudge_end" data-d="-1" aria-label="End one second earlier">−</button><output data-o="nudge_end">${secs(s.nudge_end)}</output><button type="button" data-n="nudge_end" data-d="1" aria-label="End one second later">+</button></span></label>
@@ -173,7 +192,7 @@
       const busyEl = document.activeElement && grid.contains(document.activeElement);
       const playing = [...grid.querySelectorAll('video')].some((v) => !v.paused);
       const openDetails = new Set([...grid.querySelectorAll('details[open]')].map((d) => `${d.closest('[data-sid]').dataset.sid}:${[...d.parentNode.querySelectorAll(':scope > details')].indexOf(d)}`));
-      const keyNow = JSON.stringify(data.shorts.map((s) => [s.id, s.status, s.video, s.starred]));
+      const keyNow = JSON.stringify(data.shorts.map((s) => [s.id, s.status, s.video, s.starred, (s.posts || []).map((x) => x.status).join()]));
       if (grid.dataset.key === keyNow && grid.children.length) return;
       if ((busyEl || playing) && grid.children.length) return;   // redraw later
       grid.dataset.key = keyNow;
@@ -184,6 +203,30 @@
         const key = `${d.closest('[data-sid]').dataset.sid}:${[...d.parentNode.querySelectorAll(':scope > details')].indexOf(d)}`;
         if (openDetails.has(key)) d.open = true;
       });
+      Object.keys(capLayers).forEach((k) => { capLayers[k].destroy(); delete capLayers[k]; });
+      data.shorts.forEach((s) => { if (s.captions_on) captionsOn(s); });
+    }
+
+    // Live captions: the words are fetched once per short, the design is drawn over the video.
+    async function captionsOn(s) {
+      const v = grid.querySelector(`[data-sid="${s.id}"] video`);
+      if (!v || !s.words || !window.SwmCaptions) return;
+      if (!capWords[s.id]) {
+        try { const r = await fetch(s.words, { credentials: 'same-origin', signal: ctl.signal }); if (!r.ok) return; capWords[s.id] = await r.json(); }
+        catch (e) { return; }
+      }
+      if (capLayers[s.id]) { capLayers[s.id].set(s.captions_on ? s.caption_style : null); return; }
+      if (v.isConnected) capLayers[s.id] = window.SwmCaptions.attach(v, capWords[s.id], s.captions_on ? s.caption_style : null, capStyles);
+    }
+    function syncCaptionControls(s) {
+      const cardEl = grid.querySelector(`[data-sid="${s.id}"]`);
+      if (!cardEl) return;
+      cardEl.querySelector('[data-cap-on]').checked = !!s.captions_on;
+      cardEl.querySelector('.vc-capchips').setAttribute('aria-disabled', String(!s.captions_on));
+      cardEl.querySelectorAll('[data-cap]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cap === s.caption_style)));
+      const dl = cardEl.querySelector('[data-dl]');
+      if (dl && s.download) dl.href = s.download;
+      captionsOn(s);
     }
 
     function drawHead() {
@@ -243,6 +286,14 @@
       if (!s || value === (s[el.dataset.field] || '')) return;
       if (await save(sid, { [el.dataset.field]: value })) toast('Saved');
     }, opt);
+    grid.addEventListener('change', async (e) => {
+      const box = e.target.closest('[data-cap-on]');
+      if (!box) return;
+      const sid = box.closest('[data-sid]').dataset.sid;
+      const r = await save(sid, { captions_on: box.checked ? '1' : '0' });
+      if (r) { syncCaptionControls(r.short); toast(box.checked ? 'Captions on: the download and the post carry them' : 'Captions off'); }
+      else box.checked = !box.checked;
+    }, opt);
     grid.addEventListener('keydown', (e) => {
       if (e.target.matches('.vc-title') && e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
     }, opt);
@@ -255,6 +306,13 @@
         const v = Math.max(-30, Math.min(30, Number(input.value || 0) + Number(nudge.dataset.d)));
         input.value = v;
         form.querySelector(`[data-o=${nudge.dataset.n}]`).textContent = secs(v);
+        return;
+      }
+      const chip = e.target.closest('[data-cap]');
+      if (chip) {
+        const sid = chip.closest('[data-sid]').dataset.sid;
+        const r = await save(sid, { caption_style: chip.dataset.cap, captions_on: '1' });
+        if (r) { syncCaptionControls(r.short); toast(`Captions: ${capStyles[chip.dataset.cap]?.label || ''}`); }
         return;
       }
       const btn = e.target.closest('[data-act]');

@@ -83,4 +83,4 @@ from app.models.document import (  # noqa: E402
 )
 
 # Video Clipper (Admin -> Video Clipper)
-from app.models.clipper import ClipProject, ClipShort  # noqa: E402,F401
+from app.models.clipper import ClipPost, ClipProject, ClipShort  # noqa: E402,F401

@@ -2,7 +2,7 @@
 {% from "macros/admin.html" import page_header, field, textarea, checkbox, badge, secret_field, webhook_urls with context %}
 {% set S = settings %}
 {% set sections = [('general', 'General site', 'ri-global-line'), ('website', 'Website content', 'ri-layout-4-line'), ('appearance', 'Admin appearance', 'ri-palette-line'), ('giving', 'Giving gateway', 'ri-hand-coin-line'),
-                   ('accounts', 'Church accounts', 'ri-bank-line'), ('security', 'Admin security', 'ri-shield-keyhole-line'), ('email', 'Email delivery', 'ri-mail-line'), ('ai', 'AI drafting', 'ri-magic-line'),
+                   ('accounts', 'Church accounts', 'ri-bank-line'), ('security', 'Admin security', 'ri-shield-keyhole-line'), ('email', 'Email delivery', 'ri-mail-line'), ('ai', 'AI drafting', 'ri-magic-line'), ('social', 'Social publishing', 'ri-share-forward-line'),
                    ('distribution', 'Audio distribution', 'ri-broadcast-line'), ('lists', 'Lists', 'ri-list-check-2'), ('legal', 'Legal pages', 'ri-file-list-3-line'), ('media', 'Photos & page headers', 'ri-image-line')] %}
 {% set accounts = S.get('church_accounts') if S.get('church_accounts') is iterable and S.get('church_accounts') is not string else [] %}
 {% set hero_pages = [('default', 'Default (all pages)'), ('visit', 'Plan your visit'), ('branches', 'Find a branch'), ('about', 'About'), ('departments', 'Departments'), ('messages', 'Audio messages'), ('events', 'Events'),
@@ -471,6 +471,18 @@
           </div>
         {% endfor %}
         <p class="text-[12px] text-ink-3">Test and Refresh use the key that is already saved, so save your changes first. Free tiers (notably Groq) have small per-minute token limits; long sermons may need a paid plan or a different provider.</p>
+      </section>
+
+      {# ───── Social publishing (Video Clipper → Publish, through Zernio) ───── #}
+      <section id="social" class="panel scroll-mt-4 flex flex-col gap-4">
+        <div>
+          <h2 class="text-[15px] font-semibold text-ink">Social publishing</h2>
+          <p class="text-[12px] text-ink-3 mt-1">Shorts from the Video Clipper are published or scheduled to YouTube, TikTok, Instagram, Facebook and more through <b>Zernio</b>. Each church connects its own accounts under Video Clipper → Channels; the key below is shared by every church and never shown again after saving.</p>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {{ secret_field('Zernio API key', 'zernio_api_key', secret_status.zernio_api_key, hint='Create it at zernio.com → Dashboard → API keys.') }}
+          {{ field('Ministry hashtags', 'clipper_ministry_hashtags', value=S.get('clipper_ministry_hashtags') or '', placeholder='#ScentOfWater #SWM', hint='One or two. Every short's caption always carries them, first on the hashtag line.') }}
+        </div>
       </section>
 
       {# ───── Distribution ───── #}

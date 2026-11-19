@@ -12,7 +12,7 @@ from datetime import datetime
 
 from sqlalchemy import func, select, update
 
-from app.core.clipper import media, options
+from app.core.clipper import captions, media, options
 from app.core.clipper.media import ClipperError
 from app.database import async_session
 from app.models.clipper import ClipProject, ClipShort
@@ -291,14 +291,19 @@ async def compose(project_id: int, *, more: int | None = None) -> bool:
             units, count=more or int(st["count"]), floor=floor, target=target, content_type=st["content_type"],
             title=p.title or "", style=st["style"], duration=float(p.duration or 0), taken=taken or None,
             structure=structure, progress=progress)
+        from app.core import social
+
+        ministry = await social.ministry_tags()      # the ministry's own hashtags go on every caption
         async with async_session() as db:
             proj = await db.get(ClipProject, project_id)
             start = max([s.position for s in proj.shorts] + [-1]) + 1
             for n, s in enumerate(shorts):
+                s["caption"] = social.with_ministry(s["caption"], ministry)
                 db.add(ClipShort(project_id=project_id, position=start + n, origin="ai", title=s["title"],
                                  caption=s["caption"], value=s["value"], score=s["score"], plan=s["plan"],
                                  length=s["length"], format=st["format"], quality=int(st["quality"]),
-                                 framing=st["framing"], caption_style=st["caption_style"], status="queued"))
+                                 framing=st["framing"], caption_style=captions.style_id(st["caption_style"]) or captions.DEFAULT,
+                                 captions_on=captions.style_id(st["caption_style"]) is not None, status="queued"))
             brief = dict(proj.brief or {})
             if video:
                 brief["video"] = video
@@ -344,7 +349,8 @@ async def manual_short(project_id: int, start: float, end: float) -> int | None:
         short = ClipShort(project_id=project_id, position=pos, origin="manual",
                           title=f"Clip from {options.clock(first.start)}", caption="", value=None, score=None,
                           plan=plan, length=sum(u.speech for u in units), format=st["format"],
-                          quality=int(st["quality"]), framing=st["framing"], caption_style=st["caption_style"],
+                          quality=int(st["quality"]), framing=st["framing"], caption_style=captions.style_id(st["caption_style"]) or captions.DEFAULT,
+                                 captions_on=captions.style_id(st["caption_style"]) is not None,
                           status="queued")
         db.add(short)
         proj.status, proj.stage, proj.progress, proj.error = "rendering", "Cutting the shorts", 0.0, None
@@ -439,9 +445,25 @@ async def _claim_short(short_id: int) -> bool:
         return res.rowcount == 1
 
 
+async def premake_captions(project_id: int, short_id: int) -> None:
+    from app.core.clipper import render
+
+    async with async_session() as db:
+        s = await db.get(ClipShort, short_id)
+        if s is None or s.project_id != project_id or not s.captions_on:
+            return
+        style = s.caption_style
+    master = media.short_file(project_id, short_id, "mp4")
+    if master.exists():
+        try:
+            await asyncio.to_thread(render.burn, master, style)
+        except Exception:
+            logger.exception("Captions for short %s could not be made ahead", short_id)
+
+
 async def render_queued(project_id: int) -> None:
     """Render every queued short of the project, two at a time; each appears as soon as it is ready."""
-    from app.core.clipper import cut, render, speech
+    from app.core.clipper import cut, opening, render, speech, timeline
 
     p = await _load(project_id)
     if p is None:
@@ -477,12 +499,41 @@ async def render_queued(project_id: int) -> None:
     await _update(project_id, status="rendering", progress=done_before / total,
                   stage=f"Cutting {len(queue)} short{'s' if len(queue) != 1 else ''}")
 
+    units = None
+    src_w, src_h = int(info.get("width") or 0), int(info.get("height") or 0)
+    offset = float(info.get("offset") or 0.0)
+
+    def look(a: float, b: float) -> float:
+        from app.core.clipper import reframe
+
+        return opening.speaker_share(reframe.detect(str(media.source_path(project_id)), a + offset, b + offset,
+                                                    src_w, src_h))
+
     def one(s, progress):
-        the_cut = cut.build_cut(s.plan or [], words, gaps, floor=floor if s.origin == "ai" else 0.0,
-                                nudge_start=s.nudge_start or 0.0, nudge_end=s.nudge_end or 0.0)
+        nonlocal units
+        plan = s.plan or []
+        if s.edit and s.edit.get("clips"):          # a person's own timeline (visual editor) is the cut
+            the_cut = timeline.cut_for(s.edit, words, gaps)
+        else:
+            the_cut = cut.build_cut(plan, words, gaps, floor=floor if s.origin == "ai" else 0.0,
+                                    nudge_start=s.nudge_start or 0.0, nudge_end=s.nudge_end or 0.0)
+        # AI shorts open on the speaker, not on a scripture slide (a person's own edits are left alone).
+        if (s.origin == "ai" and not s.edit and not (s.nudge_start or s.nudge_end) and src_w
+                and the_cut["segments"]):
+            if units is None:
+                units = speech.build_units(words, gaps)
+            new_plan, how = opening.choose_opening(
+                plan, units, the_cut["segments"], look, floor=floor,
+                length_after_skip=lambda pl: cut.build_cut(pl, words, gaps, floor=floor)["length"])
+            if how != "kept":
+                logger.info("Short %s: opening on the speaker (%s)", s.id, how)
+                plan = new_plan
+                the_cut = cut.build_cut(plan, words, gaps, floor=floor)
+        the_cut["plan"] = plan
         result = render.render(src=media.source_path(project_id), info=info, segments=the_cut["segments"],
                                words=the_cut["words"], out=media.short_file(project_id, s.id, "mp4"), fmt=s.format,
-                               quality=s.quality, framing=s.framing, caption_style=s.caption_style, progress=progress)
+                               quality=s.quality, framing=s.framing, caption_style=s.caption_style, progress=progress,
+                               frame_x=(s.edit or {}).get("frame_x"))
         return the_cut, result
 
     sem = asyncio.Semaphore(RENDER_PARALLEL)
@@ -495,7 +546,12 @@ async def render_queued(project_id: int) -> None:
             try:
                 the_cut, result = await asyncio.to_thread(one, s, lambda f, sid=s.id: share.__setitem__(sid, float(f)))
                 await _short_update(s.id, status="ready", segments=the_cut["segments"], length=result["length"],
-                                    rendered_at=datetime.utcnow(), error=None)
+                                    plan=the_cut["plan"], rendered_at=datetime.utcnow(), error=None)
+                if s.captions_on:          # the captioned copy is ready before anyone asks for it
+                    try:
+                        await asyncio.to_thread(render.burn, media.short_file(project_id, s.id, "mp4"), s.caption_style)
+                    except Exception:
+                        logger.exception("Captions for short %s could not be made ahead", s.id)
             except ClipperError as exc:
                 await _short_update(s.id, status="failed", error=str(exc)[:1000])
             except Exception:
@@ -569,3 +625,91 @@ def disk_summary() -> dict:
     except OSError:
         pass
     return {"free": media.free_bytes(), "total": total, "used": used}
+
+
+# ─── publishing (Zernio) ──────────────────────────────────────────────
+
+async def publish(post_id: int) -> None:
+    """Upload the short (captioned when its captions are on) and create the Zernio post."""
+    import re
+
+    from app.core import social
+    from app.core.clipper import render
+    from app.models.clipper import ClipPost
+
+    async with async_session() as db:
+        post = await db.get(ClipPost, post_id)
+        if post is None or post.status not in ("queued", "uploading"):
+            return
+        short = await db.get(ClipShort, post.short_id)
+        if short is None:
+            return
+        post.status = "uploading"
+        await db.commit()
+        project_id, captions_on, style = short.project_id, bool(short.captions_on), short.caption_style
+        caption, title, targets, when = post.caption or "", post.title or short.title, post.targets or [], post.scheduled_for
+        tz = "UTC"
+    try:
+        master = media.short_file(project_id, short.id, "mp4")
+        if not master.exists():
+            raise social.SocialError("The short's video file is missing. Re-cut it, then publish again.")
+        path = await asyncio.to_thread(render.burn, master, style) if captions_on else master
+        url = await social.upload(path)
+        tags = re.findall(r"#(\w+)", caption)
+        body = social.build_post(caption=caption, title=title, media_url=url, targets=targets,
+                                 when_utc=when.strftime("%Y-%m-%dT%H:%M:%SZ") if when else None, tz=tz, tags=tags)
+        data = await social.create_post(body)
+        status, rows = social.summarize(data)
+        if when and status not in ("published", "failed", "partial"):
+            status = "scheduled"
+        pid = str((data.get("post") or data).get("_id") or "")
+        async with async_session() as db:
+            post = await db.get(ClipPost, post_id)
+            post.status, post.results, post.zernio_post_id, post.error = status, rows, pid or None, None
+            if status in ("failed", "partial"):
+                post.error = "; ".join(f"{social.LABELS.get(r['platform'], r['platform'])}: {r['error']}"
+                                       for r in rows if r.get("error"))[:1000] or None
+            await db.commit()
+    except social.SocialError as exc:
+        await _post_failed(post_id, str(exc))
+    except Exception:
+        logger.exception("Publishing post %s failed", post_id)
+        await _post_failed(post_id, "Publishing failed unexpectedly. Try again.")
+
+
+async def _post_failed(post_id: int, message: str) -> None:
+    from app.models.clipper import ClipPost
+
+    async with async_session() as db:
+        post = await db.get(ClipPost, post_id)
+        if post is not None:
+            post.status, post.error = "failed", message[:1000]
+            await db.commit()
+
+
+async def refresh_posts(short_ids: list[int]) -> None:
+    """Ask Zernio how scheduled/just-sent posts went (at most every 2 minutes per post)."""
+    from datetime import timedelta
+
+    from app.core import social
+    from app.models.clipper import ClipPost
+
+    if not short_ids:
+        return
+    cutoff = datetime.utcnow() - timedelta(minutes=2)
+    async with async_session() as db:
+        rows = (await db.execute(select(ClipPost).where(
+            ClipPost.short_id.in_(short_ids), ClipPost.zernio_post_id.is_not(None),
+            ClipPost.status.in_(("scheduled", "uploading", "partial")), ClipPost.updated_at < cutoff))).scalars().all()
+        for post in rows[:10]:
+            if post.status == "scheduled" and post.scheduled_for and post.scheduled_for > datetime.utcnow():
+                continue
+            try:
+                status, results = social.summarize(await social.get_post(post.zernio_post_id))
+            except social.SocialError:
+                post.updated_at = datetime.utcnow()
+                continue
+            post.status, post.results, post.updated_at = status, results, datetime.utcnow()
+            failed = [r for r in results if r.get("error")]
+            post.error = "; ".join(f"{social.LABELS.get(r['platform'], r['platform'])}: {r['error']}" for r in failed)[:1000] or None
+        await db.commit()

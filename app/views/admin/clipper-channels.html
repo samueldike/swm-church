@@ -1,0 +1,89 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header with context %}
+{% block title %}Channels | Video Clipper | {{ siteName }}{% endblock %}
+{% block topbar_title %}Video Clipper{% endblock %}
+{% block topbar_subtitle %}Channels{% endblock %}
+{% block topbar_icon %}ri-share-forward-line{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=3">{% endblock %}
+
+{% block page_header %}
+  {{ page_header("Channels", "The social accounts this church posts its shorts to. Each account is connected on the platform's own sign-in page; this site never sees its password.",
+      actions='<a href="' ~ url_for('admin_clipper') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All videos</a>') }}
+{% endblock %}
+
+{% block content %}
+<div class="vc flex flex-col gap-4 max-w-4xl">
+  {% if churches %}
+  <form method="get" class="vc-inline vc-panel vc-section" style="padding:12px 16px">
+    <label class="text-[13px] font-semibold" for="vc-church">Church</label>
+    <select id="vc-church" name="church" onchange="this.form.submit()">
+      {% for b in churches %}<option value="{{ b.id }}" {{ 'selected' if b.id == church }}>{{ b.name }}{{ ' (HQ)' if b.is_hq }}</option>{% endfor %}
+    </select>
+  </form>
+  {% endif %}
+
+  {% if not key_set %}
+    <div class="vc-alert info" role="note"><i class="ri-key-2-line"></i><span>Social publishing is not switched on yet. The HQ Administrator saves the Zernio API key under <b>Settings → Social publishing</b>.</span></div>
+  {% elif problem %}
+    <div class="vc-alert bad" role="alert"><i class="ri-error-warning-line"></i><span>{{ problem }}</span></div>
+  {% endif %}
+  {% if key_set and not ministry_tags %}
+    <div class="vc-alert info" role="note"><i class="ri-hashtag"></i><span>No ministry hashtags are set. The HQ Administrator adds one or two under Settings → Social publishing, so every post carries them.</span></div>
+  {% endif %}
+
+  {% if key_set and not problem %}
+  <section class="vc-panel vc-section">
+    <h2><i class="ri-links-line"></i>Connected</h2>
+    {% if accounts %}
+      <ul class="vc-accounts">
+        {% for a in accounts %}
+        <li>
+          {% if a.picture %}<img src="{{ a.picture }}" alt="" width="36" height="36" loading="lazy" referrerpolicy="no-referrer">{% else %}<span class="vc-acc-icon"><i class="{{ icons.get(a.platform, 'ri-share-line') }}"></i></span>{% endif %}
+          <span class="min-w-0"><b>{{ a.name }}</b><small>{{ labels.get(a.platform, a.platform) }}{% if a.username %} · {{ a.username }}{% endif %}</small></span>
+          {% if a.reconnect %}<span class="vc-pill bad">Sign in again</span>{% elif not a.active %}<span class="vc-pill bad">Paused</span>{% else %}<span class="vc-pill ok"><i class="ri-check-line"></i>Ready</span>{% endif %}
+          <span class="flex-grow"></span>
+          {% if can_manage %}
+            {% if a.reconnect %}
+            <form method="post" action="{{ url_for('admin_clipper_channel_connect', platform=a.platform) }}?church={{ church }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="btn btn-secondary btn-sm" type="submit"><i class="ri-refresh-line"></i>Reconnect</button>
+            </form>
+            {% endif %}
+            <form method="post" action="{{ url_for('admin_clipper_channel_disconnect', account_id=a.id) }}?church={{ church }}" data-confirm="Remove {{ a.name }}? Shorts can no longer be posted there until it is connected again.">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="btn btn-ghost btn-sm text-bad" type="submit"><i class="ri-link-unlink"></i>Remove</button>
+            </form>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="vc-muted text-[13px]">No account is connected yet.</p>
+    {% endif %}
+  </section>
+
+  {% if can_manage %}
+  <section class="vc-panel vc-section">
+    <h2><i class="ri-add-circle-line"></i>Connect an account</h2>
+    <p>You are taken to the platform to sign in and allow posting, then brought back here. Use the church's own accounts.</p>
+    <div class="vc-connect">
+      {% for pid, label, icon in platforms %}
+      <form method="post" action="{{ url_for('admin_clipper_channel_connect', platform=pid) }}?church={{ church }}" data-turbo="false">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="vc-connect-btn"><i class="{{ icon }}"></i><span>{{ label }}</span></button>
+      </form>
+      {% endfor %}
+    </div>
+  </section>
+  {% else %}
+    <p class="vc-muted text-[13px]">The church office (branch administrator, or HQ Media for HQ) connects and removes accounts.</p>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+document.querySelectorAll('form[data-confirm]').forEach((f) => f.addEventListener('submit', (e) => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));
+</script>
+{% endblock %}

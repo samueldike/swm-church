@@ -77,11 +77,41 @@ class ClipShort(Base):
     format: Mapped[str] = mapped_column(String(20), default="vertical")        # vertical | square | landscape
     quality: Mapped[int] = mapped_column(Integer, default=1080)
     framing: Mapped[str] = mapped_column(String(20), default="speaker")        # speaker | centre | fit
-    caption_style: Mapped[str] = mapped_column(String(20), default="bold")     # bold | clean | none
+    caption_style: Mapped[str] = mapped_column(String(20), default="pop")      # the design (captions.STYLES)
+    captions_on: Mapped[bool] = mapped_column(Boolean, default=False)          # burned into the download/post
     status: Mapped[str] = mapped_column(String(20), default="queued", index=True)  # queued | rendering | ready | failed
     error: Mapped[str | None] = mapped_column(Text)
     rendered_at: Mapped[datetime | None] = mapped_column(DateTime)
     starred: Mapped[bool] = mapped_column(Boolean, default=False)
+    # The visual editor's timeline, when a person has edited the short by hand (app/core/clipper/timeline.py):
+    # {"clips": [{"start", "end"}...] on the source, in playing order, "frame_x": 0..1 | null, ...}. When set it
+    # IS the cut; the AI plan stays for reference.
+    edit: Mapped[dict | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
     project: Mapped[ClipProject] = relationship(back_populates="shorts")
+    posts: Mapped[list["ClipPost"]] = relationship(back_populates="short", cascade="all, delete-orphan",
+                                                   order_by="ClipPost.created_at.desc()", lazy="selectin")
+
+
+class ClipPost(Base):
+    """One publish of a short through Zernio (app/core/social.py): to one or more connected accounts, now or at
+    ``scheduled_for`` (naive UTC). ``status``: queued -> uploading -> scheduled | published | partial | failed."""
+    __tablename__ = "clip_posts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    short_id: Mapped[int] = mapped_column(ForeignKey("clip_shorts.id", ondelete="CASCADE"), index=True)
+    branch_id: Mapped[int | None] = mapped_column(ForeignKey("branches.id", ondelete="CASCADE"), index=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("admins.id", ondelete="SET NULL"))
+    status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
+    title: Mapped[str] = mapped_column(String(255), default="")
+    caption: Mapped[str | None] = mapped_column(Text)
+    targets: Mapped[list | None] = mapped_column(JSON)        # [{platform, accountId, name, options}]
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime)
+    zernio_post_id: Mapped[str | None] = mapped_column(String(64))
+    results: Mapped[list | None] = mapped_column(JSON)        # [{platform, status, url, error}]
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+
+    short: Mapped[ClipShort] = relationship(back_populates="posts")

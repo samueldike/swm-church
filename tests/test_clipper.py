@@ -449,3 +449,104 @@ def test_sound_is_cut_accurately_and_the_picture_counts_as_ready_only_once_probe
     assert not media.video_ready(1)
     (tmp_path / "info.json").write_text(json.dumps({"duration": 10, "width": 1280, "offset": 600}))
     assert media.video_ready(1)
+
+
+# ─── ministry hashtags, Zernio post body ─────────────────────────────
+
+def test_ministry_hashtags_are_parsed_limited_and_always_on_the_caption():
+    from app.core import social
+
+    assert social.parse_ministry_tags("#ScentOfWater, #SWM #swm") == ["ScentOfWater", "SWM"]
+    assert social.ministry_tags_problem("") and social.ministry_tags_problem("#a #b #c")
+    assert social.ministry_tags_problem("#ScentOfWater") is None
+    cap = social.with_ministry("Faith grows in the dark.\n#faith #church #prayer #hope #grace #love #god", ["ScentOfWater", "SWM"])
+    body, tags = cap.split("\n")
+    assert body == "Faith grows in the dark."
+    assert tags.split()[:2] == ["#ScentOfWater", "#SWM"] and len(tags.split()) == 7
+    again = social.with_ministry(cap, ["ScentOfWater", "SWM"])
+    assert again == cap                                         # never added twice
+    assert social.with_ministry("No tags here", ["SWM"]) == "No tags here\n#SWM"
+
+
+def test_post_body_carries_platform_options_and_a_short_x_caption():
+    from app.core import social
+
+    cap = ("word " * 80).strip() + "\n#SWM #faith"
+    body = social.build_post(caption=cap, title="Grace", media_url="https://media.zernio.com/x.mp4",
+                             targets=[{"platform": "youtube", "accountId": "a1", "options": {"visibility": "unlisted"}},
+                                      {"platform": "tiktok", "accountId": "a2", "options": {}},
+                                      {"platform": "twitter", "accountId": "a3"}],
+                             when_utc="2026-12-01T09:00:00Z", tz="UTC", tags=["SWM"])
+    assert body["scheduledFor"] == "2026-12-01T09:00:00Z" and "publishNow" not in body
+    yt, tt, x = body["platforms"]
+    assert yt["platformSpecificData"]["visibility"] == "unlisted" and yt["platformSpecificData"]["title"] == "Grace"
+    assert tt["platformSpecificData"]["privacyLevel"] == "PUBLIC_TO_EVERYONE"
+    assert len(x["customContent"]) <= 280 and x["customContent"].endswith("#SWM #faith")
+    now = social.build_post(caption="hi", title="t", media_url="u", targets=[], when_utc=None, tz="UTC", tags=[])
+    assert now["publishNow"] is True
+
+
+def test_post_status_from_zernio_reply():
+    from app.core import social
+
+    ok = {"post": {"status": "published", "platforms": [{"platform": "youtube", "status": "published", "platformPostUrl": "u"}]}}
+    assert social.summarize(ok)[0] == "published"
+    mixed = {"post": {"platforms": [{"platform": "youtube", "status": "published"},
+                                    {"platform": "tiktok", "status": "failed", "errorMessage": "too long"}]}}
+    status, rows = social.summarize(mixed)
+    assert status == "partial" and rows[1]["error"] == "too long"
+
+
+# ─── speaker opening ─────────────────────────────────────────────────
+
+def test_a_short_opening_on_a_scripture_slide_opens_on_the_speaker_instead():
+    from app.core.clipper import opening
+    from app.core.clipper.speech import Unit
+
+    def unit(i, s, e):
+        return Unit(i=i, w0=i * 10, w1=i * 10 + 10, start=s, end=e, text=f"sentence {i}", speech=e - s)
+
+    units = [unit(0, 0, 6), unit(1, 6, 10), unit(2, 10, 16)]
+    plan = [{"w0": 0, "w1": 30, "start": 0, "end": 16, "text": "...", "role": "setup"}]
+    slide_until = 9.0
+    look = lambda a, b: 0.0 if a < slide_until else 1.0         # a verse on screen for the first 9 s
+    new, how = opening.choose_opening(plan, units, [[0, 16]], look)
+    assert how == "cold_open" and new[0]["cold_open"] and new[0]["start"] >= slide_until
+    seen, how2 = opening.choose_opening(plan, units, [[0, 20]], lambda a, b: 1.0)
+    assert how2 == "kept" and seen == plan
+    # No line in the right length range: start later instead (if long enough).
+    units2 = [unit(0, 0, 6), unit(1, 6, 9.5), unit(2, 9.5, 30)]
+    new3, how3 = opening.choose_opening(plan, units2, [[0, 30]], lambda a, b: 0.0 if a < 9.5 else 1.0,
+                                        length_after_skip=lambda pl: 20.0, floor=15.0)
+    assert how3 == "skipped" and new3[0]["w0"] == 20
+
+
+# ─── editor timeline ─────────────────────────────────────────────────
+
+def test_editor_clips_are_cleaned_joined_and_cut_like_the_render():
+    from app.core.clipper import timeline
+
+    assert timeline.clips_from_segments([[10, 12], [12.4, 15], [40, 42]]) == [{"start": 10, "end": 15}, {"start": 40, "end": 42}]
+    with __import__("pytest").raises(timeline.TimelineError):
+        timeline.clean([], 100)
+    assert timeline.clean([{"start": -3, "end": 5}, {"start": 7, "end": 7.1}], 100) == [{"start": 0.0, "end": 5.0}]
+    words = [[10.0, 10.4, "Grace"], [10.5, 10.9, "is"], [12.5, 12.9, "um"], [13.0, 13.5, "enough."]]
+    out = timeline.cut_for({"clips": [{"start": 9.9, "end": 13.8}], "tighten": True}, words, [])
+    assert [w[2] for w in out["words"]] == ["Grace", "is", "enough."]          # the "um" is gone
+    assert out["length"] < 3.9                                                 # and so is the pause
+    raw = timeline.cut_for({"clips": [{"start": 9.9, "end": 13.8}], "tighten": False}, words, [])
+    assert raw["segments"] == [[9.9, 13.8]]
+
+
+# ─── caption designs ─────────────────────────────────────────────────
+
+def test_every_caption_design_makes_a_valid_ass_file_and_legacy_names_map():
+    from app.core.clipper import captions
+
+    words = [[0.0, 0.4, "Grace"], [0.45, 0.8, "is"], [0.85, 1.3, "enough,"], [1.6, 2.0, "today."]]
+    for sid in captions.STYLES:
+        text = captions.ass(words, style=sid, width=1080, height=1920)
+        assert "[Events]" in text and text.count("Dialogue:") >= 1, sid
+        assert "{\r}" not in text or sid != "glow"
+    assert captions.style_id("bold") == "pop" and captions.style_id("none") is None
+    assert set(captions.public_styles()) == set(captions.STYLES)

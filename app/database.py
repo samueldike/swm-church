@@ -64,6 +64,8 @@ async def sync_sequences() -> int:
 # Columns added after the first release. ``create_all`` only creates missing *tables*, so existing
 # databases get these via ALTER TABLE at startup (idempotent).
 _ADDED_COLUMNS = [
+    ("clip_shorts", "edit", "JSON"),
+    ("clip_shorts", "captions_on", "BOOLEAN DEFAULT FALSE"),
     ("branches", "is_hq", "BOOLEAN DEFAULT FALSE"),
     ("givings", "branch_id", "INTEGER"),
     ("givings", "gateway_owner", "VARCHAR(10) DEFAULT 'hq'"),

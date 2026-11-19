@@ -1,0 +1,131 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header with context %}
+{% block title %}Publish | {{ s.title or 'Short' }} | {{ siteName }}{% endblock %}
+{% block topbar_title %}Video Clipper{% endblock %}
+{% block topbar_subtitle %}Publish a short{% endblock %}
+{% block topbar_icon %}ri-send-plane-line{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=3">{% endblock %}
+
+{% block page_header %}
+  {{ page_header("Publish", "Check the words, pick the channels, then publish now or schedule it.",
+      actions='<a href="' ~ url_for('admin_clipper_show', project_id=p.id) ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>Back to the shorts</a>') }}
+{% endblock %}
+
+{% block content %}
+<div class="vc">
+{% if not key_set %}
+  <div class="vc-alert info" role="note"><i class="ri-key-2-line"></i><span>Social publishing is not switched on yet. The HQ Administrator saves the Zernio API key under <b>Settings → Social publishing</b>. Until then, use Download.</span></div>
+{% elif problem %}
+  <div class="vc-alert bad" role="alert"><i class="ri-error-warning-line"></i><span>{{ problem }}</span></div>
+{% else %}
+<form method="post" class="vc-pub" id="vc-pub" data-turbo="false">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="flex flex-col gap-2">
+    <div class="vc-player {{ s.format }}"><video src="{{ short.video }}" poster="{{ short.thumb }}" controls playsinline preload="metadata"></video></div>
+    <p class="vc-muted text-[12px]">{% if s.captions_on %}Posted with <b>{{ cap_label }}</b> captions burned in.{% else %}Posted without captions (switch them on from the shorts page).{% endif %} {{ short.length|round(0)|int }} seconds.</p>
+  </div>
+
+  <div class="flex flex-col gap-4">
+    <section class="vc-panel vc-section">
+      <h2><i class="ri-text"></i>Words</h2>
+      <label class="field-label" for="vc-title">Title <span class="vc-muted">(YouTube, Facebook and Pinterest show it)</span></label>
+      <input id="vc-title" name="title" value="{{ s.title }}" maxlength="100" required>
+      <label class="field-label vc-mt" for="vc-caption">Caption</label>
+      <textarea id="vc-caption" name="caption" rows="6" maxlength="2200" required>{{ caption }}</textarea>
+      <div class="vc-count" id="vc-count" aria-live="polite"></div>
+      {% if ministry %}<p class="vc-muted text-[12px]">The ministry's hashtags ({% for t in ministry %}#{{ t }}{{ ' ' if not loop.last }}{% endfor %}) are always kept on the caption, even if removed here.</p>{% endif %}
+    </section>
+
+    <section class="vc-panel vc-section">
+      <h2><i class="ri-share-forward-line"></i>Channels</h2>
+      {% if accounts %}
+      <div class="vc-targets">
+        {% for a in accounts %}
+        <label><input type="checkbox" name="account" value="{{ a.id }}" data-platform="{{ a.platform }}">
+          <i class="{{ icons.get(a.platform, 'ri-share-line') }}"></i>
+          <span class="min-w-0"><b>{{ a.name }}</b><small>{{ labels.get(a.platform, a.platform) }}</small></span></label>
+        {% endfor %}
+      </div>
+      {% else %}
+        <p class="vc-muted text-[13px]">No account is connected for this church yet.</p>
+      {% endif %}
+      <p class="text-[12.5px]"><a class="underline" href="{{ url_for('admin_clipper_channels') }}?church={{ p.branch_id }}">{{ 'Connect or manage accounts' if can_manage else 'See connected accounts' }}</a></p>
+
+      <div class="vc-opts" data-for="youtube" hidden>
+        <h3><i class="ri-youtube-line"></i>YouTube</h3>
+        <label class="field-label" for="yt-title">Video title</label>
+        <input id="yt-title" name="yt_title" value="{{ s.title }}" maxlength="100">
+        <div class="vc-inline">
+          <label>Visibility <select name="yt_visibility"><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label>
+          <label><input type="checkbox" name="yt_kids" value="1"> Made for children</label>
+        </div>
+      </div>
+      <div class="vc-opts" data-for="tiktok" hidden>
+        <h3><i class="ri-tiktok-line"></i>TikTok</h3>
+        <div class="vc-inline">
+          <label>Who can watch <select name="tt_privacy">
+            {% for v in tiktok_privacy %}<option value="{{ v }}">{{ {'PUBLIC_TO_EVERYONE': 'Everyone', 'MUTUAL_FOLLOW_FRIENDS': 'Friends', 'FOLLOWER_OF_CREATOR': 'Followers', 'SELF_ONLY': 'Only me'}[v] }}</option>{% endfor %}
+          </select></label>
+          <label><input type="checkbox" name="tt_comments" value="1" checked> Comments</label>
+          <label><input type="checkbox" name="tt_duet" value="1" checked> Duet</label>
+          <label><input type="checkbox" name="tt_stitch" value="1" checked> Stitch</label>
+        </div>
+        <label class="text-[12.5px]"><input type="checkbox" name="tt_consent" value="1"> I agree to TikTok's Music Usage Confirmation and confirm this video may be posted.</label>
+      </div>
+    </section>
+
+    <section class="vc-panel vc-section">
+      <h2><i class="ri-calendar-schedule-line"></i>When</h2>
+      <div class="vc-choice" role="radiogroup" aria-label="When">
+        <label><input type="radio" name="when" value="now" checked>Publish now<small>Goes out in a minute or two.</small></label>
+        <label><input type="radio" name="when" value="later">Schedule<small>At a date and time ({{ tz }}).</small></label>
+      </div>
+      <div class="vc-inline" id="vc-later" hidden>
+        <input type="date" name="date" aria-label="Date">
+        <input type="time" name="time" aria-label="Time" step="300">
+      </div>
+    </section>
+
+    <div class="vc-inline">
+      <button type="submit" class="btn btn-primary" id="vc-send"><i class="ri-send-plane-line"></i><span>Publish now</span></button>
+      <span class="vc-muted text-[12px]" id="vc-send-note">Pick at least one channel.</span>
+    </div>
+  </div>
+</form>
+{% endif %}
+</div>
+{% endblock %}
+
+{% block extra_body %}
+<script>
+(() => {
+  const f = document.getElementById('vc-pub');
+  if (!f) return;
+  const ctl = new AbortController(); const o = { signal: ctl.signal };
+  document.addEventListener('turbo:before-visit', () => ctl.abort(), { once: true });
+  const cap = f.querySelector('#vc-caption'), count = f.querySelector('#vc-count');
+  const send = f.querySelector('#vc-send'), note = f.querySelector('#vc-send-note');
+  const later = f.querySelector('#vc-later');
+  const sync = () => {
+    const picked = [...f.querySelectorAll('[name=account]:checked')].map((x) => x.dataset.platform);
+    f.querySelectorAll('.vc-opts').forEach((box) => { box.hidden = !picked.includes(box.dataset.for); });
+    const isLater = f.querySelector('[name=when]:checked').value === 'later';
+    later.hidden = !isLater;
+    send.querySelector('span').textContent = isLater ? 'Schedule' : 'Publish now';
+    const n = cap.value.length, x = picked.includes('twitter');
+    count.textContent = x && n > 280 ? `${n} characters: X gets a shortened version (280 max), the hashtags kept` : `${n} / 2200`;
+    count.classList.toggle('over', n > 2200);
+    send.disabled = !picked.length;
+    note.textContent = picked.length ? `${picked.length} channel${picked.length > 1 ? 's' : ''}` : 'Pick at least one channel.';
+  };
+  f.addEventListener('change', sync, o); cap.addEventListener('input', sync, o);
+  f.addEventListener('submit', (e) => {
+    if (f.querySelector('[name=account][data-platform=tiktok]:checked') && !f.querySelector('[name=tt_consent]').checked) {
+      e.preventDefault(); alert('Tick the TikTok confirmation first.'); return;
+    }
+    send.disabled = true; send.querySelector('span').textContent = 'Sending…';
+  }, o);
+  sync();
+})();
+</script>
+{% endblock %}

@@ -18,6 +18,7 @@ ENCRYPTED_SETTING_KEYS = {
     "groq_api_key",
     "gemini_api_key",
     "clipper_youtube_cookies",    # Video Clipper: a signed-in browser's YouTube cookies.txt (yt-dlp --cookies)
+    "zernio_api_key",             # Social publishing (Zernio): posts the shorts to the church's connected accounts
 }
 _ENC_PREFIX = "enc:v1:"
 

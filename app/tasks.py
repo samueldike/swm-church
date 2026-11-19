@@ -380,6 +380,22 @@ def clip_compose_task(self, project_id: int, more: int | None = None):
 
 
 @celery_app.task(bind=True, max_retries=0, acks_late=False)
+def clip_publish_task(self, post_id: int):
+    """Send one short to its chosen social accounts through Zernio."""
+    from app.core.clipper import pipeline
+
+    _run(pipeline.publish(post_id))
+
+
+@celery_app.task(bind=True, max_retries=0, acks_late=False)
+def clip_caption_task(self, project_id: int, short_id: int):
+    """Make the captioned copy of a short ahead of its download/post (the master stays clean)."""
+    from app.core.clipper import pipeline
+
+    _run(pipeline.premake_captions(project_id, short_id))
+
+
+@celery_app.task(bind=True, max_retries=0, acks_late=False)
 def clip_render_task(self, project_id: int):
     from app.core.clipper import pipeline
 

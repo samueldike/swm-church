@@ -1,9 +1,17 @@
 """Captions for a short, timed word by word on the short's own timeline (app/core/clipper/cut.py words).
 
-* ``bold``: two or three words at a time, upper case, heavy outline, the word being spoken in gold (the look of
-  most short-form video); burned in with libass.
-* ``clean``: sentence-case subtitles on a soft dark box, a short line at a time.
-* Every short also gets an ``.srt`` for platforms that take caption files.
+Shorts are rendered once WITHOUT captions (the clean master). Captions are made ahead and kept apart:
+
+* the short's words go to ``shorts/<id>.words.json``; the shorts grid and the editor draw the chosen design live
+  over the video from them (static/js/clipper-captions.js mirrors ``STYLES`` and ``group`` exactly), so ticking
+  "Captions" or picking another design shows at once;
+* the download and the social post burn the chosen design into a copy (``burn`` -> ``<id>.cap-<style>.mp4``, made in
+  the background as soon as captions are ticked, or on the spot).
+
+Designs (the look and motion of the CapCut caption presets people know): ``pop`` (3 words, the spoken word pops
+up in yellow), ``highlight`` (4 words, the spoken word on a gold box), ``one`` (one big word at a time, bouncing in),
+``glow`` (soft gold glow, spoken word white), ``clean`` (sentence subtitles on a dark band).
+Every short also gets an ``.srt`` for platforms that take caption files.
 """
 from __future__ import annotations
 
@@ -11,16 +19,49 @@ import re
 
 from app.core.clipper.media import ASSETS
 
-GOLD = "&H0037C8F0"      # ASS colours are &HAABBGGRR: this is #F0C837
-WHITE = "&H00FFFFFF"
-BLACK = "&H00000000"
+# Colours as #RRGGBB (ASS wants &HAABBGGRR, see _c).
+YELLOW, GOLD, WHITE, BLACK, GREEN = "#FFE03A", "#F0C837", "#FFFFFF", "#000000", "#3CFF8A"
+
+# One entry per design: grouping (max_words, max_chars, max_gap), case, font, size (share of the short side),
+# position (share of the height above the bottom edge), colours. clipper-captions.js holds the same table.
+STYLES: dict[str, dict] = {
+    "pop": {"label": "Pop", "hint": "Three words, the spoken one pops in yellow", "words": 3, "chars": 18, "gap": 0.55,
+            "upper": True, "font": "Poppins ExtraBold", "size": 0.105, "pos": 0.26, "color": WHITE, "active": YELLOW,
+            "outline": BLACK, "border": 0.085},
+    "highlight": {"label": "Highlight", "hint": "The spoken word sits on a gold box", "words": 4, "chars": 22, "gap": 0.6,
+                  "upper": True, "font": "Poppins ExtraBold", "size": 0.088, "pos": 0.26, "color": WHITE, "active": BLACK,
+                  "box": GOLD, "outline": BLACK, "border": 0.07},
+    "one": {"label": "One word", "hint": "One big word at a time, bouncing in", "words": 1, "chars": 14, "gap": 0.5,
+            "upper": True, "font": "Poppins ExtraBold", "size": 0.15, "pos": 0.42, "color": WHITE, "active": YELLOW,
+            "outline": BLACK, "border": 0.09},
+    "glow": {"label": "Glow", "hint": "Soft gold glow, the spoken word in white", "words": 3, "chars": 20, "gap": 0.55,
+             "upper": False, "font": "Poppins ExtraBold", "size": 0.098, "pos": 0.26, "color": GOLD, "active": WHITE,
+             "outline": GOLD, "border": 0.06, "blur": 6},
+    "clean": {"label": "Clean subtitles", "hint": "A sentence at a time on a dark band", "words": 8, "chars": 34,
+              "gap": 0.8, "upper": False, "font": "Poppins SemiBold", "size": 0.062, "pos": 0.16, "color": WHITE,
+              "active": WHITE, "band": "#000000", "border": 0.22},
+}
+DEFAULT = "pop"
+LEGACY = {"bold": "pop"}      # earlier shorts saved "bold" (the first design)
+
+
+def style_id(name: str | None) -> str | None:
+    """A known design id, or None for no captions."""
+    name = LEGACY.get(name or "", name or "")
+    return name if name in STYLES else None
 
 
 def fonts_dir() -> str:
     return str(ASSETS)
 
 
-def _group(words: list[list], max_words: int, max_chars: int, max_gap: float = 0.55) -> list[list[list]]:
+def _c(hex_rgb: str, alpha: int = 0) -> str:
+    h = hex_rgb.lstrip("#")
+    return f"&H{alpha:02X}{h[4:6]}{h[2:4]}{h[0:2]}".upper()
+
+
+def group(words: list[list], max_words: int, max_chars: int, max_gap: float = 0.55) -> list[list[list]]:
+    """Words into caption lines (pure; mirrored in clipper-captions.js)."""
     groups: list[list[list]] = []
     cur: list[list] = []
     for w in words:
@@ -36,6 +77,9 @@ def _group(words: list[list], max_words: int, max_chars: int, max_gap: float = 0
     return groups
 
 
+_group = group   # older name
+
+
 def _ts(t: float) -> str:
     t = max(0.0, t)
     h = int(t // 3600)
@@ -48,7 +92,7 @@ def _esc(text: str) -> str:
     return text.replace("\\", "/").replace("{", "(").replace("}", ")").replace("\n", " ")
 
 
-def _clean_word(w: str, upper: bool) -> str:
+def word_text(w: str, upper: bool) -> str:
     w = w.strip()
     if upper:
         w = re.sub(r"[,;:]$", "", w).upper()
@@ -56,43 +100,51 @@ def _clean_word(w: str, upper: bool) -> str:
 
 
 def ass(words: list[list], *, style: str, width: int, height: int) -> str:
-    vertical = height > width
+    sid = style_id(style) or DEFAULT
+    st = STYLES[sid]
     base = min(width, height)
-    if style == "bold":
-        size = round(base * (0.108 if vertical else 0.085))
-        margin_v = round(height * (0.24 if vertical else 0.12))
-        styles = (f"Style: Main,Poppins ExtraBold,{size},{WHITE},{WHITE},{BLACK},&H96000000,0,0,0,0,100,100,0,0,1,"
-                  f"{max(3, round(size * 0.075))},{max(1, round(size * 0.04))},2,60,60,{margin_v},1")
-        groups = _group(words, 3, 16)
+    vertical = height > width
+    size = round(base * st["size"] * (1.0 if vertical else 0.8))
+    margin_v = round(height * st["pos"] * (1.0 if vertical else 0.55))
+    bord = max(2, round(size * st["border"]))
+    if sid == "clean":
+        line_style = (f"Style: Main,{st['font']},{size},{_c(WHITE)},{_c(WHITE)},{_c(BLACK, 0x73)},{_c(BLACK, 0x73)},"
+                      f"0,0,0,0,100,100,0,0,3,{bord},0,2,80,80,{margin_v},1")
     else:
-        size = round(base * (0.062 if vertical else 0.055))
-        margin_v = round(height * (0.16 if vertical else 0.08))
-        styles = (f"Style: Main,Poppins SemiBold,{size},{WHITE},{WHITE},&H8C000000,&H8C000000,0,0,0,0,100,100,0,0,3,"
-                  f"{max(4, round(size * 0.22))},0,2,80,80,{margin_v},1")
-        groups = _group(words, 8, 34 if vertical else 48, 0.8)
+        line_style = (f"Style: Main,{st['font']},{size},{_c(st['color'])},{_c(st['color'])},{_c(st['outline'])},"
+                      f"{_c(BLACK, 0x80)},0,0,0,0,100,100,0,0,1,{bord},{max(1, round(size * 0.035))},2,60,60,{margin_v},1")
 
+    groups = group(words, st["words"], st["chars"] if vertical else st["chars"] + 10, st["gap"])
     events = []
     for n, g in enumerate(groups):
-        start = g[0][0]
-        end = g[-1][1]
+        start, end = g[0][0], g[-1][1]
         nxt = groups[n + 1][0][0] if n + 1 < len(groups) else None
-        if nxt is not None and nxt - end < 0.35:
-            end = nxt                       # no flicker between groups that follow each other
-        else:
-            end += 0.25
-        if style == "bold":
-            upper = True
-            texts = [_esc(_clean_word(w[2], upper)) for w in g]
-            for k, w in enumerate(g):
-                ws = start if k == 0 else w[0]
-                we = g[k + 1][0] if k + 1 < len(g) else end
-                if we - ws < 0.02:
-                    continue
-                line = " ".join(f"{{\\c{GOLD}}}{t}{{\\c{WHITE}}}" if j == k else t for j, t in enumerate(texts))
-                events.append(f"Dialogue: 0,{_ts(ws)},{_ts(we)},Main,,0,0,0,,{line}")
-        else:
-            text = _esc(" ".join(w[2].strip() for w in g))
-            events.append(f"Dialogue: 0,{_ts(start)},{_ts(end)},Main,,0,0,0,,{text}")
+        end = nxt if nxt is not None and nxt - end < 0.35 else end + 0.25   # no flicker between lines
+        if sid == "clean":
+            events.append(f"Dialogue: 0,{_ts(start)},{_ts(end)},Main,,0,0,0,,{{\\fad(90,60)}}"
+                          f"{_esc(' '.join(w[2].strip() for w in g))}")
+            continue
+        texts = [_esc(word_text(w[2], st["upper"])) for w in g]
+        glow = f"\\blur{st['blur']}" if st.get("blur") else ""
+        for k, w in enumerate(g):
+            ws = start if k == 0 else w[0]
+            we = g[k + 1][0] if k + 1 < len(g) else end
+            if we - ws < 0.02:
+                continue
+            # The line slides up a little and fades in when it appears; the spoken word pops.
+            enter = "{\\fad(70,0)\\fscx92\\fscy92\\t(0,110,\\fscx100\\fscy100)}" if k == 0 else ""
+            if sid == "highlight":
+                on = (f"{{\\c{_c(st['active'])}\\3c{_c(st['box'])}\\bord{round(bord * 2.4)}\\shad0"
+                      f"\\fscx108\\fscy108\\t(0,90,\\fscx100\\fscy100)}}")
+            elif sid == "one":
+                on = (f"{{\\c{_c(st['active'] if n % 2 else st['color'])}\\fscx135\\fscy135"
+                      f"\\t(0,80,\\fscx94\\fscy94)\\t(80,150,\\fscx100\\fscy100)}}")
+            else:
+                on = f"{{\\c{_c(st['active'])}\\fscx116\\fscy116\\t(0,110,\\fscx100\\fscy100)}}"
+            off = "{\\r" + glow + "}"                   # back to the line's own look after the spoken word
+            line = " ".join(f"{on}{t}{off}" if j == k else t for j, t in enumerate(texts))
+            head = f"{{{glow}}}" if glow else ""
+            events.append(f"Dialogue: 0,{_ts(ws)},{_ts(we)},Main,,0,0,0,,{enter}{head}{line}")
 
     return "\n".join([
         "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {width}", f"PlayResY: {height}", "WrapStyle: 0",
@@ -101,11 +153,16 @@ def ass(words: list[list], *, style: str, width: int, height: int) -> str:
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, "
         "Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, "
         "MarginR, MarginV, Encoding",
-        styles, "",
+        line_style, "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
         *events, "",
     ])
+
+
+def public_styles() -> dict:
+    """The design table for the browser (clipper-captions.js)."""
+    return {k: {kk: v for kk, v in st.items()} for k, st in STYLES.items()}
 
 
 def srt(words: list[list]) -> str:
@@ -118,6 +175,6 @@ def srt(words: list[list]) -> str:
         return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
     out = []
-    for n, g in enumerate(_group(words, 8, 42, 0.8), 1):
+    for n, g in enumerate(group(words, 8, 42, 0.8), 1):
         out.append(f"{n}\n{ts(g[0][0])} --> {ts(g[-1][1] + 0.2)}\n{' '.join(w[2].strip() for w in g)}\n")
     return "\n".join(out)

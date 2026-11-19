@@ -1,0 +1,107 @@
+{% extends "layouts/admin_base.html" %}
+{% block title %}{{ title }} | Video Clipper | {{ siteName }}{% endblock %}
+{% block topbar_title %}Video Clipper{% endblock %}
+{% block topbar_subtitle %}Edit a short{% endblock %}
+{% block topbar_icon %}ri-film-line{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=3">
+<link rel="stylesheet" href="{{ url_for('static', path='css/clipper-editor.css') }}?v=1">{% endblock %}
+
+{% block content %}
+<div class="vc ve" id="ve" data-csrf="{{ csrf_token }}">
+  <script type="application/json" id="ve-boot">{{ boot|tojson }}</script>
+
+  <div class="ve-bar" role="toolbar" aria-label="Editor">
+    <a href="{{ url_for('admin_clipper_show', project_id=p.id) }}" class="btn btn-secondary btn-sm" aria-label="Back to the shorts"><i class="ri-arrow-left-line"></i></a>
+    <input class="ve-title" id="ve-title" value="{{ s.title }}" maxlength="255" aria-label="Title">
+    <span class="ve-sep"></span>
+    <button type="button" class="btn btn-ghost btn-sm" data-cmd="undo" title="Undo (Ctrl+Z)" aria-label="Undo"><i class="ri-arrow-go-back-line"></i></button>
+    <button type="button" class="btn btn-ghost btn-sm" data-cmd="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><i class="ri-arrow-go-forward-line"></i></button>
+    <button type="button" class="btn btn-ghost btn-sm" data-cmd="split" title="Split at the playhead (S)"><i class="ri-scissors-cut-line"></i><span>Split</span></button>
+    <button type="button" class="btn btn-ghost btn-sm" data-cmd="delete" title="Delete the selected clip (Delete)"><i class="ri-delete-bin-6-line"></i><span>Delete</span></button>
+    <span class="ve-sep"></span>
+    <button type="button" class="btn btn-ghost btn-sm" data-cmd="zoom-out" title="Zoom out (-)" aria-label="Zoom out"><i class="ri-zoom-out-line"></i></button>
+    <button type="button" class="btn btn-ghost btn-sm" data-cmd="zoom-in" title="Zoom in (+)" aria-label="Zoom in"><i class="ri-zoom-in-line"></i></button>
+    <span class="flex-grow"></span>
+    <span class="ve-state" id="ve-state" aria-live="polite"></span>
+    {% if boot.edited %}<button type="button" class="btn btn-ghost btn-sm" data-cmd="reset" title="Throw away your edit and go back to the AI's cut"><i class="ri-magic-line"></i><span>AI cut</span></button>{% endif %}
+    <button type="button" class="btn btn-primary btn-sm" data-cmd="save" title="Save and re-cut (Ctrl+S)"><i class="ri-check-line"></i><span>Save &amp; re-cut</span></button>
+  </div>
+
+  <div class="ve-main">
+    <div class="ve-stage-wrap">
+      <div class="ve-stage {{ boot.format }}" id="ve-stage">
+        <video id="ve-video" src="{{ boot.source }}" preload="auto" playsinline></video>
+        <div class="ve-frame-hint" id="ve-frame-hint" hidden>Follows the speaker when cut</div>
+      </div>
+      <div class="ve-transport">
+        <button type="button" class="ve-play" data-cmd="play" aria-label="Play (Space)" title="Play / pause (Space)"><i class="ri-play-fill"></i></button>
+        <span class="ve-time"><b id="ve-now">0:00.0</b> / <span id="ve-len">0:00.0</span></span>
+        <span class="flex-grow"></span>
+        <span class="vc-muted text-[12px]" id="ve-loading">Loading the video…</span>
+      </div>
+    </div>
+
+    <aside class="ve-inspect" aria-label="Settings for this short">
+      <section>
+        <h3>Shape</h3>
+        <div class="ve-seg" role="radiogroup" aria-label="Shape" id="ve-format"></div>
+      </section>
+      <section>
+        <h3>Framing</h3>
+        <select id="ve-framing" aria-label="Framing"></select>
+        <label class="ve-check"><input type="checkbox" id="ve-manual"> Place it myself</label>
+        <input type="range" id="ve-frame-x" min="0" max="1" step="0.01" aria-label="Position of the frame, left to right" hidden>
+      </section>
+      <section>
+        <h3>Captions</h3>
+        <label class="vc-switch"><input type="checkbox" id="ve-cap-on"><span aria-hidden="true"></span><b>Show captions</b></label>
+        <div class="vc-capchips" id="ve-cap-styles" role="group" aria-label="Caption design"></div>
+      </section>
+      <section>
+        <h3>Pauses</h3>
+        <label class="ve-check"><input type="checkbox" id="ve-tighten"> Remove pauses and "um"s inside clips</label>
+      </section>
+      <section>
+        <h3>Move the whole short</h3>
+        <p class="vc-muted text-[12px]">Earlier or later in the video, keeping the cut the same.</p>
+        <div class="ve-shift">
+          <button type="button" class="btn btn-secondary btn-sm" data-shift="-5">−5 s</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-shift="-1">−1 s</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-shift="1">+1 s</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-shift="5">+5 s</button>
+        </div>
+      </section>
+      <section class="ve-keys">
+        <h3>Keys</h3>
+        <p><kbd>Space</kbd> play · <kbd>S</kbd> split · <kbd>Del</kbd> delete · <kbd>←</kbd><kbd>→</kbd> step · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Ctrl</kbd>+<kbd>S</kbd> save</p>
+      </section>
+    </aside>
+  </div>
+
+  <section class="ve-timeline" aria-label="Timeline">
+    <div class="ve-scroll" id="ve-scroll">
+      <div class="ve-ruler" id="ve-ruler"></div>
+      <div class="ve-track" id="ve-track" role="listbox" aria-label="Clips in playing order"></div>
+      <div class="ve-playhead" id="ve-playhead"><i></i></div>
+    </div>
+    <div class="ve-words" id="ve-words" aria-label="What is said around the selected clip"></div>
+    <div class="ve-words-bar">
+      <span class="vc-muted text-[12px]" id="ve-words-help">Click a word to jump to it. Click a grey word to stretch the clip to it. Select words (click, then Shift+click) to cut them out or add them as a new clip.</span>
+      <span class="flex-grow"></span>
+      <button type="button" class="btn btn-secondary btn-sm" data-cmd="cut-words" disabled><i class="ri-scissors-2-line"></i>Cut selected words</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-cmd="add-words" disabled><i class="ri-add-line"></i>Add as new clip</button>
+    </div>
+  </section>
+
+  <section class="ve-source vc-panel" aria-label="Where the clips are in the whole video">
+    <div class="ve-source-head"><b>In the whole video</b><span class="vc-muted text-[12px]" id="ve-source-read"></span></div>
+    <div class="ve-map" id="ve-map"><div class="ve-map-win" id="ve-map-win"></div></div>
+  </section>
+  <div class="vc-toast" id="vc-toast" role="status" aria-live="polite"></div>
+</div>
+{% endblock %}
+
+{% block extra_body %}
+<script src="{{ url_for('static', path='js/clipper-captions.js') }}?v=1"></script>
+<script src="{{ url_for('static', path='js/clipper-editor.js') }}?v=1"></script>
+{% endblock %}

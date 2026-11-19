@@ -33,9 +33,13 @@ FRAMINGS = {
     "centre": "Keep the centre",
     "fit": "Whole picture on a blurred background",
 }
+# "none" = no captions; the rest are the caption designs (app/core/clipper/captions.py STYLES, same order).
 CAPTION_STYLES = {
     "none": "No captions",
-    "bold": "Bold, word by word",
+    "pop": "Pop",
+    "highlight": "Highlight",
+    "one": "One word",
+    "glow": "Glow",
     "clean": "Clean subtitles",
 }
 LENGTHS = {

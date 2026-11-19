@@ -4,7 +4,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}New video{% endblock %}
 {% block topbar_icon %}ri-scissors-cut-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=2">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=3">{% endblock %}
 
 {% block page_header %}
   {{ page_header("New video", "Choose the video, how many shorts you want and how they should look. You can leave the page while it works.",
@@ -17,9 +17,6 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="source_kind" value="url">
 
-  {% if not fast_listen %}
-  <div class="vc-alert info" role="note"><i class="ri-timer-flash-line"></i><span><b>Fast transcription is off.</b> Writing down every word runs on this server and takes about as long as the video. With a Groq key saved under Settings → AI drafting (the HQ Administrator does this once; Groq has a free tier), a one-hour message is ready in minutes.</span></div>
-  {% endif %}
   {% if not ai_ready %}
   <div class="vc-alert bad" role="alert"><i class="ri-key-2-line"></i><span>No AI key is saved, so the clipper cannot choose moments yet. The HQ Administrator adds one under Settings → AI drafting.</span></div>
   {% endif %}
@@ -71,6 +68,21 @@
       <label class="vc-field">to <small>And where it ends, e.g. 1:40:00. Shorter parts are quicker.</small>
         <input type="text" name="range_end" placeholder="e.g. 1:40:00" inputmode="numeric" autocomplete="off"></label>
     </div>
+    <div class="vc-range" id="vc-range" hidden>
+      <div class="vc-range-stage"></div>
+      <div class="vc-range-track">
+        <div class="vc-range-sel"></div>
+        <input type="range" data-lo min="0" max="100" value="0" step="1" aria-label="Start of the part to clip" disabled>
+        <input type="range" data-hi min="0" max="100" value="100" step="1" aria-label="End of the part to clip" disabled>
+      </div>
+      <div class="vc-inline">
+        <button type="button" class="btn btn-secondary btn-sm" data-set="start" disabled><i class="ri-skip-left-line"></i>Start here</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-set="end" disabled><i class="ri-skip-right-line"></i>End here</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-whole>Whole video</button>
+        <span class="vc-muted text-[12.5px]" data-read aria-live="polite"></span>
+      </div>
+      <small class="vc-muted">Play to the moment the message starts and press <b>Start here</b>, then do the same for the end, or drag the two handles.</small>
+    </div>
   </section>
 
   <section class="vc-panel vc-section">
@@ -101,7 +113,7 @@
     </div>
     <div class="vc-captions vc-mt">
       <label class="vc-switch"><input type="checkbox" id="vc-cap-on" {{ 'checked' if defaults.caption_style != 'none' }}><span aria-hidden="true"></span>
-        <b>Add captions</b><small>Off by default. Turn on to burn words onto the video (an .srt file comes with every short either way).</small></label>
+        <b>Add captions</b><small>Off by default. Captions are made for every short anyway: switch them on or off and change the design on each short later (an .srt file comes with every short).</small></label>
       <div class="vc-choice" id="vc-cap-styles" {{ 'hidden' if defaults.caption_style == 'none' }}>
         {% for k, v in opt.CAPTION_STYLES.items() if k != 'none' %}<label><input type="radio" name="caption_style" value="{{ k }}" {{ 'checked' if k == defaults.caption_style or (defaults.caption_style == 'none' and loop.first) }} {{ 'disabled' if defaults.caption_style == 'none' }}>{{ v }}</label>{% endfor %}
       </div>
@@ -119,6 +131,7 @@
 {% endblock %}
 
 {% block extra_body %}
-<script src="{{ url_for('static', path='js/clipper.js') }}?v=2"></script>
+<script src="{{ url_for('static', path='js/clipper.js') }}?v=3"></script>
+<script src="{{ url_for('static', path='js/clipper-range.js') }}?v=1"></script>
 <script>window.SWMClipper && window.SWMClipper.form();</script>
 {% endblock %}
