@@ -148,7 +148,7 @@ def compose_prompt(units_text: str, *, count: int, floor: float, target: float, 
                      "(\"he says\", \"this\", \"that verse\", \"as I said\").")
     return f"""The ENTIRE {label} video{f' "{title}"' if title else ''} is below as a numbered list of sentences in source order. Each line reads: [id] where-it-is seconds-it-plays | the words.
 {note}
-Build {'ONE short' if count == 1 else f'up to {count} shorts'}.
+Build {'ONE short' if count == 1 else f'{count} shorts'}.{'' if count == 1 else f' A full message holds many moments of real value: deliver all {count}, spread across the whole message (beginning, middle and end), each on a different point; never two shorts that say the same thing. Return fewer only if the message truly has no more standalone moments.'}
 
 First describe the video in "video": its niche, who watches it and what they come for. Every short is judged against that.
 
@@ -589,20 +589,20 @@ def with_hashtags(caption: str | None, tags) -> str:
 
 # ─── The whole editorial pass ─────────────────────────────────────────
 
-async def make_shorts(units: list[Unit], *, count: int, floor: float, target: float, content_type: str, title: str,
-                      style: str, duration: float, taken: set[int] | None = None, structure: dict | None = None,
-                      progress=None) -> tuple[list[dict], dict, dict | None]:
-    """Shorts ready to cut: [{title, caption, value, score, plan, length}], the video brief, the structure."""
-    say = progress or (lambda *_: None)
-    if structure is None:
-        say("Finding where the message is", 0.05)
-        structure = await map_structure(units, title=title, content_type=content_type, duration=duration)
-    body = (structure or {}).get("body") or None
-    pool = [u for u in units if in_body(u, body)] or units
-    say("Choosing the strongest moments", 0.3)
-    raw, video = await compose(pool, count=count, floor=floor, target=target, content_type=content_type, title=title,
-                               style=style, structure=structure, taken=taken)
-    used = set(taken or ())
+OVERSHOOT = 1.5       # candidates asked for per short wanted: the reviewer's rejects leave enough to choose from
+REFILLS = 2           # extra rounds over the unused parts of the message when the count is still short
+
+
+def wanted(count: int) -> int:
+    """Candidates to ask for so that ``count`` survive fitting and review (pure; tested)."""
+    return min(40, int(count * OVERSHOOT + 0.999) + 1)
+
+
+async def _round(units: list[Unit], pool: list[Unit], *, ask: int, used: set[int], floor: float, target: float,
+                 content_type: str, title: str, style: str, structure: dict | None, video: dict | None):
+    raw, v = await compose(pool, count=ask, floor=floor, target=target, content_type=content_type, title=title,
+                           style=style, structure=structure, taken=used or None)
+    video = video or v
     fitted = []
     for s in raw:
         f = fit_short(units, s, floor=floor, target=target, style=style, used=used)
@@ -611,19 +611,48 @@ async def make_shorts(units: list[Unit], *, count: int, floor: float, target: fl
         used |= {x["i"] for x in f["edl"]}
         fitted.append({**s, **f})
     if not fitted:
+        return [], video
+    reviews = await review_all(units, fitted, brief=brief_text(video), floor=floor, target=target, style=style)
+    return apply_reviews(units, fitted, reviews, floor=floor, target=target, style=style), video
+
+
+async def make_shorts(units: list[Unit], *, count: int, floor: float, target: float, content_type: str, title: str,
+                      style: str, duration: float, taken: set[int] | None = None, structure: dict | None = None,
+                      progress=None) -> tuple[list[dict], dict, dict | None]:
+    """Shorts ready to cut: [{title, caption, value, score, plan, length}], the video brief, the structure.
+
+    It delivers the number asked for whenever the message holds that many moments of real value: it asks for
+    ~1.5x as many candidates, keeps the reviewer's best, and if still short runs up to ``REFILLS`` more rounds over
+    the sentences no short uses yet. Fewer come back only when the message has run out of standalone moments."""
+    say = progress or (lambda *_: None)
+    if structure is None:
+        say("Finding where the message is", 0.05)
+        structure = await map_structure(units, title=title, content_type=content_type, duration=duration)
+    body = (structure or {}).get("body") or None
+    pool = [u for u in units if in_body(u, body)] or units
+    used = set(taken or ())
+    kept: list[dict] = []
+    video: dict | None = None
+    for attempt in range(1 + REFILLS):
+        missing = count - len(kept)
+        if missing <= 0:
+            break
+        say("Choosing the strongest moments" if attempt == 0 else f"Looking for {missing} more", 0.3 + 0.2 * attempt)
+        free = [u for u in pool if u.i not in used]
+        if attempt and sum(u.speech for u in free) < floor * 1.5:
+            break                                          # nothing long enough is left
+        got, video = await _round(units, pool, ask=wanted(missing), used=used, floor=floor, target=target,
+                                  content_type=content_type, title=title, style=style, structure=structure, video=video)
+        got = sorted(got, key=lambda s: -(_int(s.get("score")) or 0))[:missing]
+        kept += got
+        # Sentences of candidates that were not kept go back into the pool for the next round.
+        used = set(taken or ()) | {x["i"] for s in kept for x in s["edl"]}
+    if not kept:
         raise EditorialError("The AI editor did not find a moment that stands on its own. Try another part of the "
                              "video, a different length, or the other style.")
-    say("Reviewing every short as it will play", 0.7)
-    brief = brief_text(video)
-    reviewed = apply_reviews(units, fitted, await review_all(units, fitted, brief=brief, floor=floor, target=target,
-                                                              style=style),
-                             floor=floor, target=target, style=style)
     out = []
-    used_final = set(taken or ())
-    for s in reviewed:
-        used_final |= {x["i"] for x in s["edl"]}
-    for s in sorted(reviewed, key=lambda s: -(_int(s.get("score")) or 0))[:count]:
-        spares = spare_ids(units, s["edl"], s.get("extra"), used_final)
+    for s in sorted(kept, key=lambda s: -(_int(s.get("score")) or 0)):
+        spares = spare_ids(units, s["edl"], s.get("extra"), used)
         out.append({
             "title": str(s.get("title") or s.get("idea") or "Short")[:200],
             "caption": with_hashtags(s.get("caption"), (video or {}).get("hashtags")),
@@ -633,7 +662,7 @@ async def make_shorts(units: list[Unit], *, count: int, floor: float, target: fl
             "length": s["length"],
             "ids": [x["i"] for x in s["edl"]],
         })
-    return out, video, structure
+    return out, video or {}, structure
 
 
 def _int(v) -> int | None:

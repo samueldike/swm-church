@@ -569,3 +569,38 @@ def test_camera_stays_with_its_speaker_when_someone_passes():
     samples = [{"t": n / 6, "faces": [speaker] + ([passer] if 10 <= n < 14 else []), "cut": False} for n in range(30)]
     picked = [x for _, x, _ in reframe.choose_subject(samples, start_x=0.5)]
     assert all(abs(x - 0.5) < 0.01 for x in picked)      # a 0.7 s walk-past never takes the frame
+
+
+def test_the_editor_asks_for_more_candidates_than_shorts_wanted():
+    from app.core.clipper import editorial
+
+    assert editorial.wanted(12) == 19 and editorial.wanted(1) == 3 and editorial.wanted(100) == 40
+
+
+def test_make_shorts_refills_until_the_count_is_met(monkeypatch):
+    import asyncio
+
+    from app.core.clipper import editorial
+    from app.core.clipper.speech import Unit
+
+    units = [Unit(i=i, w0=i, w1=i + 1, start=i * 10.0, end=i * 10.0 + 10, text=f"s{i}", speech=10.0) for i in range(60)]
+    rounds = []
+
+    async def fake_round(units_, pool, *, ask, used, **kw):
+        rounds.append(ask)
+        free = [u.i for u in pool if u.i not in used][: ask * 4]
+        # Each round only half of what was asked for survives review.
+        got = [{"edl": [{"i": i, "role": "point"} for i in free[n * 4:n * 4 + 4]], "score": 50, "length": 40.0}
+               for n in range(max(1, ask // 2))]
+        return [g for g in got if g["edl"]], {"hashtags": []}
+
+    async def fake_structure(*a, **k):
+        return None
+
+    monkeypatch.setattr(editorial, "_round", fake_round)
+    monkeypatch.setattr(editorial, "map_structure", fake_structure)
+    out, _, _ = asyncio.run(editorial.make_shorts(units, count=12, floor=30, target=45, content_type="sermon",
+                                                  title="", style="passage", duration=600))
+    assert len(out) == 12 and len(rounds) >= 2
+    ids = [i for s in out for i in s["ids"]]
+    assert len(ids) == len(set(ids))                      # no sentence in two shorts
