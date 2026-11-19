@@ -682,3 +682,13 @@ def test_value_bar_drops_weak_moments(monkeypatch):
     out, _, _ = asyncio.run(editorial.make_shorts(units, count=30, floor=30, target=45, content_type="sermon", title="",
                                                   style="passage", duration=400, min_score=70, refills=4))
     assert out and all(s["score"] >= 70 for s in out)
+
+
+def test_directions_in_messages_become_links_and_nothing_else_does():
+    from app.core.template import _directions
+
+    out = str(_directions("No key is saved. Add it under Settings → AI drafting, then Video Clipper → Channels. <b>x</b>"))
+    assert '<a href="/admin/settings#ai" class="underline font-semibold">Settings → AI drafting</a>' in out
+    assert 'href="/admin/clipper/channels"' in out
+    assert "<b>" not in out and "&lt;b&gt;" in out                       # everything else stays escaped
+    assert 'href="/admin/settings#social"' in str(_directions("Admin → Settings → Social publishing"))

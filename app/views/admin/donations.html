@@ -22,7 +22,7 @@
       <div>
         <label for="rec-purpose" class="field-label">Purpose</label>
         <select id="rec-purpose" name="purpose" class="field-select">{% for p in purposes %}<option value="{{ p }}" {{ 'selected' if p == 'Offering' else '' }}>{{ p }}</option>{% endfor %}</select>
-        <p class="field-hint">For “Others”, say what it is for in the note. Edit the list in Settings → Giving gateway.</p>
+        <p class="field-hint">For “Others”, say what it is for in the note. Edit the list in {{ 'Settings → Giving gateway'|directions }}.</p>
       </div>
       <div>
         <label for="rec-method" class="field-label">How it was received</label>

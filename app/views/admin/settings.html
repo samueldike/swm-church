@@ -477,7 +477,7 @@
       <section id="social" class="panel scroll-mt-4 flex flex-col gap-4">
         <div>
           <h2 class="text-[15px] font-semibold text-ink">Social publishing</h2>
-          <p class="text-[12px] text-ink-3 mt-1">Shorts from the Video Clipper are published or scheduled to YouTube, TikTok, Instagram, Facebook and more through <b>Zernio</b>. Each church connects its own accounts under Video Clipper → Channels; the key below is shared by every church and never shown again after saving.</p>
+          <p class="text-[12px] text-ink-3 mt-1">Shorts from the Video Clipper are published or scheduled to YouTube, TikTok, Instagram, Facebook and more through <b>Zernio</b>. Each church connects its own accounts under {{ 'Video Clipper → Channels'|directions }}; the key below is shared by every church and never shown again after saving.</p>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {{ secret_field('Zernio API key', 'zernio_api_key', secret_status.zernio_api_key, hint='Create it at zernio.com → Dashboard → API keys.') }}

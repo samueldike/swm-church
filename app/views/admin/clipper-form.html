@@ -18,7 +18,7 @@
   <input type="hidden" name="source_kind" value="url">
 
   {% if not ai_ready %}
-  <div class="vc-alert bad" role="alert"><i class="ri-key-2-line"></i><span>No AI key is saved, so the clipper cannot choose moments yet. The HQ Administrator adds one under Settings → AI drafting.</span></div>
+  <div class="vc-alert bad" role="alert"><i class="ri-key-2-line"></i><span>No AI key is saved, so the clipper cannot choose moments yet. The HQ Administrator adds one under {{ 'Settings → AI drafting'|directions }}.</span></div>
   {% endif %}
 
   <section class="vc-panel vc-section">
@@ -131,7 +131,7 @@
 {% endblock %}
 
 {% block extra_body %}
-<script src="{{ url_for('static', path='js/clipper.js') }}?v=3"></script>
+<script src="{{ url_for('static', path='js/clipper.js') }}?v=4"></script>
 <script src="{{ url_for('static', path='js/clipper-range.js') }}?v=1"></script>
 <script>window.SWMClipper && window.SWMClipper.form();</script>
 {% endblock %}

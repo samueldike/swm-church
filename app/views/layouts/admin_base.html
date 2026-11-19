@@ -41,7 +41,7 @@
                  else ('bg-gold-tint border-[#ebdfc0] text-gold-text' if m.type == 'info'
                  else 'bg-neut-bg border-line-2 text-neut')) }}">
               <i class="{{ 'ri-checkbox-circle-line' if m.type == 'success' else ('ri-error-warning-line' if m.type == 'error' else 'ri-information-line') }} text-base flex-shrink-0 mt-0.5"></i>
-              <span>{{ m.message }}</span>
+              <span>{{ m.message|directions }}</span>
             </div>
           {% endfor %}
         </div>

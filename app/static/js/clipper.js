@@ -2,6 +2,17 @@
    Inline scripts re-run on Turbo visits, so every listener hangs off one AbortController per page. */
 (() => {
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // "Settings → AI drafting" / "Video Clipper → Channels" in a message become links (same map as the server's
+  // `directions` filter in app/core/template.py). Applied to already-escaped text.
+  const TABS = { 'Website content': 'website', 'Admin Appearance': 'appearance', 'Giving gateway': 'giving', 'Church accounts': 'accounts',
+    'Admin security': 'security', 'Email delivery': 'email', 'AI drafting': 'ai', 'Social publishing': 'social',
+    'Audio distribution': 'distribution', 'Lists': 'lists', 'Legal pages': 'legal', 'General': 'general' };
+  const PAGES = { 'YouTube access': '/admin/clipper#youtube-access', 'Channels': '/admin/clipper/channels' };
+  const directions = (html) => html
+    .replace(new RegExp(`((?:Admin\\s*→\\s*)?Settings\\s*→\\s*)(${Object.keys(TABS).join('|')})`, 'g'),
+      (m, a, k) => `<a class="underline font-semibold" href="/admin/settings#${TABS[k]}">${m}</a>`)
+    .replace(new RegExp(`Video Clipper\\s*→\\s*(${Object.keys(PAGES).join('|')})`, 'g'),
+      (m, k) => `<a class="underline font-semibold" href="${PAGES[k]}">${m}</a>`);
   const fresh = () => { window.__swmClipAbort?.abort(); window.__swmClipTimer && clearTimeout(window.__swmClipTimer); const c = new AbortController(); window.__swmClipAbort = c; return c; };
 
   async function post(url, data, csrf) {
@@ -134,7 +145,7 @@
     const postsHtml = (s) => (s.posts && s.posts.length ? `<div class="vc-posts">${s.posts.map((x) => {
       const tone = x.status === 'published' ? 'ok' : (x.status === 'failed' || x.status === 'partial' ? 'bad' : 'run');
       const when = x.when ? `<span class="vc-muted">${esc(new Date(x.when).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }))}</span>` : '';
-      const err = x.error ? `<span class="vc-muted" title="${esc(x.error)}">${esc(x.error.slice(0, 90))}</span>` : '';
+      const err = x.error ? `<span class="vc-muted" title="${esc(x.error)}">${directions(esc(x.error.slice(0, 90)))}</span>` : '';
       return `<div class="row"><span class="vc-pill ${tone}">${esc(POST_LABEL[x.status] || x.status)}</span>${x.targets.map((t) => `<i class="${esc(t.icon)}" title="${esc(t.label)}${t.name ? ': ' + esc(t.name) : ''}"></i>`).join('')}${when}${err}</div>`;
     }).join('')}</div>` : '');
 
@@ -144,7 +155,7 @@
       if (s.video) {
         media = `<video src="${esc(s.video)}" poster="${esc(s.thumb)}" controls preload="none" playsinline></video>`;
       } else if (s.status === 'failed') {
-        media = `<div class="vc-wait"><i class="ri-error-warning-line"></i><span>${esc(s.error || 'This short could not be cut.')}</span></div>`;
+        media = `<div class="vc-wait"><i class="ri-error-warning-line"></i><span>${directions(esc(s.error || 'This short could not be cut.'))}</span></div>`;
       } else {
         media = `<div class="vc-wait"><i class="ri-loader-4-line vc-spin"></i><span>${s.status === 'rendering' ? 'Cutting this short…' : 'Waiting to be cut…'}</span></div>`;
       }
@@ -245,9 +256,9 @@
       }
       if (data.status === 'failed' || data.status === 'stalled') {
         problem.hidden = false;
-        problem.innerHTML = `<div class="vc-alert bad"><i class="ri-error-warning-line"></i><span>${esc(data.status === 'stalled'
+        problem.innerHTML = `<div class="vc-alert bad"><i class="ri-error-warning-line"></i><span>${directions(esc(data.status === 'stalled'
           ? 'The work stopped (the server may have restarted). Retry carries on from where it stopped.'
-          : (data.error || 'Something went wrong.'))}</span><span class="flex-grow"></span>
+          : (data.error || 'Something went wrong.')))}</span><span class="flex-grow"></span>
           <button type="button" class="btn btn-secondary btn-sm" data-act="retry"><i class="ri-refresh-line"></i>Retry</button></div>`;
       } else if (data.source_gone) {
         problem.hidden = false;

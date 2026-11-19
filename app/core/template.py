@@ -73,6 +73,40 @@ def _longdate(value) -> str:
     return value.strftime("%A, %d %B %Y").replace(" 0", " ") if value else ""
 
 
+# "Settings → AI drafting", "Video Clipper → Channels": a direction in a message becomes a link to that page (and
+# tab). The text is escaped first, so only these links are ever added. Tested in tests/test_clipper.py.
+SETTINGS_TABS = {
+    "General": "general", "Website content": "website", "Admin Appearance": "appearance", "Appearance": "appearance",
+    "Giving gateway": "giving", "Church accounts": "accounts", "Admin security": "security", "Email delivery": "email",
+    "AI drafting": "ai", "Social publishing": "social", "Audio distribution": "distribution", "Lists": "lists",
+    "Legal pages": "legal",
+}
+CLIPPER_PAGES = {"Channels": "/admin/clipper/channels", "YouTube access": "/admin/clipper#youtube-access",
+                 "Clip our YouTube lives automatically": "/admin/clipper#watch"}
+
+
+def _directions(value):
+    import re as _re
+
+    from markupsafe import Markup, escape
+
+    text = str(escape(value or ""))
+    arrow = "(?:→|&rarr;)"
+    tabs = "|".join(_re.escape(k) for k in sorted(SETTINGS_TABS, key=len, reverse=True))
+    pages = "|".join(_re.escape(k) for k in sorted(CLIPPER_PAGES, key=len, reverse=True))
+
+    def settings(m):
+        return f'<a href="/admin/settings#{SETTINGS_TABS[m.group(2)]}" class="underline font-semibold">{m.group(0)}</a>'
+
+    def clipper(m):
+        return f'<a href="{CLIPPER_PAGES[m.group(1)]}" class="underline font-semibold">{m.group(0)}</a>'
+
+    text = _re.sub(rf"((?:Admin\s*{arrow}\s*)?Settings\s*{arrow}\s*)({tabs})", settings, text)
+    text = _re.sub(rf"Video Clipper\s*{arrow}\s*({pages})", clipper, text)
+    return Markup(text)
+
+
+_env.filters["directions"] = _directions
 _env.filters["clock"] = _clock
 _env.filters["longdate"] = _longdate
 _env.filters["nl2br"] = _nl2br

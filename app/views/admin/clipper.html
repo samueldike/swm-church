@@ -18,7 +18,7 @@
   {% endif %}
 
   {% if youtube is not none %}
-  <details class="vc-panel vc-yt" {{ 'open' if youtube.state == 'unset' and not projects else '' }}>
+  <details class="vc-panel vc-yt" id="youtube-access" {{ 'open' if youtube.state == 'unset' and not projects else '' }}>
     <summary><i class="ri-youtube-line"></i><b>YouTube access</b>
       {% if youtube.state == 'set' %}<span class="vc-pill ok"><i class="ri-check-line"></i>Connected</span>
       {% elif youtube.state == 'unreadable' %}<span class="vc-pill bad">Saved but unreadable</span>

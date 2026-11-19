@@ -23,12 +23,12 @@
   {% endif %}
 
   {% if not key_set %}
-    <div class="vc-alert info" role="note"><i class="ri-key-2-line"></i><span>Social publishing is not switched on yet. The HQ Administrator saves the Zernio API key under <b>Settings → Social publishing</b>.</span></div>
+    <div class="vc-alert info" role="note"><i class="ri-key-2-line"></i><span>Social publishing is not switched on yet. The HQ Administrator saves the Zernio API key under {{ 'Settings → Social publishing'|directions }}.</span></div>
   {% elif problem %}
-    <div class="vc-alert bad" role="alert"><i class="ri-error-warning-line"></i><span>{{ problem }}</span></div>
+    <div class="vc-alert bad" role="alert"><i class="ri-error-warning-line"></i><span>{{ problem|directions }}</span></div>
   {% endif %}
   {% if key_set and not ministry_tags %}
-    <div class="vc-alert info" role="note"><i class="ri-hashtag"></i><span>No ministry hashtags are set. The HQ Administrator adds one or two under Settings → Social publishing, so every post carries them.</span></div>
+    <div class="vc-alert info" role="note"><i class="ri-hashtag"></i><span>No ministry hashtags are set. The HQ Administrator adds one or two under {{ 'Settings → Social publishing'|directions }}, so every post carries them.</span></div>
   {% endif %}
 
   {% if key_set and not problem %}
