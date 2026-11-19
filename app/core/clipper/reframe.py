@@ -147,9 +147,14 @@ def camera_path(track: list[tuple[float, float | None, bool]], crop_w: float, *,
         return min(hi, max(lo, v))
 
     def desired(k: int) -> float:
+        # The zone the speaker paces in around this moment: LOOK seconds ahead and behind, within this shot.
         j, a, b = k, smooth[k], smooth[k]
         while j + 1 < n and ts[j + 1] - ts[k] <= LOOK and not cuts[j + 1]:
             j += 1
+            a, b = min(a, smooth[j]), max(b, smooth[j])
+        j = k
+        while j - 1 >= 0 and ts[k] - ts[j - 1] <= LOOK and not cuts[j]:
+            j -= 1
             a, b = min(a, smooth[j]), max(b, smooth[j])
         return clamp((a + b) / 2 if b - a <= crop_w * BAND else smooth[k])
 
