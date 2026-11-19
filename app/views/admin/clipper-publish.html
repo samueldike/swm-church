@@ -82,22 +82,24 @@
         <p class="vc-muted text-[13px]">The church's WhatsApp is not connected right now. Link it under <a class="underline" href="{{ url_for('admin_whatsapp') }}">WhatsApp</a>.</p>
       {% else %}
         <div class="vc-targets">
-          <label {{ '' if wa_status_ok else 'title="WhatsApp Status plays at most ' ~ wa_status_max ~ ' seconds"' }}><input type="checkbox" name="wa_status" value="1" data-platform="whatsapp" {{ '' if wa_status_ok else 'disabled' }}>
+          <label {{ '' if wa_status_ok else 'title="WhatsApp Status plays at most ' ~ wa_status_max ~ ' seconds"' }}><input type="checkbox" name="wa_status" value="1" data-platform="whatsapp" {{ '' if wa_status_ok else 'disabled' }} {{ 'checked' if wa_status_ok and wa.usual.status }}>
             <i class="ri-whatsapp-line"></i><span class="min-w-0"><b>Status</b><small>{{ 'Your contacts see it for 24 hours' if wa_status_ok else 'Only shorts up to ' ~ wa_status_max ~ ' s' }}</small></span></label>
         </div>
         {% if wa.chats %}
-        <details class="vc-mt" {{ 'open' if wa.chats|length <= 8 }}>
-          <summary class="text-[13px] font-semibold">Groups and channels ({{ wa.chats|length }})</summary>
+        {% set usual_n = wa.chats|selectattr('jid', 'in', wa.usual.chats)|list|length %}
+        <details class="vc-mt" {{ 'open' if wa.chats|length <= 8 or usual_n }}>
+          <summary class="text-[13px] font-semibold">Groups and channels ({{ wa.chats|length }}){% if usual_n %} · {{ usual_n }} usual, already ticked{% endif %}</summary>
           <input type="search" class="vc-mt" placeholder="Find a group or channel" aria-label="Find a group or channel" data-wa-find>
           <div class="vc-targets vc-mt" data-wa-list>
             {% for c in wa.chats %}
-            <label data-name="{{ c.name|lower }}"><input type="checkbox" name="wa_chat" value="{{ c.jid }}" data-platform="whatsapp">
+            <label data-name="{{ c.name|lower }}"><input type="checkbox" name="wa_chat" value="{{ c.jid }}" data-platform="whatsapp" {{ 'checked' if c.jid in wa.usual.chats }}>
               <i class="{{ 'ri-broadcast-line' if c.kind == 'channel' else 'ri-group-line' }}"></i>
               <span class="min-w-0"><b>{{ c.name }}</b><small>{{ 'Channel' if c.kind == 'channel' else 'Group' }}</small></span></label>
             {% endfor %}
           </div>
         </details>
         {% endif %}
+        <label class="ve-check vc-mt"><input type="checkbox" name="wa_remember" value="1" {{ 'checked' if not wa.usual.chats and not wa.usual.status }}> Remember these as the church's usual WhatsApp places (ticked for you next time)</label>
         <label class="field-label vc-mt" for="vc-wa-text">WhatsApp caption <span class="vc-muted">(WhatsApp style: *bold* title, no topic hashtags)</span></label>
         <textarea id="vc-wa-text" name="wa_text" rows="5" maxlength="3000">{{ wa_caption }}</textarea>
         <p class="vc-muted text-[12px]">Sent from {{ wa.phone }} as a smaller video that WhatsApp plays well, a few chats at a time like a person would. Status captions are cut to 700 characters.</p>

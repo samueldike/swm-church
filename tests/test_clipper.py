@@ -625,3 +625,59 @@ def test_one_status_across_platforms_and_whatsapp():
     assert social.overall([{"status": "published"}, {"status": "failed"}]) == "partial"
     assert social.overall([{"status": "failed"}]) == "failed"
     assert social.overall([{"status": "scheduled"}, {"status": "published"}]) == "scheduled"
+
+
+# ─── YouTube watch ───────────────────────────────────────────────────
+
+def test_watch_reads_channel_links_and_only_takes_finished_lives():
+    from app.core.clipper import watch
+
+    assert watch.streams_url("https://www.youtube.com/@scentofwater") == "https://www.youtube.com/@scentofwater/streams"
+    assert watch.streams_url("youtube.com/channel/UCabcdefghijklmnopqrstuv/videos").endswith("/channel/UCabcdefghijklmnopqrstuv/streams")
+    assert watch.streams_url("https://vimeo.com/x") is None
+    assert watch.readiness({"live_status": "was_live", "duration": 9000}) == watch.READY
+    assert watch.readiness({"live_status": "is_live"}) == watch.LATER
+    assert watch.readiness({"live_status": "post_live", "duration": 9000}) == watch.LATER     # still processing
+    assert watch.readiness({"live_status": "is_upcoming"}) == watch.LATER
+    assert watch.readiness({"live_status": "was_live", "duration": 30}) == watch.SKIP
+    entries = [{"id": "new2"}, {"id": "new1"}, {"id": "old"}]
+    look, mark = watch.pick_new(entries, set(), baseline=True, latest=True)
+    assert look == ["new2"] and mark == {"new1", "old"}                 # first look: only the latest
+    look, mark = watch.pick_new(entries, {"new1", "old"}, baseline=False, latest=True)
+    assert look == ["new2"] and not mark
+
+
+def test_watch_schedule_hours_days_and_weekdays():
+    from datetime import datetime
+
+    from app.core.clipper import watch
+
+    t = datetime(2026, 11, 19, 10, 0)            # a Thursday, 11:00 in Lagos (UTC+1)
+    assert watch.next_due({"every": "hours", "n": 6}, t, "Africa/Lagos") == datetime(2026, 11, 19, 16, 0)
+    assert watch.next_due({"every": "days", "n": 1, "at": "15:00"}, t, "Africa/Lagos") == datetime(2026, 11, 19, 14, 0)
+    assert watch.next_due({"every": "days", "n": 2, "at": "09:00"}, t, "Africa/Lagos") == datetime(2026, 11, 21, 8, 0)
+    sunday = watch.next_due({"every": "weekdays", "days": [6], "at": "15:00"}, t, "Africa/Lagos")
+    assert sunday == datetime(2026, 11, 22, 14, 0) and sunday.weekday() == 6
+
+
+def test_value_bar_drops_weak_moments(monkeypatch):
+    import asyncio
+
+    from app.core.clipper import editorial
+    from app.core.clipper.speech import Unit
+
+    units = [Unit(i=i, w0=i, w1=i + 1, start=i * 10.0, end=i * 10.0 + 10, text=f"s{i}", speech=10.0) for i in range(40)]
+
+    async def fake_round(units_, pool, *, ask, used, **kw):
+        free = [u.i for u in pool if u.i not in used]
+        return [{"edl": [{"i": i, "role": "point"} for i in free[n * 4:n * 4 + 4]], "score": 90 if n % 2 else 50,
+                 "length": 40.0} for n in range(min(ask, len(free) // 4))], {"hashtags": []}
+
+    async def fake_structure(*a, **k):
+        return None
+
+    monkeypatch.setattr(editorial, "_round", fake_round)
+    monkeypatch.setattr(editorial, "map_structure", fake_structure)
+    out, _, _ = asyncio.run(editorial.make_shorts(units, count=30, floor=30, target=45, content_type="sermon", title="",
+                                                  style="passage", duration=400, min_score=70, refills=4))
+    assert out and all(s["score"] >= 70 for s in out)

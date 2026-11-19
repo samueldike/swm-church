@@ -16,6 +16,9 @@ PLAIN_KEYS = {
     "telegram_audio_chat_id", "paystack_public_key", "flutterwave_public_key", "active_giving_gateway",
     "church_accounts", "hq_share_percent", "collects_own_giving", "transcription_enabled", "service_times", "resident_pastor_since",
     "public_about", "public_pastor", "public_whatsapp", "directions_url", "listed_publicly",
+    "clipper_wa_places",    # Video Clipper: the WhatsApp Status/groups/channels shorts go to by default (JSON)
+    "clipper_watch",        # Video Clipper: watch the church's YouTube Live tab (JSON, app/core/clipper/watch.py)
+    "clipper_watch_state",  # ... and what it has seen and when it checks next (JSON)
 }
 ALL_KEYS = SECRET_KEYS | PLAIN_KEYS
 

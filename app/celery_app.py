@@ -32,6 +32,7 @@ celery_app.conf.update(
         "app.tasks.clip_video_task": {"queue": "clipper"},
         "app.tasks.clip_caption_task": {"queue": "clipper"},
         "app.tasks.clip_publish_task": {"queue": "clipper"},
+        "app.tasks.clip_watch_task": {"queue": "clipper"},
         "app.tasks.clip_listen_task": {"queue": "clipper"},
         "app.tasks.clip_compose_task": {"queue": "clipper"},
         "app.tasks.clip_render_task": {"queue": "clipper"},

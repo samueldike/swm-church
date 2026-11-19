@@ -182,6 +182,12 @@ async def _loop() -> None:
             from app.core.blog import publish_due
 
             await publish_due()
+            from app.core.clipper.watch import dispatch_due as clipper_watch_due
+
+            try:
+                await clipper_watch_due()      # Video Clipper: churches' YouTube Live tabs that are due a look
+            except Exception:
+                logger.exception("clipper watch dispatch failed")
             if datetime.utcnow() - last_housekeeping > timedelta(hours=24):
                 await housekeeping()
                 last_housekeeping = datetime.utcnow()

@@ -380,6 +380,14 @@ def clip_compose_task(self, project_id: int, more: int | None = None):
 
 
 @celery_app.task(bind=True, max_retries=0, acks_late=False)
+def clip_watch_task(self, branch_id: int):
+    """Look at the church's YouTube Live tab and start projects for finished lives."""
+    from app.core.clipper import watch
+
+    _run(watch.check(branch_id))
+
+
+@celery_app.task(bind=True, max_retries=0, acks_late=False)
 def clip_publish_task(self, post_id: int):
     """Send one short to its chosen social accounts through Zernio."""
     from app.core.clipper import pipeline

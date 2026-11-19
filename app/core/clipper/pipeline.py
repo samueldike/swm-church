@@ -290,7 +290,8 @@ async def compose(project_id: int, *, more: int | None = None) -> bool:
         shorts, video, structure = await editorial.make_shorts(
             units, count=more or int(st["count"]), floor=floor, target=target, content_type=st["content_type"],
             title=p.title or "", style=st["style"], duration=float(p.duration or 0), taken=taken or None,
-            structure=structure, progress=progress)
+            structure=structure, progress=progress,
+            min_score=int(st.get("min_score") or 0) or None, refills=int(st.get("refills") or editorial.REFILLS))
         from app.core import social
 
         ministry = await social.ministry_tags()      # the ministry's own hashtags go on every caption

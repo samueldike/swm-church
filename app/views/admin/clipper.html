@@ -48,6 +48,69 @@
   </details>
   {% endif %}
 
+  {% if watch %}
+  {% set w = watch.cfg %}{% set ws = watch.state %}
+  <details class="vc-panel vc-yt" id="watch" {{ 'open' if not w.url }}>
+    <summary><i class="ri-live-line"></i><b>Clip our YouTube lives automatically</b>
+      {% if w.enabled %}<span class="vc-pill ok"><i class="ri-radar-line"></i>Watching</span>{% else %}<span class="vc-pill">Off</span>{% endif %}
+      <span class="vc-muted vc-yt-why">{% if ws.last_result %}{{ ws.last_result }}{% else %}Every finished live service becomes ready-to-post shorts on its own.{% endif %}</span></summary>
+    <div class="vc-yt-body">
+      {% if watch.churches %}
+      <form method="get" class="vc-inline vc-mt"><label class="text-[13px] font-semibold" for="vc-wchurch">Church</label>
+        <select id="vc-wchurch" name="church" onchange="this.form.submit()">{% for b in watch.churches %}<option value="{{ b.id }}" {{ 'selected' if b.id == watch.church }}>{{ b.name }}{{ ' (HQ)' if b.is_hq }}</option>{% endfor %}</select>
+      </form>
+      {% endif %}
+      <p class="vc-muted">The server looks at the channel's <b>Live</b> tab. A live that is still on, scheduled, or still being processed by YouTube is left for the next look; once the recording is ready it is downloaded and clipped. Every moment is scored for value: the ones under your bar are left out, and all the others are cut.</p>
+      <form method="post" action="{{ url_for('admin_clipper_watch') }}?church={{ watch.church }}" class="vc-watch" data-turbo="false">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label class="vc-switch"><input type="checkbox" name="enabled" value="1" {{ 'checked' if w.enabled }}><span aria-hidden="true"></span><b>Watch the channel</b><small>{{ watch.church_name }}</small></label>
+        <label class="vc-field">Channel link<input type="url" name="url" value="{{ w.url }}" placeholder="https://www.youtube.com/@yourchurch" autocomplete="off"></label>
+        <fieldset class="vc-field"><legend>Look for new lives</legend>
+          <div class="vc-inline">
+            <select name="every" aria-label="How often" data-every>{% for k, v in watch.every.items() %}<option value="{{ k }}" {{ 'selected' if w.every == k }}>{{ v }}</option>{% endfor %}</select>
+            <label data-show="hours days">every <input type="number" name="n" min="1" max="168" value="{{ w.n }}" style="width:5em" aria-label="How many"> <span data-unit>{{ 'hours' if w.every == 'hours' else 'days' }}</span></label>
+            <label data-show="days weekdays">at <input type="time" name="at" value="{{ w.at }}" aria-label="Time of day"></label>
+          </div>
+          <div class="vc-inline vc-mt" data-show="weekdays">
+            {% for d in watch.days %}<label class="vc-day"><input type="checkbox" name="days" value="{{ loop.index0 }}" {{ 'checked' if loop.index0 in w.days }}>{{ d[:3] }}</label>{% endfor %}
+          </div>
+        </fieldset>
+        <div class="vc-row">
+          <label class="vc-field">Shape<select name="format">{% for k, v in watch.formats.items() %}<option value="{{ k }}" {{ 'selected' if w.format == k }}>{{ v }}</option>{% endfor %}</select></label>
+          <label class="vc-field">Length<select name="length">{% for k, v in watch.lengths.items() %}<option value="{{ k }}" {{ 'selected' if w.length == k }}>{{ v[0] }} to {{ v[1] }} seconds</option>{% endfor %}</select></label>
+          <label class="vc-field">Captions<select name="captions"><option value="none">None</option>{% for k, v in watch.captions.items() %}<option value="{{ k }}" {{ 'selected' if w.captions == k }}>{{ v }}</option>{% endfor %}</select></label>
+        </div>
+        <label class="vc-field">Value bar: keep moments scoring at least <output data-score>{{ w.min_score }}</output> of 100
+          <input type="range" name="min_score" min="40" max="95" step="5" value="{{ w.min_score }}" data-score-in>
+          <small>70 keeps every strong moment; raise it for fewer, stronger shorts. There is no fixed number: each message gives as many as clear the bar.</small></label>
+        <label class="ve-check"><input type="checkbox" name="latest" value="1" {{ 'checked' if w.latest }}> On the first look, also clip the most recent finished live</label>
+        <div class="vc-inline">
+          <button type="submit" class="btn btn-primary btn-sm"><i class="ri-save-line"></i>Save</button>
+          <span class="vc-muted text-[12px]">{% if ws.last_check %}Last look {{ ws.last_check[:16].replace('T', ' ') }} UTC.{% endif %}{% if w.enabled and ws.next_check %} Next {{ ws.next_check[:16].replace('T', ' ') }} UTC.{% endif %}</span>
+        </div>
+      </form>
+      {% if w.url %}
+      <form method="post" action="{{ url_for('admin_clipper_watch_check') }}?church={{ watch.church }}" class="vc-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-secondary btn-sm"><i class="ri-refresh-line"></i>Check now</button>
+      </form>
+      {% endif %}
+    </div>
+  </details>
+  <script>
+  (() => {
+    const f = document.querySelector('.vc-watch'); if (!f) return;
+    const sync = () => {
+      const every = f.querySelector('[data-every]').value;
+      f.querySelectorAll('[data-show]').forEach((el) => { el.hidden = !el.dataset.show.split(' ').includes(every); });
+      f.querySelector('[data-unit]').textContent = every === 'hours' ? 'hours' : 'days';
+      f.querySelector('[data-score]').textContent = f.querySelector('[data-score-in]').value;
+    };
+    f.addEventListener('input', sync); f.addEventListener('change', sync); sync();
+  })();
+  </script>
+  {% endif %}
+
   {% if projects %}
   <div class="vc-grid">
     {% for p in projects %}
@@ -56,6 +119,7 @@
       <a class="vc-panel vc-card" href="{{ url_for('admin_clipper_show', project_id=p.id) }}">
         <div class="vc-card-media">
           {% if ready %}<img src="/admin/clipper/{{ p.id }}/shorts/{{ ready[0].id }}/thumb.jpg" alt="" loading="lazy">{% else %}<i class="ri ri-film-line" aria-hidden="true"></i>{% endif %}
+          {% if p.settings and p.settings.auto %}<span class="vc-pill gold vc-auto" title="Started by the YouTube watch"><i class="ri-live-line"></i>Auto</span>{% endif %}
           {% if p.status == 'ready' %}<span class="vc-pill ok"><i class="ri-check-line"></i>{{ ready|length }} short{{ '' if ready|length == 1 else 's' }}</span>
           {% elif p.status == 'failed' %}<span class="vc-pill bad"><i class="ri-error-warning-line"></i>Needs attention</span>
           {% elif is_stale %}<span class="vc-pill bad"><i class="ri-pause-line"></i>Stopped</span>

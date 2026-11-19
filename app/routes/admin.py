@@ -10467,8 +10467,24 @@ async def admin_clipper(request: Request, db: AsyncSession = Depends(get_db)):
         from app.core.settings_cache import get_secret_status
 
         youtube = (await get_secret_status(db)).get("clipper_youtube_cookies") or {"state": "unset"}
+    watch_ctx = None
+    if _clip_can_manage_channels(admin):
+        from app.core.clipper import captions as _cc
+        from app.core.clipper import options as _co
+        from app.core.clipper import watch as _cw
+        from app.models.branch import Branch
+
+        wchurch = await _clip_channel_church(request, db, admin, church)
+        wcfg, wstate = await _cw.load(db, wchurch)
+        wb = await db.get(Branch, wchurch)
+        watch_ctx = {"cfg": wcfg, "state": wstate, "church": wchurch, "church_name": wb.name if wb else "",
+                     "every": _cw.EVERY, "days": _cw.DAY_NAMES, "formats": _co.FORMATS, "lengths": _co.LENGTHS,
+                     "captions": {k: v["label"] for k, v in _cc.STYLES.items()},
+                     "churches": (await db.execute(select(Branch).order_by(Branch.is_hq.desc(), Branch.name))).scalars().all()
+                     if sees_every_church(admin) else []}
     ctx = await _admin_context(request, db, "admin.clipper")
     return await render_template(request, "admin/clipper.html", {
+        "watch": watch_ctx,
         "projects": projects, "stale": pipeline.stale, "disk": pipeline.disk_summary(), "youtube": youtube,
         "title": "Video Clipper", **ctx})
 
@@ -10690,7 +10706,7 @@ async def _clip_whatsapp(db, admin, branch_id: int) -> dict | None:
     except wa.GatewayError:
         return None
     if sess.get("status") != "connected":
-        return {"connected": False, "chats": []}
+        return {"connected": False, "chats": [], "usual": {"status": False, "chats": []}}
     chats = []
     for flt in ("channels", "groups"):
         try:
@@ -10701,7 +10717,18 @@ async def _clip_whatsapp(db, admin, branch_id: int) -> dict | None:
             if c.get("readOnly"):
                 continue
             chats.append({"jid": c.get("jid"), "name": c.get("name") or c.get("jid"), "kind": "channel" if flt == "channels" else "group"})
-    return {"connected": True, "phone": sess.get("phone") or "", "chats": chats}
+    # The church's usual places (saved from the Publish page) come first and are ticked already.
+    import json as _json
+
+    from app.core.branch_settings import get_branch_settings
+
+    try:
+        usual = _json.loads((await get_branch_settings(db, branch_id)).get("clipper_wa_places") or "{}")
+    except ValueError:
+        usual = {}
+    usual = {"status": bool(usual.get("status")), "chats": [str(j) for j in usual.get("chats") or []]}
+    chats.sort(key=lambda c: (c["jid"] not in usual["chats"], c["kind"] != "channel", (c["name"] or "").lower()))
+    return {"connected": True, "phone": sess.get("phone") or "", "chats": chats, "usual": usual}
 
 
 async def _clip_church_tz(db, branch_id: int | None) -> str:
@@ -10777,6 +10804,13 @@ async def admin_clipper_publish_send(project_id: int, short_id: int, request: Re
                                "options": {"text": wa_text[: social.WA_STATUS_CAPTION]}})
         allowed_chats = {c["jid"]: c for c in wa["chats"]}
         picked = [allowed_chats[j] for j in form.getlist("wa_chat") if j in allowed_chats][:50]
+        if form.get("wa_remember") == "1":
+            import json as _json
+
+            from app.core.branch_settings import update_branch_settings
+
+            await update_branch_settings(db, p.branch_id or church, {"clipper_wa_places": _json.dumps(
+                {"status": form.get("wa_status") == "1", "chats": [c["jid"] for c in picked]})})
         if picked:
             wa_targets.append({"platform": "whatsapp", "kind": "message", "name": f"{len(picked)} group{'s' if len(picked) != 1 else ''}/channel{'s' if len(picked) != 1 else ''}",
                                "options": {"text": wa_text, "chats": [{"jid": c["jid"], "name": c["name"]} for c in picked]}})
@@ -10974,6 +11008,49 @@ async def admin_clipper_timeline_save(project_id: int, short_id: int, request: R
     await db.commit()
     await _clip_enqueue(clip_render_task, p.id)
     return JSONResponse({"ok": True, "url": f"/admin/clipper/{p.id}"})
+
+
+# ── Video Clipper → watch the church's YouTube channel (app/core/clipper/watch.py) ──
+
+@router.post("/clipper/watch", name="admin_clipper_watch")
+async def admin_clipper_watch(request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None or not _clip_can_manage_channels(admin):
+        return _redirect(request, "/admin/clipper", "Only the church office can set up the YouTube watch.", "error")
+    from app.core.clipper import watch
+
+    church = await _clip_channel_church(request, db, admin, church)
+    form = await request.form()
+    cfg, state = await watch.load(db, church)
+    new, problems = watch.clean(form, cfg)
+    back = f"/admin/clipper?church={church}#watch"
+    if problems:
+        return _redirect(request, back, " ".join(problems), "error")
+    changed_url = new.get("url") != cfg.get("url")
+    if changed_url:
+        state = {}                                       # a new channel starts from now
+    if new["enabled"] and (changed_url or not cfg.get("enabled") or not state.get("next_check")):
+        state["next_check"] = datetime.utcnow().isoformat()      # check straight away
+    await watch.save(db, church, cfg=new, state=state)
+    await log_admin_action(db, admin.id, "clipper.watch", "branch", church, {"enabled": new["enabled"], "every": new["every"]}, request)
+    await db.commit()
+    return _redirect(request, back, "YouTube watch saved." + (" The first check runs in a minute." if new["enabled"] else " It is switched off."), "success")
+
+
+@router.post("/clipper/watch/check", name="admin_clipper_watch_check")
+async def admin_clipper_watch_check(request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None or not _clip_can_manage_channels(admin):
+        return _redirect(request, "/admin/clipper", "Only the church office can run the YouTube watch.", "error")
+    from app.core.clipper import watch
+    from app.tasks import clip_watch_task
+
+    church = await _clip_channel_church(request, db, admin, church)
+    cfg, _state = await watch.load(db, church)
+    if not watch.streams_url(cfg.get("url")):
+        return _redirect(request, f"/admin/clipper?church={church}#watch", "Save the channel's link first.", "error")
+    await _clip_enqueue(clip_watch_task, church)
+    return _redirect(request, f"/admin/clipper?church={church}#watch", "Checking the channel now. New finished lives appear below in a minute or two.", "success")
 
 
 @router.post("/clipper/{project_id}/upload", name="admin_clipper_upload")

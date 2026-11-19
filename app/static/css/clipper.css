@@ -230,3 +230,12 @@
 .vc-range-track input[type=range]::-webkit-slider-runnable-track { background: transparent; }
 .vc-range-track input[type=range]::-moz-range-track { background: transparent; }
 .vc-range-track input[type=range]:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--vc-gold); outline-offset: 2px; }
+
+/* YouTube watch panel */
+.vc-watch { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+.vc-watch fieldset { border: 0; padding: 0; margin: 0; }
+.vc-watch legend { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.vc-day { display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border: 1.5px solid var(--vc-line2); border-radius: 99px; font-size: 12.5px; cursor: pointer; min-height: 36px; }
+.vc-day:has(input:checked) { border-color: var(--vc-gold); background: var(--vc-gold-tint); }
+.vc-watch input[type=range] { width: 100%; accent-color: var(--vc-gold); }
+.vc-card-media .vc-auto { position: absolute; top: 8px; right: 8px; }

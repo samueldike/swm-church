@@ -618,8 +618,11 @@ async def _round(units: list[Unit], pool: list[Unit], *, ask: int, used: set[int
 
 async def make_shorts(units: list[Unit], *, count: int, floor: float, target: float, content_type: str, title: str,
                       style: str, duration: float, taken: set[int] | None = None, structure: dict | None = None,
-                      progress=None) -> tuple[list[dict], dict, dict | None]:
+                      progress=None, min_score: int | None = None, refills: int = REFILLS) -> tuple[list[dict], dict, dict | None]:
     """Shorts ready to cut: [{title, caption, value, score, plan, length}], the video brief, the structure.
+
+    ``min_score`` (the automatic YouTube watch): only moments the editor scores at least this high are kept, and
+    with a large ``count`` and more ``refills`` it keeps looking until the message has no more such moments.
 
     It delivers the number asked for whenever the message holds that many moments of real value: it asks for
     ~1.5x as many candidates, keeps the reviewer's best, and if still short runs up to ``REFILLS`` more rounds over
@@ -633,7 +636,7 @@ async def make_shorts(units: list[Unit], *, count: int, floor: float, target: fl
     used = set(taken or ())
     kept: list[dict] = []
     video: dict | None = None
-    for attempt in range(1 + REFILLS):
+    for attempt in range(1 + refills):
         missing = count - len(kept)
         if missing <= 0:
             break
@@ -643,6 +646,8 @@ async def make_shorts(units: list[Unit], *, count: int, floor: float, target: fl
             break                                          # nothing long enough is left
         got, video = await _round(units, pool, ask=wanted(missing), used=used, floor=floor, target=target,
                                   content_type=content_type, title=title, style=style, structure=structure, video=video)
+        if min_score:
+            got = [g for g in got if (_int(g.get("score")) or 0) >= min_score]
         got = sorted(got, key=lambda s: -(_int(s.get("score")) or 0))[:missing]
         kept += got
         # Sentences of candidates that were not kept go back into the pool for the next round.
