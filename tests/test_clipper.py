@@ -640,6 +640,7 @@ def test_watch_reads_channel_links_and_only_takes_finished_lives():
     assert watch.readiness({"live_status": "post_live", "duration": 9000}) == watch.LATER     # still processing
     assert watch.readiness({"live_status": "is_upcoming"}) == watch.LATER
     assert watch.readiness({"live_status": "was_live", "duration": 30}) == watch.SKIP
+    assert watch.readiness({"live_status": "was_live", "duration": 0}) == watch.LATER      # recording not ready yet
     entries = [{"id": "new2"}, {"id": "new1"}, {"id": "old"}]
     look, mark = watch.pick_new(entries, set(), baseline=True, latest=True)
     assert look == ["new2"] and mark == {"new1", "old"}                 # first look: only the latest

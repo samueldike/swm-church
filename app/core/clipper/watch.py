@@ -37,6 +37,7 @@ DEFAULTS = {"enabled": False, "url": "", "every": "hours", "n": 6, "days": [6], 
 AUTO_COUNT = 30           # "as many as possible": the editor stops earlier when the message runs out
 AUTO_REFILLS = 4
 MAX_NEW_PER_CHECK = 3     # finished lives turned into projects per check (the rest wait for the next one)
+GIVE_UP_AFTER = timedelta(days=3)   # a live that never becomes ready (a broken stream) stops being looked at
 SEEN_KEEP = 400
 
 
@@ -128,7 +129,10 @@ def readiness(info: dict) -> str:
         return LATER
     if info.get("availability") in ("private", "premium_only", "subscriber_only", "needs_auth") and status != "was_live":
         return SKIP
-    if status == "was_live" and float(info.get("duration") or 0) >= 120:
+    length = float(info.get("duration") or 0)
+    if status == "was_live" and not length:
+        return LATER          # ended, but YouTube has not finished the recording yet (no length shown)
+    if status == "was_live" and length >= 120:
         return READY
     if status == "not_live" and float(info.get("duration") or 0) >= 600:
         return READY          # an uploaded full service on the Live tab
@@ -276,8 +280,14 @@ async def check(branch_id: int) -> str:
                 continue
             state_ = readiness(info)
             if state_ == LATER:
+                first = (state.setdefault("waiting", {})).setdefault(vid, now.isoformat())
+                if now - datetime.fromisoformat(first) > GIVE_UP_AFTER:
+                    seen.add(vid)
+                    state["waiting"].pop(vid, None)
+                    continue
                 waiting += 1
                 continue
+            (state.get("waiting") or {}).pop(vid, None)
             seen.add(vid)
             if state_ == SKIP:
                 continue
@@ -311,7 +321,7 @@ async def check(branch_id: int) -> str:
         summary = "The check failed unexpectedly; it will try again at the next time."
     async with async_session() as db:
         cfg, fresh = await load(db, branch_id)
-        fresh.update({k: v for k, v in state.items() if k in ("seen", "baseline")})
+        fresh.update({k: v for k, v in state.items() if k in ("seen", "baseline", "waiting")})
         fresh["last_check"] = now.isoformat()
         fresh["last_result"] = summary
         fresh["projects"] = list(fresh.get("projects") or []) + started
