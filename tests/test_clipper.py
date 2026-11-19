@@ -382,7 +382,6 @@ def test_local_transcription_works_in_pieces_and_resumes(tmp_path, monkeypatch):
     """A long video is written down ~10 minutes at a time (flat memory) and a retry skips finished pieces."""
     import types
 
-    from app.core import transcription
     from app.core.clipper import media, speech
 
     calls = []
@@ -394,7 +393,7 @@ def test_local_transcription_works_in_pieces_and_resumes(tmp_path, monkeypatch):
             seg = types.SimpleNamespace(words=[w], end=2.0)
             return iter([seg]), types.SimpleNamespace(duration=600.0)
 
-    monkeypatch.setattr(transcription, "_get_model", lambda: Model())
+    monkeypatch.setattr(speech, "_engine", lambda: Model())
     monkeypatch.setattr(media, "run", lambda *a, **k: None)
     audio = tmp_path / "audio.m4a"
     audio.write_bytes(b"x" * 10)

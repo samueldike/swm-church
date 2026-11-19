@@ -55,6 +55,7 @@ services:
     env_file: .env
     command: celery -A app.celery_app worker -Q transcription -c 1 -n transcriber@%h -l info
     mem_limit: 5g
+    cpu_shares: 256                         # uses every free core, but the website wins when both are busy
     volumes:
       - media_files:/app/media
       - telegram_archive:/app/telegram-archive

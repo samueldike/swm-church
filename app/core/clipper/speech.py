@@ -45,8 +45,31 @@ def _model_kwargs(language: str | None, hotwords: str | None) -> dict:
     return kwargs
 
 
+BATCH = 16         # speech stretches decoded together (faster-whisper's batched pipeline)
+
+
+def _engine():
+    """The local model wrapped in faster-whisper's batched pipeline.
+
+    Measured on the VPS with a real sermon (5 min): 10-30% faster than one stretch at a time, and the words come
+    back punctuated (the plain pipeline with condition_on_previous_text=False drops most full stops, which
+    build_units needs to find sentences). Same model, same words otherwise (2.5% of tokens differ, nearly all
+    punctuation and capitals)."""
+    from faster_whisper import BatchedInferencePipeline
+
+    from app.core.transcription import _get_model
+
+    global _batched
+    if _batched is None:
+        _batched = BatchedInferencePipeline(_get_model())
+    return _batched
+
+
+_batched = None
+
+
 def _words_of(model, path: Path, kwargs: dict, offset: float = 0.0, on_seg=None) -> list[list]:
-    segments, info = model.transcribe(str(path), **kwargs)
+    segments, info = model.transcribe(str(path), batch_size=BATCH, **kwargs)
     words: list[list] = []
     for seg in segments:
         for w in seg.words or []:
@@ -76,9 +99,7 @@ def transcribe_words(audio: Path, *, language: str | None = "en", hotwords: str 
 
     from app.core.clipper.cloud_speech import cut_points
     from app.core.clipper.media import run
-    from app.core.transcription import _get_model
-
-    model = _get_model()
+    model = _engine()
     kwargs = _model_kwargs(language, hotwords)
     total = float(duration or 0)
     if total <= PIECE * 1.5:
