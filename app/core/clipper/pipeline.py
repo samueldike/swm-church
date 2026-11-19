@@ -55,11 +55,14 @@ async def _in_thread(project_id: int, fn, *args, stage: str | None = None, **kwa
     task = asyncio.create_task(asyncio.to_thread(fn, *args, progress=cb, **kwargs))
     while not task.done():
         await asyncio.wait({task}, timeout=3)
+        # Always beat while the work is alive (even before the first progress), so a job that died
+        # shows "Stopped" after STALE_MINUTES instead of looking busy for hours.
+        fields = {}
         if state["p"] is not None:
-            fields = {"progress": state["p"]}
+            fields["progress"] = state["p"]
             if state["stage"] or stage:
                 fields["stage"] = state["stage"] or stage
-            await _update(project_id, **fields)
+        await _update(project_id, **fields)
     return task.result()
 
 
@@ -149,13 +152,16 @@ async def transcribe(project_id: int) -> bool:
             raise ClipperError("The audio of this video is missing. Retry the project.")
         await _update(project_id, status="transcribing", stage="Writing down every word", progress=0.0, error=None)
         hot = await _hotwords()
-        words = await _in_thread(project_id, speech.transcribe_words, audio, language=st.get("language") or None,
-                                 hotwords=hot, stage="Writing down every word")
-        if len(words) < 40:
-            raise ClipperError("Hardly any speech was heard in this video, so there is nothing to clip.")
         gaps_file = media.project_dir(project_id) / "gaps.json"
         gaps = json.loads(gaps_file.read_text(encoding="utf-8")) if gaps_file.exists() else []
+        partial = media.project_dir(project_id) / "words.partial.json"
+        words = await _in_thread(project_id, speech.transcribe_words, audio, language=st.get("language") or None,
+                                 hotwords=hot, duration=float(p.duration or _info(project_id).get("duration") or 0),
+                                 gaps=gaps, partial=partial, stage="Writing down every word")
+        if len(words) < 40:
+            raise ClipperError("Hardly any speech was heard in this video, so there is nothing to clip.")
         speech.save_words(media.words_path(project_id), words, gaps, {"language": st.get("language")})
+        partial.unlink(missing_ok=True)
         await _update(project_id, status="composing", stage="Waiting for the editor", progress=0.0)
         return True
     except ClipperError as exc:
@@ -422,7 +428,8 @@ def stale(p: ClipProject) -> bool:
     if not p.busy or p.status == "queued" and not p.heartbeat_at:
         return False
     beat = p.heartbeat_at or p.updated_at or p.created_at
-    limit = STALE_MINUTES * (6 if p.status == "transcribing" else 1)
+    # Waiting in the speech queue behind another long job is not a stop.
+    limit = STALE_MINUTES * (6 if p.stage == "Waiting for the speech recogniser" else 1)
     return beat is not None and datetime.utcnow() - beat > timedelta(minutes=limit)
 
 

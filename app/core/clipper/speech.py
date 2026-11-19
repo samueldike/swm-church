@@ -27,11 +27,10 @@ def norm(word: str) -> str:
     return re.sub(r"[^\w']+", "", (word or "").lower())
 
 
-def transcribe_words(audio: Path, *, language: str | None = "en", hotwords: str | None = None, progress=None) -> list[list]:
-    """[[start, end, word], ...] for the whole file, in order."""
-    from app.core.transcription import _get_model
+PIECE = 600.0      # local transcription works through the audio in pieces this long (cut at pauses)
 
-    model = _get_model()
+
+def _model_kwargs(language: str | None, hotwords: str | None) -> dict:
     kwargs = {
         "beam_size": 1,
         "condition_on_previous_text": False,
@@ -39,14 +38,15 @@ def transcribe_words(audio: Path, *, language: str | None = "en", hotwords: str 
         "vad_filter": True,
         "vad_parameters": {"min_silence_duration_ms": 400},
     }
-    if language and language != "pcm":
-        kwargs["language"] = language
-    elif language == "pcm":
-        kwargs["language"] = "en"
+    if language:
+        kwargs["language"] = "en" if language == "pcm" else language
     if hotwords:
         kwargs["hotwords"] = hotwords
-    segments, info = model.transcribe(str(audio), **kwargs)
-    total = float(info.duration or 0) or 1.0
+    return kwargs
+
+
+def _words_of(model, path: Path, kwargs: dict, offset: float = 0.0, on_seg=None) -> list[list]:
+    segments, info = model.transcribe(str(path), **kwargs)
     words: list[list] = []
     for seg in segments:
         for w in seg.words or []:
@@ -56,9 +56,67 @@ def transcribe_words(audio: Path, *, language: str | None = "en", hotwords: str 
             start, end = float(w.start), float(w.end)
             if end <= start:
                 end = start + 0.05
-            words.append([round(start, 3), round(end, 3), text])
-        if progress:
-            progress(min(1.0, float(seg.end) / total))
+            words.append([round(start + offset, 3), round(end + offset, 3), text])
+        if on_seg:
+            on_seg(float(seg.end), float(info.duration or 0))
+    return words
+
+
+def transcribe_words(audio: Path, *, language: str | None = "en", hotwords: str | None = None, progress=None,
+                     duration: float | None = None, gaps: list[list[float]] | None = None,
+                     partial: Path | None = None) -> list[list]:
+    """[[start, end, word], ...] for the whole file, in order.
+
+    With ``duration`` known the audio is worked through in ~10-minute pieces cut at real pauses, so memory stays
+    flat however long the video is (a 2 3/4-hour service in one go was killed for memory), and each finished piece
+    is saved to ``partial`` so a retry carries on from the piece it stopped in.
+    """
+    import shutil
+    import tempfile
+
+    from app.core.clipper.cloud_speech import cut_points
+    from app.core.clipper.media import run
+    from app.core.transcription import _get_model
+
+    model = _get_model()
+    kwargs = _model_kwargs(language, hotwords)
+    total = float(duration or 0)
+    if total <= PIECE * 1.5:
+        words = _words_of(model, audio, kwargs, on_seg=(lambda end, dur: progress and progress(
+            min(1.0, end / (total or dur or 1.0)))))
+        words.sort(key=lambda w: w[0])
+        return words
+
+    points = cut_points(total, gaps or [], chunk=PIECE)
+    spans = list(zip(points[:-1], points[1:]))
+    stamp = f"{audio.stat().st_size}:{language}:{len(spans)}"
+    done: dict[str, list] = {}
+    if partial and partial.exists():
+        try:
+            saved = json.loads(partial.read_text(encoding="utf-8"))
+            if saved.get("stamp") == stamp:
+                done = saved.get("pieces") or {}
+        except (OSError, ValueError):
+            done = {}
+    work = Path(tempfile.mkdtemp(prefix="listen_", dir=str(audio.parent)))
+    try:
+        for a, b in spans:
+            key = f"{a:.3f}"
+            if key in done:
+                continue
+            piece = work / "piece.wav"
+            run(["ffmpeg", "-y", "-v", "error", "-ss", f"{a:.3f}", "-t", f"{b - a:.3f}", "-i", str(audio),
+                 "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(piece)], timeout=600)
+            before = sum(y - x for x, y in spans if f"{x:.3f}" in done)
+            done[key] = _words_of(model, piece, kwargs, offset=a, on_seg=(
+                lambda end, dur, before=before: progress and progress(min(1.0, (before + end) / total))))
+            if partial:
+                partial.write_text(json.dumps({"stamp": stamp, "pieces": done}), encoding="utf-8")
+            if progress:
+                progress(min(1.0, (before + b - a) / total))
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    words = [w for a, _ in spans for w in done.get(f"{a:.3f}", [])]
     words.sort(key=lambda w: w[0])
     return words
 

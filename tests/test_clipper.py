@@ -376,3 +376,37 @@ def test_hosted_transcription_refused_key_falls_back(tmp_path, monkeypatch):
         cloud_speech.transcribe_words(wav, key="bad", duration=3.0, gaps=[])
     with pytest.raises(cloud_speech.CloudUnavailable):
         cloud_speech.transcribe_words(wav, key="", duration=3.0, gaps=[])
+
+
+def test_local_transcription_works_in_pieces_and_resumes(tmp_path, monkeypatch):
+    """A long video is written down ~10 minutes at a time (flat memory) and a retry skips finished pieces."""
+    import types
+
+    from app.core import transcription
+    from app.core.clipper import media, speech
+
+    calls = []
+
+    class Model:
+        def transcribe(self, path, **kw):
+            calls.append(path)
+            w = types.SimpleNamespace(word=" grace", start=1.0, end=1.4)
+            seg = types.SimpleNamespace(words=[w], end=2.0)
+            return iter([seg]), types.SimpleNamespace(duration=600.0)
+
+    monkeypatch.setattr(transcription, "_get_model", lambda: Model())
+    monkeypatch.setattr(media, "run", lambda *a, **k: None)
+    audio = tmp_path / "audio.m4a"
+    audio.write_bytes(b"x" * 10)
+    partial = tmp_path / "words.partial.json"
+    words = speech.transcribe_words(audio, duration=1700.0, gaps=[], partial=partial)
+    assert len(calls) == 3 and [w[0] for w in words] == [1.0, 601.0, 1201.0]
+    assert partial.exists()
+
+    import json
+    saved = json.loads(partial.read_text())
+    del saved["pieces"]["1200.000"]
+    partial.write_text(json.dumps(saved))
+    calls.clear()
+    again = speech.transcribe_words(audio, duration=1700.0, gaps=[], partial=partial)
+    assert len(calls) == 1 and again == words
