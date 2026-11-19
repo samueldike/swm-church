@@ -10602,7 +10602,7 @@ async def admin_clipper_show(project_id: int, request: Request, db: AsyncSession
     ctx = await _admin_context(request, db, "admin.clipper")
     return await render_template(request, "admin/clipper-show.html", {
         "fast_listen": bool(await _clip_groq_key()), "p": p, "data": _clip_json_project(p), "opt": options, "st": {**options.DEFAULTS, **(p.settings or {})},
-        "title": p.title or "Video", **ctx})
+        "title": p.title or "Video", "full_view": True, **ctx})   # the shorts need the width: menu opens collapsed
 
 
 @router.get("/clipper/{project_id}/status.json", name="admin_clipper_status")
