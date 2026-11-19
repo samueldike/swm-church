@@ -220,8 +220,8 @@ def burn(master: Path, style: str) -> Path:
         ass_file = work / "captions.ass"
         ass_file.write_text(captions.ass(meta["words"], style=sid, width=int(meta["width"]), height=int(meta["height"])),
                             encoding="utf-8")
-        esc = str(ass_file).replace("\\", "/").replace(":", "\:").replace("'", "\'")
-        fonts = captions.fonts_dir().replace("\\", "/").replace(":", "\:")
+        esc = str(ass_file).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
+        fonts = captions.fonts_dir().replace("\\", "/").replace(":", "\\:")
         tmp = work / "out.mp4"
         run(["ffmpeg", "-y", "-v", "error", "-i", str(master), "-vf", f"subtitles='{esc}':fontsdir='{fonts}'",
              "-c:v", "libx264", "-preset", PRESET, "-crf", CRF, "-pix_fmt", "yuv420p", "-c:a", "copy",
