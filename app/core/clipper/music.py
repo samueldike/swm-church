@@ -97,7 +97,7 @@ def mix_filters(speech: str, music: str, length: float, out: str) -> list[str]:
     return [
         f"[{speech}]aresample=48000,aformat=channel_layouts=stereo,asplit=2[mxsp][mxsc]",
         f"[{music}]aresample=48000,aformat=channel_layouts=stereo,atrim=duration={length:.3f},asetpts=PTS-STARTPTS,"
-        f"loudnorm=I={BED_LUFS}:TP=-12:LRA=7,alimiter=limit=0.25,"
+        f"loudnorm=I={BED_LUFS}:TP=-9:LRA=7,alimiter=limit=0.25,"
         f"afade=t=in:st=0:d=1,afade=t=out:st={fade_out:.3f}:d=1.5[mxbed]",
         "[mxbed][mxsc]sidechaincompress=threshold=0.012:ratio=12:attack=15:release=450:knee=4[mxduck]",
         f"[mxsp][mxduck]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[{out}]",
