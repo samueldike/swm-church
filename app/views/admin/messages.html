@@ -29,7 +29,7 @@
         {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if filter_branch_id == b.id|string else '' }}>{{ b.name }}</option>{% endfor %}
       </select>
     {% endif %}
-    <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+    <noscript><button type="submit" class="btn btn-secondary btn-sm">Filter</button></noscript>
     {% if search or filter_status or filter_branch_id %}<a href="{{ url_for('admin_messages') }}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
   </form>
 

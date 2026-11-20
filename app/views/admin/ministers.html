@@ -35,7 +35,7 @@
       <option value="">Any status</option>
       {% for v, l in statuses %}<option value="{{ v }}" {{ 'selected' if filters.status == v else '' }}>{{ l }}</option>{% endfor %}
     </select>
-    <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+    <noscript><button type="submit" class="btn btn-secondary btn-sm">Filter</button></noscript>
     {% if filters.q or filters.status or filters.branch_id %}<a href="{{ url_for('admin_ministers') }}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
   </form>
 

@@ -44,7 +44,7 @@
       <option value="none" {{ 'selected' if filter_department_id == 'none' else '' }}>In no department</option>
     </select>
   {% endif %}
-  <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+  <noscript><button type="submit" class="btn btn-secondary btn-sm">Search</button></noscript>
   {% if search or filter_branch_id or filter_country or filter_department_id %}<a href="{{ url_for('admin_members') }}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
 </form>
 

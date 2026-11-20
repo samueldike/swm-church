@@ -27,7 +27,7 @@
     </button>
   </a>
 
-  <div class="rail-toggle-row px-3 pt-2">
+  <div class="rail-toggle-row px-3 pt-2 bg-chrome">
     <button id="admin-sidebar-rail" type="button" class="rail-toggle nav-link w-full" aria-label="Collapse menu" aria-pressed="false" data-tip="Expand menu">
       <i class="ri-menu-fold-line text-base w-5 text-center flex-shrink-0"></i>
       <span class="flex-1 whitespace-nowrap text-left rail-hide">Collapse menu</span>
@@ -77,7 +77,7 @@
         {% if can('inquiries') %}{{ nav_item(url_for('admin_inquiries'), 'ri-question-answer-line', 'Contact messages', 'admin.inquiries', badges.inquiries, '{n} new messages from the website not yet answered') }}{% endif %}
         {% if can('announcements.view') %}{{ nav_item(url_for('admin_announcements'), 'ri-megaphone-line', 'Announcements', 'admin.announcements') }}{% endif %}
         {% if can('reports') %}{{ nav_item(url_for('admin_unit_reports'), 'ri-file-chart-line', 'Department reports', 'admin.unit-reports', badges.unit_reports, '{n} department reports waiting for your comment') }}{% endif %}
-        {% if can('branch_reports') %}{{ nav_item(url_for('admin_branch_reports'), 'ri-file-list-3-line', ('Branch Reports' if admin.role in ['super_admin', 'hq_pastoral'] else 'Reports to HQ'), 'admin.branch-reports', badges.branch_reports, ('{n} branch reports waiting for HQ to acknowledge' if admin.role in ['super_admin', 'hq_pastoral'] else '{n}')) }}{% endif %}
+        {% if can('branch_reports') %}{{ nav_item(url_for('admin_branch_reports'), 'ri-file-list-3-line', ('Branch reports' if admin.role in ['super_admin', 'hq_pastoral'] else 'Reports to HQ'), 'admin.branch-reports', badges.branch_reports, ('{n} branch reports waiting for HQ to acknowledge' if admin.role in ['super_admin', 'hq_pastoral'] else '{n}')) }}{% endif %}
         {% if can('clipper') %}{{ nav_item(url_for('admin_clipper'), 'ri-scissors-cut-line', 'Video Clipper', 'admin.clipper') }}{% endif %}
         {% if can('whatsapp') %}{{ nav_item(url_for('admin_whatsapp'), 'ri-whatsapp-line', 'WhatsApp', 'admin.whatsapp') }}{% endif %}
         {% if can('documents') %}{{ nav_item(url_for('admin_documents'), 'ri-folder-3-line', 'Documents', 'admin.documents', badges.documents, '{n} documents sent to you and not opened yet') }}{% endif %}
@@ -198,8 +198,15 @@
 <script>
 /* The page you are on is always visible in the menu (an open group can push it below the fold). */
 (() => {
+  // Scroll only the menu's own list (never the page): scrollIntoView would move every scrolling box around it.
   const a = document.querySelector('#admin-sidebar .nav-link-active');
-  if (a) requestAnimationFrame(() => a.scrollIntoView({ block: 'nearest' }));
+  let box = a && a.parentElement;
+  while (box && box !== document.body && !(box.scrollHeight > box.clientHeight && /(auto|scroll)/.test(getComputedStyle(box).overflowY))) box = box.parentElement;
+  if (a && box && box !== document.body) requestAnimationFrame(() => {
+    const r = a.getBoundingClientRect(), br = box.getBoundingClientRect();
+    if (r.bottom > br.bottom - 70) box.scrollTop += r.bottom - br.bottom + 90;     // clear of the user footer
+    else if (r.top < br.top) box.scrollTop -= br.top - r.top + 8;
+  });
 })();
 </script>
 <script>

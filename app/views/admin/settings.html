@@ -721,7 +721,7 @@
   const bar = document.getElementById('settings-save-bar');
   const scroller = document.querySelector('main');
 
-  function show(id, { focus = false, push = false, scroll = true } = {}) {
+  function show(id, { focus = false, push = false, scroll = true, url: writeUrl = true } = {}) {
     if (!ids.includes(id)) id = ids[0];
     tabs.forEach((t) => {
       const on = t.dataset.tab === id;
@@ -736,12 +736,13 @@
     ids.forEach((i) => { const p = document.getElementById(i); if (p) { p.hidden = i !== id; p.setAttribute('role', 'tabpanel'); p.setAttribute('aria-labelledby', 'tab-' + i); } });
     if (bar) bar.hidden = id === 'media';           /* the media panel has its own upload forms */
     const url = location.pathname + location.search + '#' + id;
-    if (location.hash !== '#' + id) (push ? history.pushState : history.replaceState).call(history, history.state, '', url);
+    if (writeUrl && location.hash !== '#' + id) (push ? history.pushState : history.replaceState).call(history, history.state, '', url);
     if (scroll && scroller) scroller.scrollTo({ top: 0 });
   }
 
   const initial = location.hash.slice(1);
-  show(ids.includes(initial) ? initial : ids[0], { scroll: false });
+  // Opening Settings without a section: no #hash is added, or the page would jump past its own header to that section.
+  show(ids.includes(initial) ? initial : ids[0], { scroll: false, url: !!initial });
 
   document.getElementById('settings-tabs').addEventListener('click', (e) => {
     const t = e.target.closest('[data-tab]');
