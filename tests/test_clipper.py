@@ -1014,3 +1014,78 @@ def test_sermon_edges_are_read_sentence_by_sentence(monkeypatch):
 
     monkeypatch.setattr(editorial, "_ask", unsure)
     assert asyncio.run(editorial.refine_sermon(units, [[200.0, 700.0]])) == [[200.0, 700.0]]   # unsure: unchanged
+
+
+
+# ─── only the senior pastor (voices) ─────────────────────────────────
+
+def _voice(seed, n=6, spread=0.25):
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    centre = rng.normal(size=256)
+    centre /= np.linalg.norm(centre)
+    out = []
+    for _ in range(n):
+        v = centre + rng.normal(size=256) * spread / 16
+        out.append((v / np.linalg.norm(v)).tolist())
+    return centre, out
+
+
+def test_the_senior_pastor_is_told_apart_from_a_pastor_who_sounds_like_him():
+    import numpy as np
+
+    from app.core.clipper import speakers
+
+    him, s1 = _voice(1)
+    _, s2 = _voice(1, spread=0.3)
+    # A pastor who has learned him: close (cosine ~0.6) but his own voice.
+    rng = np.random.default_rng(9)
+    alike = him * 0.6 + rng.normal(size=256) / 16 * 0.8
+    alike /= np.linalg.norm(alike)
+    imit = [((alike + rng.normal(size=256) / 64) / np.linalg.norm(alike + rng.normal(size=256) / 64)).tolist() for _ in range(6)]
+    cfg = speakers.parse(json_dump({"mode": "senior", "people": [
+        {"id": "a", "name": "Pastor Samuel", "role": "senior", "samples": [{"id": "x", "embs": s1}, {"id": "y", "embs": s2}]},
+        {"id": "b", "name": "Pastor B", "role": "other", "samples": [{"id": "z", "embs": imit}]}]}))
+    cal = speakers.calibrate(cfg)
+    assert cal["accept"] is not None and cal["accept"] >= speakers.MIN_ACCEPT
+    # A sermon: him for 3 minutes, the look-alike for 3 minutes, him again for 2.
+    def w(v):
+        x = np.asarray(v) + rng.normal(size=256) / 40
+        return x / np.linalg.norm(x)
+    windows = ([(t, w(him)) for t in np.arange(0, 180, 15)] + [(t, w(alike)) for t in np.arange(180, 360, 15)]
+               + [(t, w(him)) for t in np.arange(360, 480, 15)] + [(480.0, None)])
+    verdicts = speakers.judge(windows, cfg, cal["accept"])
+    ranges = speakers.his_ranges(verdicts, [[0, 495]])
+    assert ranges and ranges[0][0] == 0 and 165 <= ranges[0][1] <= 195
+    assert all(not (200 <= a < 340) for a, _ in ranges)                       # the look-alike's part is left out
+    assert any(a >= 345 for a, _ in ranges)                                   # he is picked up again after him
+    assert 0.5 <= speakers.share(verdicts) <= 0.7
+
+
+def test_voice_setup_needs_two_samples_and_falls_back_safely():
+    from app.core.clipper import speakers
+
+    _, s1 = _voice(3)
+    one = speakers.parse(json_dump({"mode": "senior", "people": [{"id": "a", "name": "P", "role": "senior",
+                                                                  "samples": [{"id": "x", "embs": s1}]}]}))
+    assert speakers.calibrate(one)["accept"] is None and speakers.calibrate(one)["strength"] == "missing"
+    assert speakers.parse("{nonsense")["mode"] == "all"
+
+
+def test_fbank_matches_the_kaldi_layout():
+    import numpy as np
+
+    from app.core.clipper import voice
+
+    x = np.sin(2 * np.pi * 440 * np.arange(16000) / 16000).astype(np.float32) * 0.3
+    f = voice.fbank(x)
+    assert f.shape == (98, 80) and abs(float(f.mean())) < 1e-3              # 25 ms / 10 ms frames, mean removed
+    peak = int(np.argmax(voice.fbank(x + 0).std(axis=0) * 0 + (voice.fbank(x) + 50).mean(axis=0)))
+    assert 5 <= peak <= 30                                                   # 440 Hz lands in a low mel bin
+
+
+def json_dump(x):
+    import json
+
+    return json.dumps(x)

@@ -31,6 +31,10 @@ COPY --from=deno /deno /usr/local/bin/deno
 COPY requirements.txt constraints.txt ./
 RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
 
+# Video Clipper "only the senior pastor": the WeSpeaker ResNet34 voiceprint model (VoxCeleb2, CC-BY-4.0,
+# github.com/wenet-e2e/wespeaker), fetched once at build and checked against its known checksum.
+RUN python -c "import hashlib, urllib.request, os; os.makedirs('/opt/models', exist_ok=True); u='https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34-LM/resolve/main/voxceleb_resnet34_LM.onnx'; p='/opt/models/wespeaker-resnet34-lm.onnx'; urllib.request.urlretrieve(u, p); h=hashlib.sha256(open(p,'rb').read()).hexdigest(); assert h=='7bb2f06e9df17cdf1ef14ee8a15ab08ed28e8d0ef5054ee135741560df2ec068', h"
+
 COPY . .
 
 EXPOSE 8000

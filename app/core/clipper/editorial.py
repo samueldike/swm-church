@@ -125,14 +125,30 @@ excluded even when it is moving or quotable: the moderator or MC (including thei
 their remarks after him), praise and worship leaders and singers, the person reading the Bible text if it is not the
 preacher, testimonies, announcements, offering, and the closing segment after the preacher hands back. The body is
 from the preacher's FIRST sentence of the message to his LAST sentence of it (his own prayer at the end of the message
-counts). Usually that is ONE range; return more than one only when the sermon was clearly interrupted (a song in the
-middle), and leave the interruption out."""
+counts). One stream may hold SEVERAL services or sermons (a conference session, two services back to back), by the same
+or different preachers: return EACH sermon as its own range, and name its preacher in "what" when it is said. Leave out
+interruptions inside a sermon (a song in the middle)."""
 
 EDGE_WINDOW = 180.0      # seconds either side of each sermon edge read sentence by sentence
 
 
 async def refine_sermon(units: list[Unit], body: list[list[float]]) -> list[list[float]]:
-    """The sermon's exact edges: the 30-second digest is too coarse, so the sentences around each edge are read
+    """Each sermon's exact edges (a stream may hold several): see ``_refine_one``. Ranges 5 minutes apart or less are
+    one sermon with an interruption, refined together."""
+    groups: list[list[list[float]]] = []
+    for r in body:
+        if groups and r[0] - groups[-1][-1][1] <= 300:
+            groups[-1].append(r)
+        else:
+            groups.append([r])
+    out: list[list[float]] = []
+    for g in groups[:6]:
+        out += await _refine_one(units, [list(r) for r in g])
+    return out + [r for g in groups[6:] for r in g]
+
+
+async def _refine_one(units: list[Unit], body: list[list[float]]) -> list[list[float]]:
+    """One sermon's exact edges: the 30-second digest is too coarse, so the sentences around each edge are read
     one by one and the preacher's first and last sentence of the message are picked. Keeps ``body`` if unsure."""
     start, end = body[0][0], body[-1][1]
     near_a = [u for u in units if start - EDGE_WINDOW <= u.start <= start + EDGE_WINDOW]

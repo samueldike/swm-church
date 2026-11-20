@@ -10462,6 +10462,7 @@ def _clip_json_project(p) -> dict:
 
     stale = pipeline.stale(p)
     return {"id": p.id, "title": p.title or "Untitled video", "status": "stalled" if stale else p.status,
+            "speaker_refused": bool(((p.brief or {}).get("speaker_check") or {}).get("refused")) and p.status == "failed",
             "stage": p.stage or "", "progress": round(p.progress or 0, 3), "error": p.error or "",
             "busy": p.busy and not stale, "shorts": [_clip_json_short(p, s) for s in p.shorts],
             "source_gone": bool(p.source_deleted_at)}
@@ -10505,7 +10506,9 @@ async def admin_clipper(request: Request, db: AsyncSession = Depends(get_db)):
         frames_ctx = {"cfg": fcfg, "church": wchurch, "formats": _cf.FORMATS,
                       "urls": {i["id"]: _clip_frame_url(wchurch, i) for i in fcfg["items"]},
                       "outros": await _co2.load(db, wchurch),
-                      "music": await __import__("app.core.clipper.music", fromlist=["load"]).load(db, wchurch)}
+                      "music": await __import__("app.core.clipper.music", fromlist=["load"]).load(db, wchurch),
+                      "voices": _clip_voices_view(await __import__("app.core.clipper.speakers", fromlist=["load"]).load(db, wchurch)),
+                      "audio_projects": [x for x in projects if x.branch_id == wchurch and __import__("app.core.clipper.media", fromlist=["audio_path"]).audio_path(x.id).exists()][:30]}
         watch_ctx = {"cfg": wcfg, "state": wstate, "church": wchurch, "church_name": wb.name if wb else "",
                      "every": _cw.EVERY, "days": _cw.DAY_NAMES, "formats": _co.FORMATS, "lengths": _co.LENGTHS,
                      "captions": {k: v["label"] for k, v in _cc.STYLES.items()},
@@ -11415,6 +11418,178 @@ async def admin_clipper_music_file(track_id: str, request: Request, db: AsyncSes
         return Response(status_code=404)
     return FileResponse(str(path), media_type=mimetypes.guess_type(path.name)[0] or "audio/mpeg",
                         headers={"Cache-Control": "private, max-age=86400"})
+
+
+# ── Video Clipper → whose messages are clipped (voices: speakers.py, voice.py) ──
+
+def _clip_voices_view(cfg: dict) -> dict:
+    """The voice library for the page: names and samples, never the voiceprints themselves."""
+    from app.core.clipper import speakers
+
+    return {"mode": cfg["mode"], "calibration": speakers.calibrate(cfg),
+            "people": [{"id": p["id"], "name": p["name"], "role": p["role"],
+                        "samples": [{"id": s["id"], "label": s.get("label") or "", "n": len(s["embs"])} for s in p["samples"]]}
+                       for p in cfg["people"]]}
+
+
+@router.post("/clipper/voices/mode", name="admin_clipper_voices_mode")
+async def admin_clipper_voices_mode(request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None or not _clip_can_manage_channels(admin):
+        return _redirect(request, "/admin/clipper", "Only the church office can choose whose messages are clipped.", "error")
+    from app.core.clipper import speakers
+
+    church = await _clip_channel_church(request, db, admin, church)
+    back = f"/admin/clipper?church={church}#voices"
+    form = await request.form()
+    cfg = await speakers.load(db, church)
+    mode = "senior" if form.get("mode") == "senior" else "all"
+    if mode == "senior" and speakers.calibrate(cfg)["accept"] is None:
+        return _redirect(request, back, "Add the senior pastor and at least two voice samples of him first.", "error")
+    cfg["mode"] = mode
+    await speakers.save(db, church, cfg)
+    await log_admin_action(db, admin.id, "clipper.voices_mode", "branch", church, {"mode": mode}, request)
+    await db.commit()
+    return _redirect(request, back, "Only the senior pastor's messages will be clipped." if mode == "senior"
+                     else "Every preacher's message will be clipped.", "success")
+
+
+@router.post("/clipper/voices/people", name="admin_clipper_voices_person")
+async def admin_clipper_voices_person(request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None or not _clip_can_manage_channels(admin):
+        return _redirect(request, "/admin/clipper", "Only the church office can change the voice library.", "error")
+    from app.core.clipper import speakers
+
+    church = await _clip_channel_church(request, db, admin, church)
+    back = f"/admin/clipper?church={church}#voices"
+    form = await request.form()
+    name = (form.get("name") or "").strip()[:80]
+    role = "senior" if form.get("role") == "senior" else "other"
+    if not name:
+        return _redirect(request, back, "Write the pastor's name.", "error")
+    cfg = await speakers.load(db, church)
+    if role == "senior" and speakers.senior(cfg):
+        return _redirect(request, back, "The senior pastor is already added. Remove him first to start again.", "error")
+    if len(cfg["people"]) >= 12:
+        return _redirect(request, back, "Up to 12 people can be in the voice library.", "error")
+    cfg["people"].append({"id": speakers.new_id(), "name": name, "role": role, "samples": []})
+    await speakers.save(db, church, cfg)
+    await db.commit()
+    return _redirect(request, back, f"{name} added. Now add voice samples of him.", "success")
+
+
+@router.post("/clipper/voices/{person_id}/sample", name="admin_clipper_voices_sample")
+async def admin_clipper_voices_sample(person_id: str, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None or not _clip_can_manage_channels(admin):
+        return _redirect(request, "/admin/clipper", "Only the church office can change the voice library.", "error")
+    import tempfile
+    from pathlib import Path
+
+    from app.core.clipper import media, speakers
+    from app.core.clipper.options import clock, parse_clock
+    from app.models.clipper import ClipProject
+
+    church = await _clip_channel_church(request, db, admin, church)
+    back = f"/admin/clipper?church={church}#voices"
+    cfg = await speakers.load(db, church)
+    person = next((x for x in cfg["people"] if x["id"] == person_id), None)
+    if not person:
+        return _redirect(request, back, "That person was not found.", "error")
+    if len(person["samples"]) >= speakers.MAX_SAMPLES:
+        return _redirect(request, back, f"Up to {speakers.MAX_SAMPLES} samples per person. Remove one first.", "error")
+    form = await request.form()
+    upload = form.get("file")
+    tmp_dir = None
+    try:
+        if upload is not None and getattr(upload, "filename", ""):
+            tmp_dir = Path(tempfile.mkdtemp(prefix="voice_"))
+            raw = tmp_dir / ("in" + Path(upload.filename).suffix.lower()[:6])
+            data = await upload.read(60 * 1024 * 1024 + 1)
+            if len(data) > 60 * 1024 * 1024:
+                return _redirect(request, back, "A voice sample can be at most 60 MB.", "error")
+            raw.write_bytes(data)
+            audio = tmp_dir / "a.wav"
+            try:
+                await asyncio.to_thread(media.extract_audio, raw, audio)
+            except media.ClipperError:
+                return _redirect(request, back, "That file could not be read as audio.", "error")
+            start, end, label = 0.0, 600.0, upload.filename[:60]
+        else:
+            pid = form.get("project")
+            p = await db.get(ClipProject, int(pid)) if str(pid or "").isdigit() else None
+            if not p or p.branch_id != church:
+                return _redirect(request, back, "Choose one of this church's videos.", "error")
+            audio = media.audio_path(p.id)
+            if not audio.exists():
+                return _redirect(request, back, "That video's sound is no longer on the server. Choose a newer one.", "error")
+            start, end = parse_clock(form.get("start")), parse_clock(form.get("end"))
+            if start is None or end is None or end - start < 30:
+                return _redirect(request, back, "Give a from and to time at least 30 seconds apart (e.g. 50:00 to 52:00), "
+                                                "where only he is speaking.", "error")
+            end = min(end, start + 600)
+            label = f"{(p.title or 'Video')[:40]} {clock(start)}–{clock(end)}"
+        try:
+            embs = await asyncio.to_thread(speakers.sample_prints, audio, start, end)
+        except FileNotFoundError:
+            return _redirect(request, back, "The voice model is not installed on this server yet.", "error")
+        if len(embs) < 2:
+            return _redirect(request, back, "Hardly any speech was found in that stretch. Choose one where he speaks throughout.", "error")
+    finally:
+        if tmp_dir is not None:
+            import shutil
+
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+    person["samples"].append({"id": speakers.new_id(), "label": label, "embs": embs})
+    await speakers.save(db, church, cfg)
+    await log_admin_action(db, admin.id, "clipper.voice_sample", "branch", church, {"person": person_id, "prints": len(embs)}, request)
+    await db.commit()
+    cal = speakers.calibrate(cfg)
+    return _redirect(request, back, f"Sample added for {person['name']} ({len(embs)} voiceprints). {cal['note']}", "success")
+
+
+@router.post("/clipper/voices/{person_id}/delete", name="admin_clipper_voices_delete")
+async def admin_clipper_voices_delete(person_id: str, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None or not _clip_can_manage_channels(admin):
+        return _redirect(request, "/admin/clipper", "Only the church office can change the voice library.", "error")
+    from app.core.clipper import speakers
+
+    church = await _clip_channel_church(request, db, admin, church)
+    back = f"/admin/clipper?church={church}#voices"
+    cfg = await speakers.load(db, church)
+    sample = (await request.form()).get("sample")
+    for person in cfg["people"]:
+        if person["id"] == person_id:
+            if sample:
+                person["samples"] = [s for s in person["samples"] if s["id"] != sample]
+            else:
+                cfg["people"] = [x for x in cfg["people"] if x["id"] != person_id]
+            break
+    else:
+        return _redirect(request, back, "That person was not found.", "error")
+    if cfg["mode"] == "senior" and speakers.calibrate(cfg)["accept"] is None:
+        cfg["mode"] = "all"                      # nothing left to recognise him by: clip everyone rather than nothing
+    await speakers.save(db, church, cfg)
+    await db.commit()
+    return _redirect(request, back, "Removed.", "success")
+
+
+@router.post("/clipper/{project_id}/clip-anyway", name="admin_clipper_clip_anyway")
+async def admin_clipper_clip_anyway(project_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    """Clip a video the voice check refused (another preacher), this once."""
+    admin, church = await _clip_ctx(request, db)
+    p = await _clip_project(db, admin, church, project_id) if admin and church is not None else None
+    if not p:
+        return JSONResponse({"ok": False, "error": "That video was not found."}, status_code=404)
+    from app.tasks import clip_compose_task
+
+    p.settings = {**(p.settings or {}), "ignore_speaker": True}
+    p.status, p.stage, p.progress, p.error, p.heartbeat_at = "composing", "Waiting for the editor", 0.0, None, datetime.utcnow()
+    await db.commit()
+    await _clip_enqueue(clip_compose_task, p.id)
+    return JSONResponse({"ok": True})
 
 
 @router.post("/clipper/{project_id}/upload", name="admin_clipper_upload")

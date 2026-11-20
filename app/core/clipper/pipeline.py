@@ -287,6 +287,12 @@ async def compose(project_id: int, *, more: int | None = None) -> bool:
             asyncio.get_running_loop().create_task(say(label, fraction))
 
         structure = (p.brief or {}).get("structure") if more else None
+        if not more and st["content_type"] == "sermon":
+            structure = await editorial.map_structure(units, title=p.title or "", content_type="sermon",
+                                                      duration=float(p.duration or 0))
+            structure = await _only_the_senior_pastor(project_id, p, st, structure)
+            if structure is False:
+                return False
         shorts, video, structure = await editorial.make_shorts(
             units, count=more or int(st["count"]), floor=floor, target=target, content_type=st["content_type"],
             title=p.title or "", style=st["style"], duration=float(p.duration or 0), taken=taken or None,
@@ -326,6 +332,42 @@ async def compose(project_id: int, *, more: int | None = None) -> bool:
             logger.exception("Clipper compose failed for project %s", project_id)
             await _fail(project_id, "Choosing the shorts failed unexpectedly. Please try again.")
     return False
+
+
+async def _only_the_senior_pastor(project_id: int, p, st: dict, structure: dict | None):
+    """With the church's "Only the senior pastor" on: keep only the parts of the sermon(s) he preaches, judged by
+    voice (speakers.py). Returns the structure to use, or False when he does not preach (the project is failed
+    with a message and a "Clip anyway" button)."""
+    from app.core.clipper import speakers
+
+    if not structure or not structure.get("body") or st.get("ignore_speaker") or not p.branch_id:
+        return structure
+    async with async_session() as db:
+        cfg = await speakers.load(db, p.branch_id)
+    him = speakers.senior(cfg)
+    cal = speakers.calibrate(cfg)
+    if cfg["mode"] != "senior" or not him or cal["accept"] is None:
+        return structure
+    await _update(project_id, stage=f"Listening for {him['name'] or 'the senior pastor'}", progress=0.08)
+    try:
+        windows = await asyncio.to_thread(speakers.windows_for, media.audio_path(project_id), structure["body"])
+    except FileNotFoundError:
+        logger.warning("Voice model missing: speaker check skipped for project %s", project_id)
+        return structure
+    verdicts = speakers.judge(windows, cfg, cal["accept"])
+    ranges = speakers.his_ranges(verdicts, structure["body"])
+    found = round(speakers.share(verdicts) * 100)
+    check = {"name": him["name"], "share": found, "ranges": ranges, "refused": not ranges}
+    async with async_session() as db:
+        proj = await db.get(ClipProject, project_id)
+        proj.brief = {**(proj.brief or {}), "speaker_check": check}
+        await db.commit()
+    if not ranges:
+        await _fail(project_id, f"{him['name'] or 'The senior pastor'} does not preach in this video (his voice matched "
+                                f"{found}% of the sermon). Only his messages are clipped; use “Clip anyway” to clip it.")
+        return False
+    logger.info("Project %s: %s preaches %s%% (%s)", project_id, him["name"], found, ranges)
+    return {**structure, "body": ranges, "speaker": him["name"] or structure.get("speaker", "")}
 
 
 async def manual_short(project_id: int, start: float, end: float) -> int | None:

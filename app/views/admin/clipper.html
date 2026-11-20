@@ -306,6 +306,69 @@
   </script>
   {% endif %}
 
+  {% if frames %}
+  {% set vc = frames.voices %}{% set cal = vc.calibration %}
+  {% set sp = vc.people|selectattr('role', 'equalto', 'senior')|first %}
+  <details class="vc-panel vc-yt" id="voices">
+    <summary><i class="ri-user-voice-line"></i><b>Whose messages are clipped</b>
+      <span class="vc-pill {{ 'ok' if vc.mode == 'senior' }}">{{ ('Only ' ~ (sp.name if sp else 'the senior pastor')) if vc.mode == 'senior' else 'All preachers' }}</span>
+      <span class="vc-muted vc-yt-why">Recognises the senior pastor by his voice, even next to pastors who preach like him.</span></summary>
+    <div class="vc-yt-body">
+      <p class="vc-muted">A voiceprint captures the sound of a voice itself (the throat, mouth and chest), not the preaching style, so a pastor who has learned the senior pastor's phrasing still sounds like himself to it. Add the senior pastor with two or more samples from different services; add the pastors who sound most like him too: each part of a sermon goes to whoever it is closest to.</p>
+
+      <form method="post" action="{{ url_for('admin_clipper_voices_mode') }}?church={{ frames.church }}" class="vc-choice" role="radiogroup" aria-label="Whose messages are clipped">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label><input type="radio" name="mode" value="all" {{ 'checked' if vc.mode != 'senior' }} onchange="this.form.submit()">All preachers<small>Every sermon in a video is clipped.</small></label>
+        <label><input type="radio" name="mode" value="senior" {{ 'checked' if vc.mode == 'senior' }} {{ 'disabled' if cal.accept is none }} onchange="this.form.submit()">Only the senior pastor<small>{{ 'Only the parts he preaches are clipped.' if cal.accept is not none else 'Add him and two voice samples first.' }}</small></label>
+      </form>
+
+      {% if sp %}
+      <div class="vc-alert {{ 'info' if cal.strength == 'strong' else 'bad' if cal.strength == 'missing' else 'info' }} vc-mt" role="status">
+        <i class="ri-shield-user-line"></i><span><b>Recognition: {{ {'strong': 'Strong', 'fair': 'Fair', 'missing': 'Not ready'}[cal.strength] }}.</b> {{ cal.note }}{% if cal.consistency is not none %} His samples agree at {{ (cal.consistency * 100)|round|int }}%{% if cal.closest_other is not none %}; the closest other pastor reaches {{ (cal.closest_other * 100)|round|int }}%{% endif %} (a part counts as his from {{ (cal.accept * 100)|round|int }}% and only when 10 points clearer than anyone else).{% endif %}</span>
+      </div>
+      {% endif %}
+
+      <ul class="vc-tracks">
+        {% for person in vc.people %}
+        <li>
+          <div class="vc-track-head">
+            <i class="{{ 'ri-vip-crown-2-line' if person.role == 'senior' else 'ri-user-line' }}"></i><b>{{ person.name }}</b>
+            <span class="vc-pill {{ 'gold' if person.role == 'senior' }}">{{ 'Senior pastor' if person.role == 'senior' else 'Another pastor' }}</span>
+            <small class="vc-muted">{{ person.samples|length }} sample{{ '' if person.samples|length == 1 else 's' }}</small>
+            <span class="flex-grow"></span>
+            <form method="post" action="{{ url_for('admin_clipper_voices_delete', person_id=person.id) }}?church={{ frames.church }}" data-confirm="Remove {{ person.name }} and his samples?"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm text-bad" type="submit" aria-label="Remove {{ person.name }}"><i class="ri-delete-bin-6-line"></i></button></form>
+          </div>
+          {% for smp in person.samples %}
+          <div class="vc-inline text-[12.5px]"><i class="ri-voiceprint-line"></i>{{ smp.label }} <span class="vc-muted">({{ smp.n }} voiceprints)</span>
+            <form method="post" action="{{ url_for('admin_clipper_voices_delete', person_id=person.id) }}?church={{ frames.church }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="sample" value="{{ smp.id }}"><button class="btn btn-ghost btn-sm" type="submit" aria-label="Remove this sample"><i class="ri-close-line"></i></button></form></div>
+          {% endfor %}
+          <form method="post" action="{{ url_for('admin_clipper_voices_sample', person_id=person.id) }}?church={{ frames.church }}" enctype="multipart/form-data" class="vc-inline" data-turbo="false">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {% if frames.audio_projects %}
+            <select name="project" aria-label="A video where {{ person.name }} preaches"><option value="">From a video…</option>{% for x in frames.audio_projects %}<option value="{{ x.id }}">{{ (x.title or 'Video')[:60] }}</option>{% endfor %}</select>
+            <input type="text" name="start" placeholder="from 50:00" style="width:7em" aria-label="From">
+            <input type="text" name="end" placeholder="to 52:00" style="width:7em" aria-label="To">
+            <span class="vc-muted text-[12px]">or</span>
+            {% endif %}
+            <input type="file" name="file" accept="audio/*,video/*" aria-label="Or a recording of {{ person.name }}">
+            <button type="submit" class="btn btn-secondary btn-sm"><i class="ri-add-line"></i>Add sample</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+
+      <form method="post" action="{{ url_for('admin_clipper_voices_person') }}?church={{ frames.church }}" class="vc-inline vc-mt">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="text" name="name" placeholder="Pastor's name" maxlength="80" required aria-label="Pastor's name">
+        <select name="role" aria-label="Who he is">{% if not sp %}<option value="senior">Senior pastor</option>{% endif %}<option value="other">Another pastor (sounds like him)</option></select>
+        <button type="submit" class="btn btn-primary btn-sm"><i class="ri-user-add-line"></i>Add</button>
+      </form>
+      <p class="vc-muted text-[12px]">Pick stretches of 1 to 3 minutes where only he speaks (no singing), from different services, rooms or microphones. The more varied, the steadier the recognition.</p>
+    </div>
+  </details>
+  <script>document.querySelectorAll('#voices form[data-confirm]').forEach((f) => f.addEventListener('submit', (e) => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));</script>
+  {% endif %}
+
   {% if projects %}
   <div class="vc-grid">
     {% for p in projects %}

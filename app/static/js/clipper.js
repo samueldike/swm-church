@@ -290,7 +290,7 @@
         problem.innerHTML = `<div class="vc-alert bad"><i class="ri-error-warning-line"></i><span>${directions(esc(data.status === 'stalled'
           ? 'The work stopped (the server may have restarted). Retry carries on from where it stopped.'
           : (data.error || 'Something went wrong.')))}</span><span class="flex-grow"></span>
-          <button type="button" class="btn btn-secondary btn-sm" data-act="retry"><i class="ri-refresh-line"></i>Retry</button></div>`;
+          ${data.speaker_refused ? '<button type="button" class="btn btn-secondary btn-sm" data-act="anyway"><i class="ri-user-voice-line"></i>Clip anyway</button>' : '<button type="button" class="btn btn-secondary btn-sm" data-act="retry"><i class="ri-refresh-line"></i>Retry</button>'}</div>`;
       } else if (data.source_gone) {
         problem.hidden = false;
         problem.innerHTML = '<div class="vc-alert info"><i class="ri-information-line"></i><span>The long source video was removed to save space. The shorts are kept, but they can no longer be re-cut.</span></div>';
@@ -414,8 +414,9 @@
     }, opt);
 
     document.getElementById('vc-problem').addEventListener('click', async (e) => {
-      if (!e.target.closest('[data-act=retry]')) return;
-      const r = await post(`${base}/retry`, {}, csrf);
+      const anyway = e.target.closest('[data-act=anyway]');
+      if (!anyway && !e.target.closest('[data-act=retry]')) return;
+      const r = await post(`${base}/${anyway ? 'clip-anyway' : 'retry'}`, {}, csrf);
       if (!r.ok) { toast(r.error || 'Could not retry.'); return; }
       data.busy = true; data.status = 'queued'; data.stage = 'Starting again'; draw();
       clearTimeout(window.__swmClipTimer); window.__swmClipTimer = setTimeout(poll, 1500);
