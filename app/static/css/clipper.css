@@ -448,3 +448,10 @@
 .vc-pane .vc-transcript { max-height: 220px; overflow: auto; font-size: 13px; line-height: 1.5; }
 .vc-pane .vc-value { margin-bottom: 8px; }
 .vc-pane .vc-fx { margin-top: 8px; }
+
+/* The design pop-up may reach past the card; the video keeps the card's rounded top. */
+.vc-short { overflow: visible; }
+.vc-short > .vc-player { border-top-left-radius: inherit; border-top-right-radius: inherit; overflow: hidden; }
+.vc-player .vc-badges { z-index: 5; }
+.vc-pop-panel .vc-capchips[aria-disabled="true"] { opacity: 1; }   /* picking a design switches captions on */
+.vc-pop[open] { z-index: 40; }
