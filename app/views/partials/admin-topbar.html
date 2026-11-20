@@ -18,8 +18,8 @@
       <button id="admin-sidebar-open" type="button" class="lg:hidden tap-44 inline-flex items-center justify-center rounded-full text-ink-2 hover:text-gold-text hover:bg-sunken flex-shrink-0" aria-label="Open menu">
         <i class="ri-menu-line text-lg"></i>
       </button>
-      <i class="{{ headerIcon|default('ri-dashboard-3-line') }} text-gold-text text-base hidden sm:inline-block flex-shrink-0"></i>
-      <div class="min-w-0">
+      <i class="topbar-title {{ headerIcon|default('ri-dashboard-3-line') }} text-gold-text text-base hidden sm:inline-block flex-shrink-0"></i>
+      <div class="topbar-title min-w-0">
         <h1 class="text-[14px] font-semibold text-ink leading-tight truncate">{{ title|default('Admin Portal') }}</h1>
         {% if subtitle %}<p class="text-[12px] text-ink-3 truncate">{{ subtitle }}</p>{% endif %}
       </div>

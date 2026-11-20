@@ -1,12 +1,12 @@
 {% extends "layouts/admin_base.html" %}
 {% from "macros/admin.html" import page_header, badge, empty_state, filter_pager with context %}
-{% block title %}Subscribers | {{ siteName }}{% endblock %}
-{% block topbar_title %}Subscribers{% endblock %}
+{% block title %}Email subscribers | {{ siteName }}{% endblock %}
+{% block topbar_title %}Email subscribers{% endblock %}
 {% block topbar_subtitle %}Newsletter sign-ups{% endblock %}
 {% block topbar_icon %}ri-mail-send-line{% endblock %}
 
 {% block page_header %}
-  {{ page_header("Newsletter subscribers", "Emails collected by the sign-up form in the site footer.",
+  {{ page_header("Email subscribers", "Emails collected by the sign-up form in the site footer.",
       actions='<a href="' ~ url_for('admin_subscribers_export') ~ '?status=active" class="btn btn-secondary" data-turbo="false"><i class="ri-download-2-line"></i>Export active (CSV)</a>',
       audit=[('Active', total_active), ('Shown', pagination.total)]) }}
 {% endblock %}

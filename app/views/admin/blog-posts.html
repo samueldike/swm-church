@@ -16,10 +16,9 @@
 <div class="wp">
   <div class="wp-head">
     <h1 class="wp-h1">Posts</h1>
-    <a href="{{ url_for('admin_blog_new') }}" class="btn btn-secondary btn-sm" data-turbo="false">Add New Post</a>
+    <a href="{{ url_for('admin_blog_new') }}" class="btn btn-primary btn-sm" data-turbo="false"><i class="ri-add-line"></i>Add New Post</a>
     <nav class="wp-subnav" aria-label="Blog">
       <a href="{{ url_for('admin_blog') }}" class="is-on" aria-current="page">All Posts</a>
-      <a href="{{ url_for('admin_blog_new') }}" data-turbo="false">Add New Post</a>
       <a href="{{ url_for('admin_blog_categories') }}">Categories</a>
       <a href="{{ url_for('admin_blog_tags') }}">Tags</a>
     </nav>

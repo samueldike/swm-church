@@ -38,7 +38,7 @@
             <tr>
               <td data-label="Branch">
                 <a href="{{ url_for('admin_branch', branch_id=b.id) }}" class="font-semibold text-ink">{{ b.name }}</a>
-                <p class="font-mono text-[12px] text-ink-3">{{ b.slug }}</p>
+
               </td>
               <td data-label="Location" class="text-ink-2">{{ [b.city, region_name(b.region_code) or b.state]|select|join(', ') or '—' }}
                 {% if not b.region_code %}<span class="block text-[12px] text-warn">Region not set: edit the branch</span>{% endif %}</td>

@@ -197,10 +197,10 @@ html.dark .dl-thumb { background: color-mix(in srgb, var(--ink, #888) 18%, var(-
 @media (max-width: 860px) {
   .dl { grid-template-columns: minmax(0, 1fr); height: auto; min-height: calc(100dvh - 120px); }
   .dl-nav { border-right: 0; border-bottom: 1px solid var(--color-line); flex-direction: row; flex-wrap: wrap; align-items: center; padding: 10px; }
-  .dl-views { flex-direction: row; overflow-x: auto; flex: 1 1 100%; }
-  .dl-views button { flex: none; }
+  .dl-views { display: grid !important; grid-template-columns: 1fr 1fr; gap: 4px; flex: 1 1 100%; overflow: visible; }
+  .dl-views button { flex: none; min-width: 0; }
   .dl-hint { display: none; }
-  .dl-search { min-width: 0; flex: 1; }
+  .dl-search { min-width: 0; flex: 1 1 100%; }
   .dl-side { position: fixed; inset: 0; width: auto; z-index: 60; }
   .dl-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 }

@@ -1,12 +1,12 @@
 {% extends "layouts/admin_base.html" %}
 {% from "macros/admin.html" import page_header, badge, empty_state, pager with context %}
-{% block title %}Security Logs | {{ siteName }}{% endblock %}
-{% block topbar_title %}Security Logs{% endblock %}
+{% block title %}Activity log | {{ siteName }}{% endblock %}
+{% block topbar_title %}Activity log{% endblock %}
 {% block topbar_subtitle %}Audit trail of console activity{% endblock %}
 {% block topbar_icon %}ri-shield-keyhole-line{% endblock %}
 
 {% block page_header %}
-  {{ page_header("Security logs", "Full audit trail of console activity",
+  {{ page_header("Activity log", "Full audit trail of console activity",
       actions='<a href="' ~ export_url ~ '" class="btn btn-secondary" data-turbo="false"><i class="ri-download-2-line"></i>Export CSV</a>',
       audit=[('Matching events', pagination.total), ('Page', pagination.page ~ ' / ' ~ pagination.pages), ('Filters', filters|length or 'None')]) }}
 {% endblock %}

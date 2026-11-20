@@ -1,7 +1,7 @@
 {% extends "layouts/admin_base.html" %}
 {% from "macros/admin.html" import page_header, badge, empty_state, filter_pager, field with context %}
-{% block title %}Donations | {{ siteName }}{% endblock %}
-{% block topbar_title %}Donations{% endblock %}
+{% block title %}Giving | {{ siteName }}{% endblock %}
+{% block topbar_title %}Giving{% endblock %}
 {% block topbar_subtitle %}{{ 'All branches' if sees_all else 'Your branch' }}{% endblock %}
 {% block topbar_icon %}ri-hand-coin-line{% endblock %}
 
@@ -10,7 +10,7 @@
   {{ page_header("Giving", ("Every gift, online or recorded by hand, for all branches." if sees_all else "Every gift for your branch, online or recorded by hand."),
       actions='<a href="' ~ export_url ~ '" class="btn btn-secondary" data-turbo="false"><i class="ri-download-2-line"></i>Download (Excel/CSV)</a>'
               ~ '<a href="#record-gift" class="btn btn-primary" data-open-record><i class="ri-add-line"></i>Record a gift</a>',
-      audit=[('Confirmed', (totals|join(' · ')) or '0'), ('Confirmed gifts', paid_count), ('Records', pagination.total)]) }}
+      audit=[('Confirmed', ((totals|join(' · ')) or '0') ~ ' from ' ~ paid_count ~ (' gift' if paid_count == 1 else ' gifts'))]) }}
 {% endblock %}
 
 {% block content %}
@@ -22,8 +22,8 @@
     if (location.hash === '#record-gift') open();
   })();
   </script>
-  <details class="panel" id="record-gift">
-    <summary class="cursor-pointer text-[13px] font-semibold text-ink flex items-center gap-2"><i class="ri-add-circle-line text-gold-text"></i>Record a gift given by cash, transfer, cheque or POS</summary>
+  <details class="panel record-gift" id="record-gift">
+    <summary class="cursor-pointer text-[14px] font-bold text-ink flex items-center gap-2"><i class="ri-add-circle-line text-gold-text"></i>Record a gift given by cash, transfer, cheque or POS<span class="flex-grow"></span><span class="btn btn-ghost btn-sm">Close</span></summary>
     <form method="POST" action="{{ url_for('admin_donations_record') }}" class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       {{ field('Amount (' ~ currency_symbol(platform_currency) ~ ' · ' ~ platform_currency ~ ')', 'amount', type='number', mono=True, required=True, id='rec-amount') }}
@@ -60,6 +60,16 @@
         <option value="">All branches</option>
         {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if filters.branch_id == b.id|string else '' }}>{{ b.name }}</option>{% endfor %}
       </select>
+    {% endif %}
+    <select name="status" onchange="this.form.submit()" aria-label="Filter by status" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
+      <option value="">All statuses</option>
+      {% for v, l in [('completed', 'Confirmed'), ('pending', 'Pending'), ('failed', 'Failed'), ('abandoned', 'Abandoned'), ('rejected', 'Not received'), ('mismatch', 'Amount mismatch')] %}<option value="{{ v }}" {{ 'selected' if filters.status == v else '' }}>{{ l }}</option>{% endfor %}
+    </select>
+    {% set more_on = filters.country or filters.currency or filters.method or filters.gateway or filters.start or filters.end %}
+    <details class="more-filters" {{ 'open' if more_on }}>
+      <summary class="btn btn-secondary btn-sm"><i class="ri-equalizer-line"></i>More filters{% if more_on %} (on){% endif %}</summary>
+      <div class="more-filters-body">
+    {% if sees_all %}
       {% if country_options|length > 1 or filters.country %}
       <select name="country" onchange="this.form.submit()" aria-label="Filter by country" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
         <option value="">All countries</option>
@@ -73,10 +83,6 @@
       {% for c in currency_options %}<option value="{{ c }}" {{ 'selected' if filters.currency == c else '' }}>{{ c }}</option>{% endfor %}
     </select>
     {% endif %}
-    <select name="status" onchange="this.form.submit()" aria-label="Filter by status" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
-      <option value="">All statuses</option>
-      {% for v, l in [('completed', 'Confirmed'), ('pending', 'Pending'), ('failed', 'Failed'), ('abandoned', 'Abandoned'), ('rejected', 'Not received'), ('mismatch', 'Amount mismatch')] %}<option value="{{ v }}" {{ 'selected' if filters.status == v else '' }}>{{ l }}</option>{% endfor %}
-    </select>
     <select name="method" onchange="this.form.submit()" aria-label="Filter by source" class="rounded-md border border-line-2 bg-surface px-2.5 py-2 text-xs font-medium text-ink-2">
       <option value="">Online + recorded</option>
       <option value="online" {{ 'selected' if filters.method == 'online' else '' }}>Online only</option>
@@ -88,11 +94,11 @@
       <option value="flutterwave" {{ 'selected' if filters.gateway == 'flutterwave' else '' }}>Flutterwave</option>
       <option value="bachs" {{ 'selected' if filters.gateway == 'bachs' else '' }}>Bachs</option>
     </select>
-    <label class="flex flex-col text-[12px] font-mono text-ink-3 uppercase tracking-wider">From
-      <input type="date" name="start" value="{{ filters.start }}" class="rounded-md border border-line-2 bg-surface px-2 py-1.5 text-xs text-ink normal-case"></label>
-    <label class="flex flex-col text-[12px] font-mono text-ink-3 uppercase tracking-wider">To
-      <input type="date" name="end" value="{{ filters.end }}" class="rounded-md border border-line-2 bg-surface px-2 py-1.5 text-xs text-ink normal-case"></label>
-    <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+    <span class="more-filters-dates">From <input type="date" name="start" value="{{ filters.start }}" aria-label="From date" class="rounded-md border border-line-2 bg-surface px-2 py-1.5 text-xs text-ink">
+      to <input type="date" name="end" value="{{ filters.end }}" aria-label="To date" class="rounded-md border border-line-2 bg-surface px-2 py-1.5 text-xs text-ink"></span>
+    <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+      </div>
+    </details>
     {% if filters.q or filters.status or filters.gateway or filters.start or filters.end or filters.branch_id or filters.method %}<a href="{{ url_for('admin_donations') }}" class="btn btn-ghost btn-sm">Clear</a>{% endif %}
   </form>
 
@@ -136,7 +142,7 @@
                     </div>
                   {% endif %}
                 </td>
-                <td data-label="Reference" class="font-mono text-[12px] text-ink-3 break-all max-w-[190px]">{{ g.reference }}</td>
+                <td data-label="Reference" class="font-mono text-[12px] text-ink-3" title="{{ g.reference }}"><span class="cell-clip">{{ g.reference }}</span></td>
               </tr>
             {% endfor %}
           </tbody>

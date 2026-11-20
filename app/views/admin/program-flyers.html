@@ -1,12 +1,12 @@
 {% extends "layouts/admin_base.html" %}
 {% from "macros/admin.html" import page_header, badge, empty_state with context %}
-{% block title %}Program Flyers | {{ siteName }}{% endblock %}
-{% block topbar_title %}Program Flyers{% endblock %}
+{% block title %}Event flyers | {{ siteName }}{% endblock %}
+{% block topbar_title %}Event flyers{% endblock %}
 {% block topbar_subtitle %}Event flyers for the programme page{% endblock %}
 {% block topbar_icon %}ri-gallery-upload-line{% endblock %}
 
 {% block page_header %}
-  {{ page_header("Program flyers", "Flyers shown on the public programme calendar",
+  {{ page_header("Event flyers", "Flyers shown on the public programme calendar",
       actions='<a href="' ~ url_for('admin_program_flyers_create_page') ~ '" class="btn btn-primary"><i class="ri-upload-2-line"></i>Upload flyer</a>',
       audit=[('Flyers', flyers|length), ('Active', flyers|selectattr('is_active')|list|length)]) }}
 {% endblock %}

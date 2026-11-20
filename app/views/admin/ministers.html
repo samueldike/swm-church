@@ -6,7 +6,7 @@
 {% block topbar_icon %}ri-user-voice-line{% endblock %}
 
 {% block page_header %}
-  {{ page_header("Ministers", "Bio-data of the ministers at " ~ ("HQ and in every branch." if can('system') else "your church.") ~ " A minister can be appointed head of a department or Resident Pastor.",
+  {{ page_header("Ministers", "The ministers at " ~ ("HQ and every branch." if can('system') else "your church."),
       actions=('<a href="' ~ url_for('admin_ministers_create') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add minister</a>') if can_manage else '',
       audit=[('On this page', pagination.total)]) }}
 {% endblock %}

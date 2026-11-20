@@ -278,17 +278,17 @@
 
 /* Clipper settings: tabs down the side on desktop, a scrolling row on phones (like a phone's Settings app). */
 .vc-settings { display: grid; grid-template-columns: 230px 1fr; gap: 16px; align-items: start; }
-.vc-tabs { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 8px; }
-.vc-tabs a { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; font-size: 13.5px; font-weight: 600; color: var(--vc-ink2); min-height: 44px; }
-.vc-tabs a:hover { background: var(--vc-sunken); color: var(--vc-ink); }
-.vc-tabs a[aria-current="true"] { background: #111; color: #f0c837; }
-.vc-tabs i { font-size: 18px; }
+.vc-setnav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 8px; }
+.vc-setnav a { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; font-size: 13.5px; font-weight: 600; color: var(--vc-ink2); min-height: 44px; }
+.vc-setnav a:hover { background: var(--vc-sunken); color: var(--vc-ink); }
+.vc-setnav a[aria-current="true"] { background: var(--color-gold-tint, #fbf3dc); color: var(--vc-ink); box-shadow: inset 3px 0 0 #c9a227; }
+.vc-setnav i { font-size: 18px; }
 .vc-tab-panels > details.vc-panel > summary { pointer-events: none; }
 .vc-tab-panels > details.vc-panel > summary::-webkit-details-marker { display: none; }
 @media (max-width: 860px) {
   .vc-settings { grid-template-columns: 1fr; }
-  .vc-tabs { flex-direction: row; overflow-x: auto; position: static; padding-bottom: 4px; scrollbar-width: none; }
-  .vc-tabs a { white-space: nowrap; flex-shrink: 0; border: 1px solid var(--vc-line); }
+  .vc-setnav { flex-direction: row; overflow-x: auto; position: static; padding-bottom: 4px; scrollbar-width: none; }
+  .vc-setnav a { white-space: nowrap; flex-shrink: 0; border: 1px solid var(--vc-line); }
 }
 
 /* Short card: three clear buttons, the rest under More (like YouTube Studio's ⋮ menu). */
@@ -473,3 +473,9 @@
 .vc-cap-drawer .vc-chip-tile { overflow: hidden; }
 .vc-cap-drawer .vc-chip-tile .vc-cap { max-width: 100%; overflow: hidden; }
 .vc-cap-drawer .vc-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Clipper settings on phones: every section is a button in a two-column grid (like Settings), not a hidden scroll row. */
+@media (max-width: 900px) {
+  .vc-setnav { display: grid !important; grid-template-columns: 1fr 1fr; gap: 6px; overflow: visible !important; }
+  .vc-setnav a { white-space: normal; }
+}

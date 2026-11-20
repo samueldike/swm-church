@@ -20,15 +20,15 @@
         <div><p class="mono-label">Who has reported</p><h2 class="text-[15px] font-semibold text-ink mt-1">{{ track_month|month_label }}</h2></div>
         <form method="get" action="{{ url_for('admin_branch_reports') }}" class="flex items-end gap-2" data-no-loading>
           <label class="flex flex-col text-[12px] font-mono text-ink-3 uppercase tracking-wider">Month
-            <input type="month" name="month" value="{{ track_month }}" class="rounded-md border border-line-2 bg-surface px-2 py-1.5 text-xs text-ink normal-case"></label>
+            <input type="month" name="month" value="{{ track_month }}" onchange="this.form.submit()" class="rounded-md border border-line-2 bg-surface px-2 py-1.5 text-xs text-ink normal-case"></label>
           {% if country_options|length > 1 or filter_country %}
           <label class="flex flex-col text-[12px] font-mono text-ink-3 uppercase tracking-wider">Country
-            <select name="country" class="rounded-md border border-line-2 bg-surface px-2 py-1.5 text-xs text-ink normal-case">
+            <select name="country" onchange="this.form.submit()" class="rounded-md border border-line-2 bg-surface px-2 py-1.5 text-xs text-ink normal-case">
               <option value="">All</option>
               {% for code, name in country_options %}<option value="{{ code }}" {{ 'selected' if filter_country == code else '' }}>{{ name }}</option>{% endfor %}
             </select></label>
           {% endif %}
-          <button type="submit" class="btn btn-secondary btn-sm">Show</button>
+          <noscript><button type="submit" class="btn btn-secondary btn-sm">Show</button></noscript>
         </form>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">

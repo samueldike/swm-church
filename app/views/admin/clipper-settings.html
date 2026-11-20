@@ -4,7 +4,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}Settings{% endblock %}
 {% block topbar_icon %}ri-settings-3-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=12">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=13">{% endblock %}
 
 {% block page_header %}
   {{ page_header("Clipper settings", "Set these up once. Every new video uses them.",
@@ -13,7 +13,7 @@
 
 {% block content %}
 <div class="vc vc-settings">
-  <nav class="vc-tabs" aria-label="Clipper settings">
+  <nav class="vc-setnav" aria-label="Clipper settings">
     {% if youtube is not none %}<a href="#youtube-access" data-tab="youtube-access"><i class="ri-youtube-line"></i><span>YouTube access</span></a>{% endif %}
     {% if watch %}<a href="#watch" data-tab="watch"><i class="ri-live-line"></i><span>Clip lives automatically</span></a>{% endif %}
     {% if frames %}
@@ -456,7 +456,7 @@
 (() => {
   const ctl = new AbortController(); const o = { signal: ctl.signal };
   document.addEventListener('turbo:before-visit', () => ctl.abort(), { once: true });
-  const tabs = [...document.querySelectorAll('.vc-tabs [data-tab]')];
+  const tabs = [...document.querySelectorAll('.vc-setnav [data-tab]')];
   const show = () => {
     const want = (location.hash || '').slice(1);
     const id = tabs.some((t) => t.dataset.tab === want) ? want : (tabs[0] && tabs[0].dataset.tab);

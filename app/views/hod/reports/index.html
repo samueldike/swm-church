@@ -1,14 +1,14 @@
 {% extends "layouts/admin_base.html" %}
-{% from "macros/admin.html" import page_header, badge, empty_state with context %}
-{% block title %}Monthly Reports | {{ siteName }}{% endblock %}
-{% block topbar_title %}Monthly Reports{% endblock %}
+{% from "macros/admin.html" import page_header, badge, empty_state, pager with context %}
+{% block title %}Monthly reports | {{ siteName }}{% endblock %}
+{% block topbar_title %}Monthly reports{% endblock %}
 {% block topbar_subtitle %}Your departmental reports{% endblock %}
 {% block topbar_icon %}ri-file-chart-line{% endblock %}
 
 {% block page_header %}
   {{ page_header("Monthly reports", (department_name or 'Your department') ~ (' · ' ~ admin_branch_name if admin_branch_name else ''),
       actions='<a href="' ~ url_for('hod_reports_create') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>New report</a>',
-      audit=[('Reports', reports|length), ('Submitted', reports|selectattr('status', 'equalto', 'submitted')|list|length), ('Drafts', reports|selectattr('status', 'equalto', 'draft')|list|length)]) }}
+      audit=[('Drafts', counts.get('draft', 0)), ('Waiting for review', counts.get('submitted', 0)), ('Reviewed', counts.get('reviewed', 0))]) }}
 {% endblock %}
 
 {% block content %}
@@ -24,13 +24,14 @@
               <td data-label="Status">{{ badge(r.status|capitalize, 'ok' if r.status == 'reviewed' else ('neut' if r.status == 'draft' else 'warn')) }}</td>
               <td data-label="Submitted" class="font-mono text-xs text-ink-2">{{ r.submitted_at.strftime('%b %d, %Y %I:%M %p') if r.submitted_at else 'Not submitted' }}</td>
               <td data-label="Action" class="text-right">
-                <a href="{{ url_for('hod_reports_edit', report_id=r.id) }}" class="btn btn-secondary btn-sm"><i class="ri-edit-line"></i>Edit</a>
+                {% if r.status == 'draft' %}<a href="{{ url_for('hod_reports_edit', report_id=r.id) }}" class="btn btn-primary btn-sm"><i class="ri-edit-line"></i>Finish</a>{% else %}<a href="{{ url_for('hod_reports_edit', report_id=r.id) }}" class="btn btn-secondary btn-sm"><i class="ri-eye-line"></i>Open</a>{% endif %}
               </td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+    <div class="px-4 pb-3">{{ pager(pagination) }}</div>
   {% else %}
     {{ empty_state("ri-file-chart-line", "No reports yet", "Create your first monthly report to get started.",
                    '<a href="' ~ url_for('hod_reports_create') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>New report</a>') }}

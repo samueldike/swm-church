@@ -1,7 +1,7 @@
 {% extends "layouts/admin_base.html" %}
 {% from "macros/admin.html" import page_header, badge with context %}
-{% block title %}ScentAI knowledge | {{ siteName }}{% endblock %}
-{% block topbar_title %}ScentAI knowledge{% endblock %}
+{% block title %}Website chat (ScentAI) | {{ siteName }}{% endblock %}
+{% block topbar_title %}Website chat (ScentAI){% endblock %}
 {% block topbar_subtitle %}Ministry information for the assistant{% endblock %}
 {% block page_header %}{{ page_header('ScentAI knowledge', 'Manage the ministry information ScentAI uses alongside teachings and the published calendar.', actions='<a class="btn btn-primary" href="' ~ url_for('admin_scentai_create') ~ '">Add knowledge</a>') }}{% endblock %}
 {% block content %}

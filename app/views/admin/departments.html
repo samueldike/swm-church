@@ -7,8 +7,7 @@
 
 {% block page_header %}
   {{ page_header("Departments", "Ministry departments and their status",
-      actions='<a href="' ~ url_for('admin_departments_create_page') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add department</a>',
-      audit=[('Departments', departments|length), ('Active', departments|selectattr('is_active')|list|length)]) }}
+      actions='<a href="' ~ url_for('admin_departments_create_page') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add department</a>') }}
 {% endblock %}
 
 {% block content %}

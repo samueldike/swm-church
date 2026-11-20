@@ -12,7 +12,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="flex flex-col gap-3.5 max-w-4xl">
+<div class="flex flex-col gap-3.5">
   {% for a in items %}
     {% set expired = a.expires_at and a.expires_at < now %}
     <article class="panel">
@@ -41,7 +41,7 @@
     </article>
   {% else %}
     <div class="panel-flush">
-      {{ empty_state("ri-megaphone-line", "No announcements", "HQ notices to your branch will appear here.",
+      {{ empty_state("ri-megaphone-line", "No announcements yet", ("Write one and every branch office sees it on its dashboard." if can_manage else "Notices from HQ will appear here."),
                      ('<a href="' ~ url_for('admin_announcements_create') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>New announcement</a>') if can_manage else '') }}
     </div>
   {% endfor %}

@@ -7,12 +7,13 @@
 
 {% block page_header %}
   {{ page_header(branch.name,
-      ([branch.address, branch.city, region_name(branch.region_code) or branch.state, country_name(branch.country_code) or branch.country]|select|join(', ')) or 'Branch overview',
+      ([branch.address, branch.city, region_name(branch.region_code) or branch.state, country_name(branch.country_code) or branch.country]|select|unique|join(', ')) or 'Branch overview',
       actions=(('<a href="' ~ url_for('admin_branches') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All branches</a>')
                if can('system') else '')
-             ~ ('<a href="' ~ (url_for('admin_branch_settings_for', branch_id=branch.id) if can('system') else url_for('admin_branch_settings')) ~ '" class="btn btn-secondary"><i class="ri-settings-3-line"></i>Branch settings</a>' if not branch.is_hq else '')
-             ~ (('<form method="POST" action="' ~ url_for('admin_branch_set_active', branch_id=branch.id) ~ '" class="inline" data-confirm="' ~ ('Deactivate this branch? Its data is kept, but it disappears from public forms.' if branch.is_active else 'Reactivate this branch?') ~ '" data-confirm-title="' ~ ('Deactivate branch' if branch.is_active else 'Reactivate branch') ~ '" data-confirm-accept="Yes"><input type="hidden" name="csrf_token" value="' ~ csrf_token ~ '"><button type="submit" class="btn btn-secondary">' ~ ('Deactivate' if branch.is_active else 'Reactivate') ~ '</button></form>') if can('system') and not branch.is_hq else ''),
-      audit=[('Slug', branch.slug), ('Status', 'Active' if branch.is_active else 'Inactive'), ('Created', branch.created_at.strftime('%Y-%m-%d') if branch.created_at else '—')]) }}
+             ~ ('<a href="' ~ ((url_for('admin_branch_settings_for', branch_id=branch.id) if can('system') else url_for('admin_branch_settings')) if not branch.is_hq else url_for('admin_settings')) ~ '" class="btn btn-secondary"><i class="ri-settings-3-line"></i>' ~ ('Branch settings' if not branch.is_hq else 'Settings') ~ '</a>')
+             ~ ('<a href="#branch-profile" class="btn btn-primary"><i class="ri-edit-line"></i>Edit branch</a>' if is_super else '')
+             ~ (('<form method="POST" action="' ~ url_for('admin_branch_set_active', branch_id=branch.id) ~ '" class="inline" data-confirm="' ~ ('Deactivate this branch? Its data is kept, but it disappears from public forms.' if branch.is_active else 'Reactivate this branch?') ~ '" data-confirm-title="' ~ ('Deactivate branch' if branch.is_active else 'Reactivate branch') ~ '" data-confirm-accept="Yes"><input type="hidden" name="csrf_token" value="' ~ csrf_token ~ '"><button type="submit" class="btn btn-ghost">' ~ ('Deactivate' if branch.is_active else 'Reactivate') ~ '</button></form>') if can('system') and not branch.is_hq else ''),
+      audit=[('Status', 'Active' if branch.is_active else 'Inactive')]) }}
 {% endblock %}
 
 {% block content %}
@@ -27,7 +28,7 @@
 
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
     <div class="panel">
-      <h2 class="text-[14px] font-semibold text-ink mb-3">Branch administrators</h2>
+      <h2 class="text-[14px] font-semibold text-ink mb-3">People who can sign in</h2>
       {% for a in admins %}
         <div class="flex items-center gap-2.5 py-2.5 {{ 'border-b border-line' if not loop.last }}">
           <div class="flex-grow min-w-0">{{ person(a.name, a.email, (a.name[0] if a.name else 'A')) }}</div>
@@ -146,7 +147,7 @@
     </div>
   </div>
 
-  <div class="panel max-w-3xl w-full">
+  <div class="panel w-full" id="branch-profile" style="scroll-margin-top: 16px">
     <h2 class="text-[14px] font-semibold text-ink mb-1">Branch profile</h2>
     <p class="text-[12px] text-ink-3 mb-4">Update identity, contact details and active status.</p>
     {% if is_super %}

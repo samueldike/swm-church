@@ -52,7 +52,7 @@
       <i class="ri-alert-line text-lg text-bad flex-shrink-0 mt-0.5 sm:mt-0"></i>
       <div class="flex-grow min-w-0">
         <p class="text-[12.5px] font-semibold text-ink">{{ critical_alerts|length }} critical security event{{ 's' if critical_alerts|length != 1 else '' }} awaiting review</p>
-        <p class="text-[12px] text-ink-2 mt-0.5 font-mono">{{ critical_alerts[0].action }}{% if critical_alerts|length > 1 %} and {{ critical_alerts|length - 1 }} more{% endif %} · last 24 hours</p>
+        <p class="text-[12px] text-ink-2 mt-0.5">{{ critical_alerts[0].action|event_words }}{% if critical_alerts|length > 1 %} and {{ critical_alerts|length - 1 }} more{% endif %} · last 24 hours</p>
       </div>
       <a href="{{ url_for('admin_security_logs') }}?reviewed=no&amp;severity=critical" class="text-xs font-semibold text-bad whitespace-nowrap flex-shrink-0">Review &rarr;</a>
     </div>
@@ -189,7 +189,7 @@
           {% for log in activityFeed[:6] %}
             <div class="flex items-center gap-2.5 py-2 {{ 'border-b border-line' if not loop.last }}">
               <span class="w-1.5 h-1.5 rounded-full bg-gold flex-shrink-0"></span>
-              <span class="flex-grow min-w-0 font-mono text-[12px] text-ink-2 truncate">{{ log.action }}</span>
+              <span class="flex-grow min-w-0 text-[12.5px] text-ink-2 truncate">{{ log.action|event_words }}</span>
               <span class="font-mono text-[12px] text-ink-3 whitespace-nowrap flex-shrink-0">{{ log.created_at|timesince }}</span>
             </div>
           {% endfor %}

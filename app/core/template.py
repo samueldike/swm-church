@@ -130,10 +130,39 @@ def _event_words(code) -> str:
     code = str(code or "")
     if code in EVENT_WORDS:
         return EVENT_WORDS[code]
-    words = code.replace("_", " ").replace(".", " · ").strip()
+    # Unknown codes read as a sentence: "clipper.outro_add" -> "Clipper outro added".
+    verbs = {"add": "added", "create": "created", "delete": "deleted", "remove": "removed", "update": "changed",
+             "edit": "changed", "save": "saved", "send": "sent", "publish": "published", "upload": "uploaded",
+             "success": "", "login": "signed in", "logout": "signed out", "failed": "failed", "reset": "reset"}
+    parts = code.replace(".", " ").replace("_", " ").split()
+    if parts and parts[-1] in verbs:
+        parts[-1] = verbs[parts[-1]]
+    words = " ".join(p for p in parts if p).strip()
     return words[:1].upper() + words[1:]
 
 
+_BACK_RE = None
+
+
+def _split_back(actions):
+    """Page headers: the "← Back" button among a page's actions becomes a small back link above the title (like
+    Gmail and WordPress), so every create/edit page has the same way back. Returns (href, label, other actions)."""
+    import re as _re
+
+    global _BACK_RE
+    if _BACK_RE is None:
+        _BACK_RE = _re.compile(r'<a href="([^"]+)" class="btn btn-(?:secondary|ghost)[^"]*"><i class="ri-arrow-left-line"></i>([^<]*)</a>')
+    text = str(actions or "")
+    m = _BACK_RE.search(text)
+    if not m:
+        return None, None, text
+    label = m.group(2).strip()
+    if label.lower() in ("cancel", "back", ""):
+        label = "Back"
+    return m.group(1), label, (text[:m.start()] + text[m.end():]).strip()
+
+
+_env.filters["split_back"] = _split_back
 _env.filters["event_words"] = _event_words
 _env.filters["clock"] = _clock
 _env.filters["longdate"] = _longdate

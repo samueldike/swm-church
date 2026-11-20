@@ -1,7 +1,7 @@
 {% extends "layouts/admin_base.html" %}
 {% from "macros/admin.html" import page_header, badge, empty_state with context %}
-{% block title %}Transcriptions | {{ siteName }}{% endblock %}
-{% block topbar_title %}Transcriptions{% endblock %}
+{% block title %}Message transcripts | {{ siteName }}{% endblock %}
+{% block topbar_title %}Message transcripts{% endblock %}
 {% block topbar_subtitle %}Speech-to-text for sermon audio{% endblock %}
 {% block topbar_icon %}ri-file-text-line{% endblock %}
 
@@ -9,7 +9,7 @@
 {% for sm in sermons %}{% if (sm.transcription_status or 'none') in ['none', 'failed'] and (sm.audio_file_path or sm.telegram_file_id) %}{% set ns.waiting = ns.waiting + 1 %}{% endif %}{% endfor %}
 {% block page_header %}
   <div id="ts-header">
-  {{ page_header("Transcriptions", "Every uploaded message is transcribed automatically, one at a time, in the background.",
+  {{ page_header("Message transcripts", "Messages are turned into text in the background, one at a time. Waiting ones start on their own.",
       actions=(('<form method="POST" action="' ~ url_for('admin_transcriptions_start_waiting') ~ '" data-turbo="false"><input type="hidden" name="csrf_token" value="' ~ csrf_token ~ '"><button type="submit" class="btn btn-primary"><i class="ri-play-circle-line"></i>Transcribe ' ~ ns.waiting ~ ' waiting</button></form>') if ns.waiting else ''),
       audit=[('Completed', sermons|selectattr('transcription_status', 'equalto', 'completed')|list|length),
              ('In progress', (sermons|selectattr('transcription_status', 'in', ['queued', 'processing'])|list|length)),
@@ -37,7 +37,7 @@
                 {% if ts in ['none', 'failed'] and not (sm.audio_file_path or sm.telegram_file_id) %}
                   {{ badge('No audio', 'neut') }}
                 {% else %}
-                  {{ badge({'completed': 'Completed', 'processing': 'Transcribing…', 'queued': 'Queued', 'failed': 'Failed', 'none': 'Not started'}.get(ts, ts|capitalize),
+                  {{ badge({'completed': 'Completed', 'processing': 'Transcribing…', 'queued': 'Queued', 'failed': 'Failed', 'none': 'Waiting'}.get(ts, ts|capitalize),
                            'ok' if ts == 'completed' else ('bad' if ts == 'failed' else ('warn' if ts in ['processing', 'queued'] else 'neut'))) }}
                   {% if ts == 'failed' and sm.transcription_error %}<p class="text-[12px] text-bad mt-1 max-w-xs">{{ sm.transcription_error }}</p>{% endif %}
                 {% endif %}

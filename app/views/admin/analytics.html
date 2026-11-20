@@ -1,13 +1,12 @@
 {% extends "layouts/admin_base.html" %}
 {% from "macros/admin.html" import page_header, kpi, empty_state with context %}
-{% block title %}Site traffic | {{ siteName }}{% endblock %}
-{% block topbar_title %}Site traffic{% endblock %}
+{% block title %}Visitors to the site | {{ siteName }}{% endblock %}
+{% block topbar_title %}Visitors to the site{% endblock %}
 {% block topbar_subtitle %}Which pages people use{% endblock %}
 {% block topbar_icon %}ri-bar-chart-2-line{% endblock %}
 
 {% block page_header %}
-  {{ page_header("Site traffic", "Counts only — no cookies, no IP addresses, nothing that identifies a person. Bots, admin pages and visitors who send “Do Not Track” are left out.",
-      audit=[('Period', 'Last ' ~ data.days ~ ' days'), ('Since', data.since.strftime('%d %b %Y'))]) }}
+  {{ page_header("Visitors to the site", "Counts only — no cookies, no IP addresses, nothing that identifies a person. Bots, admin pages and visitors who send “Do Not Track” are left out.") }}
 {% endblock %}
 
 {% block content %}

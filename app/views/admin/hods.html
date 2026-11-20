@@ -1,12 +1,12 @@
 {% extends "layouts/admin_base.html" %}
 {% from "macros/admin.html" import page_header, badge, person, empty_state with context %}
-{% block title %}Department HODs | {{ siteName }}{% endblock %}
-{% block topbar_title %}Department HODs{% endblock %}
+{% block title %}Department heads | {{ siteName }}{% endblock %}
+{% block topbar_title %}Department heads{% endblock %}
 {% block topbar_subtitle %}Departmental leadership{% endblock %}
 {% block topbar_icon %}ri-user-star-line{% endblock %}
 
 {% block page_header %}
-  {{ page_header("Department HODs", "Heads of department and their invitations. Invite anyone who is not a minister here; to make a minister a HOD, open them under Ministers.",
+  {{ page_header("Department heads", "Heads of department and their invitations. Invite anyone who is not a minister here; to make a minister a HOD, open them under Ministers.",
       actions=('<a href="' ~ url_for('admin_ministers') ~ '" class="btn btn-secondary"><i class="ri-user-voice-line"></i>From ministers</a> ' if can('ministers.view') else '') ~ '<a href="' ~ url_for('admin_hods_invite_page') ~ '" class="btn btn-primary"><i class="ri-user-add-line"></i>Invite HOD</a>',
       audit=[('Active accounts', hods|length), ('Recent invitations', invitations|length), ('Departments', departments|length)]) }}
 {% endblock %}
@@ -28,13 +28,6 @@
                 <td data-label="Status">{{ badge('Active' if hod.is_active else 'Disabled', 'ok' if hod.is_active else 'neut') }}</td>
                 <td data-label="Actions" class="text-right">
                   <a href="{{ url_for('admin_hods_edit_page', hod_id=hod.id) }}" class="icon-btn" aria-label="Edit {{ hod.name }}"><i class="ri-edit-line"></i></a>
-                  {% if can('system') %}
-                    <form method="POST" action="{{ url_for('admin_hods_make_rp', hod_id=hod.id) }}" class="inline"
-                          data-confirm="Make {{ hod.name }} the Resident Pastor of {{ hod.branch.name if hod.branch else 'their church' }}? They will review that church's department reports instead of submitting their own." data-confirm-title="Appoint Resident Pastor" data-confirm-accept="Appoint">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                      <button type="submit" class="icon-btn" aria-label="Make {{ hod.name }} Resident Pastor" title="Make Resident Pastor"><i class="ri-user-star-fill"></i></button>
-                    </form>
-                  {% endif %}
                 </td>
               </tr>
             {% endfor %}

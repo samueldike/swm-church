@@ -9,14 +9,13 @@
 {% set total_n = found.n + failed.n + saved.n + on_site.n %}
 {% set ready = login.stage == 'ready' %}
 {% set busy = job_running %}
-{% block title %}Telegram archive | {{ siteName }}{% endblock %}
-{% block topbar_title %}Telegram archive{% endblock %}
+{% block title %}Import from Telegram | {{ siteName }}{% endblock %}
+{% block topbar_title %}Import from Telegram{% endblock %}
 {% block topbar_subtitle %}Back up the HQ channel's audio{% endblock %}
 {% block topbar_icon %}ri-archive-drawer-line{% endblock %}
 
 {% block page_header %}
-  {{ page_header("Telegram archive", "A private backup of every audio file ever posted to the HQ Telegram channel, including posts from before the bot was added.",
-      audit=[('Audio found', total_n), ('Backed up', saved.n), ('Drafts created', imported)]) }}
+  {{ page_header("Import from Telegram", "A private backup of every audio file ever posted to the HQ Telegram channel, including posts from before the bot was added.") }}
 {% endblock %}
 
 {% block content %}

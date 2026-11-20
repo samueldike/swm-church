@@ -1,14 +1,13 @@
 {% extends "layouts/admin_base.html" %}
 {% from "macros/admin.html" import page_header, badge, person, empty_state with context %}
-{% block title %}Administrators | {{ siteName }}{% endblock %}
-{% block topbar_title %}Administrators{% endblock %}
+{% block title %}Who can sign in | {{ siteName }}{% endblock %}
+{% block topbar_title %}Who can sign in{% endblock %}
 {% block topbar_subtitle %}Console access and roles{% endblock %}
 {% block topbar_icon %}ri-shield-user-line{% endblock %}
 
 {% block page_header %}
   {{ page_header("Who can sign in", "Everyone who can use this admin area, and what each can do.",
-      actions='<a href="' ~ url_for('admin_admins_create_page') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add administrator</a>',
-      audit=[('Accounts', admins|length), ('Super admins', admins|selectattr('role', 'equalto', 'super_admin')|list|length)]) }}
+      actions='<a href="' ~ url_for('admin_admins_create_page') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add administrator</a>') }}
 {% endblock %}
 
 {% block content %}

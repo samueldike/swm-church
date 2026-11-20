@@ -8,8 +8,7 @@
 
 {% block page_header %}
   {{ page_header("Photos", "Media for the public gallery and outreach strips",
-      actions='<a href="' ~ url_for('admin_photos_upload_page') ~ '?collection=' ~ collection ~ '" class="btn btn-primary"><i class="ri-upload-2-line"></i>Upload photos</a>',
-      audit=[('Gallery', counts.get('gallery', 0)), ('Outreach', counts.get('outreach', 0)), ('Viewing', collection_labels.get(collection, collection))]) }}
+      actions='<a href="' ~ url_for('admin_photos_upload_page') ~ '?collection=' ~ collection ~ '" class="btn btn-primary"><i class="ri-upload-2-line"></i>Upload photos</a>') }}
 {% endblock %}
 
 {% block content %}

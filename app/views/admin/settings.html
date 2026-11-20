@@ -731,7 +731,7 @@
       t.classList.toggle('border-line-2', on);
       t.classList.toggle('text-ink', on);
       if (on && focus) t.focus();
-      if (on) t.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      if (on && scroll) t.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     });
     ids.forEach((i) => { const p = document.getElementById(i); if (p) { p.hidden = i !== id; p.setAttribute('role', 'tabpanel'); p.setAttribute('aria-labelledby', 'tab-' + i); } });
     if (bar) bar.hidden = id === 'media';           /* the media panel has its own upload forms */

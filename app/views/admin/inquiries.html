@@ -1,12 +1,12 @@
 {% extends "layouts/admin_base.html" %}
 {% from "macros/admin.html" import page_header, badge, person, empty_state with context %}
-{% block title %}Inquiries | {{ siteName }}{% endblock %}
-{% block topbar_title %}Inquiries{% endblock %}
+{% block title %}Contact messages | {{ siteName }}{% endblock %}
+{% block topbar_title %}Contact messages{% endblock %}
 {% block topbar_subtitle %}Contact form submissions{% endblock %}
 {% block topbar_icon %}ri-question-answer-line{% endblock %}
 
 {% block page_header %}
-  {{ page_header("Inquiries", "Messages from the public contact form and manually logged inquiries",
+  {{ page_header("Contact messages", "Messages from the public contact form and manually logged inquiries",
       actions='<a href="' ~ url_for('admin_inquiries_create_page') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add inquiry</a>',
       audit=[('Shown', inquiries|length), ('New', inquiries|selectattr('status', 'equalto', 'new')|list|length), ('In progress', inquiries|selectattr('status', 'equalto', 'in_progress')|list|length)]) }}
 {% endblock %}
@@ -51,12 +51,7 @@
                 <td data-label="Received" class="font-mono text-xs text-ink-3">{{ inquiry.created_at|timesince }}</td>
                 <td data-label="Status">{{ badge(inquiry.status|replace('_', ' ')|capitalize, 'bad' if inquiry.status == 'new' else ('warn' if inquiry.status == 'in_progress' else 'ok')) }}</td>
                 <td data-label="Actions" class="text-right whitespace-nowrap">
-                  <a href="{{ url_for('admin_inquiries_show', inquiry_id=inquiry.id) }}" class="icon-btn" aria-label="Open inquiry"><i class="ri-eye-line"></i></a>
-                  <form method="POST" action="{{ url_for('admin_inquiries_destroy', inquiry_id=inquiry.id) }}" class="inline"
-                        data-confirm="Delete this inquiry from {{ inquiry.name }}?" data-confirm-title="Delete Inquiry" data-confirm-accept="Delete">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                    <button type="submit" class="icon-btn text-bad" aria-label="Delete inquiry"><i class="ri-delete-bin-line"></i></button>
-                  </form>
+                  <a href="{{ url_for('admin_inquiries_show', inquiry_id=inquiry.id) }}" class="icon-btn" aria-label="Open message from {{ inquiry.name }}" title="Open"><i class="ri-arrow-right-s-line"></i></a>
                 </td>
               </tr>
             {% endfor %}

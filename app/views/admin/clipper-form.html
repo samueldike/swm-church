@@ -4,7 +4,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}New video{% endblock %}
 {% block topbar_icon %}ri-scissors-cut-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=12">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=13">{% endblock %}
 
 {% block page_header %}
   {{ page_header("New video", "Choose the video, how many shorts you want and how they should look. You can leave the page while it works.",
@@ -43,7 +43,7 @@
     <div data-pane="url" class="flex flex-col gap-3">
       <label class="vc-field">Video link
         <input type="url" name="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off">
-        <small>YouTube links need YouTube access, which the HQ Administrator connects once on the Video Clipper page. Facebook, Vimeo and direct links work as they are. Uploading the file always works.</small>
+        <small>YouTube links need YouTube access, which the HQ Administrator connects once in {{ "Video Clipper → YouTube access"|directions }}. Facebook, Vimeo and direct links work as they are. Uploading the file always works.</small>
       </label>
     </div>
     <div data-pane="upload" hidden>

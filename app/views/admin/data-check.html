@@ -1,12 +1,12 @@
 {% extends "layouts/admin_base.html" %}
 {% from "macros/admin.html" import page_header, badge, empty_state with context %}
-{% block title %}Data check | {{ siteName }}{% endblock %}
-{% block topbar_title %}Data check{% endblock %}
+{% block title %}Fix old records | {{ siteName }}{% endblock %}
+{% block topbar_title %}Fix old records{% endblock %}
 {% block topbar_subtitle %}Records that need a value from the official lists{% endblock %}
 {% block topbar_icon %}ri-shield-check-line{% endblock %}
 
 {% block page_header %}
-  {{ page_header("Data check", "Places, purposes and categories must come from the official lists so reports group correctly. These records were typed before the lists existed and could not be matched exactly, so nothing was guessed: open each one and choose the right value.",
+  {{ page_header("Fix old records", "Places, purposes and categories must come from the official lists so reports group correctly. These records were typed before the lists existed and could not be matched exactly, so nothing was guessed: open each one and choose the right value.",
       audit=[('To fix', items|length)]) }}
 {% endblock %}
 

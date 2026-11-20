@@ -4575,12 +4575,22 @@ async def hod_reports_index(request: Request, db: AsyncSession = Depends(get_db)
     from app.models.unit_report import UnitReport
     ctx = await _admin_context(request, db, "hod.reports")
 
-    report_query = select(UnitReport).where(UnitReport.hod_admin_id == admin.id).order_by(UnitReport.created_at.desc())
-    reports_result = await db.execute(report_query)
-    reports = list(reports_result.scalars().all())
+    from app.core.pagination import paginate
+
+    # Newest month first (the month the report is about, not the day the row was made), 24 to a page.
+    report_query = (select(UnitReport).where(UnitReport.hod_admin_id == admin.id)
+                    .order_by(UnitReport.report_month.desc().nulls_last(), UnitReport.created_at.desc()))
+    try:
+        page = max(1, int(request.query_params.get("page") or 1))
+    except ValueError:
+        page = 1
+    pagination = await paginate(db, report_query, page=page, per_page=24)
+    reports = pagination["items"]
+    counts = dict((await db.execute(select(UnitReport.status, func.count()).where(UnitReport.hod_admin_id == admin.id)
+                                    .group_by(UnitReport.status))).all())
 
     return await render_template(request, "hod/reports/index.html", {
-        "_db": db, "reports": reports, "hod": admin,
+        "_db": db, "reports": reports, "hod": admin, "pagination": pagination, "counts": counts,
         "department_name": await _admin_department_name(db, admin),
         "title": "Monthly Reports", "headerIcon": "ri-file-chart-line", **ctx,
     })

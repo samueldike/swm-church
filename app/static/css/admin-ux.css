@@ -59,3 +59,74 @@ body, .font-sans, .font-mono { font-family: var(--font-sans); }
   #settings-tabs .settings-tab { white-space: normal; border: 1px solid var(--color-line) !important; background: var(--color-surface); min-height: 44px; }
   #settings-tabs .settings-tab[aria-selected="true"] { border-color: var(--color-gold) !important; background: var(--color-gold-tint, #fbf3dc); }
 }
+
+/* ── 2026-11 layout pass: one heading, one way back, calm lists ── */
+/* The page heading is the title: the top bar no longer repeats it (pages without a heading keep it). */
+body:has(.page-head) #admin-topbar .topbar-title { display: none !important; }
+/* Back link above the title, the same on every create/edit page. */
+.page-back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 13px; font-weight: 600;
+  color: var(--color-ink-2); text-decoration: none; min-height: 32px; }
+.page-back:hover { color: var(--color-gold-text, #8a6d12); }
+/* Header buttons stay on one line next to the title; the main (gold) button comes first on phones. */
+@media (min-width: 640px) { .page-actions { flex-shrink: 0; flex-wrap: nowrap; } }
+@media (max-width: 639px) { .page-actions .btn-primary { order: -1; } .page-actions { width: 100%; } }
+/* Long explanations under a title: two lines on phones, the rest stays readable on a bigger screen. */
+@media (max-width: 639px) { .page-sub { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; } }
+
+/* Filter rows: same size controls, no separate "Filter" button (they apply as you choose). */
+@media (max-width: 767px) { .filter-bar select, .filter-bar input[type=date] { flex: 1 1 140px; min-height: 44px; } }
+
+/* Links inside notices are just links (not tall touch buttons). */
+[role=alert] a, [role=note] a, .vc-alert a { display: inline; min-height: 0; padding: 0; }
+
+@media (max-width: 767px) {
+  /* Phone list cards: two facts side by side, the name and the buttons across the full width. */
+  .dtable-responsive tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 14px; position: relative; }
+  .dtable-responsive td + td { margin-top: 0; }
+  .dtable-responsive td:first-child, .dtable-responsive td:last-child:has(a, button, form), .dtable-responsive td[colspan] { grid-column: 1 / -1; }
+  .dtable-responsive td { text-align: left !important; }
+  .dtable-responsive td:last-child:has(a, button, form) { margin-top: 2px; }
+  /* A row whose only button is "open": the whole card opens it (like Gmail). */
+  .dtable-responsive tr:has(> td:last-child > .icon-btn:only-child) td:first-child a:first-of-type::after { content: ""; position: absolute; inset: 0; }
+  .dtable-responsive td:last-child:has(> .icon-btn:only-child) { display: none; }
+  /* Group headings inside a list (e.g. a country) are headings, not empty cards. */
+  .dtable-responsive tr.bg-sunken { display: block; border: 0; background: none; padding: 6px 2px 0; }
+  /* Cards inside a card: drop the outer frame so cards don't touch. */
+  .panel-flush:has(.dtable-responsive) { border: 0; background: transparent; box-shadow: none; }
+  .panel-flush:has(.dtable-responsive) > .px-4 { padding-left: 0; padding-right: 0; }
+}
+
+/* Picture cards (photos, flyers, slides): every picture box keeps its own shape; a tall photo or a broken one never stretches it. */
+.panel-flush > .relative[class*="aspect-"] { overflow: hidden; min-height: 0; }
+.panel-flush > .relative[class*="aspect-"] > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+/* "More filters": the rarely used filters fold away under one button; open, they take their own row. */
+.more-filters > summary { list-style: none; }
+.more-filters > summary::-webkit-details-marker { display: none; }
+.more-filters[open] { flex-basis: 100%; order: 10; }
+.more-filters[open] > summary { margin-bottom: 8px; }
+.more-filters-body { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px; border: 1px solid var(--color-line); border-radius: 10px; background: var(--color-sunken); }
+.more-filters-dates { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--color-ink-2); }
+@media (max-width: 767px) { .more-filters-body > select { flex: 1 1 140px; min-height: 44px; } }
+
+/* A form opened by the page's own button (e.g. Record a gift): hidden until then, with its own Close. */
+.record-gift:not([open]) { display: none; }
+.record-gift > summary { list-style: none; }
+.record-gift > summary::-webkit-details-marker { display: none; }
+
+/* Long codes in a cell: one line, the full value on hover. */
+.cell-clip { display: inline-block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+
+/* "More" menu in a page header (rarely used actions, like Gmail's ⋮). */
+.hdr-more { position: relative; }
+.hdr-more > summary { list-style: none; }
+.hdr-more > summary::-webkit-details-marker { display: none; }
+.hdr-more-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; min-width: 240px; padding: 6px; border-radius: 12px;
+  background: var(--color-surface); border: 1px solid var(--color-line); box-shadow: 0 12px 32px rgba(0,0,0,.14); }
+.hdr-more-menu > a, .hdr-more-menu > button, .hdr-more-menu > form > button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 42px;
+  padding: 8px 10px; border: 0; border-radius: 8px; background: none; font-size: 13.5px; font-weight: 600; color: var(--color-ink); text-align: left; text-decoration: none; cursor: pointer; }
+.hdr-more-menu > a:hover, .hdr-more-menu > button:hover, .hdr-more-menu > form > button:hover { background: var(--color-sunken); }
+@media (max-width: 639px) { .hdr-more-menu { right: auto; left: 0; } }
+
+/* Bulk actions appear only once something is ticked (like Gmail). */
+#bulk-review-form:has(#bulk-submit:disabled) { display: none !important; }

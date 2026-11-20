@@ -6,8 +6,9 @@
 {% block topbar_icon %}ri-exchange-funds-line{% endblock %}
 
 {% block page_header %}
-  {{ page_header("Remittances", "What each branch has given, where the money sits, and who owes whom. Set each branch's HQ share in its Branch settings.",
-      audit=[('Model', 'Each branch collects' if giving_model == 'branch' else 'Central (through HQ)'), ('Branches', positions|length)]) }}
+  {{ page_header("Remittances", "Who owes whom between HQ and the branches.",
+      actions=('<a href="#record-remit" class="btn btn-primary" data-open-record><i class="ri-add-line"></i>Record a remittance</a>' if can_record else ''),
+      audit=[('Giving', 'Each branch collects' if giving_model == 'branch' else 'Central (through HQ)')]) }}
 {% endblock %}
 
 {% block content %}
@@ -19,6 +20,13 @@
     </div>
   {% endif %}
 
+  {% set unset = positions|rejectattr('share_set')|list %}
+  {% if unset %}
+    <div class="rounded-md border border-line bg-sunken px-3.5 py-2.5 text-[12.5px] flex gap-2" role="note">
+      <i class="ri-percent-line text-base mt-0.5 text-ink-3"></i>
+      <span>{{ unset|length }} branch{{ 'es have' if unset|length > 1 else ' has' }} no HQ share yet, so {{ 'their' if unset|length > 1 else 'its' }} balance can't be worked out{% if can_record %}: set it on each branch's <b>Branch settings</b> (click a branch name below){% endif %}.</span>
+    </div>
+  {% endif %}
   <div class="panel-flush">
     {% if positions %}
       <div class="overflow-x-auto">
@@ -27,7 +35,7 @@
           <tbody>
             {% for r in positions %}
               <tr>
-                <td data-label="Branch" class="font-medium text-ink">{{ r.branch.name }} <span class="font-mono text-[12px] text-ink-3">{{ r.currency }}</span></td>
+                <td data-label="Branch" class="font-medium text-ink">{% if can_record %}<a href="{{ url_for('admin_branch_settings_for', branch_id=r.branch.id) }}" class="hover:underline">{{ r.branch.name }}</a>{% else %}{{ r.branch.name }}{% endif %}</td>
                 <td data-label="Gifts recorded" class="text-right font-mono text-xs">{{ r.total|money(r.currency) }}</td>
                 <td data-label="Taken by branch" class="text-right font-mono text-xs">{{ r.at_branch|money(r.currency) }}</td>
                 <td data-label="Held by HQ" class="text-right font-mono text-xs">{{ r.held_by_hq|money(r.currency) }}</td>
@@ -35,7 +43,7 @@
                 <td data-label="Remitted to HQ" class="text-right font-mono text-xs">{{ r.to_hq|money(r.currency) }}</td>
                 <td data-label="Sent to branch" class="text-right font-mono text-xs">{{ r.to_branch|money(r.currency) }}</td>
                 <td data-label="Balance" class="text-right font-mono text-[13px] font-semibold whitespace-nowrap">
-                  {% if not r.share_set %}{% if can_record %}<a href="{{ url_for('admin_branch_settings_for', branch_id=r.branch.id) }}" class="text-ink-3 underline font-sans font-normal text-xs">Set the HQ share to see a balance</a>{% else %}<span class="text-ink-3 font-sans font-normal text-xs">HQ has not set this branch’s share yet</span>{% endif %}
+                  {% if not r.share_set %}<span class="text-ink-3 font-sans font-normal">—</span>
                   {% elif r.balance > 0.005 %}<span class="text-bad">Branch owes HQ {{ r.balance|money(r.currency) }}</span>
                   {% elif r.balance < -0.005 %}<span class="text-warn">HQ owes branch {{ (-r.balance)|money(r.currency) }}</span>
                   {% else %}<span class="text-ok">Settled</span>{% endif %}
@@ -51,8 +59,15 @@
   </div>
 
   {% if can_record %}
-    <details class="panel">
-      <summary class="cursor-pointer text-[13px] font-semibold text-ink flex items-center gap-2"><i class="ri-add-circle-line text-gold-text"></i>Record a remittance</summary>
+    <script>
+    (() => {
+      const open = () => { const d = document.getElementById('record-remit'); if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } };
+      document.querySelectorAll('[data-open-record]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); open(); }));
+      if (location.hash === '#record-remit') open();
+    })();
+    </script>
+    <details class="panel record-gift" id="record-remit">
+      <summary class="cursor-pointer text-[14px] font-bold text-ink flex items-center gap-2"><i class="ri-add-circle-line text-gold-text"></i>Record a remittance<span class="flex-grow"></span><span class="btn btn-ghost btn-sm">Close</span></summary>
       <form method="POST" action="{{ url_for('admin_remittances_store') }}" class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div>

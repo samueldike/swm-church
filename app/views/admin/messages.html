@@ -48,7 +48,7 @@
                   <p class="font-semibold text-ink">{{ sm.title }}</p>
                   <p class="text-[12px] text-ink-3">{{ sm.preacher or 'No speaker' }}{% if sm.original_file_size %} · <span class="font-mono">{{ (sm.original_file_size / 1048576)|round(1) }} MB</span>{% endif %}</p>
                 </td>
-                <td data-label="Branch">{{ sm.branch.name if sm.branch else '—' }}</td>
+                <td data-label="Branch">{{ ('HQ' if sm.branch.is_hq else sm.branch.name) if sm.branch else '—' }}</td>
                 <td data-label="Distribution">
                   <div class="flex flex-wrap gap-1.5 justify-end md:justify-start">
                     {% if 'telegram' in targets %}
@@ -67,7 +67,7 @@
                 <td data-label="Status">
                   {{ badge((sm.status or 'draft')|capitalize, 'ok' if sm.status == 'published' else ('neut' if sm.status == 'archived' else 'warn')) }}
                   {% set ts = sm.transcription_status or 'none' %}
-                  {% if sm.audio_file_path or sm.telegram_file_id %}
+                  {% if (sm.audio_file_path or sm.telegram_file_id) and ts != 'none' %}
                     <a href="{{ url_for('admin_transcriptions_show', sermon_id=sm.id) }}" class="mt-1 flex items-center gap-1 text-[12px] no-underline {{ 'text-ok' if ts == 'completed' else ('text-bad' if ts == 'failed' else ('text-warn' if ts in ['queued', 'processing'] else 'text-ink-3')) }}"
                        title="{{ sm.transcription_error if ts == 'failed' and sm.transcription_error else 'Open the transcript' }}">
                       <i class="{{ {'completed': 'ri-file-text-line', 'processing': 'ri-loader-4-line animate-spin', 'queued': 'ri-time-line', 'failed': 'ri-error-warning-line'}.get(ts, 'ri-file-unknow-line') }}"></i>

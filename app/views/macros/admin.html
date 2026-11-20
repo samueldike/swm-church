@@ -217,13 +217,15 @@
 {#- Standard page header: title, subtitle, right-aligned actions slot (raw
    HTML passed in), and an optional audit strip of (label, value) pairs. -#}
 {% macro page_header(title, subtitle='', actions='', audit=None) -%}
-  <div class="bg-surface border-b border-line flex-shrink-0">
+  {% set back_href, back_label, actions = actions|split_back %}
+  <div class="page-head bg-surface border-b border-line flex-shrink-0">
     <div class="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-5 px-4 sm:px-6 pt-4 sm:pt-5 pb-4">
       <div class="flex-grow min-w-0">
+        {% if back_href %}<a href="{{ back_href }}" class="page-back"><i class="ri-arrow-left-line"></i>{{ back_label }}</a>{% endif %}
         <h1 class="text-[26px] sm:text-[32px] font-extrabold text-ink leading-[1.02]">{{ title }}</h1>
-        {% if subtitle %}<p class="mt-1.5 text-[14px] text-ink-2 leading-relaxed">{{ subtitle }}</p>{% endif %}
+        {% if subtitle %}<p class="page-sub mt-1.5 text-[14px] text-ink-2 leading-relaxed">{{ subtitle }}</p>{% endif %}
       </div>
-      {% if actions %}<div class="flex items-center gap-2 flex-wrap">{{ actions|safe }}</div>{% endif %}
+      {% if actions %}<div class="page-actions flex items-center gap-2 flex-wrap">{{ actions|safe }}</div>{% endif %}
     </div>
     {#- Only facts a person acts on: bookkeeping labels ("Records", "Scope", "Page 1/140"...) are dropped. -#}
     {% set noise = ['Scope', 'Records', 'Page', 'Shown', 'On this page', 'Date', 'Role', 'Viewing', 'Showing'] %}
@@ -244,7 +246,7 @@
 {#- Search + filter toolbar. filter_options: list of (name, options[(value,label)], selected).
    action/method let a filter form GET the current page with query params. -#}
 {% macro toolbar(search_name='q', search_value='', search_placeholder='Search…', filters=None, actions='') -%}
-  <form method="get" class="flex flex-wrap items-center gap-2.5 mb-3.5">
+  <form method="get" class="filter-bar flex flex-wrap items-center gap-2.5 mb-3.5">
     <div class="flex items-center gap-2 w-full sm:w-72 px-3 py-2 rounded-md border border-line-2 bg-surface">
       <i class="ri-search-line text-ink-3 text-sm"></i>
       <input type="search" name="{{ search_name }}" value="{{ search_value }}" placeholder="{{ search_placeholder }}"
@@ -259,7 +261,7 @@
           {% endfor %}
         </select>
       {% endfor %}
-      <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+      <noscript><button type="submit" class="btn btn-secondary btn-sm">Filter</button></noscript>
     {% endif %}
     <span class="flex-grow"></span>
     {% if actions %}<div class="flex items-center gap-2 flex-wrap">{{ actions|safe }}</div>{% endif %}
@@ -271,6 +273,7 @@
 {#- One paginator for every list: numbered pages with First/Last and a "Go to page" box.
    Every link keeps the page's current search and filters (only `page` changes). -#}
 {% macro pager(pagination) -%}
+  {% if pagination.total %}{#- an empty list shows its own empty state, not "No results" under it -#}
   {% set cur, last = pagination.page, pagination.pages %}
   {% macro _href(n) %}{% set u = request.url.include_query_params(page=n) %}{{ u.path }}?{{ u.query }}{% endmacro %}
   <nav class="pager flex items-center gap-x-3 gap-y-2.5 pt-3.5 mt-1 border-t border-line flex-wrap" aria-label="Pages">
@@ -318,6 +321,7 @@
     {% endif %}
     {% endif %}
   </nav>
+  {% endif %}
 {%- endmacro %}
 
 {% macro pagination_bar(pagination, base_path='') -%}{{ pager(pagination) }}{%- endmacro %}

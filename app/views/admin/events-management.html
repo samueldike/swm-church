@@ -7,8 +7,7 @@
 
 {% block page_header %}
   {{ page_header("Calendar", "Programme schedule across the church",
-      actions='<a href="' ~ url_for('admin_events_create') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add program</a>',
-      audit=[('Month', currentMonth.strftime('%B %Y')), ('Programs (all)', events|length), ('Upcoming', upcomingPrograms|length)]) }}
+      actions='<a href="' ~ url_for('admin_events_create') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add program</a>') }}
 {% endblock %}
 
 {% block content %}

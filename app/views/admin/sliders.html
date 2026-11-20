@@ -1,14 +1,13 @@
 {% extends "layouts/admin_base.html" %}
 {% from "macros/admin.html" import page_header, badge, empty_state with context %}
-{% block title %}Sliders | {{ siteName }}{% endblock %}
-{% block topbar_title %}Sliders{% endblock %}
+{% block title %}Home page slides | {{ siteName }}{% endblock %}
+{% block topbar_title %}Home page slides{% endblock %}
 {% block topbar_subtitle %}Homepage hero images{% endblock %}
 {% block topbar_icon %}ri-slideshow-3-line{% endblock %}
 
 {% block page_header %}
-  {{ page_header("Homepage sliders", "Rotating hero images on the public homepage",
-      actions='<a href="' ~ url_for('admin_sliders_create_page') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add slider</a>',
-      audit=[('Sliders', sliders|length), ('Active', sliders|selectattr('is_active')|list|length)]) }}
+  {{ page_header("Home page slides", "Rotating hero images on the public homepage",
+      actions='<a href="' ~ url_for('admin_sliders_create_page') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add slider</a>') }}
 {% endblock %}
 
 {% block content %}
@@ -22,7 +21,7 @@
         </div>
         <div class="p-3.5 flex flex-col gap-1 flex-grow">
           <p class="text-[13px] font-semibold text-ink truncate">{{ sl.title or 'Untitled slider' }}</p>
-          <p class="font-mono text-[12px] text-ink-3">Position {{ sl.sort_order }}{% if sl.cta_label %} · CTA: {{ sl.cta_label }}{% endif %}</p>
+          <p class="font-mono text-[12px] text-ink-3">Order {{ (sl.sort_order or 0) + 1 }}{% if sl.cta_label %} · Button: {{ sl.cta_label }}{% endif %}</p>
         </div>
         <div class="flex items-center gap-2 px-3.5 pb-3.5">
           <a href="{{ url_for('admin_sliders_edit_page', slider_id=sl.id) }}" class="btn btn-secondary btn-sm"><i class="ri-edit-line"></i>Edit</a>

@@ -2,7 +2,7 @@
 {% from "macros/admin.html" import page_header, field, checkbox with context %}
 {% block title %}{{ 'Edit HOD' if hod else 'Invite HOD' }} | {{ siteName }}{% endblock %}
 {% block topbar_title %}{{ 'Edit HOD' if hod else 'Invite HOD' }}{% endblock %}
-{% block topbar_subtitle %}Department HODs{% endblock %}
+{% block topbar_subtitle %}Department heads{% endblock %}
 {% block topbar_icon %}ri-user-star-line{% endblock %}
 
 {% block page_header %}
@@ -75,6 +75,18 @@
       <input type="hidden" name="whatsapp" value="{{ '0' if wa_access.on else '1' }}">
       <span class="badge {{ 'badge-ok' if wa_access.on else 'badge-neut' }}">{{ 'WhatsApp on' if wa_access.on else 'WhatsApp off' }}</span>
       <button type="submit" class="btn {{ 'btn-secondary' if wa_access.on else 'btn-primary' }} btn-sm"><i class="{{ 'ri-close-circle-line' if wa_access.on else 'ri-whatsapp-line' }}"></i>{{ 'Remove WhatsApp access' if wa_access.on else 'Give WhatsApp access' }}</button>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if hod and can('system') %}
+  <div class="mt-6 pt-5 border-t border-line">
+    <h2 class="text-[16px] font-bold text-ink mb-1"><i class="ri-user-star-line"></i> Resident Pastor</h2>
+    <p class="text-[13px] text-ink-3 mb-3">Make {{ hod.name }} the Resident Pastor of {{ hod.branch.name if hod.branch else 'their church' }}. They then review that church's department reports instead of submitting their own.</p>
+    <form method="POST" action="{{ url_for('admin_hods_make_rp', hod_id=hod.id) }}"
+          data-confirm="Make {{ hod.name }} the Resident Pastor of {{ hod.branch.name if hod.branch else 'their church' }}? They will review that church's department reports instead of submitting their own." data-confirm-title="Appoint Resident Pastor" data-confirm-accept="Appoint">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn btn-secondary btn-sm"><i class="ri-user-star-line"></i>Make Resident Pastor</button>
     </form>
   </div>
   {% endif %}
