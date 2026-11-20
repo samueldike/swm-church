@@ -4,7 +4,7 @@
 {% block topbar_subtitle %}Caption Studio{% endblock %}
 {% block topbar_icon %}ri-text{% endblock %}
 {% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=9">
-<link rel="stylesheet" href="{{ url_for('static', path='css/clipper-studio.css') }}?v=1">{% endblock %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/clipper-studio.css') }}?v=2">{% endblock %}
 
 {% block content %}
 <div class="vc cs" id="cs" data-csrf="{{ csrf_token }}">
@@ -88,6 +88,6 @@
 {% endblock %}
 
 {% block extra_body %}
-<script src="{{ url_for('static', path='js/clipper-captions.js') }}?v=3"></script>
+<script src="{{ url_for('static', path='js/clipper-captions.js') }}?v=4"></script>
 <script src="{{ url_for('static', path='js/clipper-studio.js') }}?v=2"></script>
 {% endblock %}

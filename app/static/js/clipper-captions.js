@@ -27,7 +27,7 @@
     const sd = st.shadow_d / 100;
     const shadow = sd > 0 ? `${sd}em ${sd}em 0 ${rgba(st.shadow, st.shadow_a / 100)}` : '0 0 0 transparent';
     const glow = st.glow && st.box !== 'line' ? `0 0 ${0.035 * st.glow_s}em ${rgba(st.glow_color, 0.95)}, 0 0 ${0.08 * st.glow_s}em ${rgba(st.glow_color, 0.6)}, ` : '';
-    return [`--cx-font:"${st.css_font}"`, `--cx-text:${st.text}`, `--cx-active:${st.active}`, `--cx-oc:${st.outline}`,
+    return [`--cx-font:'${String(st.css_font).replace(/['"<>]/g, '')}'`, `--cx-text:${st.text}`, `--cx-active:${st.active}`, `--cx-oc:${st.outline}`,
       `--cx-ow:${st.outline_w / 100}`, `--cx-shadow:${glow}${shadow}`, `--cx-bc:${rgba(st.box_color, st.box_a / 100)}`,
       `--cx-sp:${st.spacing / 100}em`, `--cx-tilt:${st.tilt}deg`, `--cx-style:${st.italic ? 'italic' : 'normal'}`].join(';');
   }

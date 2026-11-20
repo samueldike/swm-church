@@ -9,13 +9,14 @@
 .cs-list h2 { font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--vc-muted, #777); margin: 0 0 8px; }
 .cs-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
 @media (min-width: 1181px) { .cs-cards { grid-template-columns: 1fr 1fr; } }
-.cs-card { display: flex; flex-direction: column; gap: 5px; padding: 4px; border: 1px solid var(--vc-line, #ddd); border-radius: 12px;
+.cs-card { min-width: 0; display: flex; flex-direction: column; gap: 5px; padding: 4px; border: 1px solid var(--vc-line, #ddd); border-radius: 12px;
   background: var(--vc-surface, #fff); cursor: pointer; text-align: center; }
 .cs-card:hover { border-color: #f0c837; }
 .cs-card[aria-current="true"] { border-color: #f0c837; box-shadow: 0 0 0 2px #f0c837; }
 .cs-card-tile { display: flex; align-items: center; justify-content: center; height: 54px; border-radius: 9px; overflow: hidden;
   background: linear-gradient(160deg, #3a3a3a, #121212); --cap-size: 15px; }
-.cs-card-tile .vc-cap { line-height: 1.05; white-space: nowrap; }
+.cs-card-tile .vc-cap { line-height: 1.05; white-space: nowrap; max-width: 100%; }
+.cs-card-tile { padding: 0 4px; }
 .cs-card-name { font: 700 11.5px/1.2 var(--font-sans, inherit); color: var(--vc-ink, #222); padding: 0 2px 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .cs-preview { position: sticky; top: 72px; }
