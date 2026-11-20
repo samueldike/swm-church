@@ -261,6 +261,46 @@ async def _hotwords() -> str:
 
 # ─── 3. compose ───────────────────────────────────────────────────────
 
+def ranking_input(shorts: list) -> list[dict]:
+    """Saved shorts as the ranker reads them: body ids in playing order, the cold open, title, value (pure)."""
+    out = []
+    for s in shorts:
+        pieces = [x for x in (s.plan or []) if not x.get("spare")]
+        teaser = next((x for x in pieces if x.get("cold_open")), None)
+        edl = [{"i": i} for x in pieces if not x.get("cold_open") for i in (x.get("ids") or [])]
+        if not edl:
+            continue
+        out.append({"id": s.id, "edl": edl, "cold_open": (teaser.get("ids") or [None])[0] if teaser else None,
+                    "length": float(s.length or 0), "title": s.title, "value": s.value or "", "score": s.score})
+    return out
+
+
+async def rerank(project_id: int) -> int:
+    """Rank every AI short of the project side by side (after "Find more shorts", or on request).
+    Returns how many were ranked. A person's own clips are never scored."""
+    from app.core.clipper import editorial, speech
+
+    async with async_session() as db:
+        p = await db.get(ClipProject, project_id)
+        items = ranking_input([s for s in p.shorts if s.origin == "ai" and s.status != "failed"]) if p else []
+        brief = editorial.brief_text((p.brief or {}).get("video")) if p else ""
+    if len(items) < 2:
+        return 0
+    words, gaps, _ = speech.load_words(media.words_path(project_id))
+    units = speech.build_units(words, gaps)
+    items = [s for s in items if all(0 <= x["i"] < len(units) for x in s["edl"])]
+    ranked = await editorial.rank(units, items, brief=brief)
+    async with async_session() as db:
+        for s in ranked:
+            row = await db.get(ClipShort, s["id"])
+            if row:
+                row.score = s["score"]
+                if s.get("why"):
+                    row.score_why = s["why"][:200]
+        await db.commit()
+    return len(ranked)
+
+
 async def compose(project_id: int, *, more: int | None = None) -> bool:
     from app.core.clipper import editorial, speech
 
@@ -307,7 +347,8 @@ async def compose(project_id: int, *, more: int | None = None) -> bool:
             for n, s in enumerate(shorts):
                 s["caption"] = social.with_ministry(s["caption"], ministry)
                 db.add(ClipShort(project_id=project_id, position=start + n, origin="ai", title=s["title"],
-                                 caption=s["caption"], value=s["value"], score=s["score"], plan=s["plan"],
+                                 caption=s["caption"], value=s["value"], score=s["score"],
+                                 score_why=(s.get("why") or None), plan=s["plan"],
                                  length=s["length"], format=st["format"], quality=int(st["quality"]),
                                  framing=st["framing"], caption_style=captions.style_id(st["caption_style"]) or captions.DEFAULT, denoise=st.get("denoise") or "natural",
                                  captions_on=captions.style_id(st["caption_style"]) is not None, status="queued"))
@@ -320,6 +361,11 @@ async def compose(project_id: int, *, more: int | None = None) -> bool:
             proj.status, proj.stage, proj.progress = "rendering", "Cutting the shorts", 0.0
             proj.heartbeat_at = datetime.utcnow()
             await db.commit()
+        if more:
+            try:                                  # the new batch is ranked against the shorts made before it
+                await rerank(project_id)
+            except Exception as exc:
+                logger.warning("Re-ranking project %s failed: %s", project_id, exc)
         return True
     except (ClipperError, editorial.EditorialError) as exc:
         await _fail(project_id, str(exc))

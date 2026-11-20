@@ -3,7 +3,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}{{ p.title or 'Video' }}{% endblock %}
 {% block topbar_icon %}ri-scissors-cut-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=5">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=6">{% endblock %}
 
 {% block content %}
 {#- Rendered from JSON by app/static/js/clipper.js, which polls status.json while the project works. -#}
@@ -61,6 +61,17 @@
     </div>
   </section>
 
+  <div class="vc-sortbar" id="vc-sortbar" hidden>
+    <span class="vc-muted text-[13px]" id="vc-sort-note">Best first: the strongest short is top left.</span>
+    <span class="flex-grow"></span>
+    <label class="text-[13px] font-semibold" for="vc-sort">Sort</label>
+    <select id="vc-sort" aria-label="Sort the shorts">
+      <option value="best">Best first</option>
+      <option value="video">Order in the video</option>
+      <option value="starred">Favourites first</option>
+    </select>
+    <button type="button" class="btn btn-ghost btn-sm" id="vc-rerank" title="Compare all the shorts of this video again and put the strongest first"><i class="ri-sort-desc"></i><span>Rank again</span></button>
+  </div>
   <div class="vc-shorts" id="vc-shorts"></div>
   <div class="vc-toast" id="vc-toast" role="status" aria-live="polite"></div>
 </div>
@@ -68,6 +79,6 @@
 
 {% block extra_body %}
 <script src="{{ url_for('static', path='js/clipper-captions.js') }}?v=1"></script>
-<script src="{{ url_for('static', path='js/clipper.js') }}?v=7"></script>
+<script src="{{ url_for('static', path='js/clipper.js') }}?v=8"></script>
 <script>window.SWMClipper && window.SWMClipper.show();</script>
 {% endblock %}

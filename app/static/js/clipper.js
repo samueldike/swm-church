@@ -150,6 +150,18 @@
     };
     let data = JSON.parse(document.getElementById('vc-data').textContent);
     const grid = document.getElementById('vc-shorts');
+    const sortBar = document.getElementById('vc-sortbar'), sortSel = document.getElementById('vc-sort');
+    const sortNote = document.getElementById('vc-sort-note');
+    let sortBy = 'best', ranks = {}, rankedCount = 0;
+    try { sortBy = localStorage.getItem('vc-sort') || 'best'; } catch (e) { /* private window */ }
+    if (sortSel) {
+      sortSel.value = sortBy;
+      sortSel.addEventListener('change', () => {
+        sortBy = sortSel.value;
+        try { localStorage.setItem('vc-sort', sortBy); } catch (e) { /* private window */ }
+        delete grid.dataset.key; drawShorts(true);
+      });
+    }
     const toastEl = document.getElementById('vc-toast');
     let toastTimer;
     const toast = (text) => { toastEl.textContent = text; toastEl.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('on'), 2600); };
@@ -182,11 +194,16 @@
       } else {
         media = `<div class="vc-wait"><i class="ri-loader-4-line vc-spin"></i><span>${s.status === 'rendering' ? 'Cutting this short…' : 'Waiting to be cut…'}</span></div>`;
       }
-      const badges = `<div class="vc-badges">${s.score != null ? `<span class="vc-pill gold" title="How strongly the editor rates it">${s.score}</span>` : (s.origin === 'manual' ? '<span class="vc-pill gold">Your clip</span>' : '<span></span>')}${s.length ? `<span class="vc-pill gold">${Math.round(s.length)} s</span>` : ''}</div>`;
+      const r = ranks[s.id];
+      const tier = s.score >= 85 ? 'Top pick' : s.score >= 70 ? 'Strong' : 'Good';
+      const badges = `<div class="vc-badges">${s.score != null
+        ? `<span class="vc-pill gold vc-rank ${r === 1 ? 'first' : ''}" title="${esc(`Ranked ${r} of ${rankedCount} by how valuable and shareable it is. Score ${s.score} of 100.${s.why ? ' ' + s.why : ''}`)}">#${r} · ${esc(tier)} ${s.score}</span>`
+        : (s.origin === 'manual' ? '<span class="vc-pill gold">Your clip</span>' : '<span></span>')}${s.length ? `<span class="vc-pill gold">${Math.round(s.length)} s</span>` : ''}</div>`;
       return `<article class="vc-panel vc-short ${s.starred ? 'starred' : ''}" data-sid="${s.id}">
         <div class="vc-player ${esc(fmt)}">${media}${badges}</div>
         <div class="vc-short-body">
           <div class="vc-title" contenteditable="true" spellcheck="true" role="textbox" aria-label="Title" data-field="title">${esc(s.title)}</div>
+          ${s.why ? `<div class="vc-why" title="Why it ranks here"><i class="ri-fire-line"></i><span>${esc(s.why)}</span></div>` : ''}
           ${s.value ? `<div class="vc-value"><i class="ri-lightbulb-flash-line"></i><span>${esc(s.value)}</span></div>` : ''}
           ${s.effects && s.effects.length ? `<div class="vc-fx" title="Effects the editor chose for this short"><i class="ri-magic-line"></i><span>${esc(s.effects.join(' · '))}</span></div>` : ''}
           <div class="vc-meta"><span>${esc(s.from)}–${esc(s.to)}</span>${s.pieces > 1 ? `<span>${s.pieces} parts joined</span>` : ''}${s.cold_open ? '<span>opens with a teaser</span>' : ''}</div>
@@ -236,15 +253,28 @@
     }
 
     // Keep what the person is editing or playing when a poll redraws the grid.
-    function drawShorts() {
+    function drawShorts(force) {
       const busyEl = document.activeElement && grid.contains(document.activeElement);
       const playing = [...grid.querySelectorAll('video')].some((v) => !v.paused);
       const openDetails = new Set([...grid.querySelectorAll('details[open]')].map((d) => `${d.closest('[data-sid]').dataset.sid}:${[...d.parentNode.querySelectorAll(':scope > details')].indexOf(d)}`));
-      const keyNow = JSON.stringify(data.shorts.map((s) => [s.id, s.status, s.video, s.starred, (s.posts || []).map((x) => x.status).join()]));
+      const keyNow = JSON.stringify([sortBy, data.shorts.map((s) => [s.id, s.status, s.video, s.starred, s.score, (s.posts || []).map((x) => x.status).join()])]);
       if (grid.dataset.key === keyNow && grid.children.length) return;
-      if ((busyEl || playing) && grid.children.length) return;   // redraw later
+      if (!force && (busyEl || playing) && grid.children.length) return;   // redraw later
       grid.dataset.key = keyNow;
-      const sorted = [...data.shorts].sort((a, b) => (b.starred - a.starred) || 0);
+      // Rank = place among the scored shorts of this video, best first (ties: the one made first).
+      const best = (a, b) => ((b.score ?? -1) - (a.score ?? -1)) || (a.position - b.position) || (a.id - b.id);
+      const scored = data.shorts.filter((s) => s.score != null).sort(best);
+      ranks = {}; scored.forEach((s, i) => { ranks[s.id] = i + 1; }); rankedCount = scored.length;
+      const order = {
+        best,
+        video: (a, b) => (a.at - b.at) || (a.id - b.id),
+        starred: (a, b) => (b.starred - a.starred) || best(a, b),
+      }[sortBy] || best;
+      const sorted = [...data.shorts].sort(order);
+      if (sortBar) {
+        sortBar.hidden = data.shorts.length < 2;
+        sortNote.textContent = { best: 'Best first: the strongest short is top left.', video: 'In the order they are said in the video.', starred: 'Your favourites first, then the best.' }[sortBy];
+      }
       grid.innerHTML = sorted.length ? sorted.map(card).join('') :
         (data.busy ? '' : '<div class="vc-panel vc-empty" style="grid-column:1/-1"><i class="ri ri-film-line"></i><h2>No shorts yet</h2><p>Use “Find more shorts” or clip a stretch by its times.</p></div>');
       grid.querySelectorAll('details').forEach((d) => {
@@ -316,6 +346,18 @@
       } catch (e) { if (ctl.signal.aborted) return; }
       if (!ctl.signal.aborted) window.__swmClipTimer = setTimeout(poll, data.busy ? 3000 : 20000);
     }
+
+    const rerankBtn = document.getElementById('vc-rerank');
+    if (rerankBtn) rerankBtn.addEventListener('click', async () => {
+      rerankBtn.disabled = true;
+      const label = rerankBtn.querySelector('span'); label.textContent = 'Ranking…';
+      const r = await post(`${base}/rank`, {}, csrf);
+      rerankBtn.disabled = false; label.textContent = 'Rank again';
+      if (!r.ok) { toast(r.error || 'Could not rank the shorts.'); return; }
+      const res = await fetch(`${base}/status.json`, { credentials: 'same-origin' });
+      if (res.ok) { data = await res.json(); sortBy = 'best'; if (sortSel) sortSel.value = 'best'; delete grid.dataset.key; drawHead(); drawShorts(true); }
+      toast(`Ranked ${r.ranked} shorts, best first`);
+    }, { signal: ctl.signal });
 
     async function save(sid, fields) {
       const r = await post(`${base}/shorts/${sid}/update`, fields, csrf);

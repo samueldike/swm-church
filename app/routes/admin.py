@@ -10436,7 +10436,7 @@ def _clip_json_short(p, s) -> dict:
     body = [x for x in pieces if not x.get("cold_open")]
     return {
         "id": s.id, "title": s.title, "caption": s.caption or "", "value": s.value or "", "score": s.score,
-        "origin": s.origin, "status": s.status, "error": s.error or "", "length": round(s.length or 0, 1),
+        "why": s.score_why or "", "position": s.position, "origin": s.origin, "status": s.status, "error": s.error or "", "length": round(s.length or 0, 1),
         "format": s.format, "quality": s.quality, "framing": s.framing,
         "caption_style": _clip_captions.style_id(s.caption_style) or _clip_captions.DEFAULT, "captions_on": bool(s.captions_on),
         "words": f"{base}/words.json?v={stamp}" if ready and media.short_file(p.id, s.id, "words.json").exists() else "",
@@ -10449,6 +10449,7 @@ def _clip_json_short(p, s) -> dict:
         "effects": s.effects or [],
         "nudge_start": s.nudge_start or 0, "nudge_end": s.nudge_end or 0, "starred": bool(s.starred),
         "from": clock(body[0]["start"] + offset) if body else "", "to": clock(body[-1]["end"] + offset) if body else "",
+        "at": round(body[0]["start"], 2) if body else 0,
         "pieces": len(body), "cold_open": any(x.get("cold_open") for x in pieces),
         "transcript": " ".join(x.get("text", "") for x in body)[:4000],
         "video": f"{base}/video.mp4?v={stamp}" if ready else "",
@@ -11602,6 +11603,25 @@ async def admin_clipper_clip_anyway(project_id: int, request: Request, db: Async
     await db.commit()
     await _clip_enqueue(clip_compose_task, p.id)
     return JSONResponse({"ok": True})
+
+
+@router.post("/clipper/{project_id}/rank", name="admin_clipper_rank")
+async def admin_clipper_rank(project_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    """Rank all the AI shorts of this video against each other, best first (one AI call, ~10-30 s)."""
+    admin, church = await _clip_ctx(request, db)
+    p = await _clip_project(db, admin, church, project_id) if admin and church is not None else None
+    if not p:
+        return JSONResponse({"ok": False, "error": "That video was not found."}, status_code=404)
+    from app.core.clipper import pipeline as clip_pipeline
+    from app.core.clipper.editorial import EditorialError
+
+    try:
+        n = await clip_pipeline.rerank(p.id)
+    except (EditorialError, FileNotFoundError, OSError) as exc:
+        return JSONResponse({"ok": False, "error": f"Could not rank the shorts: {exc}"}, status_code=502)
+    if not n:
+        return JSONResponse({"ok": False, "error": "There are not enough shorts made by the editor to rank."}, status_code=400)
+    return JSONResponse({"ok": True, "ranked": n})
 
 
 @router.post("/clipper/{project_id}/upload", name="admin_clipper_upload")

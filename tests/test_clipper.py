@@ -1089,3 +1089,49 @@ def json_dump(x):
     import json
 
     return json.dumps(x)
+
+
+# ─── ranking: the shorts of one message, best first ─────────────────────
+
+def test_ranking_puts_the_rankers_order_first_and_scores_follow_it():
+    shorts = [{"title": "a", "score": 90}, {"title": "b", "score": 50}, {"title": "c", "score": 70}, {"title": "d", "score": 65}]
+    out = editorial.apply_ranking(shorts, [
+        {"k": 1, "score": 88, "why": "Bold opening question"},
+        {"k": 0, "score": 88, "why": "tie must be broken"},
+        {"k": 1, "score": 10},                 # a repeat is ignored
+        {"k": 9, "score": 99},                 # out of range is ignored
+        "junk",
+        {"k": 2, "why": "no score: keeps its own"},
+    ])
+    assert [s["title"] for s in out] == ["b", "a", "c", "d"]          # d was left out: follows, own score
+    scores = [s["score"] for s in out[:3]]
+    assert scores == sorted(scores, reverse=True) and len(set(scores)) == 3
+    assert out[0]["why"] == "Bold opening question"
+    assert out[3]["score"] == 65 and "why" not in out[3]
+
+
+def test_without_a_ranking_the_editors_own_scores_order_the_shorts():
+    out = editorial.apply_ranking([{"score": 40}, {"score": 80}, {"score": None}], None)
+    assert [s["score"] for s in out] == [80, 40, None]
+
+
+def test_the_ranker_sees_every_short_with_its_teaser_first():
+    units = speech.build_units(_words("One thing. Two things here. Three is the last. Four comes after."), [])
+    shorts = [{"edl": [{"i": 0}, {"i": 1}], "cold_open": 3, "length": 20, "title": "First", "value": "v"},
+              {"edl": [{"i": 2}], "cold_open": None, "length": 9, "title": "Second", "value": ""}]
+    text = editorial.rank_prompt(units, shorts, brief="Niche: faith")
+    assert "SHORT 0" in text and "SHORT 1" in text and "Niche: faith" in text
+    assert text.index("Four comes after") < text.index("One thing")      # the cold open plays first
+
+
+def test_saved_shorts_become_ranker_input():
+    from types import SimpleNamespace as NS
+
+    from app.core.clipper.pipeline import ranking_input
+
+    s1 = NS(id=1, plan=[{"ids": [7], "cold_open": True}, {"ids": [3, 4]}, {"ids": [9], "spare": True}],
+            length=30, title="t", value=None, score=70)
+    s2 = NS(id=2, plan=[], length=5, title="empty", value="", score=None)
+    out = ranking_input([s1, s2])
+    assert len(out) == 1 and out[0]["id"] == 1
+    assert out[0]["edl"] == [{"i": 3}, {"i": 4}] and out[0]["cold_open"] == 7
