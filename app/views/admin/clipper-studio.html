@@ -4,7 +4,7 @@
 {% block topbar_subtitle %}Caption Studio{% endblock %}
 {% block topbar_icon %}ri-text{% endblock %}
 {% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=9">
-<link rel="stylesheet" href="{{ url_for('static', path='css/clipper-studio.css') }}?v=2">{% endblock %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/clipper-studio.css') }}?v=3">{% endblock %}
 
 {% block content %}
 <div class="vc cs" id="cs" data-csrf="{{ csrf_token }}">
@@ -14,7 +14,7 @@
     <a href="{{ url_for('admin_clipper') }}" class="btn btn-secondary btn-sm" aria-label="Back to the videos"><i class="ri-arrow-left-line"></i></a>
     <div class="min-w-0">
       <h1>Caption Studio</h1>
-      <p class="vc-muted">Make caption designs for your shorts. Every change plays live on the right; "Check the real video" shows exactly what the download will look like.</p>
+      <p class="vc-muted">Make caption designs for your shorts. Every change plays live in the preview; "Check the real video" shows exactly what the download will look like.</p>
     </div>
     <span class="flex-grow"></span>
     {% if churches %}
