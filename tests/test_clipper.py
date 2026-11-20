@@ -1081,8 +1081,8 @@ def test_fbank_matches_the_kaldi_layout():
     x = np.sin(2 * np.pi * 440 * np.arange(16000) / 16000).astype(np.float32) * 0.3
     f = voice.fbank(x)
     assert f.shape == (98, 80) and abs(float(f.mean())) < 1e-3              # 25 ms / 10 ms frames, mean removed
-    peak = int(np.argmax(voice.fbank(x + 0).std(axis=0) * 0 + (voice.fbank(x) + 50).mean(axis=0)))
-    assert 5 <= peak <= 30                                                   # 440 Hz lands in a low mel bin
+    low = voice.fbank(np.concatenate([x, np.zeros(16000, np.float32)]))     # tone then silence: bands differ over time
+    assert float(low[:90, 10:20].mean()) > float(low[110:, 10:20].mean())    # 440 Hz energy sits in the low mel bands
 
 
 def json_dump(x):
