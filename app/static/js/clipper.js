@@ -133,6 +133,14 @@
       const opt = (v, label) => `<option value="${esc(v)}" ${String(s.frame || 'default') === v ? 'selected' : ''}>${esc(label)}</option>`;
       return `<label class="vc-framesel">Frame <select data-frame aria-label="Frame">${opt('default', `Default${def ? ` (${def.name})` : ' (none)'}`)}${opt('none', 'No frame')}${mine.map((f) => opt(f.id, f.name)).join('')}</select></label>`;
     };
+    const musicSelect = (s) => {
+      const list = frameLib.tracks || [];
+      if (!list.length) return '';
+      const d = frameLib.music_default;
+      const dname = d === 'random' ? 'Random' : (list.find((t) => t.id === d) || {}).name || 'none';
+      const opt = (v, label) => `<option value="${esc(v)}" ${String(s.music || 'default') === v ? 'selected' : ''}>${esc(label)}</option>`;
+      return `<label class="vc-framesel">Music <select data-music aria-label="Background music">${opt('default', `Default (${dname})`)}${opt('none', 'No music')}${opt('random', 'Random')}${list.map((t) => opt(t.id, t.name)).join('')}</select></label>`;
+    };
     const outroSelect = (s) => {
       const list = frameLib.outros || [];
       if (!list.length) return '';
@@ -185,7 +193,7 @@
             <label class="vc-switch" title="${s.words ? 'Show captions on this short (preview, download and post)' : 'Re-cut this short once to add captions'}"><input type="checkbox" data-cap-on ${s.captions_on ? 'checked' : ''} ${s.words ? '' : 'disabled'}><span aria-hidden="true"></span><b>Captions</b></label>
             <div class="vc-capchips" role="group" aria-label="Caption design" aria-disabled="${!s.captions_on}">${Object.entries(capStyles).map(([k, v]) =>
               `<button type="button" data-cap="${esc(k)}" aria-pressed="${k === s.caption_style}" title="${esc(v.hint)}">${esc(v.label)}</button>`).join('')}</div>
-            ${s.video ? frameSelect(s) : ''}${s.video ? outroSelect(s) : ''}
+            ${s.video ? frameSelect(s) : ''}${s.video ? musicSelect(s) : ''}${s.video ? outroSelect(s) : ''}
           </div>
           <div class="vc-caption"><textarea data-field="caption" aria-label="Post caption" placeholder="Post caption and hashtags">${esc(s.caption)}</textarea></div>
           <div class="vc-actions">
@@ -315,6 +323,12 @@
       if (await save(sid, { [el.dataset.field]: value })) toast('Saved');
     }, opt);
     grid.addEventListener('change', async (e) => {
+      const msel = e.target.closest('[data-music]');
+      if (msel) {
+        const r = await save(msel.closest('[data-sid]').dataset.sid, { music: msel.value });
+        if (r) toast(r.short.music_name ? `Music: ${r.short.music_name}, softly under the voice in the download and the post` : 'No music on this short');
+        return;
+      }
       const osel = e.target.closest('[data-outro]');
       if (osel) {
         const r = await save(osel.closest('[data-sid]').dataset.sid, { outro: osel.value });

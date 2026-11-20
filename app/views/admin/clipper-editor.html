@@ -56,6 +56,10 @@
       <section>
         <h3>Frame</h3>
         <select id="ve-frame" aria-label="Frame"></select>
+        <h3 class="vc-mt">Background music</h3>
+        <select id="ve-music" aria-label="Background music"></select>
+        <audio id="ve-music-audio" preload="none" hidden></audio>
+        <small class="vc-muted">Plays softly here as you preview; the download and the post dip it under the voice.</small>
         <h3 class="vc-mt">Outro</h3>
         <select id="ve-outro" aria-label="Outro"></select>
         <small class="vc-muted">Added after the short in the download and the post.</small>
@@ -111,5 +115,5 @@
 
 {% block extra_body %}
 <script src="{{ url_for('static', path='js/clipper-captions.js') }}?v=1"></script>
-<script src="{{ url_for('static', path='js/clipper-editor.js') }}?v=3"></script>
+<script src="{{ url_for('static', path='js/clipper-editor.js') }}?v=4"></script>
 {% endblock %}

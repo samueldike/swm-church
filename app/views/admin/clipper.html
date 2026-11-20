@@ -195,6 +195,117 @@
   <script>document.querySelectorAll('#outros form[data-confirm]').forEach((f) => f.addEventListener('submit', (e) => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));</script>
   {% endif %}
 
+  {% if frames %}
+  {% set mc = frames.music %}
+  <details class="vc-panel vc-yt" id="music">
+    <summary><i class="ri-music-2-line"></i><b>Background music</b>
+      <span class="vc-pill">{{ mc['items']|length }} track{{ '' if mc['items']|length == 1 else 's' }}</span>
+      <span class="vc-pill {{ 'ok' if mc['default'] }}">Default: {{ 'Random' if mc['default'] == 'random' else ((mc['items']|selectattr('id', 'equalto', mc['default'])|map(attribute='name')|first) or 'None') }}</span>
+      <span class="vc-muted vc-yt-why">Played softly under the shorts, always below the preacher's voice.</span></summary>
+    <div class="vc-yt-body">
+      <p class="vc-muted">The level is set for you: every track is brought to the same quiet loudness, dips further whenever the preacher speaks, comes up a little in the pauses, and fades in and out. His voice is never changed. Use music the church has the rights to: platforms mute or take down videos with copyrighted songs.</p>
+      <form method="post" action="{{ url_for('admin_clipper_music_add') }}?church={{ frames.church }}" enctype="multipart/form-data" class="vc-inline" data-turbo="false">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="text" name="name" placeholder="Name, e.g. Soft piano" maxlength="60" aria-label="Track name">
+        <input type="file" name="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac" required aria-label="Music file">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="ri-upload-2-line"></i>Add music</button>
+      </form>
+      <div class="vc-inline vc-mt" role="group" aria-label="Default music">
+        <b class="text-[13px]">Default for new shorts:</b>
+        {% for key, label in [('none', 'None'), ('random', 'Random (a track per short)')] %}
+          {% set on = (mc['default'] == key) or (key == 'none' and not mc['default']) %}
+          {% if on %}<span class="vc-pill ok"><i class="ri-check-line"></i>{{ label }}</span>
+          {% elif key == 'random' and not mc['items'] %}<span class="vc-pill">{{ label }}</span>
+          {% else %}<form method="post" action="{{ url_for('admin_clipper_music_action', track_id=key, action='default') }}?church={{ frames.church }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm" type="submit">{{ label }}</button></form>{% endif %}
+        {% endfor %}
+      </div>
+      <ul class="vc-tracks">
+        {% for t in mc['items'] %}
+        {% set src = url_for('admin_clipper_music_file', track_id=t.id) ~ '?church=' ~ frames.church %}
+        <li>
+          <div class="vc-track-head"><b>{{ t.name }}</b><small class="vc-muted">{{ clip_clock(t.seconds) }}</small>
+            {% if mc['default'] == t.id %}<span class="vc-pill ok"><i class="ri-check-line"></i>Default</span>
+            {% else %}<form method="post" action="{{ url_for('admin_clipper_music_action', track_id=t.id, action='default') }}?church={{ frames.church }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm" type="submit">Make default</button></form>{% endif %}
+            <form method="post" action="{{ url_for('admin_clipper_music_action', track_id=t.id, action='delete') }}?church={{ frames.church }}" data-confirm="Delete “{{ t.name }}”?"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm text-bad" type="submit" aria-label="Delete {{ t.name }}"><i class="ri-delete-bin-6-line"></i></button></form>
+          </div>
+          <audio preload="none" src="{{ src }}"></audio>
+          <form method="post" action="{{ url_for('admin_clipper_music_action', track_id=t.id, action='start') }}?church={{ frames.church }}" class="vc-seek" data-seconds="{{ t.seconds }}" data-start="{{ t.start or 0 }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="start" value="{{ clip_clock(t.start or 0) }}">
+            <div class="vc-wave" aria-hidden="true"><canvas></canvas><i class="vc-wave-play"></i><i class="vc-wave-start"></i></div>
+            <input type="range" class="vc-wave-range" min="0" max="{{ [t.seconds - 5, 0]|max }}" step="0.5" value="{{ t.start or 0 }}" aria-label="Where {{ t.name }} starts">
+            <div class="vc-inline">
+              <button type="button" class="btn btn-secondary btn-sm" data-play aria-label="Play from the start point"><i class="ri-play-fill"></i><span>Play from here</span></button>
+              <span class="text-[13px]">Starts at <b data-at>{{ clip_clock(t.start or 0) }}</b></span>
+              <span class="vc-muted text-[12px]" data-now></span>
+              <span class="flex-grow"></span>
+              <button type="submit" class="btn btn-primary btn-sm" data-save disabled>Save start</button>
+            </div>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </details>
+  <script>
+  (() => {
+    const box = document.getElementById('music'); if (!box) return;
+    const clock = (t) => { t = Math.max(0, Math.round(t)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+    box.querySelectorAll('form[data-confirm]').forEach((f) => f.addEventListener('submit', (e) => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));
+    // Each track: its waveform (drawn once the panel opens), a gold start marker to drag, and Play from here.
+    const tracks = [...box.querySelectorAll('.vc-tracks li')];
+    const draw = async (li) => {
+      const form = li.querySelector('.vc-seek'); const canvas = li.querySelector('canvas');
+      if (form.dataset.drawn) return; form.dataset.drawn = '1';
+      const w = canvas.clientWidth || 600, h = canvas.clientHeight || 56, dpr = window.devicePixelRatio || 1;
+      canvas.width = w * dpr; canvas.height = h * dpr;
+      const g = canvas.getContext('2d'); g.scale(dpr, dpr);
+      try {
+        const buf = await (await fetch(li.querySelector('audio').src, { credentials: 'same-origin' })).arrayBuffer();
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const audio = await ctx.decodeAudioData(buf); ctx.close();
+        const ch = audio.getChannelData(0), bars = Math.floor(w / 3), step = Math.floor(ch.length / bars);
+        g.fillStyle = '#b9b2a2';
+        for (let i = 0; i < bars; i++) {
+          let peak = 0; for (let j = i * step; j < (i + 1) * step; j += 64) peak = Math.max(peak, Math.abs(ch[j]));
+          const bh = Math.max(2, peak * h * 0.95); g.fillRect(i * 3, (h - bh) / 2, 2, bh);
+        }
+      } catch (e) { g.fillStyle = '#d8d3c6'; g.fillRect(0, h / 2 - 1, w, 2); }
+    };
+    box.addEventListener('toggle', () => { if (box.open) tracks.forEach(draw); });
+    if (box.open) tracks.forEach(draw);
+    tracks.forEach((li) => {
+      const a = li.querySelector('audio'), form = li.querySelector('.vc-seek'), range = form.querySelector('.vc-wave-range');
+      const total = Number(form.dataset.seconds) || 1, saved = Number(form.dataset.start) || 0;
+      const mark = form.querySelector('.vc-wave-start'), head = form.querySelector('.vc-wave-play');
+      const btn = form.querySelector('[data-play]'), save = form.querySelector('[data-save]');
+      const place = () => {
+        const t = Number(range.value);
+        mark.style.left = `${(t / total) * 100}%`;
+        form.querySelector('[data-at]').textContent = clock(t);
+        form.querySelector('[name=start]').value = clock(t);
+        save.disabled = Math.abs(t - saved) < 0.25;
+      };
+      const playFrom = () => { a.currentTime = Number(range.value); a.play().catch(() => {}); };
+      range.addEventListener('input', () => { place(); if (!a.paused) a.currentTime = Number(range.value); });
+      btn.addEventListener('click', () => { if (a.paused) playFrom(); else a.pause(); });
+      // Click on the waveform: move the start there and hear it.
+      form.querySelector('.vc-wave').addEventListener('click', (e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        range.value = Math.min(Number(range.max), Math.max(0, ((e.clientX - r.left) / r.width) * total)); place(); playFrom();
+      });
+      a.addEventListener('timeupdate', () => {
+        head.style.left = `${(a.currentTime / total) * 100}%`; head.hidden = false;
+        form.querySelector('[data-now]').textContent = a.paused ? '' : `playing ${clock(a.currentTime)}`;
+      });
+      a.addEventListener('play', () => { btn.querySelector('i').className = 'ri-pause-fill'; btn.querySelector('span').textContent = 'Pause'; });
+      a.addEventListener('pause', () => { btn.querySelector('i').className = 'ri-play-fill'; btn.querySelector('span').textContent = 'Play from here'; form.querySelector('[data-now]').textContent = ''; });
+      place();
+    });
+  })();
+  </script>
+  {% endif %}
+
   {% if projects %}
   <div class="vc-grid">
     {% for p in projects %}

@@ -10443,6 +10443,7 @@ def _clip_json_short(p, s) -> dict:
         "frame": s.frame or "default", "frame_url": _clip_frame_url(p.branch_id, _clip_frames_resolve(p, s)),
         "outro": s.outro or "default", "outro_name": (_clip_outro_resolve(p, s) or {}).get("name", ""),
         "outro_seconds": (_clip_outro_resolve(p, s) or {}).get("seconds", 0), "denoise": s.denoise or "natural",
+        "music": s.music or "default", "music_name": (_clip_music_resolve(p, s) or {}).get("name", ""),
         "nudge_start": s.nudge_start or 0, "nudge_end": s.nudge_end or 0, "starred": bool(s.starred),
         "from": clock(body[0]["start"] + offset) if body else "", "to": clock(body[-1]["end"] + offset) if body else "",
         "pieces": len(body), "cold_open": any(x.get("cold_open") for x in pieces),
@@ -10501,7 +10502,8 @@ async def admin_clipper(request: Request, db: AsyncSession = Depends(get_db)):
 
         frames_ctx = {"cfg": fcfg, "church": wchurch, "formats": _cf.FORMATS,
                       "urls": {i["id"]: _clip_frame_url(wchurch, i) for i in fcfg["items"]},
-                      "outros": await _co2.load(db, wchurch)}
+                      "outros": await _co2.load(db, wchurch),
+                      "music": await __import__("app.core.clipper.music", fromlist=["load"]).load(db, wchurch)}
         watch_ctx = {"cfg": wcfg, "state": wstate, "church": wchurch, "church_name": wb.name if wb else "",
                      "every": _cw.EVERY, "days": _cw.DAY_NAMES, "formats": _co.FORMATS, "lengths": _co.LENGTHS,
                      "captions": {k: v["label"] for k, v in _cc.STYLES.items()},
@@ -10509,7 +10511,7 @@ async def admin_clipper(request: Request, db: AsyncSession = Depends(get_db)):
                      if sees_every_church(admin) else []}
     ctx = await _admin_context(request, db, "admin.clipper")
     return await render_template(request, "admin/clipper.html", {
-        "watch": watch_ctx, "frames": frames_ctx,
+        "watch": watch_ctx, "frames": frames_ctx, "clip_clock": __import__("app.core.clipper.options", fromlist=["clock"]).clock,
         "projects": projects, "stale": pipeline.stale, "disk": pipeline.disk_summary(), "youtube": youtube,
         "title": "Video Clipper", **ctx})
 
@@ -10963,7 +10965,12 @@ async def admin_clipper_edit(project_id: int, short_id: int, request: Request, d
                  "frame": s.frame or "default", "frames": [{**i, "url": _clip_frame_url(p.branch_id, i)} for i in fcfg["items"]],
                  "frame_defaults": fcfg["default"], "outro": s.outro or "default",
                  "outros": [{"id": i["id"], "name": i["name"], "seconds": i["seconds"]} for i in p._outros_cfg["items"]],
-                 "outro_default": p._outros_cfg["default"]},
+                 "outro_default": p._outros_cfg["default"], "music": s.music or "default",
+                 "tracks": [{"id": i["id"], "name": i["name"], "start": i.get("start") or 0,
+                             "url": f"/admin/clipper/music/{i['id']}/file?church={p.branch_id}"}
+                            for i in p._music_cfg["items"]],
+                 "music_default": p._music_cfg["default"],
+                 "music_random": (__import__("app.core.clipper.music", fromlist=["resolve"]).resolve("random", p._music_cfg, s.id) or {}).get("id")},
         **ctx})
 
 
@@ -11035,6 +11042,10 @@ async def admin_clipper_timeline_save(project_id: int, short_id: int, request: R
         s.caption_style = style
     if "captions_on" in body:
         s.captions_on = bool(body.get("captions_on"))
+    if isinstance(body.get("music"), str):
+        mcfg = await _clip_music(db, p)
+        if body["music"] in ("default", "none", "random") or any(i["id"] == body["music"] for i in mcfg["items"]):
+            s.music = body["music"]
     if isinstance(body.get("outro"), str):
         ocfg = await _clip_outros(db, p)
         if body["outro"] in ("default", "none") or any(i["id"] == body["outro"] for i in ocfg["items"]):
@@ -11103,6 +11114,7 @@ async def _clip_frames(db, p) -> dict:
     cfg = await frames.load(db, p.branch_id) if p.branch_id else frames.empty()
     p._frames_cfg = cfg
     await _clip_outros(db, p)
+    await _clip_music(db, p)
     return cfg
 
 
@@ -11283,6 +11295,117 @@ async def admin_clipper_outro_file(outro_id: str, request: Request, db: AsyncSes
                         headers={"Cache-Control": "private, max-age=86400"})
 
 
+# ── Video Clipper → background music (music.py: levelled and ducked under the speaker) ──
+
+async def _clip_music(db, p) -> dict:
+    from app.core.clipper import music
+
+    cfg = await music.load(db, p.branch_id) if p.branch_id else music.empty()
+    p._music_cfg = cfg
+    return cfg
+
+
+def _clip_music_resolve(p, s):
+    from app.core.clipper import music
+
+    cfg = getattr(p, "_music_cfg", None)
+    return music.resolve(s.music, cfg, s.id) if cfg else None
+
+
+@router.post("/clipper/music", name="admin_clipper_music_add")
+async def admin_clipper_music_add(request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None or not _clip_can_manage_channels(admin):
+        return _redirect(request, "/admin/clipper", "Only the church office can add music.", "error")
+    from app.core.clipper import music
+
+    church = await _clip_channel_church(request, db, admin, church)
+    back = f"/admin/clipper?church={church}#music"
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None or not getattr(upload, "filename", ""):
+        return _redirect(request, back, "Choose a music file to upload.", "error")
+    data = await upload.read(music.MAX_BYTES + 1)
+    cfg = await music.load(db, church)
+    if len(cfg["items"]) >= 50:
+        return _redirect(request, back, "A church can keep up to 50 tracks. Delete one first.", "error")
+    try:
+        item = await asyncio.to_thread(music.add, cfg, church, form.get("name") or upload.filename.rsplit(".", 1)[0],
+                                       upload.filename, data)
+    except music.MusicError as exc:
+        return _redirect(request, back, str(exc), "error")
+    await music.save(db, church, cfg)
+    await log_admin_action(db, admin.id, "clipper.music_add", "branch", church, {"track": item["id"]}, request)
+    await db.commit()
+    return _redirect(request, back, f"“{item['name']}” added. Choose it as the default, or pick Random, to use it.", "success")
+
+
+@router.post("/clipper/music/{track_id}/{action}", name="admin_clipper_music_action")
+async def admin_clipper_music_action(track_id: str, action: str, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None or not _clip_can_manage_channels(admin):
+        return _redirect(request, "/admin/clipper", "Only the church office can change music.", "error")
+    from app.core.clipper import music
+
+    church = await _clip_channel_church(request, db, admin, church)
+    back = f"/admin/clipper?church={church}#music"
+    cfg = await music.load(db, church)
+    if action == "default" and track_id in ("none", "random"):
+        if track_id == "random" and not cfg["items"]:
+            return _redirect(request, back, "Add some tracks first.", "error")
+        cfg["default"] = None if track_id == "none" else "random"
+        msg = "No music by default." if track_id == "none" else "Each short gets a track from the library (its own, every time)."
+    else:
+        item = next((i for i in cfg["items"] if i["id"] == track_id), None)
+        if not item:
+            return _redirect(request, back, "That track was not found.", "error")
+        if action == "default":
+            cfg["default"] = item["id"]
+            msg = f"“{item['name']}” now plays under every short by default."
+        elif action == "delete":
+            music.remove(cfg, church, track_id)
+            msg = f"“{item['name']}” deleted."
+        elif action == "start":
+            from app.core.clipper.options import clock, parse_clock
+
+            form = await request.form()
+            at = parse_clock(form.get("start"))
+            if at is None:
+                return _redirect(request, back, "Write the start like 0:45 or 1:20.", "error")
+            item["start"] = music.start_of({**item, "start": at})
+            msg = f"“{item['name']}” now starts at {clock(item['start'])}."
+        else:
+            return _redirect(request, back, "Unknown action.", "error")
+    await music.save(db, church, cfg)
+    await log_admin_action(db, admin.id, f"clipper.music_{action}", "branch", church, {"track": track_id}, request)
+    await db.commit()
+    return _redirect(request, back, msg, "success")
+
+
+@router.get("/clipper/music/{track_id}/file", name="admin_clipper_music_file")
+async def admin_clipper_music_file(track_id: str, request: Request, db: AsyncSession = Depends(get_db)):
+    import mimetypes
+
+    from fastapi.responses import FileResponse, Response
+
+    from app.core.clipper import music
+    from app.core.clipper.options import sees_every_church
+
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None:
+        return Response(status_code=404)
+    raw = request.query_params.get("church")
+    if raw and raw.isdigit() and (sees_every_church(admin) or int(raw) == church):
+        church = int(raw)
+    cfg = await music.load(db, church)
+    item = next((i for i in cfg["items"] if i["id"] == track_id), None)
+    path = music.path_of(church, item) if item else None
+    if not path or not path.exists():
+        return Response(status_code=404)
+    return FileResponse(str(path), media_type=mimetypes.guess_type(path.name)[0] or "audio/mpeg",
+                        headers={"Cache-Control": "private, max-age=86400"})
+
+
 @router.post("/clipper/{project_id}/upload", name="admin_clipper_upload")
 async def admin_clipper_upload(project_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     """The video file as the raw request body, streamed straight to disk (no copy in memory or /tmp)."""
@@ -11347,7 +11470,9 @@ async def admin_clipper_show(project_id: int, request: Request, db: AsyncSession
         "frames_list": {"items": [{"id": i["id"], "name": i["name"], "format": i["format"]} for i in fcfg["items"]],
                         "default": fcfg["default"],
                         "outros": [{"id": i["id"], "name": i["name"], "seconds": i["seconds"]} for i in p._outros_cfg["items"]],
-                        "outro_default": p._outros_cfg["default"]},
+                        "outro_default": p._outros_cfg["default"],
+                        "tracks": [{"id": i["id"], "name": i["name"]} for i in p._music_cfg["items"]],
+                        "music_default": p._music_cfg["default"]},
         "fast_listen": bool(await _clip_groq_key()), "p": p, "data": _clip_json_project(p), "opt": options, "st": {**options.DEFAULTS, **(p.settings or {})},
         "cap_styles": __import__("app.core.clipper.captions", fromlist=["public_styles"]).public_styles(),
         "title": p.title or "Video", "full_view": True, **ctx})   # the shorts need the width: menu opens collapsed
@@ -11438,6 +11563,12 @@ async def admin_clipper_short_update(project_id: int, short_id: int, request: Re
         on = form.get("captions_on") == "1"
         premake = premake or (on and not s.captions_on)
         s.captions_on = on
+    if "music" in form:
+        mcfg = await _clip_music(db, p)
+        val = str(form.get("music") or "default")
+        if val in ("default", "none", "random") or any(i["id"] == val for i in mcfg["items"]):
+            premake = premake or val != (s.music or "default")
+            s.music = val
     if "outro" in form:
         ocfg = await _clip_outros(db, p)
         val = str(form.get("outro") or "default")

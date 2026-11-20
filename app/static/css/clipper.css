@@ -255,3 +255,16 @@
 .vc-frame-ovl { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; z-index: 1; }
 .vc-cap-layer { z-index: 2; }
 .vc-framesel { font-size: 12.5px; max-width: 100%; }
+
+/* Background music */
+.vc-tracks { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.vc-tracks li { border: 1px solid var(--vc-line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.vc-track-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.vc-seek { display: flex; flex-direction: column; gap: 6px; }
+.vc-wave { position: relative; height: 56px; border-radius: 8px; background: var(--vc-sunken); overflow: hidden; cursor: pointer; }
+.vc-wave canvas { width: 100%; height: 100%; display: block; }
+.vc-wave-start { position: absolute; top: 0; bottom: 0; width: 3px; margin-left: -1px; background: var(--vc-gold); box-shadow: 0 0 0 1px rgba(0,0,0,.25); pointer-events: none; }
+.vc-wave-start::before { content: ""; position: absolute; top: -1px; left: -5px; border: 6px solid transparent; border-top-color: var(--vc-gold); }
+.vc-wave-play { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff4d4d; pointer-events: none; }
+.vc-wave-play[hidden] { display: none; }
+.vc-wave-range { width: 100%; accent-color: var(--vc-gold); margin: 0; }

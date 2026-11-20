@@ -467,7 +467,15 @@ async def final_copy(project_id: int, short, branch_id: int | None):
             ocfg = await outros.load(db, branch_id)
         oitem = outros.resolve(getattr(short, "outro", None), ocfg)
         opath = outros.path_of(branch_id, oitem) if oitem else None
-    return await asyncio.to_thread(render.finish, master, style, fpath, fid, opath, oitem)
+    mpath = mitem = None
+    if branch_id:
+        from app.core.clipper import music
+
+        async with async_session() as db:
+            mcfg = await music.load(db, branch_id)
+        mitem = music.resolve(getattr(short, "music", None), mcfg, short.id)
+        mpath = music.path_of(branch_id, mitem) if mitem else None
+    return await asyncio.to_thread(render.finish, master, style, fpath, fid, opath, oitem, mpath, mitem)
 
 
 async def premake_captions(project_id: int, short_id: int) -> None:

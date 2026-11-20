@@ -68,6 +68,7 @@ _ADDED_COLUMNS = [
     ("clip_shorts", "captions_on", "BOOLEAN DEFAULT FALSE"),
     ("clip_shorts", "frame", "VARCHAR(40) DEFAULT 'default'"),
     ("clip_shorts", "outro", "VARCHAR(40) DEFAULT 'default'"),
+    ("clip_shorts", "music", "VARCHAR(40) DEFAULT 'default'"),
     ("clip_shorts", "denoise", "VARCHAR(10) DEFAULT 'natural'"),
     ("branches", "is_hq", "BOOLEAN DEFAULT FALSE"),
     ("givings", "branch_id", "INTEGER"),

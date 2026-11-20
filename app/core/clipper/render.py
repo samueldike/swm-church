@@ -223,26 +223,32 @@ def captioned_path(master: Path, style: str) -> Path:
     return master.with_name(f"{master.stem}.cap-{style}.mp4")
 
 
-def finished_path(master: Path, style: str | None, frame_id: str | None, outro_id: str | None = None) -> Path:
-    if not frame_id and not outro_id:
+def finished_path(master: Path, style: str | None, frame_id: str | None, outro_id: str | None = None,
+                  music_id: str | None = None) -> Path:
+    if not frame_id and not outro_id and not music_id:
         return captioned_path(master, style) if style else master
-    return master.with_name(f"{master.stem}.fin-{style or 'none'}-{frame_id or 'none'}-{outro_id or 'none'}.mp4")
+    name = f"{master.stem}.fin-{style or 'none'}-{frame_id or 'none'}-{outro_id or 'none'}"
+    return master.with_name(f"{name}-{music_id}.mp4" if music_id else f"{name}.mp4")
 
 
 def finish(master: Path, style: str | None, frame: Path | None = None, frame_id: str | None = None,
-           outro: Path | None = None, outro_item: dict | None = None) -> Path:
+           outro: Path | None = None, outro_item: dict | None = None, music_path: Path | None = None,
+           music_item: dict | None = None) -> Path:
     """The master with its frame and then its captions on top, followed by its outro, in ONE encode, cached beside
     the master. Without an outro the sound is copied. With nothing to add, the master itself."""
-    from app.core.clipper import outros
+    from app.core.clipper import music, outros
 
     sid = captions.style_id(style) if style else None
     if frame is not None and not frame.exists():
         frame, frame_id = None, None
     if outro is not None and (not outro.exists() or not outro_item):
         outro, outro_item = None, None
-    if sid is None and frame is None and outro is None:
+    if music_path is not None and (not music_path.exists() or not music_item):
+        music_path, music_item = None, None
+    if sid is None and frame is None and outro is None and music_path is None:
         return master
-    out = finished_path(master, sid, frame_id if frame is not None else None, outro_item["id"] if outro is not None else None)
+    out = finished_path(master, sid, frame_id if frame is not None else None, outro_item["id"] if outro is not None else None,
+                        music.cache_key(music_item) if music_path is not None else None)
     if out.exists() and out.stat().st_mtime >= master.stat().st_mtime:
         return out
     meta_file = master.with_suffix(".words.json")
@@ -271,9 +277,17 @@ def finish(master: Path, style: str | None, frame: Path | None = None, frame_id:
             fonts = captions.fonts_dir().replace("\\", "/").replace(":", "\\:")
             chain.append(f"[{last}]subtitles='{esc}':fontsdir='{fonts}'[vc]")
             last = "vc"
+        speech = "0:a"
+        if music_path is not None:            # the music bed, levelled and ducked under the speaker
+            cmd += ["-stream_loop", "-1", "-ss", f"{music.start_of(music_item):.2f}", "-i", str(music_path)]
+            chain += music.mix_filters("0:a", f"{n}:a", float(info.get("duration") or 0), "mixed")
+            speech, n = "mixed", n + 1
         if outro is None:
             chain.append(f"[{last}]format=yuv420p[vo]")
-            maps, audio = ["-map", "[vo]", "-map", "0:a?"], ["-c:a", "copy"]
+            if music_path is None:
+                maps, audio = ["-map", "[vo]", "-map", "0:a?"], ["-c:a", "copy"]
+            else:
+                maps, audio = ["-map", "[vo]", "-map", "[mixed]"], ["-c:a", "aac", "-b:a", "160k", "-ar", "48000"]
         else:
             secs = outros.seconds_of(outro_item) or 3.0
             if outro_item["kind"] == "image":
@@ -291,7 +305,7 @@ def finish(master: Path, style: str | None, frame: Path | None = None, frame_id:
             chain.append(f"[{last}]fps={fps},format=yuv420p,setsar=1[vb]")
             chain.append(outros.fit_filter(width, height, f"{oi}:v", "vx"))
             chain.append(f"[vx]fps={fps},trim=duration={secs:.2f},setpts=PTS-STARTPTS[vy]")
-            chain.append("[0:a]aresample=48000,aformat=channel_layouts=stereo[ba]")
+            chain.append(f"[{speech}]aresample=48000,aformat=channel_layouts=stereo[ba]")
             chain.append(oa)
             chain.append("[vb][ba][vy][oa]concat=n=2:v=1:a=1[vo][ao]")
             maps, audio = ["-map", "[vo]", "-map", "[ao]"], ["-c:a", "aac", "-b:a", "160k", "-ar", "48000"]

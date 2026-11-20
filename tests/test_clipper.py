@@ -759,9 +759,9 @@ def test_finish_lays_the_frame_and_the_captions_on_in_one_encode(tmp_path):
         img.putpixel((x, 0), (240, 200, 55, 255))
     img.save(frame)
     out = render.finish(master, "pop", frame, "abc")
-    assert out.name == "7.fin-pop-abc.mp4" and out.stat().st_size > 1000
+    assert out.name == "7.fin-pop-abc-none.mp4" and out.stat().st_size > 1000
     assert render.finish(master, None) == master                               # nothing to add: the master itself
-    assert render.finish(master, None, frame, "abc").name == "7.fin-none-abc.mp4"
+    assert render.finish(master, None, frame, "abc").name == "7.fin-none-abc-none.mp4"
 
 
 # ─── noise reduction and outros ──────────────────────────────────────
@@ -828,3 +828,59 @@ def test_finish_adds_an_image_or_video_outro_after_the_short(tmp_path, monkeypat
     out2 = render.finish(master, None, None, None, sting, {"id": "v1", "kind": "video", "seconds": 1.5, "audio": False})
     info = probe(out2)
     assert abs(info["duration"] - 3.5) < 0.3 and info["width"] == 180 and info["has_audio"]
+
+
+# ─── background music ────────────────────────────────────────────────
+
+def test_music_choice_random_is_stable_and_start_stays_inside_the_track():
+    from app.core.clipper import music
+
+    cfg = music.parse('{"items":[{"id":"a","name":"Piano","file":"a.mp3","seconds":120,"start":30},'
+                      '{"id":"b","name":"Pads","file":"b.mp3","seconds":60}],"default":"random"}')
+    assert music.resolve("none", cfg, 5) is None
+    assert music.resolve("default", cfg, 5) == music.resolve("random", cfg, 5) == music.resolve("random", cfg, 5)
+    picks = {music.resolve("random", cfg, n)["id"] for n in range(20)}
+    assert picks == {"a", "b"}                                          # random spreads over the library
+    assert music.resolve("gone", cfg, 5) == music.resolve("random", cfg, 5)  # a deleted track: the default
+    assert music.start_of(cfg["items"][0]) == 30 and music.start_of({"seconds": 20, "start": 99}) == 15
+    assert music.cache_key(cfg["items"][0]) == "as30"
+    assert music.parse('{"items":[],"default":"random"}')["default"] is None
+
+
+def test_music_sits_far_under_the_voice_and_ducks_while_he_speaks(tmp_path):
+    import shutil
+    import subprocess
+    import wave
+
+    import numpy as np
+
+    if not shutil.which("ffmpeg"):
+        import pytest
+        pytest.skip("ffmpeg is not installed here")
+    from app.core.clipper import render
+
+    master = tmp_path / "3.mp4"
+    # "Speech": a 300 Hz voice at -14 LUFS-ish level, on for 1 s, off for 1 s, for 8 s.
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=180x320:r=25:d=8",
+                    "-f", "lavfi", "-i", "sine=f=300:d=8,volume='if(lt(mod(t,2),1),0.5,0)':eval=frame",
+                    "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", str(master)], check=True)
+    track = tmp_path / "bed.wav"                                    # loud "music": a 1500 Hz tone at full scale
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "sine=f=1500:d=20", "-af", "volume=0.9",
+                    str(track)], check=True)
+    out = render.finish(master, None, music_path=track, music_item={"id": "t", "seconds": 20, "start": 0})
+    wav = tmp_path / "mix.wav"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(out), "-ac", "1", "-ar", "16000", str(wav)], check=True)
+    w = wave.open(str(wav))
+    x = np.frombuffer(w.readframes(w.getnframes()), "<i2").astype(np.float64)
+
+    def band(seg, f):
+        spec = np.abs(np.fft.rfft(seg * np.hanning(len(seg))))
+        k = int(round(f * len(seg) / 16000))
+        return 20 * np.log10(spec[k - 3:k + 4].max() + 1e-9)
+
+    talk = [x[int(s * 16000):int((s + 0.5) * 16000)] for s in (2.3, 4.3, 6.3)]     # middle of speech bursts
+    rest = [x[int(s * 16000):int((s + 0.5) * 16000)] for s in (3.3, 5.3)]          # middle of pauses
+    under = np.mean([band(t, 300) - band(t, 1500) for t in talk])
+    assert under >= 20, f"music only {under:.1f} dB under the voice"
+    duck = np.mean([band(r, 1500) for r in rest]) - np.mean([band(t, 1500) for t in talk])
+    assert duck >= 6, f"music dipped only {duck:.1f} dB while he spoke"
