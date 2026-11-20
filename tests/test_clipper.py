@@ -692,3 +692,73 @@ def test_directions_in_messages_become_links_and_nothing_else_does():
     assert 'href="/admin/clipper/channels"' in out
     assert "<b>" not in out and "&lt;b&gt;" in out                       # everything else stays escaped
     assert 'href="/admin/settings#social"' in str(_directions("Admin → Settings → Social publishing"))
+
+
+# ─── frames ──────────────────────────────────────────────────────────
+
+def test_frames_know_their_shape_and_shorts_get_the_right_one(tmp_path):
+    from app.core.clipper import frames
+
+    assert frames.shape_of(1080, 1920) == "vertical" and frames.shape_of(1080, 1080) == "square"
+    assert frames.shape_of(1920, 1080) == "landscape" and frames.shape_of(1000, 300) is None
+    cfg = frames.parse('{"items":[{"id":"a","format":"vertical","name":"Logo","file":"a.png"},'
+                       '{"id":"b","format":"vertical","name":"Border","file":"b.png"},'
+                       '{"id":"c","format":"landscape","name":"Wide","file":"c.png"}],'
+                       '"default":{"vertical":"a","square":"zzz"}}')
+    assert cfg["default"]["square"] is None                                   # unknown ids are dropped
+    assert frames.resolve("default", "vertical", cfg)["id"] == "a"
+    assert frames.resolve("b", "vertical", cfg)["id"] == "b"
+    assert frames.resolve("none", "vertical", cfg) is None
+    assert frames.resolve("c", "vertical", cfg)["id"] == "a"                  # another shape's frame: the default
+    assert frames.resolve("default", "square", cfg) is None
+
+
+def test_a_frame_png_needs_a_short_shape_and_a_see_through_middle():
+    import io
+
+    from PIL import Image
+
+    from app.core.clipper import frames
+
+    def png(w, h, mode):
+        buf = io.BytesIO()
+        Image.new(mode, (w, h)).save(buf, "PNG")
+        return buf.getvalue()
+
+    assert frames.check_png(png(108, 192, "RGBA"))[2] == "vertical"
+    with __import__("pytest").raises(frames.FrameError):
+        frames.check_png(png(108, 192, "RGB"))                                # no transparency
+    with __import__("pytest").raises(frames.FrameError):
+        frames.check_png(png(300, 100, "RGBA"))                               # not a short's shape
+    with __import__("pytest").raises(frames.FrameError):
+        frames.check_png(b"GIF89a....")
+
+
+def test_finish_lays_the_frame_and_the_captions_on_in_one_encode(tmp_path):
+    import io
+    import json
+    import shutil
+    import subprocess
+
+    if not shutil.which("ffmpeg"):
+        import pytest
+        pytest.skip("ffmpeg is not installed here")
+    from PIL import Image
+
+    from app.core.clipper import render
+
+    master = tmp_path / "7.mp4"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=180x320:d=2", "-f", "lavfi",
+                    "-i", "sine=f=440:d=2", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                    str(master)], check=True)
+    master.with_suffix(".words.json").write_text(json.dumps({"words": [[0.1, 0.6, "Grace"], [0.7, 1.4, "abounds."]],
+                                                             "width": 180, "height": 320}))
+    frame = tmp_path / "f.png"
+    img = Image.new("RGBA", (90, 160), (0, 0, 0, 0))
+    for x in range(90):
+        img.putpixel((x, 0), (240, 200, 55, 255))
+    img.save(frame)
+    out = render.finish(master, "pop", frame, "abc")
+    assert out.name == "7.fin-pop-abc.mp4" and out.stat().st_size > 1000
+    assert render.finish(master, None) == master                               # nothing to add: the master itself
+    assert render.finish(master, None, frame, "abc").name == "7.fin-none-abc.mp4"

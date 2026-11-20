@@ -66,6 +66,7 @@ async def sync_sequences() -> int:
 _ADDED_COLUMNS = [
     ("clip_shorts", "edit", "JSON"),
     ("clip_shorts", "captions_on", "BOOLEAN DEFAULT FALSE"),
+    ("clip_shorts", "frame", "VARCHAR(40) DEFAULT 'default'"),
     ("branches", "is_hq", "BOOLEAN DEFAULT FALSE"),
     ("givings", "branch_id", "INTEGER"),
     ("givings", "gateway_owner", "VARCHAR(10) DEFAULT 'hq'"),

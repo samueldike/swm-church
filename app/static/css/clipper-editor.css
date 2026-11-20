@@ -68,3 +68,6 @@
 .ve-map-clip { position: absolute; top: 6px; bottom: 6px; background: #8b867a; border-radius: 2px; min-width: 2px; pointer-events: none; }
 .ve-map-clip.sel { background: #f0c837; }
 @media (prefers-reduced-motion: reduce) { .ve * { transition: none !important; } }
+
+.ve-stage .vc-frame-ovl { z-index: 1; }
+.ve-inspect select { width: 100%; }

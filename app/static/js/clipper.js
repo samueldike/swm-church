@@ -125,6 +125,14 @@
     const capStyles = JSON.parse(document.getElementById('vc-capstyles')?.textContent || '{}');
     const capWords = {};      // short id -> {words, width, height}
     const capLayers = {};     // short id -> overlay api
+    const frameLib = JSON.parse(document.getElementById('vc-frames')?.textContent || '{"items":[],"default":{}}');
+    const frameSelect = (s) => {
+      const mine = frameLib.items.filter((f) => f.format === (s.format || 'vertical'));
+      const def = mine.find((f) => f.id === frameLib.default[s.format || 'vertical']);
+      if (!mine.length) return '';
+      const opt = (v, label) => `<option value="${esc(v)}" ${String(s.frame || 'default') === v ? 'selected' : ''}>${esc(label)}</option>`;
+      return `<label class="vc-framesel">Frame <select data-frame aria-label="Frame">${opt('default', `Default${def ? ` (${def.name})` : ' (none)'}`)}${opt('none', 'No frame')}${mine.map((f) => opt(f.id, f.name)).join('')}</select></label>`;
+    };
     let data = JSON.parse(document.getElementById('vc-data').textContent);
     const grid = document.getElementById('vc-shorts');
     const toastEl = document.getElementById('vc-toast');
@@ -153,7 +161,7 @@
       const fmt = s.format || 'vertical';
       let media;
       if (s.video) {
-        media = `<video src="${esc(s.video)}" poster="${esc(s.thumb)}" controls preload="none" playsinline></video>`;
+        media = `<video src="${esc(s.video)}" poster="${esc(s.thumb)}" controls preload="none" playsinline></video>${s.frame_url ? `<img class="vc-frame-ovl" src="${esc(s.frame_url)}" alt="">` : ''}`;
       } else if (s.status === 'failed') {
         media = `<div class="vc-wait"><i class="ri-error-warning-line"></i><span>${directions(esc(s.error || 'This short could not be cut.'))}</span></div>`;
       } else {
@@ -170,6 +178,7 @@
             <label class="vc-switch" title="${s.words ? 'Show captions on this short (preview, download and post)' : 'Re-cut this short once to add captions'}"><input type="checkbox" data-cap-on ${s.captions_on ? 'checked' : ''} ${s.words ? '' : 'disabled'}><span aria-hidden="true"></span><b>Captions</b></label>
             <div class="vc-capchips" role="group" aria-label="Caption design" aria-disabled="${!s.captions_on}">${Object.entries(capStyles).map(([k, v]) =>
               `<button type="button" data-cap="${esc(k)}" aria-pressed="${k === s.caption_style}" title="${esc(v.hint)}">${esc(v.label)}</button>`).join('')}</div>
+            ${s.video ? frameSelect(s) : ''}
           </div>
           <div class="vc-caption"><textarea data-field="caption" aria-label="Post caption" placeholder="Post caption and hashtags">${esc(s.caption)}</textarea></div>
           <div class="vc-actions">
@@ -298,6 +307,20 @@
       if (await save(sid, { [el.dataset.field]: value })) toast('Saved');
     }, opt);
     grid.addEventListener('change', async (e) => {
+      const fsel = e.target.closest('[data-frame]');
+      if (fsel) {
+        const cardEl = fsel.closest('[data-sid]');
+        const r = await save(cardEl.dataset.sid, { frame: fsel.value });
+        if (!r) return;
+        const player = cardEl.querySelector('.vc-player');
+        let ovl = player.querySelector('.vc-frame-ovl');
+        if (r.short.frame_url) {
+          if (!ovl) { ovl = document.createElement('img'); ovl.className = 'vc-frame-ovl'; ovl.alt = ''; player.querySelector('video').after(ovl); }
+          ovl.src = r.short.frame_url;
+        } else if (ovl) ovl.remove();
+        toast(r.short.frame_url ? 'Frame on: the download and the post carry it' : 'No frame on this short');
+        return;
+      }
       const box = e.target.closest('[data-cap-on]');
       if (!box) return;
       const sid = box.closest('[data-sid]').dataset.sid;

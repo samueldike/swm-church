@@ -11,6 +11,7 @@
      data-base="/admin/clipper/{{ p.id }}">
   <script type="application/json" id="vc-data">{{ data|tojson }}</script>
   <script type="application/json" id="vc-capstyles">{{ cap_styles|tojson }}</script>
+  <script type="application/json" id="vc-frames">{{ frames_list|tojson }}</script>
   <script type="application/json" id="vc-opts">{{ {'formats': opt.FORMATS, 'framings': opt.FRAMINGS, 'captions': opt.CAPTION_STYLES, 'qualities': opt.QUALITIES}|tojson }}</script>
 
   <section class="vc-panel vc-head">

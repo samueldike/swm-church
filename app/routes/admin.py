@@ -10398,6 +10398,13 @@ async def _clip_enqueue(task, *args) -> bool:
     return await enqueue(task, *args)
 
 
+def _clip_frames_resolve(p, s):
+    from app.core.clipper import frames
+
+    cfg = getattr(p, "_frames_cfg", None)
+    return frames.resolve(s.frame, s.format, cfg) if cfg else None
+
+
 def _clip_json_post(x) -> dict:
     from app.core import social
 
@@ -10426,13 +10433,14 @@ def _clip_json_short(p, s) -> dict:
         "caption_style": _clip_captions.style_id(s.caption_style) or _clip_captions.DEFAULT, "captions_on": bool(s.captions_on),
         "words": f"{base}/words.json?v={stamp}" if ready and media.short_file(p.id, s.id, "words.json").exists() else "",
         "edited": bool(s.edit), "posts": [_clip_json_post(x) for x in (s.posts or [])[:6]],
+        "frame": s.frame or "default", "frame_url": _clip_frame_url(p.branch_id, _clip_frames_resolve(p, s)),
         "nudge_start": s.nudge_start or 0, "nudge_end": s.nudge_end or 0, "starred": bool(s.starred),
         "from": clock(body[0]["start"] + offset) if body else "", "to": clock(body[-1]["end"] + offset) if body else "",
         "pieces": len(body), "cold_open": any(x.get("cold_open") for x in pieces),
         "transcript": " ".join(x.get("text", "") for x in body)[:4000],
         "video": f"{base}/video.mp4?v={stamp}" if ready else "",
         "thumb": f"{base}/thumb.jpg?v={stamp}" if ready else "",
-        "download": (f"{base}/video.mp4?download=1" + ("&captions=1" if s.captions_on else "")) if ready else "",
+        "download": f"{base}/video.mp4?download=1&final=1" if ready else "",
         "srt": f"{base}/captions.srt" if ready else "",
     }
 
@@ -10467,7 +10475,7 @@ async def admin_clipper(request: Request, db: AsyncSession = Depends(get_db)):
         from app.core.settings_cache import get_secret_status
 
         youtube = (await get_secret_status(db)).get("clipper_youtube_cookies") or {"state": "unset"}
-    watch_ctx = None
+    watch_ctx = frames_ctx = None
     if _clip_can_manage_channels(admin):
         from app.core.clipper import captions as _cc
         from app.core.clipper import options as _co
@@ -10477,6 +10485,11 @@ async def admin_clipper(request: Request, db: AsyncSession = Depends(get_db)):
         wchurch = await _clip_channel_church(request, db, admin, church)
         wcfg, wstate = await _cw.load(db, wchurch)
         wb = await db.get(Branch, wchurch)
+        from app.core.clipper import frames as _cf
+
+        fcfg = await _cf.load(db, wchurch)
+        frames_ctx = {"cfg": fcfg, "church": wchurch, "formats": _cf.FORMATS,
+                      "urls": {i["id"]: _clip_frame_url(wchurch, i) for i in fcfg["items"]}}
         watch_ctx = {"cfg": wcfg, "state": wstate, "church": wchurch, "church_name": wb.name if wb else "",
                      "every": _cw.EVERY, "days": _cw.DAY_NAMES, "formats": _co.FORMATS, "lengths": _co.LENGTHS,
                      "captions": {k: v["label"] for k, v in _cc.STYLES.items()},
@@ -10484,7 +10497,7 @@ async def admin_clipper(request: Request, db: AsyncSession = Depends(get_db)):
                      if sees_every_church(admin) else []}
     ctx = await _admin_context(request, db, "admin.clipper")
     return await render_template(request, "admin/clipper.html", {
-        "watch": watch_ctx,
+        "watch": watch_ctx, "frames": frames_ctx,
         "projects": projects, "stale": pipeline.stale, "disk": pipeline.disk_summary(), "youtube": youtube,
         "title": "Video Clipper", **ctx})
 
@@ -10761,6 +10774,7 @@ async def admin_clipper_publish(project_id: int, short_id: int, request: Request
     ministry = await social.ministry_tags()
     wa = await _clip_whatsapp(db, admin, p.branch_id or church)
     ctx = await _admin_context(request, db, "admin.clipper")
+    await _clip_frames(db, p)
     return await render_template(request, "admin/clipper-publish.html", {
         "wa": wa, "wa_caption": social.whatsapp_caption(s.title, social.with_ministry(s.caption or "", ministry), ministry),
         "wa_status_ok": (s.length or 0) <= social.WA_STATUS_MAX_SECONDS + 0.5, "wa_status_max": social.WA_STATUS_MAX_SECONDS,
@@ -10921,6 +10935,7 @@ async def admin_clipper_edit(project_id: int, short_id: int, request: Request, d
     lo = max(0.0, min(c["start"] for c in clips) - 180) if clips else 0.0
     hi = (max(c["end"] for c in clips) + 180) if clips else 300.0
     edit = {"clips": clips, "tighten": (s.edit or {}).get("tighten", True), "frame_x": (s.edit or {}).get("frame_x")}
+    fcfg = await _clip_frames(db, p)
     ctx = await _admin_context(request, db, "admin.clipper")
     return await render_template(request, "admin/clipper-editor.html", {
         "p": p, "s": s, "short": _clip_json_short(p, s), "full_view": True, "title": f"Edit · {s.title or 'Short'}",
@@ -10930,7 +10945,9 @@ async def admin_clipper_edit(project_id: int, short_id: int, request: Request, d
                  "words": await asyncio.to_thread(_clip_words_window, p.id, lo, hi), "window": [lo, hi],
                  "format": s.format, "framing": s.framing, "quality": s.quality, "title": s.title,
                  "captions_on": bool(s.captions_on), "caption_style": captions.style_id(s.caption_style) or captions.DEFAULT,
-                 "formats": options.FORMATS, "framings": options.FRAMINGS, "styles": captions.public_styles()},
+                 "formats": options.FORMATS, "framings": options.FRAMINGS, "styles": captions.public_styles(),
+                 "frame": s.frame or "default", "frames": [{**i, "url": _clip_frame_url(p.branch_id, i)} for i in fcfg["items"]],
+                 "frame_defaults": fcfg["default"]},
         **ctx})
 
 
@@ -11002,6 +11019,10 @@ async def admin_clipper_timeline_save(project_id: int, short_id: int, request: R
         s.caption_style = style
     if "captions_on" in body:
         s.captions_on = bool(body.get("captions_on"))
+    if isinstance(body.get("frame"), str):
+        fcfg = await _clip_frames(db, p)
+        if body["frame"] in ("default", "none") or any(i["id"] == body["frame"] for i in fcfg["items"]):
+            s.frame = body["frame"]
     s.status, s.error = "queued", None
     p.status, p.stage, p.progress, p.error = "rendering", "Cutting the shorts", 0.0, None
     await log_admin_action(db, admin.id, "clipper.edit", "clip_short", s.id, {"reset": bool(body.get("reset"))}, request)
@@ -11051,6 +11072,101 @@ async def admin_clipper_watch_check(request: Request, db: AsyncSession = Depends
         return _redirect(request, f"/admin/clipper?church={church}#watch", "Save the channel's link first.", "error")
     await _clip_enqueue(clip_watch_task, church)
     return _redirect(request, f"/admin/clipper?church={church}#watch", "Checking the channel now. New finished lives appear below in a minute or two.", "success")
+
+
+# ── Video Clipper → frames (PNG overlays per church, app/core/clipper/frames.py) ──
+
+async def _clip_frames(db, p) -> dict:
+    """The project's church frames, kept on the project object for _clip_json_short."""
+    from app.core.clipper import frames
+
+    cfg = await frames.load(db, p.branch_id) if p.branch_id else frames.empty()
+    p._frames_cfg = cfg
+    return cfg
+
+
+def _clip_frame_url(branch_id: int, item: dict | None) -> str:
+    return f"/admin/clipper/frames/{item['id']}.png?church={branch_id}" if item else ""
+
+
+@router.post("/clipper/frames", name="admin_clipper_frames_add")
+async def admin_clipper_frames_add(request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None or not _clip_can_manage_channels(admin):
+        return _redirect(request, "/admin/clipper", "Only the church office can add frames.", "error")
+    from app.core.clipper import frames
+
+    church = await _clip_channel_church(request, db, admin, church)
+    back = f"/admin/clipper?church={church}#frames"
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None or not getattr(upload, "filename", ""):
+        return _redirect(request, back, "Choose a PNG frame to upload.", "error")
+    data = await upload.read(frames.MAX_BYTES + 1)
+    cfg = await frames.load(db, church)
+    if len(cfg["items"]) >= 30:
+        return _redirect(request, back, "A church can keep up to 30 frames. Delete one first.", "error")
+    try:
+        item = await asyncio.to_thread(frames.add, cfg, church, form.get("name") or upload.filename.rsplit(".", 1)[0], data)
+    except frames.FrameError as exc:
+        return _redirect(request, back, str(exc), "error")
+    await frames.save(db, church, cfg)
+    await log_admin_action(db, admin.id, "clipper.frame_add", "branch", church, {"frame": item["id"], "format": item["format"]}, request)
+    await db.commit()
+    default = cfg["default"].get(item["format"]) == item["id"]
+    return _redirect(request, back, f"Frame added for {item['format']} shorts" + (" and set as their default." if default else "."), "success")
+
+
+@router.post("/clipper/frames/{frame_id}/{action}", name="admin_clipper_frame_action")
+async def admin_clipper_frame_action(frame_id: str, action: str, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None or not _clip_can_manage_channels(admin):
+        return _redirect(request, "/admin/clipper", "Only the church office can change frames.", "error")
+    from app.core.clipper import frames
+
+    church = await _clip_channel_church(request, db, admin, church)
+    back = f"/admin/clipper?church={church}#frames"
+    cfg = await frames.load(db, church)
+    if action == "none" and frame_id in frames.FORMATS:          # /frames/<shape>/none: no default for that shape
+        cfg["default"][frame_id] = None
+        msg = f"No default frame for {frame_id} shorts."
+    else:
+        item = next((i for i in cfg["items"] if i["id"] == frame_id), None)
+        if not item:
+            return _redirect(request, back, "That frame was not found.", "error")
+        if action == "default":
+            cfg["default"][item["format"]] = item["id"]
+            msg = f"“{item['name']}” is now the default for {item['format']} shorts."
+        elif action == "delete":
+            frames.remove(cfg, church, frame_id)
+            msg = f"“{item['name']}” deleted."
+        else:
+            return _redirect(request, back, "Unknown action.", "error")
+    await frames.save(db, church, cfg)
+    await log_admin_action(db, admin.id, f"clipper.frame_{action}", "branch", church, {"frame": frame_id}, request)
+    await db.commit()
+    return _redirect(request, back, msg, "success")
+
+
+@router.get("/clipper/frames/{frame_id}.png", name="admin_clipper_frame_file")
+async def admin_clipper_frame_file(frame_id: str, request: Request, db: AsyncSession = Depends(get_db)):
+    from fastapi.responses import FileResponse, Response
+
+    from app.core.clipper import frames
+    from app.core.clipper.options import sees_every_church
+
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None:
+        return Response(status_code=404)
+    raw = request.query_params.get("church")
+    if raw and raw.isdigit() and (sees_every_church(admin) or int(raw) == church):
+        church = int(raw)
+    cfg = await frames.load(db, church)
+    item = next((i for i in cfg["items"] if i["id"] == frame_id), None)
+    path = frames.path_of(church, item) if item else None
+    if not path or not path.exists():
+        return Response(status_code=404)
+    return FileResponse(str(path), media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
 
 
 @router.post("/clipper/{project_id}/upload", name="admin_clipper_upload")
@@ -11112,7 +11228,10 @@ async def admin_clipper_show(project_id: int, request: Request, db: AsyncSession
     from app.core.clipper import options
 
     ctx = await _admin_context(request, db, "admin.clipper")
+    fcfg = await _clip_frames(db, p)
     return await render_template(request, "admin/clipper-show.html", {
+        "frames_list": {"items": [{"id": i["id"], "name": i["name"], "format": i["format"]} for i in fcfg["items"]],
+                        "default": fcfg["default"]},
         "fast_listen": bool(await _clip_groq_key()), "p": p, "data": _clip_json_project(p), "opt": options, "st": {**options.DEFAULTS, **(p.settings or {})},
         "cap_styles": __import__("app.core.clipper.captions", fromlist=["public_styles"]).public_styles(),
         "title": p.title or "Video", "full_view": True, **ctx})   # the shorts need the width: menu opens collapsed
@@ -11131,6 +11250,7 @@ async def admin_clipper_status(project_id: int, request: Request, db: AsyncSessi
         await db.refresh(p)
         for s in p.shorts:
             await db.refresh(s, ["posts"])
+    await _clip_frames(db, p)
     return JSONResponse({"ok": True, **_clip_json_project(p)})
 
 
@@ -11152,13 +11272,13 @@ async def admin_clipper_file(project_id: int, short_id: int, name: str, request:
     path = media.short_file(p.id, s.id, ext)
     if not path.exists():
         return Response(status_code=404)
-    if ext == "mp4" and request.query_params.get("captions") == "1" and s.captions_on:
-        # The download carries the chosen caption design (made ahead in the background; on the spot otherwise).
-        from app.core.clipper import render as _clip_render
+    if ext == "mp4" and (request.query_params.get("final") == "1" or request.query_params.get("captions") == "1"):
+        # The download carries the short's frame and caption design (made ahead in the background; else on the spot).
+        from app.core.clipper import pipeline as _clip_pipeline
         from app.core.clipper.media import ClipperError
 
         try:
-            path = await asyncio.to_thread(_clip_render.burn, path, s.caption_style)
+            path = await _clip_pipeline.final_copy(p.id, s, p.branch_id)
         except ClipperError as exc:
             return Response(str(exc), status_code=409, media_type="text/plain")
     headers = {"Cache-Control": "private, max-age=600"}
@@ -11202,6 +11322,12 @@ async def admin_clipper_short_update(project_id: int, short_id: int, request: Re
         on = form.get("captions_on") == "1"
         premake = premake or (on and not s.captions_on)
         s.captions_on = on
+    if "frame" in form:
+        cfg = await _clip_frames(db, p)
+        val = str(form.get("frame") or "default")
+        if val in ("default", "none") or any(i["id"] == val and i["format"] == s.format for i in cfg["items"]):
+            premake = premake or val != (s.frame or "default")
+            s.frame = val
     for key, table in tables.items():
         if key in form:
             val = form.get(key)
@@ -11231,10 +11357,11 @@ async def admin_clipper_short_update(project_id: int, short_id: int, request: Re
     await db.commit()
     if rerender:
         await _clip_enqueue(clip_render_task, p.id)
-    elif premake and s.captions_on and s.status == "ready":
+    elif premake and s.status == "ready":
         from app.tasks import clip_caption_task
 
         await _clip_enqueue(clip_caption_task, p.id, s.id)
+    await _clip_frames(db, p)
     return JSONResponse({"ok": True, "rerender": rerender, "short": _clip_json_short(p, s)})
 
 

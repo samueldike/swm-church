@@ -26,7 +26,7 @@
   let S = {
     clips: B.edit.clips.map((c) => ({ start: +c.start, end: +c.end })), tighten: B.edit.tighten !== false,
     frame_x: B.edit.frame_x ?? null, format: B.format, framing: B.framing, title: B.title,
-    captions_on: B.captions_on, caption_style: B.caption_style,
+    captions_on: B.captions_on, caption_style: B.caption_style, frame: B.frame || 'default',
   };
   const saved = JSON.stringify(S);
   const past = [], future = [];
@@ -201,6 +201,17 @@
     video.style.objectPosition = S.frame_x !== null ? `${S.frame_x * 100}% 50%` : '50% 50%';
     $('ve-frame-hint').hidden = !(S.framing === 'speaker' && S.frame_x === null && S.format !== 'landscape');
     captions.set(S.captions_on ? S.caption_style : null);
+    // Frame: the choices for this shape, and the one that shows (the church default unless chosen).
+    const mine = (B.frames || []).filter((f) => f.format === S.format);
+    const def = mine.find((f) => f.id === (B.frame_defaults || {})[S.format]);
+    const fsel = $('ve-frame');
+    fsel.innerHTML = [['default', `Default${def ? ` (${def.name})` : ' (none)'}`], ['none', 'No frame'], ...mine.map((f) => [f.id, f.name])]
+      .map(([v, l]) => `<option value="${esc(v)}" ${v === S.frame ? 'selected' : ''}>${esc(l)}</option>`).join('');
+    if (![...fsel.options].some((x) => x.selected)) fsel.value = 'default';
+    const shown = S.frame === 'none' ? null : (S.frame === 'default' ? def : mine.find((f) => f.id === S.frame) || def);
+    const ovl = $('ve-frame-ovl');
+    ovl.hidden = !shown;
+    if (shown && ovl.getAttribute('src') !== shown.url) ovl.src = shown.url;
   }
 
   // ── words ──
@@ -346,6 +357,7 @@
   $('ve-frame-x').addEventListener('pointerdown', () => { fxBefore = snapshot(); }, o);
   $('ve-frame-x').addEventListener('input', (e) => { S.frame_x = +e.target.value; video.style.objectPosition = `${S.frame_x * 100}% 50%`; }, o);
   $('ve-frame-x').addEventListener('change', () => { if (fxBefore) { past.push(fxBefore); future.length = 0; fxBefore = null; } changed(''); }, o);
+  $('ve-frame').addEventListener('change', (e) => commit(() => { S.frame = e.target.value; }, ''), o);
   $('ve-tighten').addEventListener('change', (e) => commit(() => { S.tighten = e.target.checked; }, e.target.checked ? 'Pauses removed' : 'Pauses kept'), o);
   $('ve-cap-on').addEventListener('change', (e) => commit(() => { S.captions_on = e.target.checked; }, ''), o);
   $('ve-title').addEventListener('change', (e) => { S.title = e.target.value; changed(''); }, o);

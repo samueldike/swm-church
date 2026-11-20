@@ -239,3 +239,19 @@
 .vc-day:has(input:checked) { border-color: var(--vc-gold); background: var(--vc-gold-tint); }
 .vc-watch input[type=range] { width: 100%; accent-color: var(--vc-gold); }
 .vc-card-media .vc-auto { position: absolute; top: 8px; right: 8px; }
+
+/* Video frames */
+.vc-frames-row { margin-top: 14px; }
+.vc-frames-row h3 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--vc-ink3); margin: 0 0 6px; }
+.vc-frames { display: flex; flex-wrap: wrap; gap: 10px; }
+.vc-frame-card { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; width: 150px; font-size: 12.5px; }
+.vc-frame-card.is-default .vc-frame-thumb { outline: 2px solid var(--vc-gold); outline-offset: 2px; }
+.vc-frame-thumb { width: 100%; border-radius: 8px; overflow: hidden; background: repeating-conic-gradient(#d9d4c7 0 25%, #f3f0e8 0 50%) 0 0 / 14px 14px; display: flex; align-items: center; justify-content: center; }
+.vc-frame-thumb.vertical { aspect-ratio: 9 / 16; width: 96px; }
+.vc-frame-thumb.square { aspect-ratio: 1 / 1; width: 120px; }
+.vc-frame-thumb.landscape { aspect-ratio: 16 / 9; }
+.vc-frame-thumb img { width: 100%; height: 100%; object-fit: fill; display: block; }
+.vc-frame-thumb.none span { font-size: 11.5px; color: var(--vc-ink3); background: rgba(255,255,255,.8); padding: 2px 6px; border-radius: 6px; }
+.vc-frame-ovl { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; pointer-events: none; z-index: 1; }
+.vc-cap-layer { z-index: 2; }
+.vc-framesel { font-size: 12.5px; max-width: 100%; }

@@ -111,6 +111,50 @@
   </script>
   {% endif %}
 
+  {% if frames %}
+  {% set fc = frames.cfg %}
+  <details class="vc-panel vc-yt" id="frames" {{ 'open' if request.query_params.get('church') and not fc['items'] }}>
+    <summary><i class="ri-layout-masonry-line"></i><b>Video frames</b>
+      <span class="vc-pill">{{ fc['items']|length }} frame{{ '' if fc['items']|length == 1 else 's' }}</span>
+      <span class="vc-muted vc-yt-why">A PNG laid over every short of its shape: the church logo, a border, a name bar.</span></summary>
+    <div class="vc-yt-body">
+      <p class="vc-muted">Make the PNG the size of the short (1080×1920 for vertical, 1080×1080 square, 1920×1080 landscape) with a see-through middle. Its shape is recognised from its size and it is stretched to fit exactly. The default of each shape goes on every new short; each short can switch to another frame or none.</p>
+      <form method="post" action="{{ url_for('admin_clipper_frames_add') }}?church={{ frames.church }}" enctype="multipart/form-data" class="vc-inline" data-turbo="false">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="text" name="name" placeholder="Name, e.g. Sunday logo bar" maxlength="60" aria-label="Frame name">
+        <input type="file" name="file" accept="image/png" required aria-label="PNG frame">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="ri-upload-2-line"></i>Add frame</button>
+      </form>
+      {% for fmt in frames.formats %}
+        {% set items = fc['items']|selectattr('format', 'equalto', fmt)|list %}
+        <div class="vc-frames-row">
+          <h3>{{ {'vertical': 'Vertical 9:16', 'square': 'Square 1:1', 'landscape': 'Landscape 16:9'}[fmt] }}</h3>
+          <div class="vc-frames">
+            <div class="vc-frame-card {{ 'is-default' if not fc['default'][fmt] }}">
+              <div class="vc-frame-thumb {{ fmt }} none"><span>No frame</span></div>
+              {% if fc['default'][fmt] %}
+              <form method="post" action="{{ url_for('admin_clipper_frame_action', frame_id=fmt, action='none') }}?church={{ frames.church }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm" type="submit">Make default</button></form>
+              {% else %}<span class="vc-pill ok"><i class="ri-check-line"></i>Default</span>{% endif %}
+            </div>
+            {% for i in items %}
+            <div class="vc-frame-card {{ 'is-default' if fc['default'][fmt] == i.id }}">
+              <div class="vc-frame-thumb {{ fmt }}"><img src="{{ frames.urls[i.id] }}" alt="{{ i.name }}" loading="lazy"></div>
+              <b title="{{ i.w }}×{{ i.h }}">{{ i.name }}</b>
+              <div class="vc-inline">
+                {% if fc['default'][fmt] == i.id %}<span class="vc-pill ok"><i class="ri-check-line"></i>Default</span>
+                {% else %}<form method="post" action="{{ url_for('admin_clipper_frame_action', frame_id=i.id, action='default') }}?church={{ frames.church }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm" type="submit">Make default</button></form>{% endif %}
+                <form method="post" action="{{ url_for('admin_clipper_frame_action', frame_id=i.id, action='delete') }}?church={{ frames.church }}" data-confirm="Delete the frame “{{ i.name }}”? Shorts using it go back to their shape's default."><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm text-bad" type="submit" aria-label="Delete {{ i.name }}"><i class="ri-delete-bin-6-line"></i></button></form>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </details>
+  <script>document.querySelectorAll('#frames form[data-confirm]').forEach((f) => f.addEventListener('submit', (e) => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));</script>
+  {% endif %}
+
   {% if projects %}
   <div class="vc-grid">
     {% for p in projects %}

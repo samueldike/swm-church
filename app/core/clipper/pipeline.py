@@ -446,20 +446,34 @@ async def _claim_short(short_id: int) -> bool:
         return res.rowcount == 1
 
 
-async def premake_captions(project_id: int, short_id: int) -> None:
-    from app.core.clipper import render
+async def final_copy(project_id: int, short, branch_id: int | None):
+    """The file a download or a post uses: the master, with the short's frame and captions when it has them."""
+    from app.core.clipper import frames, render
 
+    master = media.short_file(project_id, short.id, "mp4")
+    style = short.caption_style if short.captions_on else None
+    fpath = fid = None
+    if branch_id:
+        async with async_session() as db:
+            cfg = await frames.load(db, branch_id)
+        item = frames.resolve(getattr(short, "frame", None), short.format, cfg)
+        if item:
+            fpath, fid = frames.path_of(branch_id, item), item["id"]
+    return await asyncio.to_thread(render.finish, master, style, fpath, fid)
+
+
+async def premake_captions(project_id: int, short_id: int) -> None:
+    """Make the finished copy (frame + captions) ahead of its download/post."""
     async with async_session() as db:
         s = await db.get(ClipShort, short_id)
-        if s is None or s.project_id != project_id or not s.captions_on:
+        p = await db.get(ClipProject, project_id)
+        if s is None or p is None or s.project_id != project_id:
             return
-        style = s.caption_style
-    master = media.short_file(project_id, short_id, "mp4")
-    if master.exists():
+    if media.short_file(project_id, short_id, "mp4").exists():
         try:
-            await asyncio.to_thread(render.burn, master, style)
+            await final_copy(project_id, s, p.branch_id)
         except Exception:
-            logger.exception("Captions for short %s could not be made ahead", short_id)
+            logger.exception("The finished copy of short %s could not be made ahead", short_id)
 
 
 async def render_queued(project_id: int) -> None:
@@ -548,11 +562,10 @@ async def render_queued(project_id: int) -> None:
                 the_cut, result = await asyncio.to_thread(one, s, lambda f, sid=s.id: share.__setitem__(sid, float(f)))
                 await _short_update(s.id, status="ready", segments=the_cut["segments"], length=result["length"],
                                     plan=the_cut["plan"], rendered_at=datetime.utcnow(), error=None)
-                if s.captions_on:          # the captioned copy is ready before anyone asks for it
-                    try:
-                        await asyncio.to_thread(render.burn, media.short_file(project_id, s.id, "mp4"), s.caption_style)
-                    except Exception:
-                        logger.exception("Captions for short %s could not be made ahead", s.id)
+                try:                       # the finished copy (frame, captions) is ready before anyone asks
+                    await final_copy(project_id, s, p.branch_id)
+                except Exception:
+                    logger.exception("The finished copy of short %s could not be made ahead", s.id)
             except ClipperError as exc:
                 await _short_update(s.id, status="failed", error=str(exc)[:1000])
             except Exception:
@@ -659,7 +672,9 @@ async def publish(post_id: int) -> None:
         master = media.short_file(project_id, short_id, "mp4")
         if not master.exists():
             raise social.SocialError("The short's video file is missing. Re-cut it, then publish again.")
-        path = await asyncio.to_thread(render.burn, master, style) if captions_on else master
+        async with async_session() as db:
+            short = await db.get(ClipShort, short_id)
+        path = await final_copy(project_id, short, branch_id)
         if zernio:
             try:
                 url = await social.upload(path)

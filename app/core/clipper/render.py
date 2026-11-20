@@ -189,8 +189,9 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
         out.with_suffix(".srt").write_text(captions.srt(words), encoding="utf-8")
         out.with_suffix(".words.json").write_text(json.dumps({"words": words, "width": ow, "height": oh}),
                                                   encoding="utf-8")
-        for old in out.parent.glob(f"{out.stem}.cap-*.mp4"):      # captioned copies of the previous cut
-            old.unlink(missing_ok=True)
+        for pattern in (f"{out.stem}.cap-*.mp4", f"{out.stem}.fin-*.mp4"):   # finished copies of the previous cut
+            for old in out.parent.glob(pattern):
+                old.unlink(missing_ok=True)
         run(["ffmpeg", "-y", "-v", "error", "-ss", f"{min(1.5, length / 3):.2f}", "-i", str(out), "-frames:v", "1",
              "-vf", "scale=360:-2", "-q:v", "4", str(out.with_suffix(".jpg"))], timeout=120)
         report(1.0)
@@ -203,30 +204,61 @@ def captioned_path(master: Path, style: str) -> Path:
     return master.with_name(f"{master.stem}.cap-{style}.mp4")
 
 
-def burn(master: Path, style: str) -> Path:
-    """The master with the ``style`` captions burned in (cached beside it). Video re-encoded once, sound copied."""
-    sid = captions.style_id(style)
-    if sid is None:
+def finished_path(master: Path, style: str | None, frame_id: str | None) -> Path:
+    if not frame_id:
+        return captioned_path(master, style) if style else master
+    return master.with_name(f"{master.stem}.fin-{style or 'none'}-{frame_id}.mp4")
+
+
+def finish(master: Path, style: str | None, frame: Path | None = None, frame_id: str | None = None) -> Path:
+    """The master with its frame (a PNG stretched to the short's size) and then its captions on top, in ONE encode,
+    cached beside the master. Sound is copied. With neither, the master itself."""
+    sid = captions.style_id(style) if style else None
+    if frame is not None and not frame.exists():
+        frame, frame_id = None, None
+    if sid is None and frame is None:
         return master
-    out = captioned_path(master, sid)
+    out = finished_path(master, sid, frame_id if frame is not None else None)
     if out.exists() and out.stat().st_mtime >= master.stat().st_mtime:
         return out
     meta_file = master.with_suffix(".words.json")
-    if not meta_file.exists():
+    if sid and not meta_file.exists():
         raise ClipperError("Re-cut this short once to add captions to it.")
-    meta = json.loads(meta_file.read_text(encoding="utf-8"))
-    work = Path(tempfile.mkdtemp(prefix="cap_", dir=str(master.parent)))
+    if meta_file.exists():
+        meta = json.loads(meta_file.read_text(encoding="utf-8"))
+        width, height = int(meta["width"]), int(meta["height"])
+    else:
+        from app.core.clipper.media import probe
+
+        info = probe(master)
+        meta, width, height = {"words": []}, int(info["width"]), int(info["height"])
+    work = Path(tempfile.mkdtemp(prefix="fin_", dir=str(master.parent)))
     try:
-        ass_file = work / "captions.ass"
-        ass_file.write_text(captions.ass(meta["words"], style=sid, width=int(meta["width"]), height=int(meta["height"])),
-                            encoding="utf-8")
-        esc = str(ass_file).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
-        fonts = captions.fonts_dir().replace("\\", "/").replace(":", "\\:")
+        chain, last = [], "0:v"
+        cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(master)]
+        if frame is not None:
+            cmd += ["-i", str(frame)]
+            chain.append(f"[1:v]scale={width}:{height},format=rgba[fr]")
+            chain.append(f"[{last}][fr]overlay=0:0:format=auto[vf]")
+            last = "vf"
+        if sid:
+            ass_file = work / "captions.ass"
+            ass_file.write_text(captions.ass(meta["words"], style=sid, width=width, height=height), encoding="utf-8")
+            esc = str(ass_file).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
+            fonts = captions.fonts_dir().replace("\\", "/").replace(":", "\\:")
+            chain.append(f"[{last}]subtitles='{esc}':fontsdir='{fonts}'[vc]")
+            last = "vc"
+        chain.append(f"[{last}]format=yuv420p[vo]")
         tmp = work / "out.mp4"
-        run(["ffmpeg", "-y", "-v", "error", "-i", str(master), "-vf", f"subtitles='{esc}':fontsdir='{fonts}'",
-             "-c:v", "libx264", "-preset", PRESET, "-crf", CRF, "-pix_fmt", "yuv420p", "-c:a", "copy",
-             "-movflags", "+faststart", str(tmp)], timeout=900)
+        cmd += ["-filter_complex", ";".join(chain), "-map", "[vo]", "-map", "0:a?",
+                "-c:v", "libx264", "-preset", PRESET, "-crf", CRF, "-c:a", "copy", "-movflags", "+faststart", str(tmp)]
+        run(cmd, timeout=900)
         tmp.replace(out)
         return out
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+
+def burn(master: Path, style: str) -> Path:
+    """The master with the ``style`` captions burned in (no frame)."""
+    return finish(master, style)
