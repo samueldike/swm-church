@@ -23,7 +23,7 @@
   const dirty = () => JSON.stringify(plain(D)) !== saved;
   const pub = (d) => ({
     ...d, custom: true, label: d.name, hint: B.fonts[d.font]?.label || '', chars: 6 + 6 * d.words, gap: 0.6,
-    size_share: B.base_size * d.size / 100, pos_share: d.pos / 100, css_font: B.fonts[d.font]?.css || 'SWM Poppins Extra Bold',
+    size_share: B.base_size * d.size / 100, pos_share: d.pos / 100, css_font: B.fonts[d.font]?.css || 'SWM Poppins Extra Bold', em: B.fonts[d.font]?.em || 1,
   });
 
   // ── preview ──

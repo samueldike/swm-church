@@ -1327,3 +1327,14 @@ def test_a_studio_design_is_burned_into_the_finished_copy(tmp_path):
     assert diff.getbbox() is not None                       # the words are on the picture
     gone = render.finish(master, "c-00000002")              # a deleted design: the usual design instead
     assert ".cap-pop" in gone.name or "fin-pop" in gone.name
+
+
+def test_the_preview_knows_how_big_libass_draws_each_font():
+    from app.core.clipper import captions, studio
+
+    assert abs(studio.font_em("Poppins-ExtraBold.ttf") - 0.568) < 0.01        # 1000 / (1135 + 627)
+    assert abs(studio.font_em("Bangers-Regular.ttf") - 0.569) < 0.01
+    assert studio.font_em("missing.ttf") == 1.0
+    assert all(0.4 < studio.font_em(f["file"]) <= 1.0 for f in studio.FONTS.values())
+    assert all("em" in st for st in captions.public_styles().values())
+    assert studio.public(studio.preset("comic"))["em"] == studio.font_em("Bangers-Regular.ttf")

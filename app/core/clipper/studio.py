@@ -99,6 +99,36 @@ PRESETS: dict[str, dict] = {
 SAMPLE = "Grace is not just enough, it is more than enough for you today."
 
 
+def font_em(file: str) -> float:
+    """How big the font's em is for a given ASS font size (pure, cached).
+
+    libass sizes a font so that its OS/2 winAscent + winDescent fills the ASS font size; a browser's font-size is the
+    em. The live preview multiplies its size by this, so it shows the same letter size as the burned-in video."""
+    return _font_em(file)
+
+
+@__import__("functools").lru_cache(maxsize=64)
+def _font_em(file: str) -> float:
+    import struct
+
+    from app.core.clipper.captions import fonts_dir
+
+    try:
+        b = (__import__("pathlib").Path(fonts_dir()) / file).read_bytes()
+        tables = {}
+        for i in range(struct.unpack(">H", b[4:6])[0]):
+            tag, _cs, off, _ln = struct.unpack(">4sIII", b[12 + 16 * i:28 + 16 * i])
+            tables[tag] = off
+        upm = struct.unpack(">H", b[tables[b"head"] + 18:tables[b"head"] + 20])[0]
+        win_a, win_d = struct.unpack(">HH", b[tables[b"OS/2"] + 74:tables[b"OS/2"] + 78])
+        if win_a + win_d:
+            return round(upm / (win_a + win_d), 4)
+        asc, desc = struct.unpack(">hh", b[tables[b"hhea"] + 4:tables[b"hhea"] + 8])
+        return round(upm / (asc - desc), 4) if asc - desc else 1.0
+    except (OSError, KeyError, struct.error):
+        return 1.0
+
+
 def _hex(v, fallback: str) -> str:
     v = str(v or "").strip()
     if re.fullmatch(r"#?[0-9a-fA-F]{6}", v):
@@ -159,7 +189,7 @@ def public(design: dict) -> dict:
     d = clean(design, keep_id=design.get("id"))
     return {**d, "custom": True, "label": d["name"], "hint": f"Your design: {FONTS[d['font']]['label']}",
             "chars": chars_for(d["words"]), "gap": 0.6, "size_share": BASE_SIZE * d["size"] / 100, "pos_share": d["pos"] / 100,
-            "css_font": "SWM " + FONTS[d["font"]]["label"]}
+            "css_font": "SWM " + FONTS[d["font"]]["label"], "em": font_em(FONTS[d["font"]]["file"])}
 
 
 def parse(raw: str | None) -> dict:

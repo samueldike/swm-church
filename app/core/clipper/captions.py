@@ -177,7 +177,10 @@ def ass(words: list[list], *, style: str, width: int, height: int) -> str:
 
 def public_styles() -> dict:
     """The design table for the browser (clipper-captions.js)."""
-    return {k: {kk: v for kk, v in st.items()} for k, st in STYLES.items()}
+    from app.core.clipper.studio import font_em
+
+    files = {"Poppins ExtraBold": "Poppins-ExtraBold.ttf", "Poppins SemiBold": "Poppins-SemiBold.ttf"}
+    return {k: {**st, "em": font_em(files.get(st["font"], "Poppins-ExtraBold.ttf"))} for k, st in STYLES.items()}
 
 
 def srt(words: list[list]) -> str:

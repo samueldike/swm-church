@@ -11332,7 +11332,8 @@ async def admin_clipper_studio(request: Request, db: AsyncSession = Depends(get_
                  "builtins": captions.public_styles(),
                  "presets": {k: studio.public(studio.preset(k)) for k in studio.PRESETS},
                  "base": studio.BASE, "ranges": studio.RANGES,
-                 "fonts": {k: {"label": v["label"], "kind": v["kind"], "css": "SWM " + v["label"], "file": v["file"]}
+                 "fonts": {k: {"label": v["label"], "kind": v["kind"], "css": "SWM " + v["label"], "file": v["file"],
+                                "em": studio.font_em(v["file"])}
                            for k, v in studio.FONTS.items()},
                  "choices": {"word_fx": studio.WORD_FX, "mode": studio.MODES, "enter": studio.ENTERS,
                              "exit": studio.EXITS, "box": studio.BOXES},
