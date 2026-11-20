@@ -413,15 +413,23 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
         shutil.rmtree(work, ignore_errors=True)
 
 
+# A design whose look changed gets a new file name, so copies burned with the old look are made again.
+LOOK_VERSION = {"glow": 2}
+
+
+def _look(style: str | None) -> str | None:
+    return f"{style}{LOOK_VERSION[style]}" if style in LOOK_VERSION else style
+
+
 def captioned_path(master: Path, style: str) -> Path:
-    return master.with_name(f"{master.stem}.cap-{style}.mp4")
+    return master.with_name(f"{master.stem}.cap-{_look(style)}.mp4")
 
 
 def finished_path(master: Path, style: str | None, frame_id: str | None, outro_id: str | None = None,
                   music_id: str | None = None, mark_key: str | None = None) -> Path:
     if not frame_id and not outro_id and not music_id and not mark_key:
         return captioned_path(master, style) if style else master
-    name = f"{master.stem}.fin-{style or 'none'}-{frame_id or 'none'}-{outro_id or 'none'}"
+    name = f"{master.stem}.fin-{_look(style) or 'none'}-{frame_id or 'none'}-{outro_id or 'none'}"
     if music_id:
         name += f"-{music_id}"
     if mark_key:
