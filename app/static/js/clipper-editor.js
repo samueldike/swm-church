@@ -198,7 +198,8 @@
     $('ve-cap-on').checked = S.captions_on;
     const chips = $('ve-cap-styles');
     chips.setAttribute('aria-disabled', String(!S.captions_on));
-    chips.innerHTML = Object.entries(B.styles).map(([k2, v]) => window.SwmCaptions.chip(k2, v, k2 === S.caption_style)).join('');
+    chips.innerHTML = Object.entries(B.styles).map(([k2, v]) => window.SwmCaptions.chip(k2, v, k2 === S.caption_style)).join('')
+      + '<a class="vc-capchip-new" href="/admin/clipper/captions" target="_blank" rel="noopener" title="Make your own caption design in Caption Studio">+ New design</a>';
     stage.className = `ve-stage ${S.format}${S.framing === 'fit' && S.frame_x === null ? ' fit' : ''}`;
     video.style.objectPosition = S.frame_x !== null ? `${S.frame_x * 100}% 50%` : '50% 50%';
     $('ve-frame-hint').hidden = !(S.framing === 'speaker' && S.frame_x === null && S.format !== 'landscape');

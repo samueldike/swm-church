@@ -1,0 +1,93 @@
+{% extends "layouts/admin_base.html" %}
+{% block title %}Caption Studio | Video Clipper | {{ siteName }}{% endblock %}
+{% block topbar_title %}Video Clipper{% endblock %}
+{% block topbar_subtitle %}Caption Studio{% endblock %}
+{% block topbar_icon %}ri-text{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=9">
+<link rel="stylesheet" href="{{ url_for('static', path='css/clipper-studio.css') }}?v=1">{% endblock %}
+
+{% block content %}
+<div class="vc cs" id="cs" data-csrf="{{ csrf_token }}">
+  <script type="application/json" id="cs-boot">{{ boot|tojson }}</script>
+
+  <div class="cs-head">
+    <a href="{{ url_for('admin_clipper') }}" class="btn btn-secondary btn-sm" aria-label="Back to the videos"><i class="ri-arrow-left-line"></i></a>
+    <div class="min-w-0">
+      <h1>Caption Studio</h1>
+      <p class="vc-muted">Make caption designs for your shorts. Every change plays live on the right; "Check the real video" shows exactly what the download will look like.</p>
+    </div>
+    <span class="flex-grow"></span>
+    {% if churches %}
+    <form method="get" class="vc-inline">
+      <label class="text-[13px] font-semibold" for="cs-church">Church</label>
+      <select id="cs-church" name="church" onchange="this.form.submit()">
+        {% for b in churches %}<option value="{{ b.id }}" {{ 'selected' if b.id == church }}>{{ b.name }}{{ ' (HQ)' if b.is_hq }}</option>{% endfor %}
+      </select>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="cs-main">
+    <!-- 1. Designs -->
+    <aside class="cs-list vc-panel" aria-label="Designs">
+      <h2>Your designs</h2>
+      <div id="cs-mine" class="cs-cards"></div>
+      <p class="vc-muted text-[12.5px]" id="cs-mine-empty" hidden>None yet. Start from one below.</p>
+      <h2 class="vc-mt">Start from</h2>
+      <div id="cs-presets" class="cs-cards"></div>
+    </aside>
+
+    <!-- 2. Live preview -->
+    <section class="cs-preview vc-panel" aria-label="Live preview">
+      <div class="cs-toolbar">
+        <div class="ve-seg" role="radiogroup" aria-label="Shape" id="cs-format">
+          <button type="button" data-format="vertical" aria-pressed="true">9:16</button>
+          <button type="button" data-format="square" aria-pressed="false">1:1</button>
+          <button type="button" data-format="landscape" aria-pressed="false">16:9</button>
+        </div>
+        <div class="ve-seg" role="radiogroup" aria-label="Background" id="cs-bg">
+          <button type="button" data-bg="photo" aria-pressed="true" title="A picture from one of your shorts">Video</button>
+          <button type="button" data-bg="dark" aria-pressed="false">Dark</button>
+          <button type="button" data-bg="light" aria-pressed="false">Light</button>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" id="cs-play" aria-label="Pause"><i class="ri-pause-fill"></i></button>
+      </div>
+      <div class="cs-stage-wrap">
+        <div class="cs-stage vertical bg-photo" id="cs-stage"></div>
+      </div>
+      <label class="field-label vc-mt" for="cs-text">Words to try it with</label>
+      <input id="cs-text" maxlength="200" aria-label="Words to try it with">
+      <div class="vc-inline vc-mt">
+        <button type="button" class="btn btn-secondary btn-sm" id="cs-real"><i class="ri-film-line"></i><span>Check the real video</span></button>
+        <span class="vc-muted text-[12px]">Pauses the preview and draws that moment with the same engine as the downloads.</span>
+      </div>
+      <figure class="cs-real" id="cs-real-box" hidden>
+        <img id="cs-real-img" alt="The real burned-in captions at this moment">
+        <figcaption class="vc-muted text-[12px]">The real video at this moment. <button type="button" class="underline" id="cs-real-close">Close</button></figcaption>
+      </figure>
+    </section>
+
+    <!-- 3. Controls -->
+    <section class="cs-controls vc-panel" aria-label="Design settings">
+      <div class="cs-namebar">
+        <input id="cs-name" maxlength="40" aria-label="Design name" placeholder="Name this design">
+        <span class="vc-pill" id="cs-state"></span>
+      </div>
+      <div id="cs-fields"></div>
+      <div class="cs-actions" id="cs-actions">
+        <button type="button" class="btn btn-primary" data-cmd="save"><i class="ri-check-line"></i><span>Save design</span></button>
+        <button type="button" class="btn btn-secondary btn-sm" data-cmd="copy" title="Save these settings as another design"><i class="ri-file-copy-line"></i>Save as new</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-cmd="revert" title="Back to the last saved settings"><i class="ri-arrow-go-back-line"></i>Undo changes</button>
+        <button type="button" class="btn btn-ghost btn-sm text-bad" data-cmd="delete"><i class="ri-delete-bin-6-line"></i>Delete</button>
+      </div>
+      <p class="vc-muted text-[12px]" id="cs-readonly" hidden>Only the church office saves designs. You can still try them here.</p>
+    </section>
+  </div>
+  <div class="vc-toast" id="vc-toast" role="status" aria-live="polite"></div>
+</div>
+{% endblock %}
+
+{% block extra_body %}
+<script src="{{ url_for('static', path='js/clipper-captions.js') }}?v=3"></script>
+<script src="{{ url_for('static', path='js/clipper-studio.js') }}?v=1"></script>
+{% endblock %}

@@ -4,7 +4,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}Settings{% endblock %}
 {% block topbar_icon %}ri-settings-3-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=8">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=9">{% endblock %}
 
 {% block page_header %}
   {{ page_header("Clipper settings", "Set these up once. Every new video uses them.",
@@ -23,6 +23,7 @@
     <a href="#outros" data-tab="outros"><i class="ri-film-line"></i><span>Outros</span></a>
     <a href="#music" data-tab="music"><i class="ri-music-2-line"></i><span>Background music</span></a>
     {% endif %}
+    <a href="{{ url_for('admin_clipper_studio') }}{{ '?church=' ~ frames.church if frames }}"><i class="ri-text"></i><span>Caption Studio</span></a>
     <a href="{{ url_for('admin_clipper_channels') }}"><i class="ri-share-forward-line"></i><span>Social accounts</span></a>
   </nav>
   <div class="vc-tab-panels">

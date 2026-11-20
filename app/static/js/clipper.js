@@ -217,7 +217,7 @@
           <div class="vc-capbar">
             <label class="vc-switch" title="${s.words ? 'Show captions on this short (preview, download and post)' : 'Re-cut this short once to add captions'}"><input type="checkbox" data-cap-on ${s.captions_on ? 'checked' : ''} ${s.words ? '' : 'disabled'}><span aria-hidden="true"></span><b>Captions</b></label>
             <div class="vc-capchips" role="group" aria-label="Caption design (point at one to see it on the video)" aria-disabled="${!s.captions_on}">${Object.entries(capStyles).map(([k, v]) =>
-              window.SwmCaptions ? window.SwmCaptions.chip(k, v, k === s.caption_style) : `<button type="button" data-cap="${esc(k)}" aria-pressed="${k === s.caption_style}" title="${esc(v.hint)}">${esc(v.label)}</button>`).join('')}</div>
+              window.SwmCaptions ? window.SwmCaptions.chip(k, v, k === s.caption_style) : `<button type="button" data-cap="${esc(k)}" aria-pressed="${k === s.caption_style}" title="${esc(v.hint)}">${esc(v.label)}</button>`).join('')}<a class="vc-capchip-new" href="/admin/clipper/captions" title="Make your own caption design in Caption Studio">+ New design</a></div>
           </div>
           <div class="vc-actions">
             ${s.video ? `<a class="btn btn-primary btn-sm" href="${esc(base)}/shorts/${s.id}/publish"><i class="ri-send-plane-line"></i>Publish</a>` : ''}

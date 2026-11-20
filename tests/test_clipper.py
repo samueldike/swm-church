@@ -1221,3 +1221,109 @@ def test_glow_is_a_soft_halo_under_sharp_letters():
     assert all(r"\1a&HFF&" in l and r"\blur9" in l for l in halo)   # the halo: no letters, only the blurred glow
     assert all(r"\blur0" in l and r"\1a&HFF&" not in l for l in sharp)   # the letters: never blurred
     assert all(r"\fscx116" in l for l in halo + sharp)           # the spoken word grows on both, so they line up
+
+
+# ─── Caption Studio: the church's own designs ─────────────────────────
+
+def test_studio_cleans_anything_posted_into_a_safe_design():
+    from app.core.clipper import studio
+
+    d = studio.clean({"name": "  Sunday   gold  " * 5, "font": "comic-sans", "size": 999, "tilt": -50, "text": "red",
+                      "active": "ff00aa", "glow": "1", "box": "everywhere", "words": 0, "mode": "so_far", "evil": "<x>"},
+                     keep_id="c-0123abcd")
+    assert d["id"] == "c-0123abcd" and len(d["name"]) <= 40 and "  " not in d["name"]
+    assert d["font"] == studio.BASE["font"] and d["size"] == 200 and d["tilt"] == -12 and d["words"] == 1
+    assert d["text"] == studio.BASE["text"] and d["active"] == "#FF00AA" and d["glow"] is True
+    assert d["box"] == "none" and d["mode"] == "so_far" and "evil" not in d
+    assert studio.clean({}, keep_id="../x").get("id") is None
+
+
+def test_every_studio_font_ships_with_the_app():
+    from pathlib import Path
+
+    from app.core.clipper import captions, studio
+
+    for f in studio.FONTS.values():
+        assert (Path(captions.fonts_dir()) / f["file"]).exists(), f["file"]
+
+
+def test_studio_ids_are_caption_designs_everywhere():
+    from app.core.clipper import captions, options, studio
+
+    cid = studio.new_id()
+    assert studio.is_custom(cid) and captions.style_id(cid) == cid
+    assert captions.style_id("c-NOTHEX!!") is None
+    st, _ = options.clean_settings({"caption_style": cid})
+    assert st["caption_style"] == cid
+
+
+def test_every_preset_and_every_motion_makes_valid_subtitles():
+    from app.core.clipper import studio
+
+    words = [[0.0, 0.4, "Grace"], [0.45, 0.8, "is"], [0.85, 1.3, "enough,"], [1.6, 2.0, "today."]]
+    for key in studio.PRESETS:
+        text = studio.ass(words, studio.preset(key), width=1080, height=1920)
+        assert "[Events]" in text and text.count("Dialogue:") >= 3, key
+    for table, field in ((studio.ENTERS, "enter"), (studio.WORD_FX, "word_fx"), (studio.MODES, "mode"),
+                         (studio.BOXES, "box"), (studio.EXITS, "exit")):
+        for value in table:
+            for shape in ((1080, 1920), (1920, 1080)):
+                text = studio.ass(words, {**studio.BASE, field: value}, width=shape[0], height=shape[1])
+                assert text.count("Dialogue:") >= 3, (field, value)
+
+
+def test_studio_motions_and_highlights_say_what_they_mean():
+    from app.core.clipper import studio
+
+    words = [[0.0, 0.4, "Grace"], [0.45, 0.8, "is"], [0.85, 1.3, "enough."]]
+    ev = lambda d: [l for l in studio.ass(words, {**studio.BASE, **d}, width=1080, height=1920).splitlines()
+                    if l.startswith("Dialogue")]
+    first = ev({"mode": "reveal"})[0]                       # "Grace" spoken: the two later words are hidden
+    assert first.count(r"\alpha&HFF&") == 2
+    second = ev({"mode": "so_far", "active": "#00FF00"})[1]    # "is" spoken: "Grace" and "is" are both lit
+    assert second.count(r"\c&H0000FF00") == 2
+    assert r"\move(" in ev({"enter": "slide"})[0] and r"\move(" not in ev({"enter": "slide"})[1]
+    assert r"\fad(0,140)" in ev({"enter": "none", "exit": "fade"})[-1]
+    assert ",3," in studio.ass(words, {**studio.BASE, "box": "line"}, width=1080, height=1920).split("Style: Main,")[1].split("\n")[0]
+    glow = ev({"glow": True})
+    assert len(glow) == 6 and {l[:12] for l in glow} == {"Dialogue: 0,", "Dialogue: 1,"}
+    assert r"\u1" in ev({"word_fx": "underline"})[0]
+    assert "Anton" in studio.ass(words, {**studio.BASE, "font": "anton"}, width=1080, height=1920)
+
+
+def test_editing_a_design_changes_its_file_name_but_renaming_does_not():
+    from app.core.clipper import studio
+
+    a = studio.preset("pop")
+    assert studio.cache_key(a) == studio.cache_key({**a, "name": "Renamed"})
+    assert studio.cache_key(a) != studio.cache_key({**a, "active": "#00FF00"})
+
+
+def test_a_studio_design_is_burned_into_the_finished_copy(tmp_path):
+    import json
+    import shutil
+    import subprocess
+
+    if not shutil.which("ffmpeg"):
+        import pytest
+        pytest.skip("ffmpeg is not installed here")
+    from PIL import Image, ImageChops
+
+    from app.core.clipper import render, studio
+
+    master = tmp_path / "7.mp4"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=360x640:r=25:d=2",
+                    "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", "2", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", str(master)], check=True)
+    (tmp_path / "7.words.json").write_text(json.dumps({"words": [[0.0, 0.9, "Grace"], [0.9, 1.9, "wins"]],
+                                                       "width": 360, "height": 640}))
+    design = {**studio.preset("headline"), "id": "c-00000001"}
+    out = render.finish(master, "c-00000001", design=design)
+    assert out != master and studio.cache_key(design) in out.name
+    still, plain = tmp_path / "a.png", tmp_path / "b.png"
+    for src, png in ((out, still), (master, plain)):
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", "0.5", "-i", str(src), "-frames:v", "1", str(png)], check=True)
+    diff = ImageChops.difference(Image.open(still).convert("RGB"), Image.open(plain).convert("RGB"))
+    assert diff.getbbox() is not None                       # the words are on the picture
+    gone = render.finish(master, "c-00000002")              # a deleted design: the usual design instead
+    assert ".cap-pop" in gone.name or "fin-pop" in gone.name

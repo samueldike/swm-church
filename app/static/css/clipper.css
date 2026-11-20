@@ -350,3 +350,56 @@
 .vc-chip-name { font: 700 10.5px/1.1 var(--font-sans, inherit); text-align: center; padding: 0 2px 2px; }
 .vc-capchips button.vc-capchip[aria-pressed="true"] { background: #111; color: #f0c837; border-color: #f0c837; box-shadow: 0 0 0 1px #f0c837; }
 .vc-capchips button.vc-capchip:hover { border-color: #f0c837; }
+
+/* ── Caption Studio designs (clipper-captions.js customLine; same choices as app/core/clipper/studio.py:ass) ── */
+@font-face { font-family: "SWM Poppins Extra Bold"; font-display: swap; src: url("/static/fonts/clipper/Poppins-ExtraBold.ttf") format("truetype"); }
+@font-face { font-family: "SWM Poppins Semi Bold"; font-display: swap; src: url("/static/fonts/clipper/Poppins-SemiBold.ttf") format("truetype"); }
+@font-face { font-family: "SWM Montserrat Extra Bold"; font-display: swap; src: url("/static/fonts/clipper/Montserrat-ExtraBold.ttf") format("truetype"); }
+@font-face { font-family: "SWM Inter Extra Bold"; font-display: swap; src: url("/static/fonts/clipper/Inter-ExtraBold.ttf") format("truetype"); }
+@font-face { font-family: "SWM Bricolage Grotesque"; font-display: swap; src: url("/static/fonts/clipper/BricolageGrotesque-ExtraBold.ttf") format("truetype"); }
+@font-face { font-family: "SWM Anton"; font-display: swap; src: url("/static/fonts/clipper/Anton-Regular.ttf") format("truetype"); }
+@font-face { font-family: "SWM Bebas Neue"; font-display: swap; src: url("/static/fonts/clipper/BebasNeue-Regular.ttf") format("truetype"); }
+@font-face { font-family: "SWM Oswald Bold"; font-display: swap; src: url("/static/fonts/clipper/Oswald-Bold.ttf") format("truetype"); }
+@font-face { font-family: "SWM Archivo Black"; font-display: swap; src: url("/static/fonts/clipper/ArchivoBlack-Regular.ttf") format("truetype"); }
+@font-face { font-family: "SWM Lilita One"; font-display: swap; src: url("/static/fonts/clipper/LilitaOne-Regular.ttf") format("truetype"); }
+@font-face { font-family: "SWM Luckiest Guy"; font-display: swap; src: url("/static/fonts/clipper/LuckiestGuy-Regular.ttf") format("truetype"); }
+@font-face { font-family: "SWM Bangers"; font-display: swap; src: url("/static/fonts/clipper/Bangers-Regular.ttf") format("truetype"); }
+@font-face { font-family: "SWM Righteous"; font-display: swap; src: url("/static/fonts/clipper/Righteous-Regular.ttf") format("truetype"); }
+@font-face { font-family: "SWM Permanent Marker"; font-display: swap; src: url("/static/fonts/clipper/PermanentMarker-Regular.ttf") format("truetype"); }
+@font-face { font-family: "SWM Caveat Bold"; font-display: swap; src: url("/static/fonts/clipper/Caveat-Bold.ttf") format("truetype"); }
+@font-face { font-family: "SWM Dancing Script"; font-display: swap; src: url("/static/fonts/clipper/DancingScript-Bold.ttf") format("truetype"); }
+@font-face { font-family: "SWM Playfair Display Black"; font-display: swap; src: url("/static/fonts/clipper/PlayfairDisplay-Black.ttf") format("truetype"); }
+@font-face { font-family: "SWM Merriweather Black"; font-display: swap; src: url("/static/fonts/clipper/Merriweather-Black.ttf") format("truetype"); }
+.vc-cap.vc-cx { font-family: var(--cx-font), sans-serif; font-weight: 400; font-style: var(--cx-style); color: var(--cx-text);
+  -webkit-text-stroke: calc(var(--cap-size, 28px) * var(--cx-ow) * 2) var(--cx-oc); paint-order: stroke fill;
+  text-shadow: var(--cx-shadow); letter-spacing: var(--cx-sp); transform: rotate(var(--cx-tilt)); line-height: 1.15; }
+.vc-cx .lit { color: var(--cx-active); }
+.vc-cx .hide { visibility: hidden; }
+.vc-cx.fx-pop .on { animation: cx-pop .11s ease-out; }
+.vc-cx.fx-bounce .on { animation: cx-bounce .16s ease-out; }
+.vc-cx.fx-grow .on { transform: scale(1.12); }
+.vc-cx.fx-underline .on { text-decoration: underline; text-decoration-thickness: .07em; text-underline-offset: .12em; }
+.vc-cx.box-word .on { background: var(--cx-bc); border-radius: .14em; padding: 0 .14em; -webkit-text-stroke: 0; text-shadow: none; }
+.vc-cx.box-line { background: var(--cx-bc); border-radius: .2em; padding: .14em .42em; -webkit-text-stroke: 0; text-shadow: none; }
+@keyframes cx-pop { from { transform: scale(1.2); } to { transform: scale(1); } }
+@keyframes cx-bounce { 0% { transform: scale(1.35); } 50% { transform: scale(.92); } 100% { transform: scale(1); } }
+.vc-cx.enter.in-fade { animation: cx-fade .15s ease-out; }
+.vc-cx.enter.in-pop { animation: cx-in-pop .14s ease-out; }
+.vc-cx.enter.in-slide { animation: cx-slide .17s ease-out; }
+.vc-cx.enter.in-drop { animation: cx-drop .17s ease-out; }
+.vc-cx.enter.in-bounce { animation: cx-in-bounce .18s ease-out; }
+.vc-cx.enter.in-zoom { animation: cx-zoom .17s ease-out; }
+.vc-cx.enter.in-blur { animation: cx-blur .18s ease-out; }
+.vc-cx.enter.in-swing { animation: cx-swing .2s ease-out; }
+@keyframes cx-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cx-in-pop { from { transform: rotate(var(--cx-tilt)) scale(.7); } to { transform: rotate(var(--cx-tilt)) scale(1); } }
+@keyframes cx-slide { from { opacity: 0; transform: rotate(var(--cx-tilt)) translateY(.6em); } to { opacity: 1; transform: rotate(var(--cx-tilt)) translateY(0); } }
+@keyframes cx-drop { from { opacity: 0; transform: rotate(var(--cx-tilt)) translateY(-.6em); } to { opacity: 1; transform: rotate(var(--cx-tilt)) translateY(0); } }
+@keyframes cx-in-bounce { 0% { transform: rotate(var(--cx-tilt)) scale(1.25); } 55% { transform: rotate(var(--cx-tilt)) scale(.92); } 100% { transform: rotate(var(--cx-tilt)) scale(1); } }
+@keyframes cx-zoom { from { opacity: 0; transform: rotate(var(--cx-tilt)) scale(1.5); } to { opacity: 1; transform: rotate(var(--cx-tilt)) scale(1); } }
+@keyframes cx-blur { from { opacity: 0; filter: blur(8px); } to { opacity: 1; filter: blur(0); } }
+@keyframes cx-swing { from { opacity: 0; transform: rotate(calc(var(--cx-tilt) - 14deg)); } to { opacity: 1; transform: rotate(var(--cx-tilt)); } }
+@media (prefers-reduced-motion: reduce) { .vc-cx, .vc-cx .on { animation: none !important; } }
+.vc-capchips .vc-capchip-new { display: inline-flex; align-items: center; justify-content: center; width: 78px; min-height: 56px;
+  border: 1px dashed var(--line, #ccc); border-radius: 10px; font: 700 10.5px/1.2 var(--font-sans, inherit); color: var(--ink-2, #555); text-align: center; text-decoration: none; }
+.vc-capchips .vc-capchip-new:hover { border-color: #f0c837; color: inherit; }

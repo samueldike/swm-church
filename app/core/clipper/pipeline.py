@@ -571,7 +571,15 @@ async def final_copy(project_id: int, short, branch_id: int | None):
             wcfg = await watermark.load(db, branch_id)
         mark = watermark.resolve(getattr(short, "watermark", None), wcfg)
         wpath, wkey = watermark.path_of(branch_id, mark), watermark.cache_key(wcfg, mark)
-    return await asyncio.to_thread(render.finish, master, style, fpath, fid, opath, oitem, mpath, mitem, wpath, wcfg, wkey)
+    design = None
+    if style and branch_id:
+        from app.core.clipper import studio
+
+        if studio.is_custom(style):
+            async with async_session() as db:
+                design = studio.find(await studio.load(db, branch_id), style)
+    return await asyncio.to_thread(render.finish, master, style, fpath, fid, opath, oitem, mpath, mitem, wpath, wcfg, wkey,
+                                   design)
 
 
 async def premake_captions(project_id: int, short_id: int) -> None:

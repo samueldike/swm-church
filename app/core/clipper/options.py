@@ -120,6 +120,9 @@ def clean_settings(form) -> tuple[dict, list[str]]:
         val = get(key)
         if key == "caption_style" and val == "bold":      # the first caption design's earlier name
             val = "pop"
+        if key == "caption_style" and val and __import__("app.core.clipper.studio", fromlist=["is_custom"]).is_custom(val):
+            out[key] = val                                  # a Caption Studio design
+            continue
         out[key] = val if val in table else DEFAULTS[key]
     try:
         q = int(get("quality") or DEFAULTS["quality"])

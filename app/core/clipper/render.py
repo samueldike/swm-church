@@ -440,12 +440,17 @@ def finished_path(master: Path, style: str | None, frame_id: str | None, outro_i
 def finish(master: Path, style: str | None, frame: Path | None = None, frame_id: str | None = None,
            outro: Path | None = None, outro_item: dict | None = None, music_path: Path | None = None,
            music_item: dict | None = None, mark_path: Path | None = None, mark_cfg: dict | None = None,
-           mark_key: str | None = None) -> Path:
+           mark_key: str | None = None, design: dict | None = None) -> Path:
     """The master with its frame, its watermark and then its captions on top, followed by its outro, in ONE encode,
     cached beside the master. Without an outro the sound is copied. With nothing to add, the master itself."""
     from app.core.clipper import music, outros, watermark
 
+    from app.core.clipper import studio
+
     sid = captions.style_id(style) if style else None
+    if studio.is_custom(sid) and not design:
+        sid = captions.DEFAULT                   # a Caption Studio design that was deleted: the usual design
+    look = f"{sid}-{studio.cache_key(design)}" if studio.is_custom(sid) else sid
     if frame is not None and not frame.exists():
         frame, frame_id = None, None
     if outro is not None and (not outro.exists() or not outro_item):
@@ -456,7 +461,7 @@ def finish(master: Path, style: str | None, frame: Path | None = None, frame_id:
         mark_path, mark_key = None, None
     if sid is None and frame is None and outro is None and music_path is None and mark_path is None:
         return master
-    out = finished_path(master, sid, frame_id if frame is not None else None, outro_item["id"] if outro is not None else None,
+    out = finished_path(master, look, frame_id if frame is not None else None, outro_item["id"] if outro is not None else None,
                         music.cache_key(music_item) if music_path is not None else None, mark_key)
     if out.exists() and out.stat().st_mtime >= master.stat().st_mtime:
         return out
@@ -486,7 +491,9 @@ def finish(master: Path, style: str | None, frame: Path | None = None, frame_id:
             last, n = "vw", n + 1
         if sid:
             ass_file = work / "captions.ass"
-            ass_file.write_text(captions.ass(meta["words"], style=sid, width=width, height=height), encoding="utf-8")
+            text = (studio.ass(meta["words"], design, width=width, height=height) if studio.is_custom(sid)
+                    else captions.ass(meta["words"], style=sid, width=width, height=height))
+            ass_file.write_text(text, encoding="utf-8")
             esc = str(ass_file).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
             fonts = captions.fonts_dir().replace("\\", "/").replace(":", "\\:")
             chain.append(f"[{last}]subtitles='{esc}':fontsdir='{fonts}'[vc]")

@@ -47,13 +47,18 @@ LEGACY = {"bold": "pop"}      # earlier shorts saved "bold" (the first design)
 
 
 def style_id(name: str | None) -> str | None:
-    """A known design id, or None for no captions."""
+    """A known design id (built in, or a Caption Studio id ``c-xxxxxxxx``), or None for no captions."""
+    from app.core.clipper.studio import is_custom
+
     name = LEGACY.get(name or "", name or "")
-    return name if name in STYLES else None
+    return name if name in STYLES or is_custom(name) else None
 
 
 def fonts_dir() -> str:
-    return str(ASSETS)
+    """Every caption font (Poppins and the Caption Studio fonts): the same files the browser preview loads."""
+    from pathlib import Path
+
+    return str(Path(__file__).resolve().parents[2] / "static" / "fonts" / "clipper")
 
 
 def _c(hex_rgb: str, alpha: int = 0) -> str:

@@ -10565,7 +10565,7 @@ async def _clip_page(request: Request, db: AsyncSession, template: str, title: s
                       "audio_projects": [x for x in projects if x.branch_id == wchurch and __import__("app.core.clipper.media", fromlist=["audio_path"]).audio_path(x.id).exists()][:30]}
         watch_ctx = {"cfg": wcfg, "state": wstate, "church": wchurch, "church_name": wb.name if wb else "",
                      "every": _cw.EVERY, "days": _cw.DAY_NAMES, "formats": _co.FORMATS, "lengths": _co.LENGTHS,
-                     "captions": {k: v["label"] for k, v in _cc.STYLES.items()},
+                     "captions": {k: v["label"] for k, v in (await _clip_cap_styles(db, wchurch)).items()},
                      "churches": (await db.execute(select(Branch).order_by(Branch.is_hq.desc(), Branch.name))).scalars().all()
                      if sees_every_church(admin) else []}
     ctx = await _admin_context(request, db, "admin.clipper")
@@ -10621,6 +10621,7 @@ async def admin_clipper_new(request: Request, db: AsyncSession = Depends(get_db)
     ctx = await _admin_context(request, db, "admin.clipper")
     return await render_template(request, "admin/clipper-form.html", {
         "opt": options, "defaults": options.DEFAULTS, "max_mb": app_settings.CLIPPER_MAX_UPLOAD_MB,
+        "custom_captions": {k: v["label"] for k, v in (await _clip_cap_styles(db, church)).items() if v.get("custom")},
         "ai_ready": await ai.is_configured(), "fast_listen": bool(await _clip_groq_key()), "title": "New video", **ctx})
 
 
@@ -10637,6 +10638,8 @@ async def admin_clipper_create(request: Request, db: AsyncSession = Depends(get_
 
     form = await request.form()
     st, problems = options.clean_settings(form)
+    if not await _clip_style_ok(db, church, st.get("caption_style")):
+        st["caption_style"] = options.DEFAULTS["caption_style"] if st.get("caption_style") == "none" else "pop"
     kind = "upload" if form.get("source_kind") == "upload" else "url"
     url = (form.get("url") or "").strip()
     if kind == "url" and not media.valid_url(url):
@@ -10855,7 +10858,7 @@ async def admin_clipper_publish(project_id: int, short_id: int, request: Request
         "p": p, "s": s, "short": _clip_json_short(p, s), "accounts": accounts, "problem": problem, "key_set": key_set,
         "caption": social.with_ministry(s.caption or "", ministry), "ministry": ministry, "labels": social.LABELS,
         "icons": social.ICONS, "tiktok_privacy": social.TIKTOK_PRIVACY, "tz": await _clip_church_tz(db, p.branch_id),
-        "cap_label": (captions.STYLES.get(captions.style_id(s.caption_style) or "") or {}).get("label"),
+        "cap_label": ((await _clip_cap_styles(db, p.branch_id)).get(captions.style_id(s.caption_style) or "") or {}).get("label"),
         "can_manage": _clip_can_manage_channels(admin), "full_view": True, "title": "Publish", **ctx})
 
 
@@ -11020,7 +11023,7 @@ async def admin_clipper_edit(project_id: int, short_id: int, request: Request, d
                  "words": await asyncio.to_thread(_clip_words_window, p.id, lo, hi), "window": [lo, hi],
                  "format": s.format, "framing": s.framing, "quality": s.quality, "title": s.title,
                  "captions_on": bool(s.captions_on), "caption_style": captions.style_id(s.caption_style) or captions.DEFAULT,
-                 "formats": options.FORMATS, "framings": options.FRAMINGS, "styles": captions.public_styles(),
+                 "formats": options.FORMATS, "framings": options.FRAMINGS, "styles": await _clip_cap_styles(db, p.branch_id),
                  "frame": s.frame or "default", "frames": [{**i, "url": _clip_frame_url(p.branch_id, i)} for i in fcfg["items"]],
                  "frame_defaults": fcfg["default"], "outro": s.outro or "default",
                  "watermark": s.watermark or "default", "marks": _clip_marks_list(p),
@@ -11104,7 +11107,7 @@ async def admin_clipper_timeline_save(project_id: int, short_id: int, request: R
     if isinstance(body.get("title"), str) and body["title"].strip():
         s.title = body["title"].strip()[:255]
     style = captions.style_id(body.get("caption_style"))
-    if style:
+    if style and await _clip_style_ok(db, p.branch_id, style):
         s.caption_style = style
     if "captions_on" in body:
         s.captions_on = bool(body.get("captions_on"))
@@ -11276,6 +11279,199 @@ async def admin_clipper_frame_file(frame_id: str, request: Request, db: AsyncSes
     if not path or not path.exists():
         return Response(status_code=404)
     return FileResponse(str(path), media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
+
+
+# ── Video Clipper → Caption Studio (the church's own caption designs: studio.py) ──
+
+async def _clip_cap_styles(db, branch_id: int | None) -> dict:
+    """Every design a short of this church can use: the built-in five, then the church's own."""
+    from app.core.clipper import captions, studio
+
+    out = dict(captions.public_styles())
+    if branch_id:
+        for d in (await studio.load(db, branch_id))["items"]:
+            out[d["id"]] = studio.public(d)
+    return out
+
+
+async def _clip_style_ok(db, branch_id: int | None, style: str | None) -> bool:
+    from app.core.clipper import studio
+
+    if not studio.is_custom(style):
+        return True
+    return bool(branch_id) and studio.find(await studio.load(db, branch_id), style) is not None
+
+
+@router.get("/clipper/captions", response_class=HTMLResponse, name="admin_clipper_studio")
+async def admin_clipper_studio(request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin:
+        return RedirectResponse(url="/admin/login", status_code=303)
+    if church is None:
+        return RedirectResponse(url="/admin/dashboard", status_code=303)
+    from app.core.clipper import captions, media, studio
+    from app.core.clipper.options import sees_every_church
+    from app.models.branch import Branch
+    from app.models.clipper import ClipProject, ClipShort
+
+    church = await _clip_channel_church(request, db, admin, church)
+    cfg = await studio.load(db, church)
+    # A real picture to try designs on: the newest finished short of this church.
+    photo = ""
+    row = (await db.execute(select(ClipShort.id, ClipShort.project_id, ClipShort.format).join(ClipProject)
+                            .where(ClipProject.branch_id == church, ClipShort.status == "ready")
+                            .order_by(ClipShort.id.desc()).limit(8))).all()
+    for sid, pid, fmt in row:
+        if media.short_file(pid, sid, "jpg").exists():
+            photo = f"/admin/clipper/{pid}/shorts/{sid}/thumb.jpg"
+            break
+    ctx = await _admin_context(request, db, "admin.clipper")
+    return await render_template(request, "admin/clipper-studio.html", {
+        "boot": {"church": church, "can_edit": _clip_can_manage_channels(admin), "photo": photo,
+                 "designs": [studio.public(d) for d in cfg["items"]],
+                 "builtins": captions.public_styles(),
+                 "presets": {k: studio.public(studio.preset(k)) for k in studio.PRESETS},
+                 "base": studio.BASE, "ranges": studio.RANGES,
+                 "fonts": {k: {"label": v["label"], "kind": v["kind"], "css": "SWM " + v["label"], "file": v["file"]}
+                           for k, v in studio.FONTS.items()},
+                 "choices": {"word_fx": studio.WORD_FX, "mode": studio.MODES, "enter": studio.ENTERS,
+                             "exit": studio.EXITS, "box": studio.BOXES},
+                 "sample": studio.SAMPLE, "base_size": studio.BASE_SIZE,
+                 "max": studio.MAX_DESIGNS},
+        "fonts": studio.FONTS,
+        "churches": (await db.execute(select(Branch).order_by(Branch.is_hq.desc(), Branch.name))).scalars().all()
+        if sees_every_church(admin) else [], "church": church,
+        "full_view": True, "title": "Caption Studio", **ctx})
+
+
+@router.post("/clipper/captions/save", name="admin_clipper_studio_save")
+async def admin_clipper_studio_save(request: Request, db: AsyncSession = Depends(get_db)):
+    """Save one design (new or changed). Body: JSON {design}. Answers with the saved design."""
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None or not _clip_can_manage_channels(admin):
+        return JSONResponse({"ok": False, "error": "Only the church office can save caption designs."}, status_code=403)
+    from app.core.clipper import studio
+
+    church = await _clip_channel_church(request, db, admin, church)
+    try:
+        body = await request.json()
+    except ValueError:
+        return JSONResponse({"ok": False, "error": "The design could not be read."}, status_code=400)
+    raw = (body or {}).get("design") if isinstance(body, dict) else None
+    if not isinstance(raw, dict):
+        return JSONResponse({"ok": False, "error": "The design could not be read."}, status_code=400)
+    cfg = await studio.load(db, church)
+    old = studio.find(cfg, raw.get("id"))
+    design = studio.clean(raw, keep_id=old["id"] if old else studio.new_id())
+    if old:
+        cfg["items"] = [design if i["id"] == old["id"] else i for i in cfg["items"]]
+    else:
+        if len(cfg["items"]) >= studio.MAX_DESIGNS:
+            return JSONResponse({"ok": False, "error": f"A church can keep up to {studio.MAX_DESIGNS} designs. Delete one first."}, status_code=400)
+        cfg["items"].append(design)
+    await studio.save(db, church, cfg)
+    await log_admin_action(db, admin.id, "clipper.caption_design_" + ("edit" if old else "add"), "branch", church,
+                           {"design": design["id"], "name": design["name"]}, request)
+    await db.commit()
+    return JSONResponse({"ok": True, "design": studio.public(design)})
+
+
+@router.post("/clipper/captions/{design_id}/delete", name="admin_clipper_studio_delete")
+async def admin_clipper_studio_delete(design_id: str, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None or not _clip_can_manage_channels(admin):
+        return JSONResponse({"ok": False, "error": "Only the church office can delete caption designs."}, status_code=403)
+    from sqlalchemy import update
+
+    from app.core.clipper import captions, studio
+    from app.models.clipper import ClipProject, ClipShort
+
+    church = await _clip_channel_church(request, db, admin, church)
+    cfg = await studio.load(db, church)
+    design = studio.find(cfg, design_id)
+    if not design:
+        return JSONResponse({"ok": False, "error": "That design was not found."}, status_code=404)
+    cfg["items"] = [i for i in cfg["items"] if i["id"] != design_id]
+    await studio.save(db, church, cfg)
+    # Shorts that used it go back to the usual design (their captions stay on).
+    ids = select(ClipProject.id).where(ClipProject.branch_id == church)
+    moved = (await db.execute(update(ClipShort).where(ClipShort.project_id.in_(ids), ClipShort.caption_style == design_id)
+                              .values(caption_style=captions.DEFAULT))).rowcount
+    await log_admin_action(db, admin.id, "clipper.caption_design_delete", "branch", church,
+                           {"design": design_id, "name": design["name"], "shorts_moved": moved}, request)
+    await db.commit()
+    return JSONResponse({"ok": True, "moved": moved})
+
+
+@router.post("/clipper/captions/sample", name="admin_clipper_studio_sample")
+async def admin_clipper_studio_sample(request: Request, db: AsyncSession = Depends(get_db)):
+    """The real burned-in look: one frame rendered by the same code as the downloads (ffmpeg + libass)."""
+    from fastapi.responses import Response
+
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None:
+        return JSONResponse({"ok": False, "error": "Not allowed."}, status_code=403)
+    try:
+        body = await request.json()
+    except ValueError:
+        body = {}
+    body = body if isinstance(body, dict) else {}
+    from app.core.clipper import studio
+
+    sizes = {"vertical": (540, 960), "square": (720, 720), "landscape": (960, 540)}
+    w, h = sizes.get(body.get("format"), sizes["vertical"])
+    design = studio.clean(body.get("design") if isinstance(body.get("design"), dict) else None)
+    text = re.sub(r"\s+", " ", str(body.get("text") or studio.SAMPLE))[:200]
+    try:
+        moment = max(0.0, min(30.0, float(body.get("at") or 0)))
+    except (TypeError, ValueError):
+        moment = 0.0
+    bg = body.get("bg") if body.get("bg") in ("dark", "light", "photo") else "dark"
+    photo = None
+    if bg == "photo":
+        m = re.fullmatch(r"/admin/clipper/(\d+)/shorts/(\d+)/thumb\.jpg", str(body.get("photo") or ""))
+        if m:
+            from app.core.clipper import media
+
+            p = await _clip_project(db, admin, church, int(m.group(1)))
+            if p and _clip_short(p, int(m.group(2))):
+                photo = media.short_file(p.id, int(m.group(2)), "jpg")
+    try:
+        png = await asyncio.to_thread(_clip_studio_frame, design, text, moment, w, h, bg, photo)
+    except Exception as exc:  # ffmpeg missing or failed: say so plainly
+        logging.getLogger(__name__).warning("Caption sample failed: %s", exc)
+        return JSONResponse({"ok": False, "error": "The sample could not be made right now."}, status_code=500)
+    return Response(png, media_type="image/png", headers={"Cache-Control": "no-store"})
+
+
+def _clip_studio_frame(design: dict, text: str, moment: float, w: int, h: int, bg: str, photo) -> bytes:
+    import shutil
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    from app.core.clipper import captions, studio
+
+    work = Path(tempfile.mkdtemp(prefix="capstudio_"))
+    try:
+        words = studio.sample_words(text)
+        ass_file = work / "s.ass"
+        ass_file.write_text(studio.ass(words, design, width=w, height=h), encoding="utf-8")
+        fonts = captions.fonts_dir().replace("\\", "/").replace(":", "\\:")
+        sub = f"subtitles={str(ass_file).replace(chr(92), '/')}:fontsdir={fonts}"
+        if photo is not None and Path(photo).exists():
+            src = ["-loop", "1", "-t", "40", "-i", str(photo)]
+            vf = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},{sub}"
+        else:
+            colour = "0x1d232b" if bg == "dark" else "0xe9e4d8"
+            src = ["-f", "lavfi", "-i", f"color=c={colour}:s={w}x{h}:d=40:r=25"]
+            vf = sub
+        out = work / "f.png"
+        subprocess.run(["ffmpeg", "-y", "-v", "error", *src, "-vf", vf, "-ss", f"{moment:.2f}", "-frames:v", "1", str(out)],
+                       check=True, timeout=60)
+        return out.read_bytes()
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 
 # ── Video Clipper → watermark (the ministry logo or the church's own, in a corner: watermark.py) ──
@@ -11874,7 +12070,7 @@ async def admin_clipper_show(project_id: int, request: Request, db: AsyncSession
                         "tracks": [{"id": i["id"], "name": i["name"]} for i in p._music_cfg["items"]],
                         "music_default": p._music_cfg["default"]},
         "fast_listen": bool(await _clip_groq_key()), "p": p, "data": _clip_json_project(p), "opt": options, "st": {**options.DEFAULTS, **(p.settings or {})},
-        "cap_styles": __import__("app.core.clipper.captions", fromlist=["public_styles"]).public_styles(),
+        "cap_styles": await _clip_cap_styles(db, p.branch_id),
         "title": p.title or "Video", "full_view": True, **ctx})   # the shorts need the width: menu opens collapsed
 
 
@@ -11959,7 +12155,7 @@ async def admin_clipper_short_update(project_id: int, short_id: int, request: Re
         if style is None and form.get("caption_style") == "none":
             premake = premake or bool(s.captions_on)
             s.captions_on = False
-        elif style and style != s.caption_style:
+        elif style and style != s.caption_style and await _clip_style_ok(db, p.branch_id, style):
             s.caption_style, premake = style, True
     if "captions_on" in form:
         on = form.get("captions_on") == "1"

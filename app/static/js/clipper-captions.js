@@ -18,6 +18,31 @@
   const wordText = (w, upper) => { w = w.trim(); return upper ? w.replace(/[,;:]$/, '').toUpperCase() : w; };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+  const rgba = (hex, a = 1) => {
+    const h = String(hex || '#000000').replace('#', '');
+    return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`;
+  };
+  // Caption Studio designs (st.custom): CSS variables + classes that mirror studio.ass exactly.
+  function customVars(st) {
+    const sd = st.shadow_d / 100;
+    const shadow = sd > 0 ? `${sd}em ${sd}em 0 ${rgba(st.shadow, st.shadow_a / 100)}` : '0 0 0 transparent';
+    const glow = st.glow && st.box !== 'line' ? `0 0 ${0.035 * st.glow_s}em ${rgba(st.glow_color, 0.95)}, 0 0 ${0.08 * st.glow_s}em ${rgba(st.glow_color, 0.6)}, ` : '';
+    return [`--cx-font:"${st.css_font}"`, `--cx-text:${st.text}`, `--cx-active:${st.active}`, `--cx-oc:${st.outline}`,
+      `--cx-ow:${st.outline_w / 100}`, `--cx-shadow:${glow}${shadow}`, `--cx-bc:${rgba(st.box_color, st.box_a / 100)}`,
+      `--cx-sp:${st.spacing / 100}em`, `--cx-tilt:${st.tilt}deg`, `--cx-style:${st.italic ? 'italic' : 'normal'}`].join(';');
+  }
+  function customLine(st, words, k, fresh) {
+    const cls = ['vc-cap', 'vc-cx', `fx-${st.word_fx}`, `box-${st.box}`, `in-${st.enter}`];
+    if (fresh && st.enter !== 'none') cls.push('enter');
+    return `<div class="${cls.join(' ')}" style="${customVars(st)}">${words.map((w, j) => {
+      const c = [];
+      if (j === k) c.push('on', 'lit');
+      else if (st.mode === 'so_far' && j < k) c.push('lit');
+      if (st.mode === 'reveal' && j > k) c.push('hide');
+      return `<span class="${c.join(' ')}">${esc(w)}</span>`;
+    }).join(' ')}</div>`;
+  }
+
   function lines(words, st, vertical) {
     const gs = group(words, st.words, vertical ? st.chars : st.chars + 10, st.gap);
     return gs.map((g, n) => {
@@ -43,8 +68,9 @@
       if (!st) return;
       const r = host.getBoundingClientRect();
       const short = Math.min(r.width, r.height);
-      layer.style.setProperty('--cap-size', `${short * st.size * (vertical ? 1 : 0.8)}px`);
-      layer.style.setProperty('--cap-bottom', `${r.height * st.pos * (vertical ? 1 : 0.55)}px`);
+      const sz = st.custom ? st.size_share : st.size, ps = st.custom ? st.pos_share : st.pos;
+      layer.style.setProperty('--cap-size', `${short * sz * (vertical ? 1 : 0.8)}px`);
+      layer.style.setProperty('--cap-bottom', `${r.height * ps * (vertical ? 1 : 0.55)}px`);
     };
     let peek = null;          // a design shown while the pointer is on its button (not saved)
     const draw = () => {
@@ -59,9 +85,16 @@
       let k = 0;
       line.words.forEach((w, j) => { if (t >= (j === 0 ? line.start : w[0])) k = j; });
       const key = `${line.n}:${k}`;
+      if (st.custom && st.exit === 'fade' && layer.firstChild && key === shown) {
+        layer.firstChild.style.opacity = String(Math.max(0, Math.min(1, (line.end - t) / 0.14)));
+      }
       if (key === shown) return;
       const fresh = !shown.startsWith(`${line.n}:`);
       shown = key;
+      if (st.custom) {
+        layer.innerHTML = customLine(st, line.words.map((w) => wordText(w[2], st.upper)), k, fresh);
+        return;
+      }
       const words = styleId === 'clean' ? [line.words.map((w) => w[2].trim()).join(' ')] : line.words.map((w) => wordText(w[2], st.upper));
       layer.innerHTML = `<div class="vc-cap vc-cap-${styleId}${fresh ? ' enter' : ''}${styleId === 'one' && line.n % 2 ? ' alt' : ''}">${
         words.map((w, j) => `<span class="${styleId !== 'clean' && j === k ? 'on' : ''}">${esc(w)}</span>`).join(' ')}</div>`;
@@ -100,6 +133,12 @@
   // A design button that shows the design itself: a sample line on a dark tile, then its name.
   const SAMPLE = { one: ['GRACE'], clean: ['His grace is enough'] };
   function chip(id, st, pressed) {
+    if (st.custom) {
+      const ws = (st.words === 1 ? ['GRACE'] : ['His', 'grace', 'wins']).map((w) => wordText(w, st.upper));
+      return `<button type="button" class="vc-capchip" data-cap="${esc(id)}" aria-pressed="${pressed}" title="${esc(st.hint)}">`
+        + `<span class="vc-chip-tile" aria-hidden="true">${customLine({ ...st, enter: 'none' }, ws, ws.length > 1 ? 1 : 0, false)}</span>`
+        + `<span class="vc-chip-name">${esc(st.label)}</span></button>`;
+    }
     const words = SAMPLE[id] || (st.upper ? ['HIS', 'GRACE', 'WINS'] : ['His', 'grace', 'wins']);
     const on = id === 'clean' ? -1 : (words.length > 1 ? 1 : 0);
     return `<button type="button" class="vc-capchip" data-cap="${esc(id)}" aria-pressed="${pressed}" title="${esc(st.hint)}">`
@@ -108,5 +147,5 @@
       + `<span class="vc-chip-name">${esc(st.label)}</span></button>`;
   }
 
-  window.SwmCaptions = { attach, group, chip };
+  window.SwmCaptions = { attach, group, chip, customLine, wordText };
 })();

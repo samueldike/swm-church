@@ -4,7 +4,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}New video{% endblock %}
 {% block topbar_icon %}ri-scissors-cut-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=8">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=9">{% endblock %}
 
 {% block page_header %}
   {{ page_header("New video", "Choose the video, how many shorts you want and how they should look. You can leave the page while it works.",
@@ -123,7 +123,9 @@
         <b>Add captions</b><small>Off by default. Captions are made for every short anyway: switch them on or off and change the design on each short later (an .srt file comes with every short).</small></label>
       <div class="vc-choice" id="vc-cap-styles" {{ 'hidden' if defaults.caption_style == 'none' }}>
         {% for k, v in opt.CAPTION_STYLES.items() if k != 'none' %}<label><input type="radio" name="caption_style" value="{{ k }}" {{ 'checked' if k == defaults.caption_style or (defaults.caption_style == 'none' and loop.first) }} {{ 'disabled' if defaults.caption_style == 'none' }}>{{ v }}</label>{% endfor %}
+        {% for k, v in (custom_captions or {}).items() %}<label><input type="radio" name="caption_style" value="{{ k }}" {{ 'disabled' if defaults.caption_style == 'none' }}>{{ v }} <small>(yours)</small></label>{% endfor %}
       </div>
+      <p class="vc-muted text-[12px]">Make your own design (font, colours, effects, motion) in <a class="underline font-semibold" href="{{ url_for('admin_clipper_studio') }}">Caption Studio</a>.</p>
     </div>
   </section>
 
@@ -138,7 +140,7 @@
 {% endblock %}
 
 {% block extra_body %}
-<script src="{{ url_for('static', path='js/clipper.js') }}?v=11"></script>
+<script src="{{ url_for('static', path='js/clipper.js') }}?v=12"></script>
 <script src="{{ url_for('static', path='js/clipper-range.js') }}?v=1"></script>
 <script>window.SWMClipper && window.SWMClipper.form();</script>
 {% endblock %}
