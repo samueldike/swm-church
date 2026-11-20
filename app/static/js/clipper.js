@@ -216,8 +216,8 @@
           <div class="vc-meta"><span>${esc(s.from)}–${esc(s.to)}</span>${s.pieces > 1 ? `<span>${s.pieces} parts joined</span>` : ''}${s.cold_open ? '<span>opens with a teaser</span>' : ''}</div>
           <div class="vc-capbar">
             <label class="vc-switch" title="${s.words ? 'Show captions on this short (preview, download and post)' : 'Re-cut this short once to add captions'}"><input type="checkbox" data-cap-on ${s.captions_on ? 'checked' : ''} ${s.words ? '' : 'disabled'}><span aria-hidden="true"></span><b>Captions</b></label>
-            <div class="vc-capchips" role="group" aria-label="Caption design" aria-disabled="${!s.captions_on}">${Object.entries(capStyles).map(([k, v]) =>
-              `<button type="button" data-cap="${esc(k)}" aria-pressed="${k === s.caption_style}" title="${esc(v.hint)}">${esc(v.label)}</button>`).join('')}</div>
+            <div class="vc-capchips" role="group" aria-label="Caption design (point at one to see it on the video)" aria-disabled="${!s.captions_on}">${Object.entries(capStyles).map(([k, v]) =>
+              window.SwmCaptions ? window.SwmCaptions.chip(k, v, k === s.caption_style) : `<button type="button" data-cap="${esc(k)}" aria-pressed="${k === s.caption_style}" title="${esc(v.hint)}">${esc(v.label)}</button>`).join('')}</div>
           </div>
           <div class="vc-actions">
             ${s.video ? `<a class="btn btn-primary btn-sm" href="${esc(base)}/shorts/${s.id}/publish"><i class="ri-send-plane-line"></i>Publish</a>` : ''}
@@ -303,6 +303,18 @@
       if (capLayers[s.id]) { capLayers[s.id].set(s.captions_on ? s.caption_style : null); return; }
       if (v.isConnected) capLayers[s.id] = window.SwmCaptions.attach(v, capWords[s.id], s.captions_on ? s.caption_style : null, capStyles);
     }
+    // Point at (or tab to) a design: it shows on that short's video at once; moving away puts the saved one back.
+    async function peekCaption(chipEl, on) {
+      const sid = chipEl.closest('[data-sid]')?.dataset.sid;
+      const s = data.shorts.find((x) => String(x.id) === sid);
+      if (!s || !s.words) return;
+      if (on && !capLayers[s.id]) await captionsOn(s);
+      if (capLayers[s.id]) capLayers[s.id].preview(on ? chipEl.dataset.cap : null);
+    }
+    grid.addEventListener('pointerover', (e) => { const c = e.target.closest('[data-cap]'); if (c && !c.contains(e.relatedTarget)) peekCaption(c, true); }, opt);
+    grid.addEventListener('pointerout', (e) => { const c = e.target.closest('[data-cap]'); if (c && !c.contains(e.relatedTarget)) peekCaption(c, false); }, opt);
+    grid.addEventListener('focusin', (e) => { const c = e.target.closest('[data-cap]'); if (c) peekCaption(c, true); }, opt);
+    grid.addEventListener('focusout', (e) => { const c = e.target.closest('[data-cap]'); if (c) peekCaption(c, false); }, opt);
     function syncCaptionControls(s) {
       const cardEl = grid.querySelector(`[data-sid="${s.id}"]`);
       if (!cardEl) return;

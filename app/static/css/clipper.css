@@ -175,7 +175,8 @@
 .vc-cap-one { font-size: calc(var(--cap-size, 28px)); }
 .vc-cap-one .on { animation: vc-cap-bounce .15s ease-out; }
 .vc-cap-one.alt .on { color: #ffe03a; }
-.vc-cap-glow { color: #f0c837; -webkit-text-stroke: 0; text-shadow: 0 0 .22em rgba(240,200,55,.9), 0 0 .5em rgba(240,200,55,.55); }
+.vc-cap-glow { color: #f0c837; -webkit-text-stroke: calc(var(--cap-size, 28px) * .03) rgba(58,38,0,.82); paint-order: stroke fill;
+  text-shadow: 0 0 .16em rgba(240,200,55,.75), 0 0 .42em rgba(240,200,55,.45); }
 .vc-cap-glow .on { color: #fff; animation: vc-cap-pop .11s ease-out; }
 .vc-cap-clean { font-weight: 600; -webkit-text-stroke: 0; text-shadow: none; background: rgba(0,0,0,.55); border-radius: .3em; padding: .12em .45em; }
 @media (prefers-reduced-motion: reduce) { .vc-cap, .vc-cap .on { animation: none !important; } }
@@ -336,3 +337,16 @@
 .vc-wm-ovl.bottom-left { bottom: 4%; left: 4%; } .vc-wm-ovl.bottom-right { bottom: 4%; right: 4%; }
 .vc-wm-ovl.white { filter: brightness(0) invert(1); }
 .vc-wm-thumb { position: relative; background: linear-gradient(135deg, #2b2b2b, #59544a); }
+
+/* Caption design buttons show the design itself (a sample on a dark tile), like CapCut's caption gallery. */
+.vc-capchips button.vc-capchip { display: inline-flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 3px;
+  min-height: 0; border-radius: 10px; width: 78px; }
+.vc-chip-tile { display: flex; align-items: center; justify-content: center; height: 34px; border-radius: 7px; overflow: hidden;
+  background: linear-gradient(160deg, #3a3a3a, #121212); --cap-size: 11px; }
+.vc-chip-tile .vc-cap { line-height: 1; white-space: nowrap; animation: none; }
+.vc-chip-tile .vc-cap .on { animation: none; }
+.vc-chip-tile .vc-cap-one { --cap-size: 15px; }
+.vc-chip-tile .vc-cap-clean { --cap-size: 8.5px; padding: .25em .5em; }
+.vc-chip-name { font: 700 10.5px/1.1 var(--font-sans, inherit); text-align: center; padding: 0 2px 2px; }
+.vc-capchips button.vc-capchip[aria-pressed="true"] { background: #111; color: #f0c837; border-color: #f0c837; box-shadow: 0 0 0 1px #f0c837; }
+.vc-capchips button.vc-capchip:hover { border-color: #f0c837; }

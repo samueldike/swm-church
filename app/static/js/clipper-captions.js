@@ -46,10 +46,15 @@
       layer.style.setProperty('--cap-size', `${short * st.size * (vertical ? 1 : 0.8)}px`);
       layer.style.setProperty('--cap-bottom', `${r.height * st.pos * (vertical ? 1 : 0.55)}px`);
     };
+    let peek = null;          // a design shown while the pointer is on its button (not saved)
     const draw = () => {
       if (!st) { if (shown) { layer.innerHTML = ''; shown = ''; } return; }
-      const t = extra.time ? extra.time() : video.currentTime;
-      const line = ls.find((l) => t >= l.start && t < l.end);
+      let t = extra.time ? extra.time() : video.currentTime;
+      let line = ls.find((l) => t >= l.start && t < l.end);
+      if (!line && peek) {        // paused between lines or before the first: show the next line, so there is a look
+        line = ls.find((l) => l.start >= t) || ls[0];
+        if (line) t = line.words.length > 1 ? line.words[1][0] : line.start;
+      }
       if (!line) { if (shown) { layer.innerHTML = ''; shown = ''; } return; }
       let k = 0;
       line.words.forEach((w, j) => { if (t >= (j === 0 ? line.start : w[0])) k = j; });
@@ -76,6 +81,15 @@
         shown = ''; size(); draw();
       },
       setWords(m) { meta = m; vertical = (meta.height || 1920) > (meta.width || 1080); api.set(styleId); },
+      // preview(id): show that design for a moment; preview(null): back to the saved one.
+      preview(id) {
+        if (id && styles[id]) {
+          if (peek === null) peek = styleId || '';
+          const keep = peek; api.set(id); peek = keep;
+        } else if (peek !== null) {
+          const back = peek || null; peek = null; api.set(back);
+        }
+      },
       draw() { draw(); },
       destroy() { cancelAnimationFrame(raf); ro.disconnect(); layer.remove(); },
     };
@@ -83,5 +97,16 @@
     return api;
   }
 
-  window.SwmCaptions = { attach, group };
+  // A design button that shows the design itself: a sample line on a dark tile, then its name.
+  const SAMPLE = { one: ['GRACE'], clean: ['His grace is enough'] };
+  function chip(id, st, pressed) {
+    const words = SAMPLE[id] || (st.upper ? ['HIS', 'GRACE', 'WINS'] : ['His', 'grace', 'wins']);
+    const on = id === 'clean' ? -1 : (words.length > 1 ? 1 : 0);
+    return `<button type="button" class="vc-capchip" data-cap="${esc(id)}" aria-pressed="${pressed}" title="${esc(st.hint)}">`
+      + `<span class="vc-chip-tile" aria-hidden="true"><span class="vc-cap vc-cap-${esc(id)}">${words.map((w, j) =>
+        `<span class="${j === on ? 'on' : ''}">${esc(w)}</span>`).join(' ')}</span></span>`
+      + `<span class="vc-chip-name">${esc(st.label)}</span></button>`;
+  }
+
+  window.SwmCaptions = { attach, group, chip };
 })();

@@ -198,7 +198,7 @@
     $('ve-cap-on').checked = S.captions_on;
     const chips = $('ve-cap-styles');
     chips.setAttribute('aria-disabled', String(!S.captions_on));
-    chips.innerHTML = Object.entries(B.styles).map(([k2, v]) => `<button type="button" data-cap="${esc(k2)}" aria-pressed="${k2 === S.caption_style}" title="${esc(v.hint)}">${esc(v.label)}</button>`).join('');
+    chips.innerHTML = Object.entries(B.styles).map(([k2, v]) => window.SwmCaptions.chip(k2, v, k2 === S.caption_style)).join('');
     stage.className = `ve-stage ${S.format}${S.framing === 'fit' && S.frame_x === null ? ' fit' : ''}`;
     video.style.objectPosition = S.frame_x !== null ? `${S.frame_x * 100}% 50%` : '50% 50%';
     $('ve-frame-hint').hidden = !(S.framing === 'speaker' && S.frame_x === null && S.format !== 'landscape');
@@ -384,6 +384,12 @@
   $('ve-music').addEventListener('change', (e) => commit(() => { S.music = e.target.value; }, ''), o);
   $('ve-outro').addEventListener('change', (e) => commit(() => { S.outro = e.target.value; }, ''), o);
   $('ve-frame').addEventListener('change', (e) => commit(() => { S.frame = e.target.value; }, ''), o);
+  const capChips = $('ve-cap-styles');
+  const peek = (e, on) => { const c = e.target.closest('[data-cap]'); if (c && !c.contains(e.relatedTarget)) captions.preview(on ? c.dataset.cap : null); };
+  capChips.addEventListener('pointerover', (e) => peek(e, true), o);
+  capChips.addEventListener('pointerout', (e) => peek(e, false), o);
+  capChips.addEventListener('focusin', (e) => peek(e, true), o);
+  capChips.addEventListener('focusout', (e) => peek(e, false), o);
   $('ve-watermark').addEventListener('change', (e) => commit(() => { S.watermark = e.target.value; }, ''), o);
   $('ve-tighten').addEventListener('change', (e) => commit(() => { S.tighten = e.target.checked; }, e.target.checked ? 'Pauses removed' : 'Pauses kept'), o);
   $('ve-cap-on').addEventListener('change', (e) => commit(() => { S.captions_on = e.target.checked; }, ''), o);

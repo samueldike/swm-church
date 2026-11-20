@@ -1208,3 +1208,16 @@ def test_the_watermark_is_burned_into_the_finished_copy(tmp_path):
     x, y, w, h = watermark.placement(cfg, 360, 640, 200, 200)
     assert img.getpixel((x + w // 2, y + h // 2)) > 200          # white logo in the top-right corner
     assert img.getpixel((20, 600)) < 40                           # the rest of the picture untouched
+
+
+def test_glow_is_a_soft_halo_under_sharp_letters():
+    from app.core.clipper import captions
+
+    words = [[0.0, 0.4, "Grace"], [0.45, 0.8, "is"], [0.85, 1.3, "enough."]]
+    text = captions.ass(words, style="glow", width=1080, height=1920)
+    halo = [l for l in text.splitlines() if l.startswith("Dialogue: 0,")]
+    sharp = [l for l in text.splitlines() if l.startswith("Dialogue: 1,")]
+    assert halo and len(halo) == len(sharp)                      # every moment has both layers
+    assert all("\1a&HFF&" in l and "\blur" in l for l in halo)  # the halo: no letters, only the blurred glow
+    assert all("\blur0" in l and "\1a&HFF&" not in l for l in sharp)   # the letters: never blurred
+    assert all("\fscx116" in l for l in halo + sharp)           # the spoken word grows on both, so they line up

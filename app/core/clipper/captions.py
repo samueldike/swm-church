@@ -21,6 +21,7 @@ from app.core.clipper.media import ASSETS
 
 # Colours as #RRGGBB (ASS wants &HAABBGGRR, see _c).
 YELLOW, GOLD, WHITE, BLACK, GREEN = "#FFE03A", "#F0C837", "#FFFFFF", "#000000", "#3CFF8A"
+EDGE = "#3A2600"              # the thin dark edge that keeps glow letters sharp
 
 # One entry per design: grouping (max_words, max_chars, max_gap), case, font, size (share of the short side),
 # position (share of the height above the bottom edge), colours. clipper-captions.js holds the same table.
@@ -34,7 +35,7 @@ STYLES: dict[str, dict] = {
     "one": {"label": "One word", "hint": "One big word at a time, bouncing in", "words": 1, "chars": 14, "gap": 0.5,
             "upper": True, "font": "Poppins ExtraBold", "size": 0.15, "pos": 0.42, "color": WHITE, "active": YELLOW,
             "outline": BLACK, "border": 0.09},
-    "glow": {"label": "Glow", "hint": "Soft gold glow, the spoken word in white", "words": 3, "chars": 20, "gap": 0.55,
+    "glow": {"label": "Glow", "hint": "Gold words with a soft glow, the spoken word in white", "words": 3, "chars": 20, "gap": 0.55,
              "upper": False, "font": "Poppins ExtraBold", "size": 0.098, "pos": 0.26, "color": GOLD, "active": WHITE,
              "outline": GOLD, "border": 0.06, "blur": 6},
     "clean": {"label": "Clean subtitles", "hint": "A sentence at a time on a dark band", "words": 8, "chars": 34,
@@ -125,7 +126,6 @@ def ass(words: list[list], *, style: str, width: int, height: int) -> str:
                           f"{_esc(' '.join(w[2].strip() for w in g))}")
             continue
         texts = [_esc(word_text(w[2], st["upper"])) for w in g]
-        glow = f"\\blur{st['blur']}" if st.get("blur") else ""
         for k, w in enumerate(g):
             ws = start if k == 0 else w[0]
             we = g[k + 1][0] if k + 1 < len(g) else end
@@ -141,10 +141,20 @@ def ass(words: list[list], *, style: str, width: int, height: int) -> str:
                       f"\\t(0,80,\\fscx94\\fscy94)\\t(80,150,\\fscx100\\fscy100)}}")
             else:
                 on = f"{{\\c{_c(st['active'])}\\fscx116\\fscy116\\t(0,110,\\fscx100\\fscy100)}}"
-            off = "{\\r" + glow + "}"                   # back to the line's own look after the spoken word
+            if st.get("blur"):
+                # Glow: layer 0 is only the halo (blurred gold edge, no fill); layer 1 is the text, sharp, with a thin
+                # dark edge so every letter stays crisp against the halo. Both carry the same size changes, so they
+                # stay exactly on top of each other.
+                halo = (f"\\1a&HFF&\\3c{_c(st['outline'])}\\3a&H40&\\bord{round(bord * 2.2)}"
+                        f"\\blur{st['blur'] * 1.6:g}\\shad0")
+                sharp = f"\\blur0\\bord{max(1, round(size * 0.03))}\\3c{_c(EDGE)}\\3a&H30&\\shad0"
+                for layer, look, word_on in ((0, halo, on.replace(f"\\c{_c(st['active'])}", "")), (1, sharp, on)):
+                    line = " ".join(f"{word_on}{t}{{\\r{look}}}" if j == k else t for j, t in enumerate(texts))
+                    events.append(f"Dialogue: {layer},{_ts(ws)},{_ts(we)},Main,,0,0,0,,{enter}{{{look}}}{line}")
+                continue
+            off = "{\\r}"                              # back to the line's own look after the spoken word
             line = " ".join(f"{on}{t}{off}" if j == k else t for j, t in enumerate(texts))
-            head = f"{{{glow}}}" if glow else ""
-            events.append(f"Dialogue: 0,{_ts(ws)},{_ts(we)},Main,,0,0,0,,{enter}{head}{line}")
+            events.append(f"Dialogue: 0,{_ts(ws)},{_ts(we)},Main,,0,0,0,,{enter}{line}")
 
     return "\n".join([
         "[Script Info]", "ScriptType: v4.00+", f"PlayResX: {width}", f"PlayResY: {height}", "WrapStyle: 0",
