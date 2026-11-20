@@ -884,3 +884,69 @@ def test_music_sits_far_under_the_voice_and_ducks_while_he_speaks(tmp_path):
     assert under >= 20, f"music only {under:.1f} dB under the voice"
     duck = np.mean([band(r, 1500) for r in rest]) - np.mean([band(t, 1500) for t in talk])
     assert duck >= 6, f"music dipped only {duck:.1f} dB while he spoke"
+
+
+# ─── effects: light transitions, smart zoom, finishing touches ───────
+
+def test_light_transitions_only_on_new_points_and_never_overused():
+    from app.core.clipper import render
+
+    # 40 s short: pause cuts (small gaps) and two real jumps (skips of 30 s and 50 s), one back-jump (a cold open's return).
+    segs = [[100, 104], [100.0 + 4.3, 110], [140, 146], [146.4, 152], [200, 206], [100, 108], [108.3, 115]]
+    at = render.transition_points(segs)
+    assert 1 <= len(at) <= render.FLASH_MAX and len(at) <= int(sum(e - s for s, e in segs) // render.FLASH_EVERY) or 1
+    assert all(b - a >= render.FLASH_SPACING for a, b in zip(at, at[1:]))
+    starts = [sum(e - s for s, e in segs[:k]) for k in range(len(segs))]
+    jumps = {round(starts[k], 3) for k in (2, 4, 5)}                         # the joins that really jump
+    assert set(at) <= jumps and round(starts[5], 3) in at                     # the return from the teaser comes first
+    assert render.transition_points([[0, 10], [10.3, 20]]) == []              # pause cuts never flash
+    assert render.flash_filter([]) == "" and "eval=frame" in render.flash_filter([3.2])
+
+
+def test_smart_zoom_hides_jump_cuts_and_pushes_in_on_the_payoff():
+    from app.core.clipper import render
+
+    segs = [[0, 3], [3.4, 7], [7.5, 11], [11.4, 16], [50, 56]]               # pause cuts, then a new point
+    plan = render.zoom_plan(segs, emphasis=[(50, 56)])
+    assert plan[0] == (1.0, 1.0)
+    assert any(z0 == render.PUNCH for z0, _ in plan[1:4])                    # a punch-in on a jump cut
+    assert plan[4][0] == 1.0 and plan[4][1] > 1.0                            # new point starts wide, then pushes in
+    changes = sum(1 for a, b in zip(plan, plan[1:]) if a[1] != b[0]) + sum(1 for z0, z1 in plan if z1 != z0)
+    assert changes <= max(1, int(sum(e - s for s, e in segs) // render.ZOOM_EVERY)) + 1
+    assert render.zoom_filter(1.0, 1.0, 2, 1080, 1920) == ""
+    assert "eval=frame" in render.zoom_filter(1.0, 1.07, 3, 1080, 1920)
+
+
+def test_scripture_is_recognised_where_it_is_read():
+    from app.core.clipper import render
+
+    assert render.scripture_like("Turn with me to John 3:16") and render.scripture_like("Romans chapter 8 verse 28")
+    assert render.scripture_like("the Bible says do not fear") and not render.scripture_like("John came to church")
+    words = [[0.2, 0.6, "Turn"], [0.7, 1.0, "to"], [1.1, 1.5, "Psalm"], [1.6, 2.0, "23"], [4.0, 4.5, "Amen"]]
+    assert render.scripture_segments([[10, 13], [20, 23]], words) == [0]
+
+
+def test_a_short_renders_with_every_effect_switched_on(tmp_path):
+    import shutil
+    import subprocess
+
+    if not shutil.which("ffmpeg"):
+        import pytest
+        pytest.skip("ffmpeg is not installed here")
+    from app.core.clipper import render
+    from app.core.clipper.media import probe
+
+    src = tmp_path / "src.mp4"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc=s=320x180:r=25:d=60", "-f", "lavfi",
+                    "-i", "sine=f=220:d=60", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(src)],
+                   check=True)
+    segs = [[1, 5], [5.4, 9], [9.4, 13], [30, 36], [36.4, 40]]
+    words = [[0.5, 1.0, "Turn"], [1.1, 1.4, "to"], [1.5, 2.0, "John"], [2.1, 2.5, "3"], [14.0, 14.5, "Amen."]]
+    out = tmp_path / "short.mp4"
+    res = render.render(src=src, info={"width": 320, "height": 180, "fps": 25, "has_video": True}, segments=segs,
+                        words=words, out=out, fmt="vertical", quality=720, framing="centre", caption_style="none",
+                        denoise="natural", flashes=True, zooms=True, emphasis=[(30, 40)], touches=True)
+    info = probe(out)
+    assert abs(info["duration"] - sum(e - s for s, e in segs)) < 0.4 and info["width"] == 720
+    fx = " · ".join(res["effects"])
+    assert "light transition + whoosh" in fx and "fade out" in fx and "sharpen" in fx and "scripture glow" in fx

@@ -268,3 +268,9 @@
 .vc-wave-play { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff4d4d; pointer-events: none; }
 .vc-wave-play[hidden] { display: none; }
 .vc-wave-range { width: 100%; accent-color: var(--vc-gold); margin: 0; }
+
+/* Effects */
+.vc-fx { display: flex; gap: 6px; align-items: flex-start; font-size: 12px; color: var(--vc-ink3); line-height: 1.4; }
+.vc-fx i { color: var(--vc-gold); margin-top: 1px; }
+.vc-fx-toggles { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.vc-fx-toggles label { display: flex; gap: 6px; align-items: center; }

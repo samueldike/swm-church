@@ -4,7 +4,7 @@
 {% block topbar_subtitle %}Edit a short{% endblock %}
 {% block topbar_icon %}ri-film-line{% endblock %}
 {% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=3">
-<link rel="stylesheet" href="{{ url_for('static', path='css/clipper-editor.css') }}?v=2">{% endblock %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/clipper-editor.css') }}?v=3">{% endblock %}
 
 {% block content %}
 <div class="vc ve" id="ve" data-csrf="{{ csrf_token }}">
@@ -32,6 +32,7 @@
       <div class="ve-stage {{ boot.format }}" id="ve-stage">
         <video id="ve-video" src="{{ boot.source }}" preload="auto" playsinline></video>
         <img class="vc-frame-ovl" id="ve-frame-ovl" alt="" hidden>
+        <div class="ve-flash" id="ve-flash" aria-hidden="true"></div>
         <div class="ve-frame-hint" id="ve-frame-hint" hidden>Follows the speaker when cut</div>
       </div>
       <div class="ve-transport">
@@ -68,6 +69,13 @@
         <h3>Captions</h3>
         <label class="vc-switch"><input type="checkbox" id="ve-cap-on"><span aria-hidden="true"></span><b>Show captions</b></label>
         <div class="vc-capchips" id="ve-cap-styles" role="group" aria-label="Caption design"></div>
+      </section>
+      <section>
+        <h3>Effects</h3>
+        <label class="ve-check"><input type="checkbox" id="ve-flashes"> Light transitions + whoosh on new points</label>
+        <label class="ve-check"><input type="checkbox" id="ve-zooms"> Smart zoom</label>
+        <label class="ve-check"><input type="checkbox" id="ve-touches"> Finishing touches</label>
+        <small class="vc-muted">Used only where they help; the preview shows the flashes and zooms.</small>
       </section>
       <section>
         <h3>Pauses</h3>
@@ -115,5 +123,5 @@
 
 {% block extra_body %}
 <script src="{{ url_for('static', path='js/clipper-captions.js') }}?v=1"></script>
-<script src="{{ url_for('static', path='js/clipper-editor.js') }}?v=4"></script>
+<script src="{{ url_for('static', path='js/clipper-editor.js') }}?v=5"></script>
 {% endblock %}

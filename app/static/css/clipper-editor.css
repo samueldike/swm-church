@@ -71,3 +71,10 @@
 
 .ve-stage .vc-frame-ovl { z-index: 1; }
 .ve-inspect select { width: 100%; }
+
+.ve-stage video { transform-origin: 50% 42%; }
+.ve-flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; z-index: 3;
+  background: radial-gradient(circle at 50% 45%, rgba(255,244,214,.95), rgba(255,214,140,.55) 55%, rgba(255,190,110,.2)); }
+.ve-flash.on { animation: ve-flash .32s ease-out; }
+@keyframes ve-flash { 0% { opacity: 0; } 40% { opacity: .85; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .ve-flash.on { animation: none; } }

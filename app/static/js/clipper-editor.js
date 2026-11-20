@@ -27,6 +27,7 @@
     clips: B.edit.clips.map((c) => ({ start: +c.start, end: +c.end })), tighten: B.edit.tighten !== false,
     frame_x: B.edit.frame_x ?? null, format: B.format, framing: B.framing, title: B.title,
     captions_on: B.captions_on, caption_style: B.caption_style, frame: B.frame || 'default', outro: B.outro || 'default', music: B.music || 'default',
+    flashes: B.flashes !== false, zooms: B.zooms !== false, touches: B.touches !== false,
   };
   const saved = JSON.stringify(S);
   const past = [], future = [];
@@ -65,7 +66,7 @@
         const r = await fetch(`${B.base}/shorts/${B.short}/timeline/preview`, {
           method: 'POST', credentials: 'same-origin', signal: ctl.signal,
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
-          body: JSON.stringify({ clips: S.clips, tighten: S.tighten }),
+          body: JSON.stringify({ clips: S.clips, tighten: S.tighten, flashes: S.flashes, zooms: S.zooms }),
         });
         const j = await r.json();
         if (seq !== cutSeq) return;
@@ -76,7 +77,7 @@
           while (ci < S.clips.length - 1 && !(s >= S.clips[ci].start - 0.05 && e <= S.clips[ci].end + 0.05)) ci++;
           return [s, e, ci];
         });
-        cut = { segments: segs, words: j.words, length: j.length };
+        cut = { segments: segs, words: j.words, length: j.length, flashes: j.flashes || [], zooms: j.zooms || [] };
         T = Math.min(T, cut.length);
         draw(); captions.setWords({ words: cut.words, width: SIZES[S.format][0], height: SIZES[S.format][1] });
       } catch (e) { /* offline: the local cut keeps working */ }
@@ -114,13 +115,14 @@
     const src = video.currentTime - B.offset;
     if (seg) {
       if (src >= seg[1] - 0.025) {
-        if (k + 1 < cut.segments.length) { k += 1; video.currentTime = cut.segments[k][0] + B.offset; }
+        if (k + 1 < cut.segments.length) { k += 1; video.currentTime = cut.segments[k][0] + B.offset; segmentFx(); }
         else { video.pause(); playing = false; T = cut.length; drawHead(); return; }
       } else if (src < seg[0] - 0.5 || src > seg[1] + 0.5) {
         video.currentTime = seg[0] + B.offset;
       } else {
         T = cum()[k] + Math.max(0, src - seg[0]);
       }
+      zoomFx();
     }
     drawHead(); requestAnimationFrame(tick);
   }
@@ -391,6 +393,38 @@
   }
   video.addEventListener('play', () => { const a = $('ve-music-audio'); if (a.src) a.play().catch(() => {}); }, o);
   video.addEventListener('pause', () => $('ve-music-audio').pause(), o);
+
+  // ── effects preview: the flashes (with their whoosh) and the zooms the render will make ──
+  let audioCtx = null;
+  function whoosh() {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const n = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.7, audioCtx.sampleRate), d = n.getChannelData(0);
+      for (let i = 0; i < d.length; i++) { const x = i / d.length; d[i] = (Math.random() * 2 - 1) * Math.sin(Math.PI * x) * 0.25; }
+      const src = audioCtx.createBufferSource(); src.buffer = n;
+      const f = audioCtx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2200; f.Q.value = 0.6;
+      src.connect(f).connect(audioCtx.destination); src.start();
+    } catch (e) {}
+  }
+  function segmentFx() {
+    if (!S.flashes || !cut.flashes) return;
+    const at = cum()[k];
+    if (cut.flashes.some((t) => Math.abs(t - at) < 0.05)) {
+      const el = $('ve-flash'); el.classList.remove('on'); void el.offsetWidth; el.classList.add('on'); whoosh();
+    }
+  }
+  function zoomFx() {
+    const z = (cut.zooms || [])[k];
+    if (!S.zooms || !z) { video.style.transform = ''; return; }
+    const seg = cut.segments[k]; const d = Math.max(0.05, seg[1] - seg[0]);
+    const u = Math.min(1, Math.max(0, (video.currentTime - B.offset - seg[0]) / d)); const e = u * u * (3 - 2 * u);
+    const s = z[0] + (z[1] - z[0]) * e;
+    video.style.transform = s > 1.001 ? `scale(${s.toFixed(4)})` : '';
+  }
+  ['flashes', 'zooms', 'touches'].forEach((key) => {
+    const box = $(`ve-${key}`); box.checked = S[key];
+    box.addEventListener('change', () => commit(() => { S[key] = box.checked; }, ''), o);
+  });
 
   // ── keys ──
   document.addEventListener('keydown', (e) => {

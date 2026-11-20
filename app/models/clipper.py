@@ -83,6 +83,10 @@ class ClipShort(Base):
     outro: Mapped[str] = mapped_column(String(40), default="default")          # "default" | "none" | an outro id (outros.py)
     music: Mapped[str] = mapped_column(String(40), default="default")          # "default" | "none" | "random" | a track id (music.py)
     denoise: Mapped[str] = mapped_column(String(10), default="natural")        # natural | strong | off (render.DENOISE_MODELS)
+    flashes: Mapped[bool] = mapped_column(Boolean, default=True)               # light transitions on new points (render.transition_points)
+    zooms: Mapped[bool] = mapped_column(Boolean, default=True)                 # smart zoom: punch-ins and push-ins (render.zoom_plan)
+    touches: Mapped[bool] = mapped_column(Boolean, default=True)               # hook pop, scripture glow, sharpen, fade out
+    effects: Mapped[list | None] = mapped_column(JSON)                         # what the last render used, for the screens
     status: Mapped[str] = mapped_column(String(20), default="queued", index=True)  # queued | rendering | ready | failed
     error: Mapped[str | None] = mapped_column(Text)
     rendered_at: Mapped[datetime | None] = mapped_column(DateTime)

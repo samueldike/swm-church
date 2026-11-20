@@ -564,7 +564,11 @@ async def render_queued(project_id: int) -> None:
         result = render.render(src=media.source_path(project_id), info=info, segments=the_cut["segments"],
                                words=the_cut["words"], out=media.short_file(project_id, s.id, "mp4"), fmt=s.format,
                                quality=s.quality, framing=s.framing, caption_style=s.caption_style, progress=progress,
-                               frame_x=(s.edit or {}).get("frame_x"), denoise=getattr(s, "denoise", None))
+                               frame_x=(s.edit or {}).get("frame_x"), denoise=getattr(s, "denoise", None),
+                               flashes=bool(getattr(s, "flashes", True)), zooms=bool(getattr(s, "zooms", True)),
+                               emphasis=[] if s.edit else [(x["start"], x["end"]) for x in the_cut["plan"]
+                                                           if x.get("cold_open") or x.get("role") in ("payoff", "hook")],
+                               touches=bool(getattr(s, "touches", True)))
         return the_cut, result
 
     sem = asyncio.Semaphore(RENDER_PARALLEL)
@@ -577,7 +581,8 @@ async def render_queued(project_id: int) -> None:
             try:
                 the_cut, result = await asyncio.to_thread(one, s, lambda f, sid=s.id: share.__setitem__(sid, float(f)))
                 await _short_update(s.id, status="ready", segments=the_cut["segments"], length=result["length"],
-                                    plan=the_cut["plan"], rendered_at=datetime.utcnow(), error=None)
+                                    plan=the_cut["plan"], effects=result.get("effects") or [],
+                                    rendered_at=datetime.utcnow(), error=None)
                 try:                       # the finished copy (frame, captions) is ready before anyone asks
                     await final_copy(project_id, s, p.branch_id)
                 except Exception:

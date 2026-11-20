@@ -188,6 +188,7 @@
         <div class="vc-short-body">
           <div class="vc-title" contenteditable="true" spellcheck="true" role="textbox" aria-label="Title" data-field="title">${esc(s.title)}</div>
           ${s.value ? `<div class="vc-value"><i class="ri-lightbulb-flash-line"></i><span>${esc(s.value)}</span></div>` : ''}
+          ${s.effects && s.effects.length ? `<div class="vc-fx" title="Effects the editor chose for this short"><i class="ri-magic-line"></i><span>${esc(s.effects.join(' · '))}</span></div>` : ''}
           <div class="vc-meta"><span>${esc(s.from)}–${esc(s.to)}</span>${s.pieces > 1 ? `<span>${s.pieces} parts joined</span>` : ''}${s.cold_open ? '<span>opens with a teaser</span>' : ''}</div>
           <div class="vc-capbar">
             <label class="vc-switch" title="${s.words ? 'Show captions on this short (preview, download and post)' : 'Re-cut this short once to add captions'}"><input type="checkbox" data-cap-on ${s.captions_on ? 'checked' : ''} ${s.words ? '' : 'disabled'}><span aria-hidden="true"></span><b>Captions</b></label>
@@ -213,6 +214,11 @@
               <label>Framing ${select('framing', opts.framings, s.framing)}</label>
               <label>Quality ${select('quality', opts.qualities, s.quality)}</label>
               <label>Noise reduction ${select('denoise', opts.denoise, s.denoise || 'natural')}</label>
+              <div class="wide vc-fx-toggles">
+                <label><input type="hidden" name="flashes" value="0"><input type="checkbox" name="flashes" value="1" ${s.flashes ? 'checked' : ''}> Light transitions + whoosh (on new points)</label>
+                <label><input type="hidden" name="zooms" value="0"><input type="checkbox" name="zooms" value="1" ${s.zooms ? 'checked' : ''}> Smart zoom (punch-ins, push-ins)</label>
+                <label><input type="hidden" name="touches" value="0"><input type="checkbox" name="touches" value="1" ${s.touches ? 'checked' : ''}> Finishing touches (hook pop, scripture glow, sharpen, fade out)</label>
+              </div>
               <label>Start <span class="vc-nudge"><button type="button" data-n="nudge_start" data-d="-1" aria-label="Start one second earlier">−</button><output data-o="nudge_start">${secs(s.nudge_start)}</output><button type="button" data-n="nudge_start" data-d="1" aria-label="Start one second later">+</button></span></label>
               <label>End <span class="vc-nudge"><button type="button" data-n="nudge_end" data-d="-1" aria-label="End one second earlier">−</button><output data-o="nudge_end">${secs(s.nudge_end)}</output><button type="button" data-n="nudge_end" data-d="1" aria-label="End one second later">+</button></span></label>
               <input type="hidden" name="nudge_start" value="${s.nudge_start}"><input type="hidden" name="nudge_end" value="${s.nudge_end}">

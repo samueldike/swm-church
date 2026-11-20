@@ -10444,6 +10444,8 @@ def _clip_json_short(p, s) -> dict:
         "outro": s.outro or "default", "outro_name": (_clip_outro_resolve(p, s) or {}).get("name", ""),
         "outro_seconds": (_clip_outro_resolve(p, s) or {}).get("seconds", 0), "denoise": s.denoise or "natural",
         "music": s.music or "default", "music_name": (_clip_music_resolve(p, s) or {}).get("name", ""),
+        "flashes": s.flashes is not False, "zooms": s.zooms is not False, "touches": s.touches is not False,
+        "effects": s.effects or [],
         "nudge_start": s.nudge_start or 0, "nudge_end": s.nudge_end or 0, "starred": bool(s.starred),
         "from": clock(body[0]["start"] + offset) if body else "", "to": clock(body[-1]["end"] + offset) if body else "",
         "pieces": len(body), "cold_open": any(x.get("cold_open") for x in pieces),
@@ -10970,6 +10972,7 @@ async def admin_clipper_edit(project_id: int, short_id: int, request: Request, d
                              "url": f"/admin/clipper/music/{i['id']}/file?church={p.branch_id}"}
                             for i in p._music_cfg["items"]],
                  "music_default": p._music_cfg["default"],
+                 "flashes": s.flashes is not False, "zooms": s.zooms is not False, "touches": s.touches is not False,
                  "music_random": (__import__("app.core.clipper.music", fromlist=["resolve"]).resolve("random", p._music_cfg, s.id) or {}).get("id")},
         **ctx})
 
@@ -10996,6 +10999,11 @@ async def admin_clipper_timeline_preview(project_id: int, short_id: int, request
         clips = timeline.clean(body.get("clips"), float(p.duration or 0) or 1e9)
         words, gaps, _ = await asyncio.to_thread(speech.load_words, media.words_path(p.id))
         cut = timeline.cut_for({"clips": clips, "tighten": bool(body.get("tighten", True))}, words, gaps)
+        from app.core.clipper import render as _clip_render
+
+        cut["flashes"] = _clip_render.transition_points(cut["segments"]) if body.get("flashes", True) else []
+        cut["zooms"] = (_clip_render.zoom_plan(cut["segments"]) if body.get("zooms", True)
+                        else [(1.0, 1.0)] * len(cut["segments"]))
     except timeline.TimelineError as exc:
         return JSONResponse({"ok": False, "error": str(exc)}, status_code=400)
     except FileNotFoundError:
@@ -11042,6 +11050,9 @@ async def admin_clipper_timeline_save(project_id: int, short_id: int, request: R
         s.caption_style = style
     if "captions_on" in body:
         s.captions_on = bool(body.get("captions_on"))
+    for key in ("flashes", "zooms", "touches"):
+        if key in body:
+            setattr(s, key, bool(body.get(key)))
     if isinstance(body.get("music"), str):
         mcfg = await _clip_music(db, p)
         if body["music"] in ("default", "none", "random") or any(i["id"] == body["music"] for i in mcfg["items"]):
@@ -11588,6 +11599,12 @@ async def admin_clipper_short_update(project_id: int, short_id: int, request: Re
                 val = int(val) if str(val).isdigit() else None
             if val in table and val != getattr(s, key):
                 setattr(s, key, val)
+                rerender = True
+    for key in ("flashes", "zooms", "touches"):
+        if key in form:
+            on = form.getlist(key)[-1] == "1"
+            if on != (getattr(s, key) is not False):
+                setattr(s, key, on)
                 rerender = True
     for key in ("nudge_start", "nudge_end"):
         if key in form:
