@@ -595,7 +595,7 @@ def test_make_shorts_refills_until_the_count_is_met(monkeypatch):
         return [g for g in got if g["edl"]], {"hashtags": []}
 
     async def fake_structure(*a, **k):
-        return None
+        return {"body": [[0.0, 100000.0]]}
 
     monkeypatch.setattr(editorial, "_round", fake_round)
     monkeypatch.setattr(editorial, "map_structure", fake_structure)
@@ -675,7 +675,7 @@ def test_value_bar_drops_weak_moments(monkeypatch):
                  "length": 40.0} for n in range(min(ask, len(free) // 4))], {"hashtags": []}
 
     async def fake_structure(*a, **k):
-        return None
+        return {"body": [[0.0, 100000.0]]}
 
     monkeypatch.setattr(editorial, "_round", fake_round)
     monkeypatch.setattr(editorial, "map_structure", fake_structure)
@@ -950,3 +950,67 @@ def test_a_short_renders_with_every_effect_switched_on(tmp_path):
     assert abs(info["duration"] - sum(e - s for s, e in segs)) < 0.4 and info["width"] == 720
     fx = " · ".join(res["effects"])
     assert "light transition + whoosh" in fx and "fade out" in fx and "sharpen" in fx and "scripture glow" in fx
+
+
+
+def test_only_the_sermon_is_clipped(monkeypatch):
+    import asyncio
+
+    import pytest
+
+    from app.core.clipper import editorial
+    from app.core.clipper.speech import Unit
+
+    units = [Unit(i=i, w0=i, w1=i + 1, start=i * 10.0, end=i * 10.0 + 10, text=f"s{i}", speech=10.0) for i in range(60)]
+
+    async def no_sermon(*a, **k):
+        return {"body": []}
+
+    monkeypatch.setattr(editorial, "map_structure", no_sermon)
+    with pytest.raises(editorial.EditorialError):
+        asyncio.run(editorial.make_shorts(units, count=3, floor=30, target=45, content_type="sermon", title="",
+                                          style="passage", duration=600))
+
+    async def sermon(*a, **k):                    # the sermon runs 200-500 s; before it the moderator, after it songs
+        return {"body": [[200.0, 500.0]]}
+
+    seen_used = []
+
+    async def greedy_round(units_, pool, *, ask, used, **kw):
+        seen_used.append(set(used))
+        assert all(200 <= u.start and u.end <= 500 for u in pool)            # the editor only sees the sermon
+        # A misbehaving round tries to sneak in a moderator line (id 5) next to sermon lines.
+        return [{"edl": [{"i": 5, "role": "hook"}, {"i": 25, "role": "point"}], "score": 90, "length": 40.0},
+                {"edl": [{"i": i, "role": "point"} for i in (30, 31, 32, 33)], "score": 80, "length": 40.0}], {}
+
+    monkeypatch.setattr(editorial, "map_structure", sermon)
+    monkeypatch.setattr(editorial, "_round", greedy_round)
+    out, _, _ = asyncio.run(editorial.make_shorts(units, count=2, floor=30, target=45, content_type="sermon", title="",
+                                                  style="passage", duration=600))
+    assert {5, 0, 59} <= seen_used[0]                                         # outside lines are locked out
+    assert out and all(all(20 <= i < 50 for i in s["ids"]) for s in out)      # the short with line 5 was dropped
+
+
+def test_sermon_edges_are_read_sentence_by_sentence(monkeypatch):
+    import asyncio
+
+    from app.core.clipper import editorial
+    from app.core.clipper.speech import Unit
+
+    units = [Unit(i=i, w0=i, w1=i + 1, start=i * 10.0, end=i * 10.0 + 9, text=f"s{i}", speech=9.0) for i in range(100)]
+    asked = []
+
+    async def fake_ask(prompt, **kw):
+        asked.append(prompt)
+        return {"first": 23, "last": 71, "why": "moderator hands over at 3:50; closing hymn after 11:59"}
+
+    monkeypatch.setattr(editorial, "_ask", fake_ask)
+    body = asyncio.run(editorial.refine_sermon(units, [[200.0, 700.0]]))     # the digest guessed 200-700 s
+    assert body == [[230.0, 719.0]]
+    assert "[23]" in asked[0] and "[71]" in asked[0]
+
+    async def unsure(prompt, **kw):
+        return {"first": None, "last": 999}
+
+    monkeypatch.setattr(editorial, "_ask", unsure)
+    assert asyncio.run(editorial.refine_sermon(units, [[200.0, 700.0]])) == [[200.0, 700.0]]   # unsure: unchanged
