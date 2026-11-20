@@ -4,7 +4,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}Publish a short{% endblock %}
 {% block topbar_icon %}ri-send-plane-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=4">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=5">{% endblock %}
 
 {% block page_header %}
   {{ page_header("Publish", "Check the words, pick the channels, then publish now or schedule it.",
@@ -30,7 +30,7 @@
       <label class="field-label" for="vc-title">Title <span class="vc-muted">(YouTube, Facebook and Pinterest show it)</span></label>
       <input id="vc-title" name="title" value="{{ s.title }}" maxlength="100" required>
       <label class="field-label vc-mt" for="vc-caption">Caption</label>
-      <textarea id="vc-caption" name="caption" rows="6" maxlength="2200" required>{{ caption }}</textarea>
+      <textarea id="vc-caption" name="caption" data-richtext="off" rows="6" maxlength="2200" required>{{ caption }}</textarea>
       <div class="vc-count" id="vc-count" aria-live="polite"></div>
       {% if ministry %}<p class="vc-muted text-[12px]">The ministry's hashtags ({% for t in ministry %}#{{ t }}{{ ' ' if not loop.last }}{% endfor %}) are always kept on the caption, even if removed here.</p>{% endif %}
     </section>
@@ -101,7 +101,7 @@
         {% endif %}
         <label class="ve-check vc-mt"><input type="checkbox" name="wa_remember" value="1" {{ 'checked' if not wa.usual.chats and not wa.usual.status }}> Remember these as the church's usual WhatsApp places (ticked for you next time)</label>
         <label class="field-label vc-mt" for="vc-wa-text">WhatsApp caption <span class="vc-muted">(WhatsApp style: *bold* title, no topic hashtags)</span></label>
-        <textarea id="vc-wa-text" name="wa_text" rows="5" maxlength="3000">{{ wa_caption }}</textarea>
+        <textarea id="vc-wa-text" name="wa_text" data-richtext="off" rows="5" maxlength="3000">{{ wa_caption }}</textarea>
         <p class="vc-muted text-[12px]">Sent from {{ wa.phone }} as a smaller video that WhatsApp plays well, a few chats at a time like a person would. Status captions are cut to 700 characters.</p>
       {% endif %}
     </section>

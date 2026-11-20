@@ -315,3 +315,10 @@
 .vc-add-choice input { width: 7.5em; }
 
 .vc-moreopts > summary { cursor: pointer; font-size: 13.5px; font-weight: 600; display: flex; gap: 6px; align-items: center; min-height: 40px; }
+
+/* Shorts: four across on a wide screen, then three, two, one as the screen narrows. */
+.vc-shorts { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 1500px) { .vc-shorts { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1100px) { .vc-shorts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .vc-shorts { grid-template-columns: 1fr; } }
+.vc-caption textarea { width: 100%; min-height: 110px; resize: vertical; font: 13.5px/1.5 inherit; padding: 10px 12px; border: 1px solid var(--vc-line2); border-radius: 10px; background: var(--vc-surface); }

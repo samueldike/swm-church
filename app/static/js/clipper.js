@@ -210,7 +210,7 @@
           </div>
           ${postsHtml(s)}
           <details><summary><i class="ri-chat-quote-line"></i>Post caption</summary>
-            <div class="vc-caption"><textarea data-field="caption" aria-label="Post caption" placeholder="Post caption and hashtags">${esc(s.caption)}</textarea></div></details>
+            <div class="vc-caption"><textarea data-field="caption" data-richtext="off" rows="5" aria-label="Post caption" placeholder="Post caption and hashtags">${esc(s.caption)}</textarea></div></details>
           ${s.video && (frameSelect(s) || musicSelect(s) || outroSelect(s)) ? `<details><summary><i class="ri-palette-line"></i>Frame, music and outro</summary>
             <div class="vc-look">${frameSelect(s)}${musicSelect(s)}${outroSelect(s)}</div></details>` : ''}
           <details><summary><i class="ri-text"></i>What is said</summary><div class="vc-transcript">${esc(s.transcript)}</div></details>
