@@ -10418,6 +10418,21 @@ def _clip_mark_json(p, s) -> dict | None:
             "position": cfg["position"], "size": cfg["size"], "opacity": cfg["opacity"], "tone": cfg["tone"]}
 
 
+def _clip_look_key(p, s, stamp: int) -> str:
+    """A short fingerprint of everything the finished copy is made of (pure apart from the loaded church settings)."""
+    import zlib
+
+    from app.core.clipper import music, watermark
+
+    mcfg = getattr(p, "_mark_cfg", None)
+    mark = watermark.resolve(getattr(s, "watermark", None), mcfg) if mcfg else None
+    track = music.resolve(s.music, p._music_cfg, s.id) if getattr(p, "_music_cfg", None) else None
+    parts = [stamp, bool(s.captions_on), s.caption_style if s.captions_on else "",
+             (_clip_frames_resolve(p, s) or {}).get("id"), watermark.cache_key(mcfg, mark) if mcfg else s.watermark,
+             (_clip_outro_resolve(p, s) or {}).get("id"), music.cache_key(track) if track else s.music]
+    return format(zlib.crc32(repr(parts).encode()), "08x")
+
+
 def _clip_mark_url(branch_id: int, mark: dict | None) -> str:
     from app.core.clipper import watermark
 
@@ -10477,7 +10492,9 @@ def _clip_json_short(p, s) -> dict:
         "transcript": " ".join(x.get("text", "") for x in body)[:4000],
         "video": f"{base}/video.mp4?v={stamp}" if ready else "",
         "thumb": f"{base}/thumb.jpg?v={stamp}" if ready else "",
-        "download": f"{base}/video.mp4?download=1&final=1" if ready else "",
+        # The link names the short's current look, so a change of frame, watermark, captions, music or outro (or a
+        # re-cut) gives a new link and the click always gets that look, never a copy the browser kept.
+        "download": f"{base}/video.mp4?download=1&final=1&look={_clip_look_key(p, s, stamp)}" if ready else "",
         "srt": f"{base}/captions.srt" if ready else "",
     }
 
@@ -11905,7 +11922,9 @@ async def admin_clipper_file(project_id: int, short_id: int, name: str, request:
             path = await _clip_pipeline.final_copy(p.id, s, p.branch_id)
         except ClipperError as exc:
             return Response(str(exc), status_code=409, media_type="text/plain")
-    headers = {"Cache-Control": "private, max-age=600"}
+    final = ext == "mp4" and (request.query_params.get("final") == "1" or request.query_params.get("captions") == "1")
+    # A finished copy follows the short's current choices: never kept by the browser.
+    headers = {"Cache-Control": "no-store" if final else "private, max-age=600"}
     if request.query_params.get("download") or ext == "srt":
         fname = f"{slugify(s.title or 'short')[:60] or 'short'}.{ext}"
         headers["Content-Disposition"] = f'attachment; filename="{fname}"'

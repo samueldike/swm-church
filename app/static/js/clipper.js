@@ -383,6 +383,9 @@
       if (!r.ok) { toast(r.error || 'Could not save.'); return null; }
       const at = data.shorts.findIndex((s) => s.id === r.short.id);
       if (at >= 0) data.shorts[at] = r.short;
+      // The download link carries the short's current look (frame, watermark, captions, music, outro).
+      const dl = grid.querySelector(`[data-sid="${r.short.id}"] [data-dl]`);
+      if (dl && r.short.download) dl.href = r.short.download;
       return r;
     }
 
@@ -443,6 +446,7 @@
     }, opt);
 
     grid.addEventListener('click', async (e) => {
+      if (e.target.closest('[data-dl]')) { toast('Preparing the download with its watermark, frame, captions, music and outro…'); return; }
       const nudge = e.target.closest('[data-n]');
       if (nudge) {
         const form = nudge.closest('form');

@@ -1218,6 +1218,6 @@ def test_glow_is_a_soft_halo_under_sharp_letters():
     halo = [l for l in text.splitlines() if l.startswith("Dialogue: 0,")]
     sharp = [l for l in text.splitlines() if l.startswith("Dialogue: 1,")]
     assert halo and len(halo) == len(sharp)                      # every moment has both layers
-    assert all("\1a&HFF&" in l and "\blur" in l for l in halo)  # the halo: no letters, only the blurred glow
-    assert all("\blur0" in l and "\1a&HFF&" not in l for l in sharp)   # the letters: never blurred
-    assert all("\fscx116" in l for l in halo + sharp)           # the spoken word grows on both, so they line up
+    assert all(r"\1a&HFF&" in l and r"\blur9" in l for l in halo)   # the halo: no letters, only the blurred glow
+    assert all(r"\blur0" in l and r"\1a&HFF&" not in l for l in sharp)   # the letters: never blurred
+    assert all(r"\fscx116" in l for l in halo + sharp)           # the spoken word grows on both, so they line up
