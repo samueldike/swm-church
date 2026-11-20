@@ -68,7 +68,7 @@
       {%- endmacro %}
 
       <div class="mb-1.5 px-1">
-        {% if can('dashboard') %}{{ nav_item(url_for('admin_dashboard'), 'ri-home-5-line', 'Home', 'admin.dashboard') }}{% endif %}
+        {% if can('dashboard') %}{{ nav_item(url_for('admin_dashboard'), 'ri-dashboard-3-line', 'Dashboard', 'admin.dashboard') }}{% endif %}
         {% if can('members') %}{{ nav_item(url_for('admin_members'), 'ri-team-line', 'Members', 'admin.members', badges.members, '{n} joined in the last 7 days') }}{% endif %}
         {% if can('events') %}{{ nav_item(url_for('admin_events'), 'ri-calendar-event-line', 'Calendar', 'admin.events', badges.events, '{n} events in the next 7 days') }}{% endif %}
         {% if can('audio') %}{{ nav_item(url_for('admin_messages'), 'ri-mic-line', 'Audio Messages', 'admin.messages', badges.messages, '{n} messages saved as drafts, not yet published') }}{% endif %}

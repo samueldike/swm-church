@@ -4,7 +4,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}New video{% endblock %}
 {% block topbar_icon %}ri-scissors-cut-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=3">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=4">{% endblock %}
 
 {% block page_header %}
   {{ page_header("New video", "Choose the video, how many shorts you want and how they should look. You can leave the page while it works.",
@@ -59,11 +59,16 @@
         <input type="text" name="title" maxlength="200" placeholder="e.g. Sunday Service, 9 November"></label>
       <label class="vc-field">It is a
         <select name="content_type">{% for k, v in opt.CONTENT_TYPES.items() %}<option value="{{ k }}" {{ 'selected' if k == defaults.content_type }}>{{ v }}</option>{% endfor %}</select></label>
-      <label class="vc-field">Language spoken
-        <select name="language">{% for k, v in opt.LANGUAGES.items() %}<option value="{{ k }}" {{ 'selected' if k == defaults.language }}>{{ v }}</option>{% endfor %}</select></label>
-      <label class="vc-field">Noise reduction
-        <select name="denoise">{% for k, v in opt.DENOISE.items() %}<option value="{{ k }}" {{ 'selected' if k == defaults.denoise }}>{{ v }}</option>{% endfor %}</select></label>
     </div>
+    <details class="vc-mt vc-moreopts">
+      <summary><i class="ri-equalizer-line"></i>More options <span class="vc-muted">(language, noise reduction)</span></summary>
+      <div class="vc-row vc-mt">
+        <label class="vc-field">Language spoken
+          <select name="language">{% for k, v in opt.LANGUAGES.items() %}<option value="{{ k }}" {{ 'selected' if k == defaults.language }}>{{ v }}</option>{% endfor %}</select></label>
+        <label class="vc-field">Noise reduction
+          <select name="denoise">{% for k, v in opt.DENOISE.items() %}<option value="{{ k }}" {{ 'selected' if k == defaults.denoise }}>{{ v }}</option>{% endfor %}</select></label>
+      </div>
+    </details>
     <div class="vc-row vc-mt">
       <label class="vc-field">Only this part: from <small>Optional. Skip the worship and announcements: give the time the message starts.</small>
         <input type="text" name="range_start" placeholder="e.g. 45:00" inputmode="numeric" autocomplete="off"></label>
@@ -133,7 +138,7 @@
 {% endblock %}
 
 {% block extra_body %}
-<script src="{{ url_for('static', path='js/clipper.js') }}?v=5"></script>
+<script src="{{ url_for('static', path='js/clipper.js') }}?v=6"></script>
 <script src="{{ url_for('static', path='js/clipper-range.js') }}?v=1"></script>
 <script>window.SWMClipper && window.SWMClipper.form();</script>
 {% endblock %}

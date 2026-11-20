@@ -10470,6 +10470,17 @@ def _clip_json_project(p) -> dict:
 
 @router.get("/clipper", response_class=HTMLResponse, name="admin_clipper")
 async def admin_clipper(request: Request, db: AsyncSession = Depends(get_db)):
+    """The videos: a grid of projects with New video. Setup lives on Clipper settings."""
+    return await _clip_page(request, db, "admin/clipper.html", "Video Clipper")
+
+
+@router.get("/clipper/settings", response_class=HTMLResponse, name="admin_clipper_settings")
+async def admin_clipper_settings(request: Request, db: AsyncSession = Depends(get_db)):
+    """Clipper settings, in tabs: YouTube access, auto-clip lives, frames, outros, music, preachers."""
+    return await _clip_page(request, db, "admin/clipper-settings.html", "Clipper settings")
+
+
+async def _clip_page(request: Request, db: AsyncSession, template: str, title: str):
     admin, church = await _clip_ctx(request, db)
     if not admin:
         return RedirectResponse(url="/admin/login", status_code=303)
@@ -10515,10 +10526,10 @@ async def admin_clipper(request: Request, db: AsyncSession = Depends(get_db)):
                      "churches": (await db.execute(select(Branch).order_by(Branch.is_hq.desc(), Branch.name))).scalars().all()
                      if sees_every_church(admin) else []}
     ctx = await _admin_context(request, db, "admin.clipper")
-    return await render_template(request, "admin/clipper.html", {
-        "watch": watch_ctx, "frames": frames_ctx, "clip_clock": __import__("app.core.clipper.options", fromlist=["clock"]).clock,
+    return await render_template(request, template, {
+        "watch": watch_ctx, "frames": frames_ctx, "can_setup": _clip_can_manage_channels(admin) or youtube is not None, "clip_clock": __import__("app.core.clipper.options", fromlist=["clock"]).clock,
         "projects": projects, "stale": pipeline.stale, "disk": pipeline.disk_summary(), "youtube": youtube,
-        "title": "Video Clipper", **ctx})
+        "title": title, **ctx})
 
 
 @router.post("/clipper/youtube-access", name="admin_clipper_youtube")
@@ -10537,20 +10548,20 @@ async def admin_clipper_youtube(request: Request, db: AsyncSession = Depends(get
         await update_settings(db, {"clipper_youtube_cookies": ""})
         await log_admin_action(db, admin.id, "clipper.youtube_access", "setting", None, {"action": "removed"}, request)
         await db.commit()
-        return _redirect(request, "/admin/clipper", "YouTube access removed.", "success")
+        return _redirect(request, "/admin/clipper/settings#youtube-access", "YouTube access removed.", "success")
     upload = form.get("cookies")
     text = ""
     if upload is not None and hasattr(upload, "read"):
         raw = await upload.read(512 * 1024 + 1)
         if len(raw) > 512 * 1024:
-            return _redirect(request, "/admin/clipper", "That file is too large to be a cookies.txt export.", "error")
+            return _redirect(request, "/admin/clipper/settings#youtube-access", "That file is too large to be a cookies.txt export.", "error")
         text = raw.decode("utf-8", "replace")
     if not media.valid_cookies(text):
-        return _redirect(request, "/admin/clipper", "That is not a YouTube cookies.txt export. Export it from a browser that is signed in to YouTube (Netscape format).", "error")
+        return _redirect(request, "/admin/clipper/settings#youtube-access", "That is not a YouTube cookies.txt export. Export it from a browser that is signed in to YouTube (Netscape format).", "error")
     await update_settings(db, {"clipper_youtube_cookies": text})
     await log_admin_action(db, admin.id, "clipper.youtube_access", "setting", None, {"action": "saved"}, request)
     await db.commit()
-    return _redirect(request, "/admin/clipper", "YouTube access saved. YouTube links will now download with it.", "success")
+    return _redirect(request, "/admin/clipper/settings#youtube-access", "YouTube access saved. YouTube links will now download with it.", "success")
 
 
 @router.get("/clipper/new", response_class=HTMLResponse, name="admin_clipper_new")
@@ -11089,7 +11100,7 @@ async def admin_clipper_watch(request: Request, db: AsyncSession = Depends(get_d
     form = await request.form()
     cfg, state = await watch.load(db, church)
     new, problems = watch.clean(form, cfg)
-    back = f"/admin/clipper?church={church}#watch"
+    back = f"/admin/clipper/settings?church={church}#watch"
     if problems:
         return _redirect(request, back, " ".join(problems), "error")
     changed_url = new.get("url") != cfg.get("url")
@@ -11114,9 +11125,9 @@ async def admin_clipper_watch_check(request: Request, db: AsyncSession = Depends
     church = await _clip_channel_church(request, db, admin, church)
     cfg, _state = await watch.load(db, church)
     if not watch.streams_url(cfg.get("url")):
-        return _redirect(request, f"/admin/clipper?church={church}#watch", "Save the channel's link first.", "error")
+        return _redirect(request, f"/admin/clipper/settings?church={church}#watch", "Save the channel's link first.", "error")
     await _clip_enqueue(clip_watch_task, church)
-    return _redirect(request, f"/admin/clipper?church={church}#watch", "Checking the channel now. New finished lives appear below in a minute or two.", "success")
+    return _redirect(request, f"/admin/clipper/settings?church={church}#watch", "Checking the channel now. New finished lives appear below in a minute or two.", "success")
 
 
 # ── Video Clipper → frames (PNG overlays per church, app/core/clipper/frames.py) ──
@@ -11144,7 +11155,7 @@ async def admin_clipper_frames_add(request: Request, db: AsyncSession = Depends(
     from app.core.clipper import frames
 
     church = await _clip_channel_church(request, db, admin, church)
-    back = f"/admin/clipper?church={church}#frames"
+    back = f"/admin/clipper/settings?church={church}#frames"
     form = await request.form()
     upload = form.get("file")
     if upload is None or not getattr(upload, "filename", ""):
@@ -11172,7 +11183,7 @@ async def admin_clipper_frame_action(frame_id: str, action: str, request: Reques
     from app.core.clipper import frames
 
     church = await _clip_channel_church(request, db, admin, church)
-    back = f"/admin/clipper?church={church}#frames"
+    back = f"/admin/clipper/settings?church={church}#frames"
     cfg = await frames.load(db, church)
     if action == "none" and frame_id in frames.FORMATS:          # /frames/<shape>/none: no default for that shape
         cfg["default"][frame_id] = None
@@ -11234,7 +11245,7 @@ async def admin_clipper_outros_add(request: Request, db: AsyncSession = Depends(
     from app.core.clipper import outros
 
     church = await _clip_channel_church(request, db, admin, church)
-    back = f"/admin/clipper?church={church}#outros"
+    back = f"/admin/clipper/settings?church={church}#outros"
     form = await request.form()
     upload = form.get("file")
     if upload is None or not getattr(upload, "filename", ""):
@@ -11262,7 +11273,7 @@ async def admin_clipper_outro_action(outro_id: str, action: str, request: Reques
     from app.core.clipper import outros
 
     church = await _clip_channel_church(request, db, admin, church)
-    back = f"/admin/clipper?church={church}#outros"
+    back = f"/admin/clipper/settings?church={church}#outros"
     cfg = await outros.load(db, church)
     if outro_id == "none" and action == "default":
         cfg["default"] = None
@@ -11334,7 +11345,7 @@ async def admin_clipper_music_add(request: Request, db: AsyncSession = Depends(g
     from app.core.clipper import music
 
     church = await _clip_channel_church(request, db, admin, church)
-    back = f"/admin/clipper?church={church}#music"
+    back = f"/admin/clipper/settings?church={church}#music"
     form = await request.form()
     upload = form.get("file")
     if upload is None or not getattr(upload, "filename", ""):
@@ -11362,7 +11373,7 @@ async def admin_clipper_music_action(track_id: str, action: str, request: Reques
     from app.core.clipper import music
 
     church = await _clip_channel_church(request, db, admin, church)
-    back = f"/admin/clipper?church={church}#music"
+    back = f"/admin/clipper/settings?church={church}#music"
     cfg = await music.load(db, church)
     if action == "default" and track_id in ("none", "random"):
         if track_id == "random" and not cfg["items"]:
@@ -11440,7 +11451,7 @@ async def admin_clipper_voices_mode(request: Request, db: AsyncSession = Depends
     from app.core.clipper import speakers
 
     church = await _clip_channel_church(request, db, admin, church)
-    back = f"/admin/clipper?church={church}#voices"
+    back = f"/admin/clipper/settings?church={church}#voices"
     form = await request.form()
     cfg = await speakers.load(db, church)
     mode = "senior" if form.get("mode") == "senior" else "all"
@@ -11462,7 +11473,7 @@ async def admin_clipper_voices_person(request: Request, db: AsyncSession = Depen
     from app.core.clipper import speakers
 
     church = await _clip_channel_church(request, db, admin, church)
-    back = f"/admin/clipper?church={church}#voices"
+    back = f"/admin/clipper/settings?church={church}#voices"
     form = await request.form()
     name = (form.get("name") or "").strip()[:80]
     role = "senior" if form.get("role") == "senior" else "other"
@@ -11492,7 +11503,7 @@ async def admin_clipper_voices_sample(person_id: str, request: Request, db: Asyn
     from app.models.clipper import ClipProject
 
     church = await _clip_channel_church(request, db, admin, church)
-    back = f"/admin/clipper?church={church}#voices"
+    back = f"/admin/clipper/settings?church={church}#voices"
     cfg = await speakers.load(db, church)
     person = next((x for x in cfg["people"] if x["id"] == person_id), None)
     if not person:
@@ -11557,7 +11568,7 @@ async def admin_clipper_voices_delete(person_id: str, request: Request, db: Asyn
     from app.core.clipper import speakers
 
     church = await _clip_channel_church(request, db, admin, church)
-    back = f"/admin/clipper?church={church}#voices"
+    back = f"/admin/clipper/settings?church={church}#voices"
     cfg = await speakers.load(db, church)
     sample = (await request.form()).get("sample")
     for person in cfg["people"]:

@@ -194,19 +194,25 @@
             <label class="vc-switch" title="${s.words ? 'Show captions on this short (preview, download and post)' : 'Re-cut this short once to add captions'}"><input type="checkbox" data-cap-on ${s.captions_on ? 'checked' : ''} ${s.words ? '' : 'disabled'}><span aria-hidden="true"></span><b>Captions</b></label>
             <div class="vc-capchips" role="group" aria-label="Caption design" aria-disabled="${!s.captions_on}">${Object.entries(capStyles).map(([k, v]) =>
               `<button type="button" data-cap="${esc(k)}" aria-pressed="${k === s.caption_style}" title="${esc(v.hint)}">${esc(v.label)}</button>`).join('')}</div>
-            ${s.video ? frameSelect(s) : ''}${s.video ? musicSelect(s) : ''}${s.video ? outroSelect(s) : ''}
           </div>
-          <div class="vc-caption"><textarea data-field="caption" aria-label="Post caption" placeholder="Post caption and hashtags">${esc(s.caption)}</textarea></div>
           <div class="vc-actions">
-            ${s.download ? `<a class="btn btn-primary btn-sm" href="${esc(s.download)}" data-turbo="false" download data-dl><i class="ri-download-2-line"></i>Download</a>` : ''}
-            ${s.video ? `<a class="btn btn-secondary btn-sm" href="${esc(base)}/shorts/${s.id}/publish"><i class="ri-send-plane-line"></i>Publish</a>` : ''}
+            ${s.video ? `<a class="btn btn-primary btn-sm" href="${esc(base)}/shorts/${s.id}/publish"><i class="ri-send-plane-line"></i>Publish</a>` : ''}
             ${s.video && !data.source_gone ? `<a class="btn btn-secondary btn-sm" href="${esc(base)}/shorts/${s.id}/edit"><i class="ri-film-line"></i>Edit</a>` : ''}
-            <button type="button" class="btn btn-secondary btn-sm" data-act="copy"><i class="ri-file-copy-line"></i>Copy caption</button>
-            ${s.srt ? `<a class="btn btn-ghost btn-sm" href="${esc(s.srt)}" data-turbo="false" title="Caption file for YouTube or Facebook"><i class="ri-closed-captioning-line"></i>.srt</a>` : ''}
-            <button type="button" class="btn btn-ghost btn-sm" data-act="star" aria-pressed="${s.starred}" title="Mark as a favourite"><i class="${s.starred ? 'ri-star-fill' : 'ri-star-line'}"></i></button>
-            <button type="button" class="btn btn-ghost btn-sm" data-act="delete" title="Delete this short"><i class="ri-delete-bin-6-line"></i></button>
+            ${s.download ? `<a class="btn btn-secondary btn-sm" href="${esc(s.download)}" data-turbo="false" download data-dl><i class="ri-download-2-line"></i>Download</a>` : ''}
+            <details class="vc-more"><summary class="btn btn-ghost btn-sm" aria-label="More actions"><i class="ri-more-2-fill"></i>More</summary>
+              <div class="vc-more-menu" role="menu">
+                <button type="button" role="menuitem" data-act="copy"><i class="ri-file-copy-line"></i>Copy post caption</button>
+                ${s.srt ? `<a role="menuitem" href="${esc(s.srt)}" data-turbo="false"><i class="ri-closed-captioning-line"></i>Caption file (.srt)</a>` : ''}
+                <button type="button" role="menuitem" data-act="star" aria-pressed="${s.starred}"><i class="${s.starred ? 'ri-star-fill' : 'ri-star-line'}"></i>${s.starred ? 'Remove from favourites' : 'Add to favourites'}</button>
+                <button type="button" role="menuitem" data-act="delete" class="bad"><i class="ri-delete-bin-6-line"></i>Delete this short</button>
+              </div>
+            </details>
           </div>
           ${postsHtml(s)}
+          <details><summary><i class="ri-chat-quote-line"></i>Post caption</summary>
+            <div class="vc-caption"><textarea data-field="caption" aria-label="Post caption" placeholder="Post caption and hashtags">${esc(s.caption)}</textarea></div></details>
+          ${s.video && (frameSelect(s) || musicSelect(s) || outroSelect(s)) ? `<details><summary><i class="ri-palette-line"></i>Frame, music and outro</summary>
+            <div class="vc-look">${frameSelect(s)}${musicSelect(s)}${outroSelect(s)}</div></details>` : ''}
           <details><summary><i class="ri-text"></i>What is said</summary><div class="vc-transcript">${esc(s.transcript)}</div></details>
           ${data.source_gone ? '' : `<details><summary><i class="ri-equalizer-line"></i>Adjust and re-cut</summary>
             <form class="vc-recut" data-recut>
@@ -298,7 +304,7 @@
         problem.hidden = true;
       }
       tools.hidden = data.busy;
-      tools.querySelectorAll('#vc-more, #vc-manual').forEach((x) => { x.hidden = data.source_gone; });
+      tools.querySelectorAll('.vc-add').forEach((x) => { x.hidden = data.source_gone; });
     }
 
     function draw() { drawHead(); drawShorts(); }
@@ -327,6 +333,9 @@
       const value = el.dataset.field === 'title' ? el.textContent.trim() : el.value;
       if (!s || value === (s[el.dataset.field] || '')) return;
       if (await save(sid, { [el.dataset.field]: value })) toast('Saved');
+    }, opt);
+    document.addEventListener('click', (e) => {
+      document.querySelectorAll('.vc-more[open]').forEach((m) => { if (!m.contains(e.target)) m.open = false; });
     }, opt);
     grid.addEventListener('change', async (e) => {
       const msel = e.target.closest('[data-music]');
@@ -376,6 +385,8 @@
         form.querySelector(`[data-o=${nudge.dataset.n}]`).textContent = secs(v);
         return;
       }
+      const menu = e.target.closest('.vc-more');
+      if (menu && e.target.closest('[data-act]')) menu.open = false;
       const chip = e.target.closest('[data-cap]');
       if (chip) {
         const sid = chip.closest('[data-sid]').dataset.sid;

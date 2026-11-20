@@ -1,0 +1,396 @@
+{% extends "layouts/admin_base.html" %}
+{% from "macros/admin.html" import page_header with context %}
+{% block title %}Clipper settings | {{ siteName }}{% endblock %}
+{% block topbar_title %}Video Clipper{% endblock %}
+{% block topbar_subtitle %}Settings{% endblock %}
+{% block topbar_icon %}ri-settings-3-line{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=4">{% endblock %}
+
+{% block page_header %}
+  {{ page_header("Clipper settings", "Set these up once. Every new video uses them.",
+      actions='<a href="' ~ url_for('admin_clipper') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>Back to videos</a>') }}
+{% endblock %}
+
+{% block content %}
+<div class="vc vc-settings">
+  <nav class="vc-tabs" aria-label="Clipper settings">
+    {% if youtube is not none %}<a href="#youtube-access" data-tab="youtube-access"><i class="ri-youtube-line"></i><span>YouTube access</span></a>{% endif %}
+    {% if watch %}<a href="#watch" data-tab="watch"><i class="ri-live-line"></i><span>Clip lives automatically</span></a>{% endif %}
+    {% if frames %}
+    <a href="#voices" data-tab="voices"><i class="ri-user-voice-line"></i><span>Whose messages</span></a>
+    <a href="#frames" data-tab="frames"><i class="ri-layout-masonry-line"></i><span>Video frames</span></a>
+    <a href="#outros" data-tab="outros"><i class="ri-film-line"></i><span>Outros</span></a>
+    <a href="#music" data-tab="music"><i class="ri-music-2-line"></i><span>Background music</span></a>
+    {% endif %}
+    <a href="{{ url_for('admin_clipper_channels') }}"><i class="ri-share-forward-line"></i><span>Social accounts</span></a>
+  </nav>
+  <div class="vc-tab-panels">
+  {% if youtube is not none %}
+  <details class="vc-panel vc-yt" id="youtube-access" {{ 'open' if youtube.state == 'unset' and not projects else '' }}>
+    <summary><i class="ri-youtube-line"></i><b>YouTube access</b>
+      {% if youtube.state == 'set' %}<span class="vc-pill ok"><i class="ri-check-line"></i>Connected</span>
+      {% elif youtube.state == 'unreadable' %}<span class="vc-pill bad">Saved but unreadable</span>
+      {% else %}<span class="vc-pill">Not connected</span>{% endif %}
+      <span class="vc-muted vc-yt-why">YouTube refuses servers unless they download as a signed-in viewer.</span></summary>
+    <div class="vc-yt-body">
+      <ol>
+        <li>In Chrome or Edge, sign in to YouTube with a church Google account (a separate account, not anyone's personal one, is safest).</li>
+        <li>Add the browser extension <b>Get cookies.txt LOCALLY</b>, open youtube.com, and export the cookies (Netscape format).</li>
+        <li>Upload that file here. It is stored encrypted and used only to download the links you clip.</li>
+      </ol>
+      <p class="vc-muted">Sign-ins expire after some weeks. When YouTube links start failing, export and upload a fresh file. Uploading the video file always works without this.</p>
+      <div class="vc-yt-actions">
+        <form method="post" action="{{ url_for('admin_clipper_youtube') }}" enctype="multipart/form-data" class="vc-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="file" name="cookies" accept=".txt,text/plain" required>
+          <button type="submit" class="btn btn-primary btn-sm"><i class="ri-upload-2-line"></i>{{ 'Replace' if youtube.state == 'set' else 'Save' }} cookies.txt</button>
+        </form>
+        {% if youtube.state != 'unset' %}
+        <form method="post" action="{{ url_for('admin_clipper_youtube') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="clear" value="1">
+          <button type="submit" class="btn btn-ghost btn-sm"><i class="ri-link-unlink"></i>Remove</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </details>
+  {% endif %}
+
+  {% if watch %}
+  {% set w = watch.cfg %}{% set ws = watch.state %}
+  <details class="vc-panel vc-yt" id="watch" {{ 'open' if not w.url }}>
+    <summary><i class="ri-live-line"></i><b>Clip our YouTube lives automatically</b>
+      {% if w.enabled %}<span class="vc-pill ok"><i class="ri-radar-line"></i>Watching</span>{% else %}<span class="vc-pill">Off</span>{% endif %}
+      <span class="vc-muted vc-yt-why">{% if ws.last_result %}{{ ws.last_result }}{% else %}Every finished live service becomes ready-to-post shorts on its own.{% endif %}</span></summary>
+    <div class="vc-yt-body">
+      {% if watch.churches %}
+      <form method="get" class="vc-inline vc-mt"><label class="text-[13px] font-semibold" for="vc-wchurch">Church</label>
+        <select id="vc-wchurch" name="church" onchange="this.form.submit()">{% for b in watch.churches %}<option value="{{ b.id }}" {{ 'selected' if b.id == watch.church }}>{{ b.name }}{{ ' (HQ)' if b.is_hq }}</option>{% endfor %}</select>
+      </form>
+      {% endif %}
+      <p class="vc-muted">The server looks at the channel's <b>Live</b> tab. A live that is still on, scheduled, or still being processed by YouTube is left for the next look; once the recording is ready it is downloaded and clipped. Every moment is scored for value: the ones under your bar are left out, and all the others are cut.</p>
+      <form method="post" action="{{ url_for('admin_clipper_watch') }}?church={{ watch.church }}" class="vc-watch" data-turbo="false">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label class="vc-switch"><input type="checkbox" name="enabled" value="1" {{ 'checked' if w.enabled }}><span aria-hidden="true"></span><b>Watch the channel</b><small>{{ watch.church_name }}</small></label>
+        <label class="vc-field">Channel link<input type="url" name="url" value="{{ w.url }}" placeholder="https://www.youtube.com/@yourchurch" autocomplete="off"></label>
+        <fieldset class="vc-field"><legend>Look for new lives</legend>
+          <div class="vc-inline">
+            <select name="every" aria-label="How often" data-every>{% for k, v in watch.every.items() %}<option value="{{ k }}" {{ 'selected' if w.every == k }}>{{ v }}</option>{% endfor %}</select>
+            <label data-show="hours days">every <input type="number" name="n" min="1" max="168" value="{{ w.n }}" style="width:5em" aria-label="How many"> <span data-unit>{{ 'hours' if w.every == 'hours' else 'days' }}</span></label>
+            <label data-show="days weekdays">at <input type="time" name="at" value="{{ w.at }}" aria-label="Time of day"></label>
+          </div>
+          <div class="vc-inline vc-mt" data-show="weekdays">
+            {% for d in watch.days %}<label class="vc-day"><input type="checkbox" name="days" value="{{ loop.index0 }}" {{ 'checked' if loop.index0 in w.days }}>{{ d[:3] }}</label>{% endfor %}
+          </div>
+        </fieldset>
+        <div class="vc-row">
+          <label class="vc-field">Shape<select name="format">{% for k, v in watch.formats.items() %}<option value="{{ k }}" {{ 'selected' if w.format == k }}>{{ v.label if v is mapping else v }}</option>{% endfor %}</select></label>
+          <label class="vc-field">Length<select name="length">{% for k, v in watch.lengths.items() %}<option value="{{ k }}" {{ 'selected' if w.length == k }}>{{ v[0] }} to {{ v[1] }} seconds</option>{% endfor %}</select></label>
+          <label class="vc-field">Captions<select name="captions"><option value="none">None</option>{% for k, v in watch.captions.items() %}<option value="{{ k }}" {{ 'selected' if w.captions == k }}>{{ v }}</option>{% endfor %}</select></label>
+        </div>
+        <label class="vc-field">Value bar: keep moments scoring at least <output data-score>{{ w.min_score }}</output> of 100
+          <input type="range" name="min_score" min="40" max="95" step="5" value="{{ w.min_score }}" data-score-in>
+          <small>70 keeps every strong moment; raise it for fewer, stronger shorts. There is no fixed number: each message gives as many as clear the bar.</small></label>
+        <label class="ve-check"><input type="checkbox" name="latest" value="1" {{ 'checked' if w.latest }}> On the first look, also clip the most recent finished live</label>
+        <div class="vc-inline">
+          <button type="submit" class="btn btn-primary btn-sm"><i class="ri-save-line"></i>Save</button>
+          <span class="vc-muted text-[12px]">{% if ws.last_check %}Last look {{ ws.last_check[:16].replace('T', ' ') }} UTC.{% endif %}{% if w.enabled and ws.next_check %} Next {{ ws.next_check[:16].replace('T', ' ') }} UTC.{% endif %}</span>
+        </div>
+      </form>
+      {% if w.url %}
+      <form method="post" action="{{ url_for('admin_clipper_watch_check') }}?church={{ watch.church }}" class="vc-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn btn-secondary btn-sm"><i class="ri-refresh-line"></i>Check now</button>
+      </form>
+      {% endif %}
+    </div>
+  </details>
+  <script>
+  (() => {
+    const f = document.querySelector('.vc-watch'); if (!f) return;
+    const sync = () => {
+      const every = f.querySelector('[data-every]').value;
+      f.querySelectorAll('[data-show]').forEach((el) => { el.hidden = !el.dataset.show.split(' ').includes(every); });
+      f.querySelector('[data-unit]').textContent = every === 'hours' ? 'hours' : 'days';
+      f.querySelector('[data-score]').textContent = f.querySelector('[data-score-in]').value;
+    };
+    f.addEventListener('input', sync); f.addEventListener('change', sync); sync();
+  })();
+  </script>
+  {% endif %}
+
+  {% if frames %}
+  {% set fc = frames.cfg %}
+  <details class="vc-panel vc-yt" id="frames" {{ 'open' if request.query_params.get('church') and not fc['items'] }}>
+    <summary><i class="ri-layout-masonry-line"></i><b>Video frames</b>
+      <span class="vc-pill">{{ fc['items']|length }} frame{{ '' if fc['items']|length == 1 else 's' }}</span>
+      <span class="vc-muted vc-yt-why">A PNG laid over every short of its shape: the church logo, a border, a name bar.</span></summary>
+    <div class="vc-yt-body">
+      <p class="vc-muted">Make the PNG the size of the short (1080×1920 for vertical, 1080×1080 square, 1920×1080 landscape) with a see-through middle. Its shape is recognised from its size and it is stretched to fit exactly. The default of each shape goes on every new short; each short can switch to another frame or none.</p>
+      <form method="post" action="{{ url_for('admin_clipper_frames_add') }}?church={{ frames.church }}" enctype="multipart/form-data" class="vc-inline" data-turbo="false">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="text" name="name" placeholder="Name, e.g. Sunday logo bar" maxlength="60" aria-label="Frame name">
+        <input type="file" name="file" accept="image/png" required aria-label="PNG frame">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="ri-upload-2-line"></i>Add frame</button>
+      </form>
+      {% for fmt in frames.formats %}
+        {% set items = fc['items']|selectattr('format', 'equalto', fmt)|list %}
+        <div class="vc-frames-row">
+          <h3>{{ {'vertical': 'Vertical 9:16', 'square': 'Square 1:1', 'landscape': 'Landscape 16:9'}[fmt] }}</h3>
+          <div class="vc-frames">
+            <div class="vc-frame-card {{ 'is-default' if not fc['default'][fmt] }}">
+              <div class="vc-frame-thumb {{ fmt }} none"><span>No frame</span></div>
+              {% if fc['default'][fmt] %}
+              <form method="post" action="{{ url_for('admin_clipper_frame_action', frame_id=fmt, action='none') }}?church={{ frames.church }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm" type="submit">Make default</button></form>
+              {% else %}<span class="vc-pill ok"><i class="ri-check-line"></i>Default</span>{% endif %}
+            </div>
+            {% for i in items %}
+            <div class="vc-frame-card {{ 'is-default' if fc['default'][fmt] == i.id }}">
+              <div class="vc-frame-thumb {{ fmt }}"><img src="{{ frames.urls[i.id] }}" alt="{{ i.name }}" loading="lazy"></div>
+              <b title="{{ i.w }}×{{ i.h }}">{{ i.name }}</b>
+              <div class="vc-inline">
+                {% if fc['default'][fmt] == i.id %}<span class="vc-pill ok"><i class="ri-check-line"></i>Default</span>
+                {% else %}<form method="post" action="{{ url_for('admin_clipper_frame_action', frame_id=i.id, action='default') }}?church={{ frames.church }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm" type="submit">Make default</button></form>{% endif %}
+                <form method="post" action="{{ url_for('admin_clipper_frame_action', frame_id=i.id, action='delete') }}?church={{ frames.church }}" data-confirm="Delete the frame “{{ i.name }}”? Shorts using it go back to their shape's default."><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm text-bad" type="submit" aria-label="Delete {{ i.name }}"><i class="ri-delete-bin-6-line"></i></button></form>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </details>
+  <script>document.querySelectorAll('#frames form[data-confirm]').forEach((f) => f.addEventListener('submit', (e) => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));</script>
+  {% endif %}
+
+  {% if frames %}
+  {% set oc = frames.outros %}
+  <details class="vc-panel vc-yt" id="outros">
+    <summary><i class="ri-film-line"></i><b>Outros</b>
+      <span class="vc-pill">{{ oc['items']|length }} outro{{ '' if oc['items']|length == 1 else 's' }}</span>
+      <span class="vc-muted vc-yt-why">What plays after each short: a logo card for a few seconds, or a short branded video.</span></summary>
+    <div class="vc-yt-body">
+      <p class="vc-muted">A picture shows for 1 to 4 seconds; a video (up to 15 seconds) plays whole. Either is fitted into the short's shape over a soft blurred copy of itself, so one outro suits vertical, square and landscape shorts. The default ends every short; each short can pick another or none.</p>
+      <form method="post" action="{{ url_for('admin_clipper_outros_add') }}?church={{ frames.church }}" enctype="multipart/form-data" class="vc-inline" data-turbo="false">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="text" name="name" placeholder="Name, e.g. Logo card" maxlength="60" aria-label="Outro name">
+        <input type="file" name="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm" required aria-label="Outro picture or video">
+        <label class="text-[13px]">Picture shows for <select name="seconds" aria-label="Seconds a picture shows">{% for s in [1, 2, 3, 4] %}<option value="{{ s }}" {{ 'selected' if s == 3 }}>{{ s }} s</option>{% endfor %}</select></label>
+        <button type="submit" class="btn btn-primary btn-sm"><i class="ri-upload-2-line"></i>Add outro</button>
+      </form>
+      <div class="vc-frames vc-mt">
+        <div class="vc-frame-card {{ 'is-default' if not oc['default'] }}">
+          <div class="vc-frame-thumb landscape none"><span>No outro</span></div>
+          {% if oc['default'] %}
+          <form method="post" action="{{ url_for('admin_clipper_outro_action', outro_id='none', action='default') }}?church={{ frames.church }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm" type="submit">Make default</button></form>
+          {% else %}<span class="vc-pill ok"><i class="ri-check-line"></i>Default</span>{% endif %}
+        </div>
+        {% for i in oc['items'] %}
+        {% set src = url_for('admin_clipper_outro_file', outro_id=i.id) ~ '?church=' ~ frames.church %}
+        <div class="vc-frame-card {{ 'is-default' if oc['default'] == i.id }}">
+          <div class="vc-frame-thumb landscape">{% if i.kind == 'image' %}<img src="{{ src }}" alt="{{ i.name }}" loading="lazy" style="object-fit:contain">{% else %}<video src="{{ src }}" muted playsinline preload="metadata" controls style="width:100%;height:100%;object-fit:contain"></video>{% endif %}</div>
+          <b>{{ i.name }}</b><small class="vc-muted">{{ 'Picture' if i.kind == 'image' else 'Video' }} · {{ i.seconds }} s</small>
+          <div class="vc-inline">
+            {% if oc['default'] == i.id %}<span class="vc-pill ok"><i class="ri-check-line"></i>Default</span>
+            {% else %}<form method="post" action="{{ url_for('admin_clipper_outro_action', outro_id=i.id, action='default') }}?church={{ frames.church }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm" type="submit">Make default</button></form>{% endif %}
+            <form method="post" action="{{ url_for('admin_clipper_outro_action', outro_id=i.id, action='delete') }}?church={{ frames.church }}" data-confirm="Delete the outro “{{ i.name }}”?"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm text-bad" type="submit" aria-label="Delete {{ i.name }}"><i class="ri-delete-bin-6-line"></i></button></form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </details>
+  <script>document.querySelectorAll('#outros form[data-confirm]').forEach((f) => f.addEventListener('submit', (e) => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));</script>
+  {% endif %}
+
+  {% if frames %}
+  {% set mc = frames.music %}
+  <details class="vc-panel vc-yt" id="music">
+    <summary><i class="ri-music-2-line"></i><b>Background music</b>
+      <span class="vc-pill">{{ mc['items']|length }} track{{ '' if mc['items']|length == 1 else 's' }}</span>
+      <span class="vc-pill {{ 'ok' if mc['default'] }}">Default: {{ 'Random' if mc['default'] == 'random' else ((mc['items']|selectattr('id', 'equalto', mc['default'])|map(attribute='name')|first) or 'None') }}</span>
+      <span class="vc-muted vc-yt-why">Played softly under the shorts, always below the preacher's voice.</span></summary>
+    <div class="vc-yt-body">
+      <p class="vc-muted">The level is set for you: every track is brought to the same quiet loudness, dips further whenever the preacher speaks, comes up a little in the pauses, and fades in and out. His voice is never changed. Use music the church has the rights to: platforms mute or take down videos with copyrighted songs.</p>
+      <form method="post" action="{{ url_for('admin_clipper_music_add') }}?church={{ frames.church }}" enctype="multipart/form-data" class="vc-inline" data-turbo="false">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="text" name="name" placeholder="Name, e.g. Soft piano" maxlength="60" aria-label="Track name">
+        <input type="file" name="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.flac" required aria-label="Music file">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="ri-upload-2-line"></i>Add music</button>
+      </form>
+      <div class="vc-inline vc-mt" role="group" aria-label="Default music">
+        <b class="text-[13px]">Default for new shorts:</b>
+        {% for key, label in [('none', 'None'), ('random', 'Random (a track per short)')] %}
+          {% set on = (mc['default'] == key) or (key == 'none' and not mc['default']) %}
+          {% if on %}<span class="vc-pill ok"><i class="ri-check-line"></i>{{ label }}</span>
+          {% elif key == 'random' and not mc['items'] %}<span class="vc-pill">{{ label }}</span>
+          {% else %}<form method="post" action="{{ url_for('admin_clipper_music_action', track_id=key, action='default') }}?church={{ frames.church }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm" type="submit">{{ label }}</button></form>{% endif %}
+        {% endfor %}
+      </div>
+      <ul class="vc-tracks">
+        {% for t in mc['items'] %}
+        {% set src = url_for('admin_clipper_music_file', track_id=t.id) ~ '?church=' ~ frames.church %}
+        <li>
+          <div class="vc-track-head"><b>{{ t.name }}</b><small class="vc-muted">{{ clip_clock(t.seconds) }}</small>
+            {% if mc['default'] == t.id %}<span class="vc-pill ok"><i class="ri-check-line"></i>Default</span>
+            {% else %}<form method="post" action="{{ url_for('admin_clipper_music_action', track_id=t.id, action='default') }}?church={{ frames.church }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm" type="submit">Make default</button></form>{% endif %}
+            <form method="post" action="{{ url_for('admin_clipper_music_action', track_id=t.id, action='delete') }}?church={{ frames.church }}" data-confirm="Delete “{{ t.name }}”?"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm text-bad" type="submit" aria-label="Delete {{ t.name }}"><i class="ri-delete-bin-6-line"></i></button></form>
+          </div>
+          <audio preload="none" src="{{ src }}"></audio>
+          <form method="post" action="{{ url_for('admin_clipper_music_action', track_id=t.id, action='start') }}?church={{ frames.church }}" class="vc-seek" data-seconds="{{ t.seconds }}" data-start="{{ t.start or 0 }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="start" value="{{ clip_clock(t.start or 0) }}">
+            <div class="vc-wave" aria-hidden="true"><canvas></canvas><i class="vc-wave-play"></i><i class="vc-wave-start"></i></div>
+            <input type="range" class="vc-wave-range" min="0" max="{{ [t.seconds - 5, 0]|max }}" step="0.5" value="{{ t.start or 0 }}" aria-label="Where {{ t.name }} starts">
+            <div class="vc-inline">
+              <button type="button" class="btn btn-secondary btn-sm" data-play aria-label="Play from the start point"><i class="ri-play-fill"></i><span>Play from here</span></button>
+              <span class="text-[13px]">Starts at <b data-at>{{ clip_clock(t.start or 0) }}</b></span>
+              <span class="vc-muted text-[12px]" data-now></span>
+              <span class="flex-grow"></span>
+              <button type="submit" class="btn btn-primary btn-sm" data-save disabled>Save start</button>
+            </div>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </details>
+  <script>
+  (() => {
+    const box = document.getElementById('music'); if (!box) return;
+    const clock = (t) => { t = Math.max(0, Math.round(t)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+    box.querySelectorAll('form[data-confirm]').forEach((f) => f.addEventListener('submit', (e) => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));
+    // Each track: its waveform (drawn once the panel opens), a gold start marker to drag, and Play from here.
+    const tracks = [...box.querySelectorAll('.vc-tracks li')];
+    const draw = async (li) => {
+      const form = li.querySelector('.vc-seek'); const canvas = li.querySelector('canvas');
+      if (form.dataset.drawn) return; form.dataset.drawn = '1';
+      const w = canvas.clientWidth || 600, h = canvas.clientHeight || 56, dpr = window.devicePixelRatio || 1;
+      canvas.width = w * dpr; canvas.height = h * dpr;
+      const g = canvas.getContext('2d'); g.scale(dpr, dpr);
+      try {
+        const buf = await (await fetch(li.querySelector('audio').src, { credentials: 'same-origin' })).arrayBuffer();
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const audio = await ctx.decodeAudioData(buf); ctx.close();
+        const ch = audio.getChannelData(0), bars = Math.floor(w / 3), step = Math.floor(ch.length / bars);
+        g.fillStyle = '#b9b2a2';
+        for (let i = 0; i < bars; i++) {
+          let peak = 0; for (let j = i * step; j < (i + 1) * step; j += 64) peak = Math.max(peak, Math.abs(ch[j]));
+          const bh = Math.max(2, peak * h * 0.95); g.fillRect(i * 3, (h - bh) / 2, 2, bh);
+        }
+      } catch (e) { g.fillStyle = '#d8d3c6'; g.fillRect(0, h / 2 - 1, w, 2); }
+    };
+    box.addEventListener('toggle', () => { if (box.open) tracks.forEach(draw); });
+    if (box.open) tracks.forEach(draw);
+    tracks.forEach((li) => {
+      const a = li.querySelector('audio'), form = li.querySelector('.vc-seek'), range = form.querySelector('.vc-wave-range');
+      const total = Number(form.dataset.seconds) || 1, saved = Number(form.dataset.start) || 0;
+      const mark = form.querySelector('.vc-wave-start'), head = form.querySelector('.vc-wave-play');
+      const btn = form.querySelector('[data-play]'), save = form.querySelector('[data-save]');
+      const place = () => {
+        const t = Number(range.value);
+        mark.style.left = `${(t / total) * 100}%`;
+        form.querySelector('[data-at]').textContent = clock(t);
+        form.querySelector('[name=start]').value = clock(t);
+        save.disabled = Math.abs(t - saved) < 0.25;
+      };
+      const playFrom = () => { a.currentTime = Number(range.value); a.play().catch(() => {}); };
+      range.addEventListener('input', () => { place(); if (!a.paused) a.currentTime = Number(range.value); });
+      btn.addEventListener('click', () => { if (a.paused) playFrom(); else a.pause(); });
+      // Click on the waveform: move the start there and hear it.
+      form.querySelector('.vc-wave').addEventListener('click', (e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        range.value = Math.min(Number(range.max), Math.max(0, ((e.clientX - r.left) / r.width) * total)); place(); playFrom();
+      });
+      a.addEventListener('timeupdate', () => {
+        head.style.left = `${(a.currentTime / total) * 100}%`; head.hidden = false;
+        form.querySelector('[data-now]').textContent = a.paused ? '' : `playing ${clock(a.currentTime)}`;
+      });
+      a.addEventListener('play', () => { btn.querySelector('i').className = 'ri-pause-fill'; btn.querySelector('span').textContent = 'Pause'; });
+      a.addEventListener('pause', () => { btn.querySelector('i').className = 'ri-play-fill'; btn.querySelector('span').textContent = 'Play from here'; form.querySelector('[data-now]').textContent = ''; });
+      place();
+    });
+  })();
+  </script>
+  {% endif %}
+
+  {% if frames %}
+  {% set vc = frames.voices %}{% set cal = vc.calibration %}
+  {% set sp = vc.people|selectattr('role', 'equalto', 'senior')|first %}
+  <details class="vc-panel vc-yt" id="voices">
+    <summary><i class="ri-user-voice-line"></i><b>Whose messages are clipped</b>
+      <span class="vc-pill {{ 'ok' if vc.mode == 'senior' }}">{{ ('Only ' ~ (sp.name if sp else 'the senior pastor')) if vc.mode == 'senior' else 'All preachers' }}</span>
+      <span class="vc-muted vc-yt-why">Recognises the senior pastor by his voice, even next to pastors who preach like him.</span></summary>
+    <div class="vc-yt-body">
+      <p class="vc-muted">A voiceprint captures the sound of a voice itself (the throat, mouth and chest), not the preaching style, so a pastor who has learned the senior pastor's phrasing still sounds like himself to it. Add the senior pastor with two or more samples from different services; add the pastors who sound most like him too: each part of a sermon goes to whoever it is closest to.</p>
+
+      <form method="post" action="{{ url_for('admin_clipper_voices_mode') }}?church={{ frames.church }}" class="vc-choice" role="radiogroup" aria-label="Whose messages are clipped">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label><input type="radio" name="mode" value="all" {{ 'checked' if vc.mode != 'senior' }} onchange="this.form.submit()">All preachers<small>Every sermon in a video is clipped.</small></label>
+        <label><input type="radio" name="mode" value="senior" {{ 'checked' if vc.mode == 'senior' }} {{ 'disabled' if cal.accept is none }} onchange="this.form.submit()">Only the senior pastor<small>{{ 'Only the parts he preaches are clipped.' if cal.accept is not none else 'Add him and two voice samples first.' }}</small></label>
+      </form>
+
+      {% if sp %}
+      <div class="vc-alert {{ 'info' if cal.strength == 'strong' else 'bad' if cal.strength == 'missing' else 'info' }} vc-mt" role="status">
+        <i class="ri-shield-user-line"></i><span><b>Recognition: {{ {'strong': 'Strong', 'fair': 'Fair', 'missing': 'Not ready'}[cal.strength] }}.</b> {{ cal.note }}{% if cal.consistency is not none %} His samples agree at {{ (cal.consistency * 100)|round|int }}%{% if cal.closest_other is not none %}; the closest other pastor reaches {{ (cal.closest_other * 100)|round|int }}%{% endif %} (a part counts as his from {{ (cal.accept * 100)|round|int }}% and only when 10 points clearer than anyone else).{% endif %}</span>
+      </div>
+      {% endif %}
+
+      <ul class="vc-tracks">
+        {% for person in vc.people %}
+        <li>
+          <div class="vc-track-head">
+            <i class="{{ 'ri-vip-crown-2-line' if person.role == 'senior' else 'ri-user-line' }}"></i><b>{{ person.name }}</b>
+            <span class="vc-pill {{ 'gold' if person.role == 'senior' }}">{{ 'Senior pastor' if person.role == 'senior' else 'Another pastor' }}</span>
+            <small class="vc-muted">{{ person.samples|length }} sample{{ '' if person.samples|length == 1 else 's' }}</small>
+            <span class="flex-grow"></span>
+            <form method="post" action="{{ url_for('admin_clipper_voices_delete', person_id=person.id) }}?church={{ frames.church }}" data-confirm="Remove {{ person.name }} and his samples?"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm text-bad" type="submit" aria-label="Remove {{ person.name }}"><i class="ri-delete-bin-6-line"></i></button></form>
+          </div>
+          {% for smp in person.samples %}
+          <div class="vc-inline text-[12.5px]"><i class="ri-voiceprint-line"></i>{{ smp.label }} <span class="vc-muted">({{ smp.n }} voiceprints)</span>
+            <form method="post" action="{{ url_for('admin_clipper_voices_delete', person_id=person.id) }}?church={{ frames.church }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="sample" value="{{ smp.id }}"><button class="btn btn-ghost btn-sm" type="submit" aria-label="Remove this sample"><i class="ri-close-line"></i></button></form></div>
+          {% endfor %}
+          <form method="post" action="{{ url_for('admin_clipper_voices_sample', person_id=person.id) }}?church={{ frames.church }}" enctype="multipart/form-data" class="vc-inline" data-turbo="false">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {% if frames.audio_projects %}
+            <select name="project" aria-label="A video where {{ person.name }} preaches"><option value="">From a video…</option>{% for x in frames.audio_projects %}<option value="{{ x.id }}">{{ (x.title or 'Video')[:60] }}</option>{% endfor %}</select>
+            <input type="text" name="start" placeholder="from 50:00" style="width:7em" aria-label="From">
+            <input type="text" name="end" placeholder="to 52:00" style="width:7em" aria-label="To">
+            <span class="vc-muted text-[12px]">or</span>
+            {% endif %}
+            <input type="file" name="file" accept="audio/*,video/*" aria-label="Or a recording of {{ person.name }}">
+            <button type="submit" class="btn btn-secondary btn-sm"><i class="ri-add-line"></i>Add sample</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+
+      <form method="post" action="{{ url_for('admin_clipper_voices_person') }}?church={{ frames.church }}" class="vc-inline vc-mt">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="text" name="name" placeholder="Pastor's name" maxlength="80" required aria-label="Pastor's name">
+        <select name="role" aria-label="Who he is">{% if not sp %}<option value="senior">Senior pastor</option>{% endif %}<option value="other">Another pastor (sounds like him)</option></select>
+        <button type="submit" class="btn btn-primary btn-sm"><i class="ri-user-add-line"></i>Add</button>
+      </form>
+      <p class="vc-muted text-[12px]">Pick stretches of 1 to 3 minutes where only he speaks (no singing), from different services, rooms or microphones. The more varied, the steadier the recognition.</p>
+    </div>
+  </details>
+  <script>document.querySelectorAll('#voices form[data-confirm]').forEach((f) => f.addEventListener('submit', (e) => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));</script>
+  {% endif %}
+  </div>
+</div>
+<script>
+(() => {
+  const ctl = new AbortController(); const o = { signal: ctl.signal };
+  document.addEventListener('turbo:before-visit', () => ctl.abort(), { once: true });
+  const tabs = [...document.querySelectorAll('.vc-tabs [data-tab]')];
+  const show = () => {
+    const want = (location.hash || '').slice(1);
+    const id = tabs.some((t) => t.dataset.tab === want) ? want : (tabs[0] && tabs[0].dataset.tab);
+    document.querySelectorAll('.vc-tab-panels > details.vc-panel').forEach((d) => { d.hidden = d.id !== id; if (d.id === id) d.open = true; });
+    tabs.forEach((t) => t.setAttribute('aria-current', String(t.dataset.tab === id)));
+  };
+  window.addEventListener('hashchange', show, o);
+  show();
+})();
+</script>
+{% endblock %}
