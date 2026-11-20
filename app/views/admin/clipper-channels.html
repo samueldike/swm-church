@@ -23,7 +23,7 @@
   {% endif %}
 
   {% if not key_set %}
-    <div class="vc-alert info" role="note"><i class="ri-key-2-line"></i><span>Social publishing is not switched on yet. The HQ Administrator saves the Zernio API key under {{ 'Settings → Social publishing'|directions }}.</span></div>
+    <div class="vc-alert info" role="note"><i class="ri-key-2-line"></i><span>Posting to Facebook, TikTok, YouTube and Instagram is not switched on yet. The HQ Administrator turns it on in {{ 'Settings → Social publishing'|directions }}.</span></div>
   {% elif problem %}
     <div class="vc-alert bad" role="alert"><i class="ri-error-warning-line"></i><span>{{ problem|directions }}</span></div>
   {% endif %}

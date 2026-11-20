@@ -14,7 +14,7 @@
 {% block content %}
 <div class="vc">
 {% if not key_set and not (wa and wa.connected) %}
-  <div class="vc-alert info" role="note"><i class="ri-key-2-line"></i><span>Social publishing is not switched on yet. The HQ Administrator saves the Zernio API key under {{ 'Settings → Social publishing'|directions }}{% if not wa %}, and the church's WhatsApp can be connected under <a class="underline font-semibold" href="{{ url_for('admin_whatsapp') }}">WhatsApp</a>{% endif %}. Until then, use Download.</span></div>
+  <div class="vc-alert info" role="note"><i class="ri-key-2-line"></i><span>Posting to Facebook, TikTok, YouTube and Instagram is not switched on yet. The HQ Administrator turns it on in {{ 'Settings → Social publishing'|directions }}{% if not wa %}, and the church's WhatsApp can be connected under <a class="underline font-semibold" href="{{ url_for('admin_whatsapp') }}">WhatsApp</a>{% endif %}. Until then, use Download.</span></div>
 {% else %}
 {% if problem %}<div class="vc-alert bad" role="alert"><i class="ri-error-warning-line"></i><span>{{ problem|directions }}</span></div>{% endif %}
 <form method="post" class="vc-pub" id="vc-pub" data-turbo="false">
@@ -38,7 +38,7 @@
     <section class="vc-panel vc-section">
       <h2><i class="ri-share-forward-line"></i>Channels</h2>
       {% if not key_set %}
-        <p class="vc-muted text-[13px]">YouTube, TikTok, Instagram and the rest switch on when the HQ Administrator saves the Zernio key ({{ 'Settings → Social publishing'|directions }}).</p>
+        <p class="vc-muted text-[13px]">YouTube, TikTok, Instagram and the rest switch on once the HQ Administrator turns them on ({{ 'Settings → Social publishing'|directions }}).</p>
       {% elif accounts %}
       <div class="vc-targets">
         {% for a in accounts %}

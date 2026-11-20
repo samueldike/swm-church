@@ -1,0 +1,54 @@
+/* Admin usability layer (loaded after admin.css; plain CSS, no build step).
+   From the 2026-11 usability audit: lists read like Gmail/WhatsApp rows on phones, money always shows the ₦ sign,
+   the menu is grouped, and nothing runs off the screen. */
+
+/* ₦ and other currency signs: Figtree has no ₦, so a tiny Noto Sans subset (only those characters) follows it. */
+:root { --font-sans: "Figtree", "Noto Sans", ui-sans-serif, system-ui, -apple-system, sans-serif; }
+body, .font-sans, .font-mono { font-family: var(--font-sans); }
+
+/* ── Lists on phones: a card per record, title first, labels above values, nothing pushed off the edge ── */
+@media (max-width: 767px) {
+  .dtable-responsive, .dtable-responsive tbody { display: block; width: 100%; }
+  .dtable-responsive thead { display: none; }
+  .dtable-responsive tr {
+    display: block; margin: 0 0 10px; padding: 12px 14px;
+    border: 1px solid var(--color-line); border-radius: 12px; background: var(--color-surface);
+  }
+  .dtable-responsive tr:last-child { margin-bottom: 0; }
+  .dtable-responsive td {
+    display: block; padding: 0; border: 0; text-align: left; min-width: 0;
+    overflow-wrap: anywhere; font-size: 13.5px; line-height: 1.45;
+  }
+  .dtable-responsive td + td { margin-top: 8px; }
+  .dtable-responsive td[data-label]::before {
+    content: attr(data-label); display: block; margin: 0 0 1px;
+    font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--color-ink-3);
+    text-align: left;
+  }
+  /* The first cell is the record's name: big, no label. */
+  .dtable-responsive td:first-child { font-size: 15px; font-weight: 700; color: var(--color-ink); }
+  .dtable-responsive td:first-child::before { display: none !important; }
+  /* Buttons sit together at the bottom, no "Actions" label. */
+  .dtable-responsive td:last-child:has(a, button, form) { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--color-line); }
+  .dtable-responsive td:last-child:has(a, button, form)::before { display: none; }
+  .dtable-responsive td:last-child :is(.flex, div) { justify-content: flex-start !important; flex-wrap: wrap; }
+  /* Codes and references only matter on a big screen. */
+  .dtable-responsive td[data-mobile="hide"], .dtable-responsive td[data-label="Reference"], .dtable-responsive td[data-label="ID"] { display: none; }
+  .dtable-responsive td * { max-width: 100%; }
+
+  /* Stat strips and filter rows wrap instead of running off the screen. */
+  .stat-strip, .stats-row, [data-stats] { flex-wrap: wrap !important; overflow: visible !important; }
+  #admin-topbar p { display: none; }               /* the page heading below already says it */
+}
+
+/* Keep the sticky save bar on Settings solid so fields do not show through it. */
+.settings-savebar, [data-savebar] { background: var(--color-surface) !important; }
+
+/* Menu group headings (partials/admin-sidebar.html). */
+.nav-group-label { display: block; padding: 14px 12px 4px; font-size: 10.5px; font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--color-chrome-text, #8b867a); opacity: .85; }
+#admin-sidebar.is-rail .nav-group-label { visibility: hidden; height: 6px; padding: 4px 0 0; }
+
+/* The facts strip under a page heading: wraps on phones instead of running off the screen. */
+.page-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; padding: 8px 24px; }
+@media (max-width: 639px) { .page-stats { padding: 8px 16px; gap: 4px 14px; } }

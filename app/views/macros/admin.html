@@ -225,10 +225,13 @@
       </div>
       {% if actions %}<div class="flex items-center gap-2 flex-wrap">{{ actions|safe }}</div>{% endif %}
     </div>
+    {#- Only facts a person acts on: bookkeeping labels ("Records", "Scope", "Page 1/140"...) are dropped. -#}
+    {% set noise = ['Scope', 'Records', 'Page', 'Shown', 'On this page', 'Date', 'Role', 'Viewing', 'Showing'] %}
+    {% set audit = (audit or [])|rejectattr(0, 'in', noise)|list %}
     {% if audit %}
-      <div class="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-2 bg-sunken border-t border-line overflow-x-auto admin-scrollbar" tabindex="0" role="group" aria-label="Page details">
+      <div class="page-stats bg-sunken border-t border-line" role="group" aria-label="Page details">
         {% for label, value in audit %}
-          <div class="flex items-center gap-1.5 whitespace-nowrap {{ 'pl-3 sm:pl-4 border-l border-line' if not loop.first else '' }}">
+          <div class="flex items-center gap-1.5 whitespace-nowrap">
             <span class="mono-label">{{ label }}</span>
             <span class="font-mono text-[12px] font-medium text-ink-2">{{ value }}</span>
           </div>

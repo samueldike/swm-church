@@ -21,7 +21,9 @@ async def log_admin_action(
     ip_address = None
     user_agent = None
     if request:
-        ip_address = request.client.host if request.client else None
+        from app.core.client_ip import client_ip
+
+        ip_address = client_ip(request)        # the visitor's real address, not the proxy's (X-Real-IP / X-Forwarded-For)
         user_agent = request.headers.get("user-agent")
 
     log_entry = AdminAuditLog(

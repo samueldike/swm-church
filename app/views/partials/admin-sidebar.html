@@ -53,75 +53,90 @@
       {% if can('whatsapp') %}<div class="mb-2 px-1">{{ nav_item(url_for('admin_whatsapp'), 'ri-whatsapp-line', 'WhatsApp', 'admin.whatsapp') }}</div>{% endif %}
       {% if can('clipper') %}<div class="mb-2 px-1">{{ nav_item(url_for('admin_clipper'), 'ri-scissors-cut-line', 'Video Clipper', 'admin.clipper') }}</div>{% endif %}
     {% else %}
-      {#- Ordered by how often each is used: daily work first, then weekly, then occasional, then setup.
-          Spacing separates the groups (no headings). Every item keeps its own permission check. -#}
-
-      {# Daily #}
-      <div class="mb-1.5 px-1">
-        {% if can('dashboard') %}{{ nav_item(url_for('admin_dashboard'), 'ri-dashboard-3-line', 'Dashboard', 'admin.dashboard') }}{% endif %}
-        {% if can('whatsapp') %}{{ nav_item(url_for('admin_whatsapp'), 'ri-whatsapp-line', 'WhatsApp', 'admin.whatsapp') }}{% endif %}
-        {% if can('documents') %}{{ nav_item(url_for('admin_documents'), 'ri-folder-3-line', 'Documents', 'admin.documents', badges.documents, '{n} documents sent to you and not opened yet') }}{% endif %}
-        {% if can('audio') %}{{ nav_item(url_for('admin_messages'), 'ri-message-3-line', 'Audio Messages', 'admin.messages', badges.messages, '{n} draft messages not yet published') }}{% endif %}
-        {% if can('events') %}{{ nav_item(url_for('admin_events'), 'ri-calendar-event-line', 'Calendar', 'admin.events', badges.events, '{n} events in the next 7 days') }}{% endif %}
-        {% if can('members') %}{{ nav_item(url_for('admin_members'), 'ri-team-line', 'Members', 'admin.members', badges.members, '{n} joined in the last 7 days') }}{% endif %}
-        {% if can('prayer') %}{{ nav_item(url_for('admin_prayer_requests'), 'ri-hand-heart-line', 'Prayer Requests', 'admin.prayer-requests', badges.prayers, '{n} prayer requests waiting for a response') }}{% endif %}
-        {% if can('inquiries') %}{{ nav_item(url_for('admin_inquiries'), 'ri-question-answer-line', 'Inquiries', 'admin.inquiries', badges.inquiries, '{n} new inquiries not yet handled') }}{% endif %}
-      </div>
-
-      {# Weekly #}
-      <div class="mb-1.5 px-1">
-        {% if can('announcements.view') %}{{ nav_item(url_for('admin_announcements'), 'ri-megaphone-line', 'Announcements', 'admin.announcements') }}{% endif %}
-        {% if can('donations') %}{{ nav_item(url_for('admin_donations'), 'ri-hand-coin-line', 'Donations', 'admin.donations') }}{% endif %}
-        {% if can('reports') %}{{ nav_item(url_for('admin_unit_reports'), 'ri-file-chart-line', 'Unit Reports', 'admin.unit-reports', badges.unit_reports, '{n} department reports waiting for your comment') }}{% endif %}
-        {% if can('branch_reports') %}{{ nav_item(url_for('admin_branch_reports'), 'ri-file-list-3-line', ('Branch Reports' if admin.role in ['super_admin', 'hq_pastoral'] else 'Reports to HQ'), 'admin.branch-reports', badges.branch_reports, ('{n} reports waiting for HQ to acknowledge' if admin.role in ['super_admin', 'hq_pastoral'] else '{n}')) }}{% endif %}
-        {% if can('clipper') %}{{ nav_item(url_for('admin_clipper'), 'ri-scissors-cut-line', 'Video Clipper', 'admin.clipper') }}{% endif %}
-        {% if can('media') %}{{ nav_item(url_for('admin_blog'), 'ri-article-line', 'Blog', 'admin.blog') }}
-        {{ nav_item(url_for('admin_program_flyers'), 'ri-gallery-upload-line', 'Program Flyers', 'admin.program-flyers') }}{% endif %}
-        {% if can('audio') %}{{ nav_item(url_for('admin_transcriptions'), 'ri-file-text-line', 'Transcriptions', 'admin.transcriptions') }}{% endif %}
-      </div>
-
-      {# Occasional: website, people records, publishing, audience, money owed between churches #}
-      <div class="mb-1.5 px-1">
-        {% if can('media') %}{{ nav_item(url_for('admin_sliders'), 'ri-slideshow-3-line', 'Sliders', 'admin.sliders') }}
-        {{ nav_item(url_for('admin_photos'), 'ri-image-line', 'Photos', 'admin.photos') }}{% endif %}
-        {% if can('departments.view') %}{{ nav_item(url_for('admin_departments'), 'ri-building-2-line', 'Departments', 'admin.departments') }}{% endif %}
-        {% if can('ministers.view') %}{{ nav_item(url_for('admin_ministers'), 'ri-user-voice-line', 'Ministers', 'admin.ministers') }}{% endif %}
-        {% if can('hods') %}{{ nav_item(url_for('admin_hods'), 'ri-user-star-line', 'Department HODs', 'admin.hods') }}{% endif %}
-        {% if can('media') %}
-        {% set pub_open = active_page in ['admin.pub-devotionals', 'admin.pub-books'] %}
-        <details class="group" {{ 'open' if pub_open else '' }}>
-          <summary data-tip="Books Pub" class="nav-link cursor-pointer list-none [&::-webkit-details-marker]:hidden {{ 'nav-link-active' if pub_open else '' }}">
-            <i class="ri-book-open-line text-base w-5 text-center flex-shrink-0"></i>
-            <span class="flex-1 whitespace-nowrap rail-hide">Books Pub</span>
+      {#- Daily work is always visible; everything occasional folds into a few named groups that open on tap (the group
+          you are working in stays open). Plain names: no internal words. Every item keeps its own permission check. -#}
+      {% macro nav_group(key, icon, label, pages) -%}
+        {% set open_now = active_page in pages %}
+        <details class="group nav-group" data-group="{{ key }}" {{ 'open' if open_now else '' }}>
+          <summary data-tip="{{ label }}" class="nav-link cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+            <i class="{{ icon }} text-base w-5 text-center flex-shrink-0"></i>
+            <span class="flex-1 whitespace-nowrap rail-hide">{{ label }}</span>
             <i class="rail-hide ri-arrow-down-s-line text-base transition-transform group-open:rotate-180"></i>
           </summary>
-          <div class="ml-4 pl-2 border-l border-chrome-line mt-0.5 mb-1 rail-sub">
-            {{ nav_item(url_for('admin_pubs', kind='devotionals'), 'ri-sun-line', 'Daily Devotional', 'admin.pub-devotionals') }}
-            {{ nav_item(url_for('admin_pubs', kind='books'), 'ri-book-2-line', 'Book', 'admin.pub-books') }}
-          </div>
+          <div class="ml-4 pl-2 border-l border-chrome-line mt-0.5 mb-1 rail-sub">{{ caller() }}</div>
         </details>
-        {{ nav_item(url_for('admin_subscribers'), 'ri-mail-send-line', 'Subscribers', 'admin.subscribers') }}
-        {{ nav_item(url_for('admin_campaigns'), 'ri-mail-star-line', 'Email campaigns', 'admin.campaigns') }}
-        {% endif %}
-        {% if can('analytics') %}{{ nav_item(url_for('admin_analytics'), 'ri-bar-chart-2-line', 'Site traffic', 'admin.analytics') }}{% endif %}
-        {% if can('remittances') %}{{ nav_item(url_for('admin_remittances'), 'ri-exchange-funds-line', 'Remittances', 'admin.remittances') }}{% endif %}
+      {%- endmacro %}
+
+      <div class="mb-1.5 px-1">
+        {% if can('dashboard') %}{{ nav_item(url_for('admin_dashboard'), 'ri-home-5-line', 'Home', 'admin.dashboard') }}{% endif %}
+        {% if can('members') %}{{ nav_item(url_for('admin_members'), 'ri-team-line', 'Members', 'admin.members', badges.members, '{n} joined in the last 7 days') }}{% endif %}
+        {% if can('events') %}{{ nav_item(url_for('admin_events'), 'ri-calendar-event-line', 'Calendar', 'admin.events', badges.events, '{n} events in the next 7 days') }}{% endif %}
+        {% if can('audio') %}{{ nav_item(url_for('admin_messages'), 'ri-mic-line', 'Audio Messages', 'admin.messages', badges.messages, '{n} messages saved as drafts, not yet published') }}{% endif %}
+        {% if can('prayer') %}{{ nav_item(url_for('admin_prayer_requests'), 'ri-hand-heart-line', 'Prayer Requests', 'admin.prayer-requests', badges.prayers, '{n} prayer requests waiting for a response') }}{% endif %}
+        {% if can('inquiries') %}{{ nav_item(url_for('admin_inquiries'), 'ri-question-answer-line', 'Contact Messages', 'admin.inquiries', badges.inquiries, '{n} new messages from the website not yet answered') }}{% endif %}
+        {% if can('announcements.view') %}{{ nav_item(url_for('admin_announcements'), 'ri-megaphone-line', 'Announcements', 'admin.announcements') }}{% endif %}
+        {% if can('reports') %}{{ nav_item(url_for('admin_unit_reports'), 'ri-file-chart-line', 'Department Reports', 'admin.unit-reports', badges.unit_reports, '{n} department reports waiting for your comment') }}{% endif %}
+        {% if can('branch_reports') %}{{ nav_item(url_for('admin_branch_reports'), 'ri-file-list-3-line', ('Branch Reports' if admin.role in ['super_admin', 'hq_pastoral'] else 'Reports to HQ'), 'admin.branch-reports', badges.branch_reports, ('{n} branch reports waiting for HQ to acknowledge' if admin.role in ['super_admin', 'hq_pastoral'] else '{n}')) }}{% endif %}
+        {% if can('clipper') %}{{ nav_item(url_for('admin_clipper'), 'ri-scissors-cut-line', 'Video Clipper', 'admin.clipper') }}{% endif %}
+        {% if can('whatsapp') %}{{ nav_item(url_for('admin_whatsapp'), 'ri-whatsapp-line', 'WhatsApp', 'admin.whatsapp') }}{% endif %}
+        {% if can('documents') %}{{ nav_item(url_for('admin_documents'), 'ri-folder-3-line', 'Documents', 'admin.documents', badges.documents, '{n} documents sent to you and not opened yet') }}{% endif %}
       </div>
 
-      {# Setup and administration #}
       <div class="mb-1.5 px-1">
-        {% if can('system') %}{{ nav_item(url_for('admin_branches'), 'ri-map-pin-2-line', 'Branches', 'admin.branches') }}
-        {% elif can('branch.view') and admin_branch_id %}{{ nav_item(url_for('admin_branch', branch_id=admin_branch_id), 'ri-map-pin-2-line', 'My branch', 'admin.branches') }}{% endif %}
-        {% if can('branch_settings') and not can('system') %}{{ nav_item(url_for('admin_branch_settings'), 'ri-settings-3-line', 'Branch settings', 'admin.branch-settings') }}{% endif %}
-        {% if can('activity') and not can('system') %}{{ nav_item(url_for('admin_activity'), 'ri-history-line', 'Activity', 'admin.activity') }}{% endif %}
-        {% if can('system') %}
-        {{ nav_item(url_for('admin_telegram_archive'), 'ri-archive-drawer-line', 'Telegram archive', 'admin.telegram-archive') }}
-        {{ nav_item(url_for('admin_scentai_knowledge'), 'ri-magic-line', 'ScentAI knowledge', 'admin.settings.scentai') }}
-        {{ nav_item(url_for('admin_admins'), 'ri-shield-user-line', 'Admins & roles', 'admin.admins') }}
-        {{ nav_item(url_for('admin_settings'), 'ri-settings-4-line', 'Settings', 'admin.settings') }}
-        {{ nav_item(url_for('admin_data_check'), 'ri-shield-check-line', 'Data check', 'admin.data-check', badges.data_check, '{n} records need a value from the official lists') }}
-        {{ nav_item(url_for('admin_security_logs'), 'ri-shield-keyhole-line', 'Security Logs', 'admin.security-logs') }}
+        {% if can('donations') or can('remittances') %}
+          {% call nav_group('money', 'ri-hand-coin-line', 'Money', ['admin.donations', 'admin.remittances']) %}
+            {% if can('donations') %}{{ nav_item(url_for('admin_donations'), 'ri-hand-coin-line', 'Giving', 'admin.donations') }}{% endif %}
+            {% if can('remittances') %}{{ nav_item(url_for('admin_remittances'), 'ri-exchange-funds-line', 'Remittances', 'admin.remittances') }}{% endif %}
+          {% endcall %}
         {% endif %}
-        {% if can('harvest') %}{{ nav_item(url_for('admin_harvesttrack'), 'ri-seedling-line', 'HarvestTrack', 'admin.harvesttrack', tag='Coming soon') }}{% endif %}
+        {% if can('media') or can('analytics') %}
+          {% call nav_group('website', 'ri-global-line', 'Website', ['admin.sliders', 'admin.photos', 'admin.program-flyers', 'admin.blog', 'admin.analytics']) %}
+            {% if can('media') %}
+            {{ nav_item(url_for('admin_sliders'), 'ri-slideshow-3-line', 'Home page slides', 'admin.sliders') }}
+            {{ nav_item(url_for('admin_photos'), 'ri-image-line', 'Photos', 'admin.photos') }}
+            {{ nav_item(url_for('admin_program_flyers'), 'ri-gallery-upload-line', 'Event flyers', 'admin.program-flyers') }}
+            {{ nav_item(url_for('admin_blog'), 'ri-article-line', 'Blog', 'admin.blog') }}
+            {% endif %}
+            {% if can('analytics') %}{{ nav_item(url_for('admin_analytics'), 'ri-bar-chart-2-line', 'Visitors to the site', 'admin.analytics') }}{% endif %}
+          {% endcall %}
+        {% endif %}
+        {% if can('media') or can('audio') %}
+          {% call nav_group('publishing', 'ri-book-open-line', 'Publishing', ['admin.pub-devotionals', 'admin.pub-books', 'admin.transcriptions', 'admin.subscribers', 'admin.campaigns']) %}
+            {% if can('media') %}
+            {{ nav_item(url_for('admin_pubs', kind='devotionals'), 'ri-sun-line', 'Daily devotional', 'admin.pub-devotionals') }}
+            {{ nav_item(url_for('admin_pubs', kind='books'), 'ri-book-2-line', 'Books', 'admin.pub-books') }}
+            {% endif %}
+            {% if can('audio') %}{{ nav_item(url_for('admin_transcriptions'), 'ri-file-text-line', 'Message transcripts', 'admin.transcriptions') }}{% endif %}
+            {% if can('media') %}
+            {{ nav_item(url_for('admin_campaigns'), 'ri-mail-star-line', 'Email newsletters', 'admin.campaigns') }}
+            {{ nav_item(url_for('admin_subscribers'), 'ri-mail-send-line', 'Email subscribers', 'admin.subscribers') }}
+            {% endif %}
+          {% endcall %}
+        {% endif %}
+        {% if can('departments.view') or can('ministers.view') or can('hods') %}
+          {% call nav_group('records', 'ri-building-2-line', 'Church records', ['admin.departments', 'admin.ministers', 'admin.hods']) %}
+            {% if can('departments.view') %}{{ nav_item(url_for('admin_departments'), 'ri-building-2-line', 'Departments', 'admin.departments') }}{% endif %}
+            {% if can('ministers.view') %}{{ nav_item(url_for('admin_ministers'), 'ri-user-voice-line', 'Ministers', 'admin.ministers') }}{% endif %}
+            {% if can('hods') %}{{ nav_item(url_for('admin_hods'), 'ri-user-star-line', 'Department heads', 'admin.hods') }}{% endif %}
+          {% endcall %}
+        {% endif %}
+        {% set admin_pages = ['admin.branches', 'admin.branch-settings', 'admin.activity', 'admin.telegram-archive', 'admin.settings.scentai', 'admin.admins', 'admin.settings', 'admin.data-check', 'admin.security-logs'] %}
+        {% if can('system') or can('branch.view') or can('branch_settings') or can('activity') %}
+          {% call nav_group('admin', 'ri-settings-4-line', 'Administration', admin_pages) %}
+            {% if can('system') %}{{ nav_item(url_for('admin_settings'), 'ri-settings-4-line', 'Settings', 'admin.settings') }}
+            {{ nav_item(url_for('admin_admins'), 'ri-shield-user-line', 'Who can sign in', 'admin.admins') }}
+            {{ nav_item(url_for('admin_branches'), 'ri-map-pin-2-line', 'Branches', 'admin.branches') }}
+            {% elif can('branch.view') and admin_branch_id %}{{ nav_item(url_for('admin_branch', branch_id=admin_branch_id), 'ri-map-pin-2-line', 'My branch', 'admin.branches') }}{% endif %}
+            {% if can('branch_settings') and not can('system') %}{{ nav_item(url_for('admin_branch_settings'), 'ri-settings-3-line', 'Branch settings', 'admin.branch-settings') }}{% endif %}
+            {% if can('activity') and not can('system') %}{{ nav_item(url_for('admin_activity'), 'ri-history-line', 'Activity log', 'admin.activity') }}{% endif %}
+            {% if can('system') %}
+            {{ nav_item(url_for('admin_security_logs'), 'ri-history-line', 'Activity log', 'admin.security-logs') }}
+            {{ nav_item(url_for('admin_scentai_knowledge'), 'ri-chat-smile-2-line', 'Website chat (ScentAI)', 'admin.settings.scentai') }}
+            {{ nav_item(url_for('admin_telegram_archive'), 'ri-telegram-line', 'Import from Telegram', 'admin.telegram-archive') }}
+            {% if badges.data_check %}{{ nav_item(url_for('admin_data_check'), 'ri-tools-line', 'Fix old records', 'admin.data-check', badges.data_check, '{n} old records need a value from the official lists') }}{% endif %}
+            {% endif %}
+          {% endcall %}
+        {% endif %}
       </div>
     {% endif %}
   </nav>

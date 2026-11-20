@@ -76,7 +76,7 @@
           </div>
         </fieldset>
         <div class="vc-row">
-          <label class="vc-field">Shape<select name="format">{% for k, v in watch.formats.items() %}<option value="{{ k }}" {{ 'selected' if w.format == k }}>{{ v }}</option>{% endfor %}</select></label>
+          <label class="vc-field">Shape<select name="format">{% for k, v in watch.formats.items() %}<option value="{{ k }}" {{ 'selected' if w.format == k }}>{{ v.label if v is mapping else v }}</option>{% endfor %}</select></label>
           <label class="vc-field">Length<select name="length">{% for k, v in watch.lengths.items() %}<option value="{{ k }}" {{ 'selected' if w.length == k }}>{{ v[0] }} to {{ v[1] }} seconds</option>{% endfor %}</select></label>
           <label class="vc-field">Captions<select name="captions"><option value="none">None</option>{% for k, v in watch.captions.items() %}<option value="{{ k }}" {{ 'selected' if w.captions == k }}>{{ v }}</option>{% endfor %}</select></label>
         </div>

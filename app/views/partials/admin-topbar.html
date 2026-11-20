@@ -26,6 +26,7 @@
     </div>
 
     <div class="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
+      {% if active_page in ['admin.members', 'admin.dashboard'] and can('members') %}
       <form method="GET" action="{{ url_for('admin_members') }}" class="relative hidden md:block" data-no-loading>
         <i class="ri-search-line text-ink-3 text-sm absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
         <label for="admin-topbar-search" class="sr-only">Search members</label>
@@ -33,6 +34,7 @@
                value="{{ request.query_params.get('q', '') }}"
                class="pl-9 pr-3 py-1.5 bg-sunken border border-line rounded-full text-[13px] text-ink placeholder-ink-3 outline-none focus:border-gold focus:bg-surface w-44 lg:w-56 transition-colors font-mono"/>
       </form>
+      {% endif %}
 
       <button id="admin-theme-toggle" type="button" class="icon-btn relative" aria-label="Switch theme" aria-pressed="false">
         <i class="ri-sun-line text-base theme-light-icon"></i>

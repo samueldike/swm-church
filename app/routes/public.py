@@ -523,7 +523,7 @@ async def messages_ask(request: Request, question: str = Form(..., max_length=12
     from app.core import ai, throttle
     from app.models.sermon import Sermon
 
-    key = "message-ai:" + (request.client.host if request.client else "unknown")
+    key = "message-ai:" + __import__("app.core.client_ip", fromlist=["client_ip"]).client_ip(request)
     if throttle.is_blocked(key, limit=8, window=600):
         return JSONResponse({"error": "Please wait a few minutes before asking again."}, status_code=429)
     throttle.record_failure(key, window=600)
@@ -1797,7 +1797,7 @@ async def scentai_stream(request: Request, question: str = Form(..., max_length=
     from app.core.site_content import channels
     from app.models.sermon import Sermon
 
-    key = "scentai:" + (request.client.host if request.client else "unknown")
+    key = "scentai:" + __import__("app.core.client_ip", fromlist=["client_ip"]).client_ip(request)
     if throttle.is_blocked(key, limit=30, window=600):
         return JSONResponse({"error": "You have asked a lot in a short time. Please wait a few minutes and try again."}, status_code=429)
     throttle.record_failure(key, window=600)
@@ -1865,7 +1865,7 @@ async def scentai_feedback(request: Request, rating: str = Form(...), question: 
 
     if rating not in ("up", "down"):
         return JSONResponse({"error": "Unknown rating"}, status_code=400)
-    key = "scentai-fb:" + (request.client.host if request.client else "unknown")
+    key = "scentai-fb:" + __import__("app.core.client_ip", fromlist=["client_ip"]).client_ip(request)
     if throttle.is_blocked(key, limit=40, window=600):
         return JSONResponse({"ok": True})
     throttle.record_failure(key, window=600)

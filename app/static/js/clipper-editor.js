@@ -188,7 +188,7 @@
     $('ve-source-read').textContent = `Clips from ${clock(Math.min(...S.clips.map((c) => c.start)))} to ${clock(Math.max(...S.clips.map((c) => c.end)))} of ${clock(D)}. Click anywhere to read what is said there.`;
   }
   function drawInspector() {
-    $('ve-format').innerHTML = Object.entries(B.formats).map(([k2, v]) => `<button type="button" data-format="${esc(k2)}" aria-pressed="${k2 === S.format}">${esc(String(v).split(' ')[0])}</button>`).join('');
+    $('ve-format').innerHTML = Object.entries(B.formats).map(([k2, v]) => `<button type="button" data-format="${esc(k2)}" aria-pressed="${k2 === S.format}">${esc(String((v && v.label) || v).split(' ')[0])}</button>`).join('');
     const fr = $('ve-framing');
     if (!fr.options.length) fr.innerHTML = Object.entries(B.framings).map(([k2, v]) => `<option value="${esc(k2)}">${esc(v)}</option>`).join('');
     fr.value = S.framing; fr.disabled = S.frame_x !== null;
