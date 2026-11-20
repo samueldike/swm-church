@@ -107,6 +107,33 @@ def _directions(value):
 
 
 _env.filters["directions"] = _directions
+
+# Activity log: event codes in plain words ("auth.login.failed" -> "A sign-in failed").
+EVENT_WORDS = {
+    "auth.login.success": "Signed in", "auth.login.failed": "A sign-in failed (wrong password)",
+    "auth.logout": "Signed out", "auth.password.changed": "Changed a password", "auth.password.reset": "Reset a password",
+    "settings.update": "Changed settings", "settings.secrets_changed": "Changed a saved key in Settings",
+    "settings.telegram_large_files": "Changed Telegram large files", "whatsapp.connect": "Linked WhatsApp",
+    "whatsapp.disconnect": "Unlinked WhatsApp", "whatsapp.post": "Scheduled a WhatsApp post",
+    "document.view": "Opened a document", "document.upload": "Uploaded a document", "document.delete": "Deleted a document",
+    "clipper.create": "Started a video in the Video Clipper", "clipper.youtube_access": "Changed YouTube access",
+    "clipper.publish": "Published a short", "clipper.edit": "Edited a short", "minister.created": "Added a minister",
+    "minister.made_hod": "Made a minister a department head", "publication.create": "Started a publication",
+    "publication.update": "Edited a publication", "publication.build": "Built a publication", "publication.export": "Downloaded a publication",
+    "telegram_archive.scan": "Scanned the Telegram channel", "telegram_archive.download": "Downloaded from Telegram",
+    "telegram_archive.signed_in": "Signed in to Telegram for the import",
+}
+
+
+def _event_words(code) -> str:
+    code = str(code or "")
+    if code in EVENT_WORDS:
+        return EVENT_WORDS[code]
+    words = code.replace("_", " ").replace(".", " · ").strip()
+    return words[:1].upper() + words[1:]
+
+
+_env.filters["event_words"] = _event_words
 _env.filters["clock"] = _clock
 _env.filters["longdate"] = _longdate
 _env.filters["nl2br"] = _nl2br

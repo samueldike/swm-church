@@ -3199,7 +3199,8 @@ async def admin_unit_reports(request: Request, db: AsyncSession = Depends(get_db
             selectinload(UnitReport.department),
             selectinload(UnitReport.hod_admin),
         )
-        .order_by(UnitReport.created_at.desc())
+        # Newest month first ("2025-10" sorts as text); within a month, the latest submitted first.
+        .order_by(UnitReport.report_month.desc().nulls_last(), UnitReport.created_at.desc())
     )
     scope_filter = await _unit_report_scope_filter(admin, db)
     if scope_filter is not None:

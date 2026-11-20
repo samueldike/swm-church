@@ -19,16 +19,17 @@
 <div class="flex flex-col gap-4 sm:gap-5">
 
   {% if site_todo %}
-    <section class="panel" aria-label="Website checklist">
-      <div class="flex items-center justify-between mb-2">
-        <h2 class="text-[14px] font-semibold text-ink"><i class="ri-checkbox-multiple-line text-gold-text" aria-hidden="true"></i> {{ site_todo|length }} thing{{ '' if site_todo|length == 1 else 's' }} to finish on the public website</h2>
-        <a href="{{ url_for('admin_settings') }}#website" class="text-[13px] font-bold text-gold-text whitespace-nowrap flex-shrink-0">Open checklist &rarr;</a>
-      </div>
-      <ul class="flex flex-col gap-1.5">
+    {#- One line until opened: the day's work comes first. -#}
+    <details class="panel" aria-label="Website checklist">
+      <summary class="flex items-center justify-between gap-3 cursor-pointer list-none">
+        <span class="text-[14px] font-semibold text-ink"><i class="ri-checkbox-multiple-line text-gold-text" aria-hidden="true"></i> {{ site_todo|length }} thing{{ '' if site_todo|length == 1 else 's' }} to finish on the public website</span>
+        <a href="{{ url_for('admin_settings') }}#website" class="text-[13px] font-bold text-gold-text whitespace-nowrap flex-shrink-0">Finish them &rarr;</a>
+      </summary>
+      <ul class="flex flex-col gap-1.5 mt-2">
         {% for it in site_todo[:4] %}<li class="text-[12.5px] text-ink-2"><i class="ri-error-warning-line text-warn" aria-hidden="true"></i> {{ it.label }}</li>{% endfor %}
         {% if site_todo|length > 4 %}<li class="text-[12px] text-ink-3">and {{ site_todo|length - 4 }} more…</li>{% endif %}
       </ul>
-    </section>
+    </details>
   {% endif %}
 
   {% if announcements %}

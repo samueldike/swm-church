@@ -6,7 +6,7 @@
 {% block topbar_icon %}ri-file-chart-line{% endblock %}
 
 {% block page_header %}
-  {{ page_header("Unit reports", ("Monthly reports from HQ's own heads of department. A branch's department reports go to that branch's admin; HQ receives each branch admin's Branch Report instead." if can('system') or admin.role == 'hq_pastoral' else "Monthly reports submitted by your heads of department"),
+  {{ page_header("Department reports", ("Monthly reports from HQ's heads of department." if can('system') or admin.role == 'hq_pastoral' else "Monthly reports from your heads of department."),
       audit=[('Reports', reports|length), ('Awaiting review', reports|selectattr('status', 'equalto', 'submitted')|list|length), ('Reviewed', reports|selectattr('status', 'equalto', 'reviewed')|list|length)]) }}
 {% endblock %}
 

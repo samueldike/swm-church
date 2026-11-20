@@ -52,3 +52,10 @@ body, .font-sans, .font-mono { font-family: var(--font-sans); }
 /* The facts strip under a page heading: wraps on phones instead of running off the screen. */
 .page-stats { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; padding: 8px 24px; }
 @media (max-width: 639px) { .page-stats { padding: 8px 16px; gap: 4px 14px; } }
+
+/* Settings on phones and tablets: every section visible as a button (like a phone's Settings list), not a hidden scroll row. */
+@media (max-width: 1023px) {
+  #settings-tabs { display: grid !important; grid-template-columns: 1fr 1fr; gap: 6px; overflow: visible !important; padding-bottom: 4px; }
+  #settings-tabs .settings-tab { white-space: normal; border: 1px solid var(--color-line) !important; background: var(--color-surface); min-height: 44px; }
+  #settings-tabs .settings-tab[aria-selected="true"] { border-color: var(--color-gold) !important; background: var(--color-gold-tint, #fbf3dc); }
+}

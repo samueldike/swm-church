@@ -6,7 +6,7 @@
 {% block topbar_icon %}ri-shield-user-line{% endblock %}
 
 {% block page_header %}
-  {{ page_header("Administrators", "Console access, roles and branch scope",
+  {{ page_header("Who can sign in", "Everyone who can use this admin area, and what each can do.",
       actions='<a href="' ~ url_for('admin_admins_create_page') ~ '" class="btn btn-primary"><i class="ri-add-line"></i>Add administrator</a>',
       audit=[('Accounts', admins|length), ('Super admins', admins|selectattr('role', 'equalto', 'super_admin')|list|length)]) }}
 {% endblock %}
