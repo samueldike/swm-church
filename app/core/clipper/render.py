@@ -162,7 +162,7 @@ def zoom_filter(z0: float, z1: float, d: float, ow: int, oh: int) -> str:
         u = f"min(1,t/{max(0.05, d):.3f})"
         z = f"({z0:.3f}+{z1 - z0:.3f}*{u}*{u}*(3-2*{u}))"
     return (f",scale=w='trunc({ow}*{z}/2)*2':h='trunc({oh}*{z}/2)*2':eval=frame:flags=bicubic,"
-            f"crop={ow}:{oh}:'(iw-{ow})/2':'(ih-{oh})*0.42'")
+            f"crop={ow}:{oh}:'(iw-{ow})/2':'(ih-{oh})*0.42',setsar=1")
 
 
 # Finishing touches, each only where it earns its place (shake, glitch and the like are never used on preaching).
