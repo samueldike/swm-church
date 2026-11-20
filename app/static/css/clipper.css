@@ -119,11 +119,11 @@
 .vc-caption textarea { width: 100% !important; min-height: 74px; font-size: 12.5px; line-height: 1.45; padding: 8px 10px; resize: vertical; }
 .vc-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .vc-actions .btn { flex: 0 0 auto; }
-.vc-short details { border-top: 1px solid var(--vc-line); padding-top: 8px; }
-.vc-short summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--vc-ink2); list-style: none; display: flex; align-items: center; gap: 6px; }
-.vc-short summary::-webkit-details-marker { display: none; }
-.vc-short summary::after { content: "\203A"; margin-left: auto; transition: transform .15s; font-size: 16px; }
-.vc-short details[open] summary::after { transform: rotate(90deg); }
+.vc-short details.vc-tools { border-top: 1px solid var(--vc-line); padding-top: 8px; }
+.vc-short .vc-tools > summary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--vc-ink2); list-style: none; display: flex; align-items: center; gap: 6px; }
+.vc-short details > summary::-webkit-details-marker { display: none; }
+.vc-short .vc-tools > summary::after { content: "\203A"; margin-left: auto; transition: transform .15s; font-size: 16px; }
+.vc-short .vc-tools[open] > summary::after { transform: rotate(90deg); }
 .vc-transcript { font-size: 12.5px; line-height: 1.55; color: var(--vc-ink2); max-height: 180px; overflow: auto; margin-top: 8px; }
 .vc-recut { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 .vc-recut label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--vc-ink2); }
@@ -403,3 +403,48 @@
 .vc-capchips .vc-capchip-new { display: inline-flex; align-items: center; justify-content: center; width: 78px; min-height: 56px;
   border: 1px dashed var(--line, #ccc); border-radius: 10px; font: 700 10.5px/1.2 var(--font-sans, inherit); color: var(--ink-2, #555); text-align: center; text-decoration: none; }
 .vc-capchips .vc-capchip-new:hover { border-color: #f0c837; color: inherit; }
+
+/* ── Short card v2: calm and familiar (title, one reason line, captions row, one action row, one Customise panel) ── */
+.vc-short { display: flex; flex-direction: column; }
+.vc-short-body { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 14px; }
+.vc-short .vc-title { font-size: 15px; font-weight: 800; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; border-radius: 6px; }
+.vc-short .vc-title:focus { -webkit-line-clamp: unset; display: block; outline: 2px solid var(--vc-gold, #f0c837); outline-offset: 2px; }
+.vc-short .vc-why { font-size: 12.5px; font-weight: 600; color: var(--vc-ink-2, #555); }
+.vc-short .vc-why span { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.vc-short .vc-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--vc-muted, #777); }
+.vc-short .vc-meta i { margin-right: 3px; }
+.vc-short .vc-fav { color: #b8860b; font-weight: 700; }
+
+.vc-capline { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 12px; background: var(--vc-sunken, #f5f3ee); }
+.vc-pop { position: relative; }
+.vc-pop > summary { list-style: none; display: inline-flex; align-items: center; gap: 4px; min-height: 34px; padding: 4px 10px; border-radius: 999px;
+  border: 1px solid var(--vc-line, #ddd); background: var(--vc-surface, #fff); font: 700 12.5px/1 var(--font-sans, inherit); cursor: pointer; max-width: 150px; }
+.vc-pop > summary span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vc-pop > summary::-webkit-details-marker { display: none; }
+.vc-pop[data-off] > summary { opacity: .5; }
+.vc-pop-panel { position: absolute; z-index: 30; right: 0; top: calc(100% + 6px); width: 290px; max-width: 80vw; padding: 10px; border-radius: 14px;
+  background: var(--vc-surface, #fff); border: 1px solid var(--vc-line, #ddd); box-shadow: 0 14px 40px rgba(0,0,0,.18); }
+.vc-pop-head { display: flex; flex-direction: column; margin-bottom: 8px; font-size: 13px; }
+.vc-pop-head .vc-muted { font-size: 11.5px; }
+.vc-pop-panel .vc-capchips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.vc-pop-panel .vc-capchips button.vc-capchip, .vc-pop-panel .vc-capchip-new { width: auto; }
+
+.vc-actbar { display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center; }
+.vc-actbar .vc-act-main { justify-content: center; min-height: 40px; }
+.vc-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px;
+  border: 1px solid var(--vc-line, #ddd); background: var(--vc-surface, #fff); color: var(--vc-ink, #222); font-size: 18px; cursor: pointer; list-style: none; }
+.vc-icon-btn:hover { border-color: var(--vc-gold, #f0c837); }
+.vc-actbar .vc-more > summary::-webkit-details-marker { display: none; }
+
+.vc-tools { border-top: 1px solid var(--vc-line, #e7e4dc); padding-top: 8px; }
+.vc-tools > summary { list-style: none; display: flex; align-items: baseline; gap: 6px; cursor: pointer; font-weight: 700; font-size: 13.5px; padding: 4px 0; }
+.vc-tools > summary::-webkit-details-marker { display: none; }
+.vc-tools > summary small { font-weight: 500; color: var(--vc-muted, #888); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vc-tools > summary::after { content: "\203A"; margin-left: auto; color: var(--vc-muted, #888); transition: transform .15s; }
+.vc-tools[open] > summary::after { transform: rotate(90deg); }
+.vc-tabs-mini { display: flex; gap: 4px; margin: 8px 0 10px; padding: 3px; border-radius: 10px; background: var(--vc-sunken, #f3f1ec); }
+.vc-tabs-mini button { flex: 1; padding: 6px 4px; border: 0; border-radius: 8px; background: none; font: 700 11.5px/1.1 var(--font-sans, inherit); color: var(--vc-ink-2, #555); cursor: pointer; }
+.vc-tabs-mini button[aria-selected="true"] { background: var(--vc-surface, #fff); color: var(--vc-ink, #111); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.vc-pane .vc-transcript { max-height: 220px; overflow: auto; font-size: 13px; line-height: 1.5; }
+.vc-pane .vc-value { margin-bottom: 8px; }
+.vc-pane .vc-fx { margin-top: 8px; }

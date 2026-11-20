@@ -160,6 +160,7 @@
     const sortBar = document.getElementById('vc-sortbar'), sortSel = document.getElementById('vc-sort');
     const sortNote = document.getElementById('vc-sort-note');
     let sortBy = 'best', ranks = {}, rankedCount = 0;
+    const cardTabs = {};      // short id -> open tab in its Customise panel
     try { sortBy = localStorage.getItem('vc-sort') || 'best'; } catch (e) { /* private window */ }
     if (sortSel) {
       sortSel.value = sortBy;
@@ -206,24 +207,33 @@
       const badges = `<div class="vc-badges">${s.score != null
         ? `<span class="vc-pill gold vc-rank ${r === 1 ? 'first' : ''}" title="${esc(`Ranked ${r} of ${rankedCount} by how valuable and shareable it is. Score ${s.score} of 100.${s.why ? ' ' + s.why : ''}`)}">#${r} · ${esc(tier)} ${s.score}</span>`
         : (s.origin === 'manual' ? '<span class="vc-pill gold">Your clip</span>' : '<span></span>')}${s.length ? `<span class="vc-pill gold">${Math.round(s.length)} s</span>` : ''}</div>`;
+      const capName = (capStyles[s.caption_style] || {}).label || 'Pop';
+      const tab = cardTabs[s.id] || 'look';
+      const pane = (id, html) => `<div class="vc-pane" data-pane="${id}" ${tab === id ? '' : 'hidden'}>${html}</div>`;
       return `<article class="vc-panel vc-short ${s.starred ? 'starred' : ''}" data-sid="${s.id}">
         <div class="vc-player ${esc(fmt)}">${media}${badges}</div>
         <div class="vc-short-body">
-          <div class="vc-title" contenteditable="true" spellcheck="true" role="textbox" aria-label="Title" data-field="title">${esc(s.title)}</div>
+          <div class="vc-title" contenteditable="true" spellcheck="true" role="textbox" aria-label="Title (click to change)" data-field="title">${esc(s.title)}</div>
           ${s.why ? `<div class="vc-why" title="Why it ranks here"><i class="ri-fire-line"></i><span>${esc(s.why)}</span></div>` : ''}
-          ${s.value ? `<div class="vc-value"><i class="ri-lightbulb-flash-line"></i><span>${esc(s.value)}</span></div>` : ''}
-          ${s.effects && s.effects.length ? `<div class="vc-fx" title="Effects the editor chose for this short"><i class="ri-magic-line"></i><span>${esc(s.effects.join(' · '))}</span></div>` : ''}
-          <div class="vc-meta"><span>${esc(s.from)}–${esc(s.to)}</span>${s.pieces > 1 ? `<span>${s.pieces} parts joined</span>` : ''}${s.cold_open ? '<span>opens with a teaser</span>' : ''}</div>
-          <div class="vc-capbar">
+          <div class="vc-meta"><span><i class="ri-time-line"></i>${esc(s.from)}–${esc(s.to)}</span>${s.pieces > 1 ? `<span>${s.pieces} parts</span>` : ''}${s.cold_open ? '<span>teaser first</span>' : ''}${s.starred ? '<span class="vc-fav"><i class="ri-star-fill"></i>Favourite</span>' : ''}</div>
+
+          <div class="vc-capline">
             <label class="vc-switch" title="${s.words ? 'Show captions on this short (preview, download and post)' : 'Re-cut this short once to add captions'}"><input type="checkbox" data-cap-on ${s.captions_on ? 'checked' : ''} ${s.words ? '' : 'disabled'}><span aria-hidden="true"></span><b>Captions</b></label>
-            <div class="vc-capchips" role="group" aria-label="Caption design (point at one to see it on the video)" aria-disabled="${!s.captions_on}">${Object.entries(capStyles).map(([k, v]) =>
-              window.SwmCaptions ? window.SwmCaptions.chip(k, v, k === s.caption_style) : `<button type="button" data-cap="${esc(k)}" aria-pressed="${k === s.caption_style}" title="${esc(v.hint)}">${esc(v.label)}</button>`).join('')}<a class="vc-capchip-new" href="/admin/clipper/captions" title="Make your own caption design in Caption Studio">+ New design</a></div>
+            <details class="vc-pop" ${s.captions_on ? '' : 'data-off'}>
+              <summary aria-label="Caption design"><span data-cap-name>${esc(capName)}</span><i class="ri-arrow-down-s-line"></i></summary>
+              <div class="vc-pop-panel">
+                <div class="vc-pop-head"><b>Caption design</b><span class="vc-muted">Point at one to see it on the video</span></div>
+                <div class="vc-capchips" role="group" aria-label="Caption design" aria-disabled="${!s.captions_on}">${Object.entries(capStyles).map(([k, v]) =>
+                  window.SwmCaptions ? window.SwmCaptions.chip(k, v, k === s.caption_style) : `<button type="button" data-cap="${esc(k)}" aria-pressed="${k === s.caption_style}" title="${esc(v.hint)}">${esc(v.label)}</button>`).join('')}<a class="vc-capchip-new" href="/admin/clipper/captions" title="Make your own caption design in Caption Studio">+ New design</a></div>
+              </div>
+            </details>
           </div>
-          <div class="vc-actions">
-            ${s.video ? `<a class="btn btn-primary btn-sm" href="${esc(base)}/shorts/${s.id}/publish"><i class="ri-send-plane-line"></i>Publish</a>` : ''}
-            ${s.video && !data.source_gone ? `<a class="btn btn-secondary btn-sm" href="${esc(base)}/shorts/${s.id}/edit"><i class="ri-film-line"></i>Edit</a>` : ''}
-            ${s.download ? `<a class="btn btn-secondary btn-sm" href="${esc(s.download)}" data-turbo="false" download data-dl><i class="ri-download-2-line"></i>Download</a>` : ''}
-            <details class="vc-more"><summary class="btn btn-ghost btn-sm" aria-label="More actions"><i class="ri-more-2-fill"></i>More</summary>
+
+          <div class="vc-actbar">
+            ${s.video ? `<a class="btn btn-primary btn-sm vc-act-main" href="${esc(base)}/shorts/${s.id}/publish"><i class="ri-send-plane-line"></i>Publish</a>` : '<span class="vc-act-main"></span>'}
+            ${s.download ? `<a class="vc-icon-btn" href="${esc(s.download)}" data-turbo="false" download data-dl title="Download" aria-label="Download"><i class="ri-download-2-line"></i></a>` : ''}
+            ${s.video && !data.source_gone ? `<a class="vc-icon-btn" href="${esc(base)}/shorts/${s.id}/edit" title="Edit in the editor" aria-label="Edit"><i class="ri-scissors-cut-line"></i></a>` : ''}
+            <details class="vc-more"><summary class="vc-icon-btn" title="More" aria-label="More actions"><i class="ri-more-2-fill"></i></summary>
               <div class="vc-more-menu" role="menu">
                 <button type="button" role="menuitem" data-act="copy"><i class="ri-file-copy-line"></i>Copy post caption</button>
                 ${s.srt ? `<a role="menuitem" href="${esc(s.srt)}" data-turbo="false"><i class="ri-closed-captioning-line"></i>Caption file (.srt)</a>` : ''}
@@ -233,13 +243,18 @@
             </details>
           </div>
           ${postsHtml(s)}
-          <details><summary><i class="ri-chat-quote-line"></i>Post caption</summary>
-            <div class="vc-caption"><textarea data-field="caption" data-richtext="off" rows="5" aria-label="Post caption" placeholder="Post caption and hashtags">${esc(s.caption)}</textarea></div></details>
-          ${s.video ? `<details><summary><i class="ri-palette-line"></i>Watermark, frame, music and outro</summary>
-            <div class="vc-look">${markSelect(s)}${frameSelect(s)}${musicSelect(s)}${outroSelect(s)}</div></details>` : ''}
-          <details><summary><i class="ri-text"></i>What is said</summary><div class="vc-transcript">${esc(s.transcript)}</div></details>
-          ${data.source_gone ? '' : `<details><summary><i class="ri-equalizer-line"></i>Adjust and re-cut</summary>
-            <form class="vc-recut" data-recut>
+
+          <details class="vc-tools"><summary><i class="ri-equalizer-line"></i><span>Customise</span><small>look, post text, what is said, re-cut</small></summary>
+            <div class="vc-tabs-mini" role="tablist">
+              ${[['look', 'Look'], ['text', 'Post text'], ['said', 'What is said'], ...(data.source_gone ? [] : [['recut', 'Re-cut']])].map(([id, label]) =>
+                `<button type="button" role="tab" data-tab="${id}" aria-selected="${tab === id}">${label}</button>`).join('')}
+            </div>
+            ${pane('look', s.video ? `<div class="vc-look">${markSelect(s)}${frameSelect(s)}${musicSelect(s)}${outroSelect(s)}</div>
+              ${s.effects && s.effects.length ? `<div class="vc-fx" title="Effects the editor chose for this short"><i class="ri-magic-line"></i><span>${esc(s.effects.join(' · '))}</span></div>` : ''}` : '<p class="vc-muted">Available once the short is cut.</p>')}
+            ${pane('text', `<div class="vc-caption"><textarea data-field="caption" data-richtext="off" rows="5" aria-label="Post caption" placeholder="Post caption and hashtags">${esc(s.caption)}</textarea></div>
+              <p class="vc-muted text-[12px]">Used when you publish. Saved when you click away.</p>`)}
+            ${pane('said', `${s.value ? `<div class="vc-value"><i class="ri-lightbulb-flash-line"></i><span>${esc(s.value)}</span></div>` : ''}<div class="vc-transcript">${esc(s.transcript)}</div>`)}
+            ${data.source_gone ? '' : pane('recut', `<form class="vc-recut" data-recut>
               <label>Shape ${select('format', opts.formats, s.format)}</label>
               <label>Framing ${select('framing', opts.framings, s.framing)}</label>
               <label>Quality ${select('quality', opts.qualities, s.quality)}</label>
@@ -254,7 +269,8 @@
               <input type="hidden" name="nudge_start" value="${s.nudge_start}"><input type="hidden" name="nudge_end" value="${s.nudge_end}">
               <div class="wide"><button type="submit" class="btn btn-secondary btn-sm"><i class="ri-refresh-line"></i>Re-cut this short</button>
               <span class="vc-muted text-[12px]">Start and end move by whole words.</span></div>
-            </form></details>`}
+            </form>`)}
+          </details>
         </div>
       </article>`;
     }
@@ -263,7 +279,7 @@
     function drawShorts(force) {
       const busyEl = document.activeElement && grid.contains(document.activeElement);
       const playing = [...grid.querySelectorAll('video')].some((v) => !v.paused);
-      const openDetails = new Set([...grid.querySelectorAll('details[open]')].map((d) => `${d.closest('[data-sid]').dataset.sid}:${[...d.parentNode.querySelectorAll(':scope > details')].indexOf(d)}`));
+      const openDetails = new Set([...grid.querySelectorAll('details.vc-tools[open]')].map((d) => `${d.closest('[data-sid]').dataset.sid}:${d.className}`));
       const keyNow = JSON.stringify([sortBy, data.shorts.map((s) => [s.id, s.status, s.video, s.starred, s.score, s.watermark, (s.posts || []).map((x) => x.status).join()])]);
       if (grid.dataset.key === keyNow && grid.children.length) return;
       if (!force && (busyEl || playing) && grid.children.length) return;   // redraw later
@@ -285,7 +301,7 @@
       grid.innerHTML = sorted.length ? sorted.map(card).join('') :
         (data.busy ? '' : '<div class="vc-panel vc-empty" style="grid-column:1/-1"><i class="ri ri-film-line"></i><h2>No shorts yet</h2><p>Use “Find more shorts” or clip a stretch by its times.</p></div>');
       grid.querySelectorAll('details').forEach((d) => {
-        const key = `${d.closest('[data-sid]').dataset.sid}:${[...d.parentNode.querySelectorAll(':scope > details')].indexOf(d)}`;
+        const key = `${d.closest('[data-sid]').dataset.sid}:${d.className}`;
         if (openDetails.has(key)) d.open = true;
       });
       Object.keys(capLayers).forEach((k) => { capLayers[k].destroy(); delete capLayers[k]; });
@@ -321,6 +337,8 @@
       cardEl.querySelector('[data-cap-on]').checked = !!s.captions_on;
       cardEl.querySelector('.vc-capchips').setAttribute('aria-disabled', String(!s.captions_on));
       cardEl.querySelectorAll('[data-cap]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cap === s.caption_style)));
+      const nm = cardEl.querySelector('[data-cap-name]'); if (nm) nm.textContent = (capStyles[s.caption_style] || {}).label || '';
+      const pop = cardEl.querySelector('.vc-pop'); if (pop) pop.toggleAttribute('data-off', !s.captions_on);
       const dl = cardEl.querySelector('[data-dl]');
       if (dl && s.download) dl.href = s.download;
       captionsOn(s);
@@ -399,7 +417,7 @@
       if (await save(sid, { [el.dataset.field]: value })) toast('Saved');
     }, opt);
     document.addEventListener('click', (e) => {
-      document.querySelectorAll('.vc-more[open]').forEach((m) => { if (!m.contains(e.target)) m.open = false; });
+      document.querySelectorAll('.vc-more[open], .vc-pop[open]').forEach((m) => { if (!m.contains(e.target)) m.open = false; });
     }, opt);
     grid.addEventListener('change', async (e) => {
       const msel = e.target.closest('[data-music]');
@@ -458,8 +476,17 @@
       }
       const menu = e.target.closest('.vc-more');
       if (menu && e.target.closest('[data-act]')) menu.open = false;
+      const tabBtn = e.target.closest('.vc-tabs-mini [data-tab]');
+      if (tabBtn) {
+        const cardEl = tabBtn.closest('[data-sid]');
+        cardTabs[cardEl.dataset.sid] = tabBtn.dataset.tab;
+        cardEl.querySelectorAll('.vc-tabs-mini [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b === tabBtn)));
+        cardEl.querySelectorAll('.vc-pane').forEach((pn) => { pn.hidden = pn.dataset.pane !== tabBtn.dataset.tab; });
+        return;
+      }
       const chip = e.target.closest('[data-cap]');
       if (chip) {
+        const pop = chip.closest('.vc-pop'); if (pop) pop.open = false;
         const sid = chip.closest('[data-sid]').dataset.sid;
         const r = await save(sid, { caption_style: chip.dataset.cap, captions_on: '1' });
         if (r) { syncCaptionControls(r.short); toast(`Captions: ${capStyles[chip.dataset.cap]?.label || ''}`); }
