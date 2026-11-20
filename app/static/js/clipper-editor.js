@@ -26,7 +26,7 @@
   let S = {
     clips: B.edit.clips.map((c) => ({ start: +c.start, end: +c.end })), tighten: B.edit.tighten !== false,
     frame_x: B.edit.frame_x ?? null, format: B.format, framing: B.framing, title: B.title,
-    captions_on: B.captions_on, caption_style: B.caption_style, frame: B.frame || 'default', outro: B.outro || 'default', music: B.music || 'default',
+    captions_on: B.captions_on, caption_style: B.caption_style, frame: B.frame || 'default', watermark: B.watermark || 'default', outro: B.outro || 'default', music: B.music || 'default',
     flashes: B.flashes !== false, zooms: B.zooms !== false, touches: B.touches !== false,
   };
   const saved = JSON.stringify(S);
@@ -220,6 +220,19 @@
     $('ve-outro').innerHTML = [['default', `Default${odef ? ` (${odef.name}, ${odef.seconds} s)` : ' (none)'}`], ['none', 'No outro'],
       ...(B.outros || []).map((x) => [x.id, `${x.name} (${x.seconds} s)`])]
       .map(([v, l]) => `<option value="${esc(v)}" ${v === S.outro ? 'selected' : ''}>${esc(l)}</option>`).join('');
+    // Watermark: the church default unless chosen; drawn where the render puts it.
+    const ML = B.marks || { items: [] };
+    const wdef = ML.items.find((m) => m.id === ML.default);
+    $('ve-watermark').innerHTML = [['default', `Default (${wdef ? wdef.name : 'none'})`], ['none', 'No watermark'], ...ML.items.map((m) => [m.id, m.name])]
+      .map(([v, l]) => `<option value="${esc(v)}" ${v === (S.watermark || 'default') ? 'selected' : ''}>${esc(l)}</option>`).join('');
+    const mark = S.watermark === 'none' ? null : (ML.items.find((m) => m.id === S.watermark) || wdef);
+    const wovl = $('ve-wm-ovl');
+    wovl.hidden = !mark;
+    if (mark) {
+      if (wovl.getAttribute('src') !== mark.url) wovl.src = mark.url;
+      wovl.className = `vc-wm-ovl ${ML.position} ${ML.tone === 'white' ? 'white' : ''}`;
+      wovl.style.width = `${ML.size}%`; wovl.style.opacity = ML.opacity / 100;
+    }
     const ovl = $('ve-frame-ovl');
     ovl.hidden = !shown;
     if (shown && ovl.getAttribute('src') !== shown.url) ovl.src = shown.url;
@@ -371,6 +384,7 @@
   $('ve-music').addEventListener('change', (e) => commit(() => { S.music = e.target.value; }, ''), o);
   $('ve-outro').addEventListener('change', (e) => commit(() => { S.outro = e.target.value; }, ''), o);
   $('ve-frame').addEventListener('change', (e) => commit(() => { S.frame = e.target.value; }, ''), o);
+  $('ve-watermark').addEventListener('change', (e) => commit(() => { S.watermark = e.target.value; }, ''), o);
   $('ve-tighten').addEventListener('change', (e) => commit(() => { S.tighten = e.target.checked; }, e.target.checked ? 'Pauses removed' : 'Pauses kept'), o);
   $('ve-cap-on').addEventListener('change', (e) => commit(() => { S.captions_on = e.target.checked; }, ''), o);
   $('ve-title').addEventListener('change', (e) => { S.title = e.target.value; changed(''); }, o);

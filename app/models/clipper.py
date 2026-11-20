@@ -70,6 +70,7 @@ class ClipShort(Base):
     value: Mapped[str | None] = mapped_column(Text)                            # what the viewer takes away
     score: Mapped[int | None] = mapped_column(Integer)
     score_why: Mapped[str | None] = mapped_column(String(200))                 # the ranker's reason, plain words
+    watermark: Mapped[str | None] = mapped_column(String(40), default="default")   # default | none | <id> (watermark.py)
     plan: Mapped[list | None] = mapped_column(JSON)                            # [{start,end,text,role,cold_open?,spare?}]
     segments: Mapped[list | None] = mapped_column(JSON)                        # exact cut [[start,end],...] after trimming
     nudge_start: Mapped[float] = mapped_column(Float, default=0.0)             # seconds added (-) / removed (+) at the start

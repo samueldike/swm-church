@@ -81,8 +81,9 @@ SETTINGS_TABS = {
     "AI drafting": "ai", "Social publishing": "social", "Audio distribution": "distribution", "Lists": "lists",
     "Legal pages": "legal",
 }
-CLIPPER_PAGES = {"Channels": "/admin/clipper/channels", "YouTube access": "/admin/clipper#youtube-access",
-                 "Clip our YouTube lives automatically": "/admin/clipper#watch"}
+CLIPPER_PAGES = {"Channels": "/admin/clipper/channels", "YouTube access": "/admin/clipper/settings#youtube-access",
+                 "Clip our YouTube lives automatically": "/admin/clipper/settings#watch",
+                 "Watermark": "/admin/clipper/settings#watermark"}
 
 
 def _directions(value):

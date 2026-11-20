@@ -10406,6 +10406,28 @@ def _clip_frames_resolve(p, s):
     return frames.resolve(s.frame, s.format, cfg) if cfg else None
 
 
+def _clip_mark_json(p, s) -> dict | None:
+    """The watermark a short shows, for the live preview: picture, corner, size, opacity, tone."""
+    from app.core.clipper import watermark
+
+    cfg = getattr(p, "_mark_cfg", None)
+    mark = watermark.resolve(getattr(s, "watermark", None), cfg) if cfg else None
+    if not mark:
+        return None
+    return {"id": mark["id"], "name": mark.get("name") or "", "url": _clip_mark_url(p.branch_id, mark),
+            "position": cfg["position"], "size": cfg["size"], "opacity": cfg["opacity"], "tone": cfg["tone"]}
+
+
+def _clip_mark_url(branch_id: int, mark: dict | None) -> str:
+    from app.core.clipper import watermark
+
+    if not mark:
+        return ""
+    if mark["id"] == watermark.MINISTRY:
+        return "/static/images/swm-logo.png"
+    return f"/admin/clipper/watermarks/{mark['id']}.png?church={branch_id}"
+
+
 def _clip_outro_resolve(p, s):
     from app.core.clipper import outros
 
@@ -10442,6 +10464,7 @@ def _clip_json_short(p, s) -> dict:
         "words": f"{base}/words.json?v={stamp}" if ready and media.short_file(p.id, s.id, "words.json").exists() else "",
         "edited": bool(s.edit), "posts": [_clip_json_post(x) for x in (s.posts or [])[:6]],
         "frame": s.frame or "default", "frame_url": _clip_frame_url(p.branch_id, _clip_frames_resolve(p, s)),
+        "watermark": s.watermark or "default", "mark": _clip_mark_json(p, s),
         "outro": s.outro or "default", "outro_name": (_clip_outro_resolve(p, s) or {}).get("name", ""),
         "outro_seconds": (_clip_outro_resolve(p, s) or {}).get("seconds", 0), "denoise": s.denoise or "natural",
         "music": s.music or "default", "music_name": (_clip_music_resolve(p, s) or {}).get("name", ""),
@@ -10519,6 +10542,7 @@ async def _clip_page(request: Request, db: AsyncSession, template: str, title: s
         frames_ctx = {"cfg": fcfg, "church": wchurch, "formats": _cf.FORMATS,
                       "urls": {i["id"]: _clip_frame_url(wchurch, i) for i in fcfg["items"]},
                       "outros": await _co2.load(db, wchurch),
+                      "watermark": _clip_marks_view(wchurch, await __import__("app.core.clipper.watermark", fromlist=["load"]).load(db, wchurch)),
                       "music": await __import__("app.core.clipper.music", fromlist=["load"]).load(db, wchurch),
                       "voices": _clip_voices_view(await __import__("app.core.clipper.speakers", fromlist=["load"]).load(db, wchurch)),
                       "audio_projects": [x for x in projects if x.branch_id == wchurch and __import__("app.core.clipper.media", fromlist=["audio_path"]).audio_path(x.id).exists()][:30]}
@@ -10982,6 +11006,7 @@ async def admin_clipper_edit(project_id: int, short_id: int, request: Request, d
                  "formats": options.FORMATS, "framings": options.FRAMINGS, "styles": captions.public_styles(),
                  "frame": s.frame or "default", "frames": [{**i, "url": _clip_frame_url(p.branch_id, i)} for i in fcfg["items"]],
                  "frame_defaults": fcfg["default"], "outro": s.outro or "default",
+                 "watermark": s.watermark or "default", "marks": _clip_marks_list(p),
                  "outros": [{"id": i["id"], "name": i["name"], "seconds": i["seconds"]} for i in p._outros_cfg["items"]],
                  "outro_default": p._outros_cfg["default"], "music": s.music or "default",
                  "tracks": [{"id": i["id"], "name": i["name"], "start": i.get("start") or 0,
@@ -11073,6 +11098,12 @@ async def admin_clipper_timeline_save(project_id: int, short_id: int, request: R
         mcfg = await _clip_music(db, p)
         if body["music"] in ("default", "none", "random") or any(i["id"] == body["music"] for i in mcfg["items"]):
             s.music = body["music"]
+    if isinstance(body.get("watermark"), str):
+        from app.core.clipper import watermark as _wm
+
+        wcfg = await _clip_watermark(db, p)
+        if body["watermark"] in ("default", "none") or any(m["id"] == body["watermark"] for m in _wm.choices(wcfg)):
+            s.watermark = body["watermark"]
     if isinstance(body.get("outro"), str):
         ocfg = await _clip_outros(db, p)
         if body["outro"] in ("default", "none") or any(i["id"] == body["outro"] for i in ocfg["items"]):
@@ -11140,6 +11171,7 @@ async def _clip_frames(db, p) -> dict:
 
     cfg = await frames.load(db, p.branch_id) if p.branch_id else frames.empty()
     p._frames_cfg = cfg
+    await _clip_watermark(db, p)
     await _clip_outros(db, p)
     await _clip_music(db, p)
     return cfg
@@ -11224,6 +11256,139 @@ async def admin_clipper_frame_file(frame_id: str, request: Request, db: AsyncSes
     cfg = await frames.load(db, church)
     item = next((i for i in cfg["items"] if i["id"] == frame_id), None)
     path = frames.path_of(church, item) if item else None
+    if not path or not path.exists():
+        return Response(status_code=404)
+    return FileResponse(str(path), media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
+
+
+# ── Video Clipper → watermark (the ministry logo or the church's own, in a corner: watermark.py) ──
+
+async def _clip_watermark(db, p) -> dict:
+    from app.core.clipper import watermark
+
+    cfg = await watermark.load(db, p.branch_id) if p.branch_id else watermark.empty()
+    p._mark_cfg = cfg
+    return cfg
+
+
+def _clip_marks_list(p) -> dict:
+    """What the grid and the editor offer: every mark, the church default and how it is placed."""
+    from app.core.clipper import watermark
+
+    cfg = getattr(p, "_mark_cfg", None) or watermark.empty()
+    return {"items": [{**m, "url": _clip_mark_url(p.branch_id, m)} for m in watermark.choices(cfg)],
+            "default": cfg["default"], "position": cfg["position"], "size": cfg["size"],
+            "opacity": cfg["opacity"], "tone": cfg["tone"]}
+
+
+def _clip_marks_view(church: int, cfg: dict) -> dict:
+    from app.core.clipper import watermark
+
+    return {"cfg": cfg, "items": [{**m, "url": _clip_mark_url(church, m)} for m in watermark.choices(cfg)],
+            "positions": watermark.POSITIONS, "tones": watermark.TONES, "sizes": watermark.SIZES,
+            "opacity_range": watermark.OPACITY}
+
+
+@router.post("/clipper/watermarks", name="admin_clipper_watermarks_add")
+async def admin_clipper_watermarks_add(request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None or not _clip_can_manage_channels(admin):
+        return _redirect(request, "/admin/clipper", "Only the church office can add a watermark.", "error")
+    from app.core.clipper import watermark
+
+    church = await _clip_channel_church(request, db, admin, church)
+    back = f"/admin/clipper/settings?church={church}#watermark"
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None or not getattr(upload, "filename", ""):
+        return _redirect(request, back, "Choose a PNG logo to upload.", "error")
+    data = await upload.read(watermark.MAX_BYTES + 1)
+    cfg = await watermark.load(db, church)
+    if len(cfg["items"]) >= 10:
+        return _redirect(request, back, "A church can keep up to 10 watermarks. Delete one first.", "error")
+    try:
+        entry = await asyncio.to_thread(watermark.add, cfg, church, form.get("name") or upload.filename.rsplit(".", 1)[0], data)
+    except watermark.WatermarkError as exc:
+        return _redirect(request, back, str(exc), "error")
+    if form.get("make_default") == "1":
+        cfg["default"] = entry["id"]
+    await watermark.save(db, church, cfg)
+    await log_admin_action(db, admin.id, "clipper.watermark_add", "branch", church, {"watermark": entry["id"]}, request)
+    await db.commit()
+    made_default = cfg["default"] == entry["id"]
+    return _redirect(request, back, f"Watermark “{entry['name']}” added" + (" and set as the default." if made_default else "."), "success")
+
+
+@router.post("/clipper/watermarks/look", name="admin_clipper_watermark_look")
+async def admin_clipper_watermark_look(request: Request, db: AsyncSession = Depends(get_db)):
+    """Where the watermark sits, how big and how see-through: the same for every short of the church."""
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None or not _clip_can_manage_channels(admin):
+        return _redirect(request, "/admin/clipper", "Only the church office can change the watermark.", "error")
+    import json as _json
+
+    from app.core.clipper import watermark
+
+    church = await _clip_channel_church(request, db, admin, church)
+    form = await request.form()
+    cfg = await watermark.load(db, church)
+    cfg = watermark.parse(_json.dumps({**cfg, "position": form.get("position"), "size": form.get("size"),
+                                       "opacity": form.get("opacity"), "tone": form.get("tone")}))
+    await watermark.save(db, church, cfg)
+    await log_admin_action(db, admin.id, "clipper.watermark_look", "branch", church,
+                           {k: cfg[k] for k in ("position", "size", "opacity", "tone")}, request)
+    await db.commit()
+    return _redirect(request, f"/admin/clipper/settings?church={church}#watermark",
+                     "Watermark placement saved. New downloads and posts use it.", "success")
+
+
+@router.post("/clipper/watermarks/{mark_id}/{action}", name="admin_clipper_watermark_action")
+async def admin_clipper_watermark_action(mark_id: str, action: str, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None or not _clip_can_manage_channels(admin):
+        return _redirect(request, "/admin/clipper", "Only the church office can change the watermark.", "error")
+    from app.core.clipper import watermark
+
+    church = await _clip_channel_church(request, db, admin, church)
+    back = f"/admin/clipper/settings?church={church}#watermark"
+    cfg = await watermark.load(db, church)
+    if mark_id == "none" and action == "default":
+        cfg["default"] = None
+        msg = "No watermark by default. Each short can still pick one."
+    else:
+        mark = next((m for m in watermark.choices(cfg) if m["id"] == mark_id), None)
+        if not mark:
+            return _redirect(request, back, "That watermark was not found.", "error")
+        if action == "default":
+            cfg["default"] = mark_id
+            msg = f"“{mark['name']}” is now on every short by default."
+        elif action == "delete" and not mark["builtin"]:
+            watermark.remove(cfg, church, mark_id)
+            msg = f"“{mark['name']}” deleted."
+        else:
+            return _redirect(request, back, "Unknown action.", "error")
+    await watermark.save(db, church, cfg)
+    await log_admin_action(db, admin.id, f"clipper.watermark_{action}", "branch", church, {"watermark": mark_id}, request)
+    await db.commit()
+    return _redirect(request, back, msg, "success")
+
+
+@router.get("/clipper/watermarks/{mark_id}.png", name="admin_clipper_watermark_file")
+async def admin_clipper_watermark_file(mark_id: str, request: Request, db: AsyncSession = Depends(get_db)):
+    from fastapi.responses import FileResponse, Response
+
+    from app.core.clipper import watermark
+    from app.core.clipper.options import sees_every_church
+
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None:
+        return Response(status_code=404)
+    raw = request.query_params.get("church")
+    if raw and raw.isdigit() and (sees_every_church(admin) or int(raw) == church):
+        church = int(raw)
+    cfg = await watermark.load(db, church)
+    entry = watermark.item(cfg, mark_id)
+    path = watermark.path_of(church, entry) if entry else None
     if not path or not path.exists():
         return Response(status_code=404)
     return FileResponse(str(path), media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
@@ -11688,7 +11853,7 @@ async def admin_clipper_show(project_id: int, request: Request, db: AsyncSession
         "frames_list": {"items": [{"id": i["id"], "name": i["name"], "format": i["format"]} for i in fcfg["items"]],
                         "default": fcfg["default"],
                         "outros": [{"id": i["id"], "name": i["name"], "seconds": i["seconds"]} for i in p._outros_cfg["items"]],
-                        "outro_default": p._outros_cfg["default"],
+                        "outro_default": p._outros_cfg["default"], "marks": _clip_marks_list(p),
                         "tracks": [{"id": i["id"], "name": i["name"]} for i in p._music_cfg["items"]],
                         "music_default": p._music_cfg["default"]},
         "fast_listen": bool(await _clip_groq_key()), "p": p, "data": _clip_json_project(p), "opt": options, "st": {**options.DEFAULTS, **(p.settings or {})},
@@ -11787,6 +11952,14 @@ async def admin_clipper_short_update(project_id: int, short_id: int, request: Re
         if val in ("default", "none", "random") or any(i["id"] == val for i in mcfg["items"]):
             premake = premake or val != (s.music or "default")
             s.music = val
+    if "watermark" in form:
+        from app.core.clipper import watermark as _wm
+
+        wcfg = await _clip_watermark(db, p)
+        val = str(form.get("watermark") or "default")
+        if val in ("default", "none") or any(m["id"] == val for m in _wm.choices(wcfg)):
+            premake = premake or val != (s.watermark or "default")
+            s.watermark = val
     if "outro" in form:
         ocfg = await _clip_outros(db, p)
         val = str(form.get("outro") or "default")

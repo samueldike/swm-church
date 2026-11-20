@@ -535,7 +535,7 @@ async def _claim_short(short_id: int) -> bool:
 
 
 async def final_copy(project_id: int, short, branch_id: int | None):
-    """The file a download or a post uses: the master, with the short's frame and captions when it has them."""
+    """The file a download or a post uses: the master, with the short's frame, watermark, captions, music and outro."""
     from app.core.clipper import frames, render
 
     master = media.short_file(project_id, short.id, "mp4")
@@ -563,7 +563,15 @@ async def final_copy(project_id: int, short, branch_id: int | None):
             mcfg = await music.load(db, branch_id)
         mitem = music.resolve(getattr(short, "music", None), mcfg, short.id)
         mpath = music.path_of(branch_id, mitem) if mitem else None
-    return await asyncio.to_thread(render.finish, master, style, fpath, fid, opath, oitem, mpath, mitem)
+    wpath = wcfg = wkey = None
+    if branch_id:
+        from app.core.clipper import watermark
+
+        async with async_session() as db:
+            wcfg = await watermark.load(db, branch_id)
+        mark = watermark.resolve(getattr(short, "watermark", None), wcfg)
+        wpath, wkey = watermark.path_of(branch_id, mark), watermark.cache_key(wcfg, mark)
+    return await asyncio.to_thread(render.finish, master, style, fpath, fid, opath, oitem, mpath, mitem, wpath, wcfg, wkey)
 
 
 async def premake_captions(project_id: int, short_id: int) -> None:

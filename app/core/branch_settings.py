@@ -19,6 +19,7 @@ PLAIN_KEYS = {
     "clipper_voices",       # Video Clipper: whose messages are clipped and the voice library (clipper/speakers.py)
     "clipper_music",        # Video Clipper: background music tracks and the default (track / random / none, clipper/music.py)
     "clipper_outros",       # Video Clipper: outro images/videos and the default (JSON, clipper/outros.py)
+    "clipper_watermark",    # Video Clipper: the watermark (ministry logo or the church's own), corner, size (JSON, clipper/watermark.py)
     "clipper_frames",       # Video Clipper: the church's PNG frames and the default per shape (JSON, clipper/frames.py)
     "clipper_wa_places",    # Video Clipper: the WhatsApp Status/groups/channels shorts go to by default (JSON)
     "clipper_watch",        # Video Clipper: watch the church's YouTube Live tab (JSON, app/core/clipper/watch.py)

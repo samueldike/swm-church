@@ -418,19 +418,24 @@ def captioned_path(master: Path, style: str) -> Path:
 
 
 def finished_path(master: Path, style: str | None, frame_id: str | None, outro_id: str | None = None,
-                  music_id: str | None = None) -> Path:
-    if not frame_id and not outro_id and not music_id:
+                  music_id: str | None = None, mark_key: str | None = None) -> Path:
+    if not frame_id and not outro_id and not music_id and not mark_key:
         return captioned_path(master, style) if style else master
     name = f"{master.stem}.fin-{style or 'none'}-{frame_id or 'none'}-{outro_id or 'none'}"
-    return master.with_name(f"{name}-{music_id}.mp4" if music_id else f"{name}.mp4")
+    if music_id:
+        name += f"-{music_id}"
+    if mark_key:
+        name += f"-{mark_key}"
+    return master.with_name(f"{name}.mp4")
 
 
 def finish(master: Path, style: str | None, frame: Path | None = None, frame_id: str | None = None,
            outro: Path | None = None, outro_item: dict | None = None, music_path: Path | None = None,
-           music_item: dict | None = None) -> Path:
-    """The master with its frame and then its captions on top, followed by its outro, in ONE encode, cached beside
-    the master. Without an outro the sound is copied. With nothing to add, the master itself."""
-    from app.core.clipper import music, outros
+           music_item: dict | None = None, mark_path: Path | None = None, mark_cfg: dict | None = None,
+           mark_key: str | None = None) -> Path:
+    """The master with its frame, its watermark and then its captions on top, followed by its outro, in ONE encode,
+    cached beside the master. Without an outro the sound is copied. With nothing to add, the master itself."""
+    from app.core.clipper import music, outros, watermark
 
     sid = captions.style_id(style) if style else None
     if frame is not None and not frame.exists():
@@ -439,10 +444,12 @@ def finish(master: Path, style: str | None, frame: Path | None = None, frame_id:
         outro, outro_item = None, None
     if music_path is not None and (not music_path.exists() or not music_item):
         music_path, music_item = None, None
-    if sid is None and frame is None and outro is None and music_path is None:
+    if mark_path is not None and (not mark_path.exists() or not mark_cfg or not mark_key):
+        mark_path, mark_key = None, None
+    if sid is None and frame is None and outro is None and music_path is None and mark_path is None:
         return master
     out = finished_path(master, sid, frame_id if frame is not None else None, outro_item["id"] if outro is not None else None,
-                        music.cache_key(music_item) if music_path is not None else None)
+                        music.cache_key(music_item) if music_path is not None else None, mark_key)
     if out.exists() and out.stat().st_mtime >= master.stat().st_mtime:
         return out
     meta_file = master.with_suffix(".words.json")
@@ -464,6 +471,11 @@ def finish(master: Path, style: str | None, frame: Path | None = None, frame_id:
             chain.append(f"[{n}:v]scale={width}:{height},format=rgba[fr]")
             chain.append(f"[{last}][fr]overlay=0:0:format=auto[vf]")
             last, n = "vf", n + 1
+        if mark_path is not None:
+            mw, mh = watermark.size_of(mark_path)
+            cmd += ["-i", str(mark_path)]           # a still: overlay holds its one frame, like the frame above
+            chain += watermark.overlay_filters(mark_cfg, f"{n}:v", last, "vw", width, height, mw, mh)
+            last, n = "vw", n + 1
         if sid:
             ass_file = work / "captions.ass"
             ass_file.write_text(captions.ass(meta["words"], style=sid, width=width, height=height), encoding="utf-8")

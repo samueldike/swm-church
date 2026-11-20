@@ -4,7 +4,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}New video{% endblock %}
 {% block topbar_icon %}ri-scissors-cut-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=6">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=7">{% endblock %}
 
 {% block page_header %}
   {{ page_header("New video", "Choose the video, how many shorts you want and how they should look. You can leave the page while it works.",
@@ -138,7 +138,7 @@
 {% endblock %}
 
 {% block extra_body %}
-<script src="{{ url_for('static', path='js/clipper.js') }}?v=7"></script>
+<script src="{{ url_for('static', path='js/clipper.js') }}?v=9"></script>
 <script src="{{ url_for('static', path='js/clipper-range.js') }}?v=1"></script>
 <script>window.SWMClipper && window.SWMClipper.form();</script>
 {% endblock %}

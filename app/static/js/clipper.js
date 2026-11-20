@@ -7,7 +7,7 @@
   const TABS = { 'Website content': 'website', 'Admin Appearance': 'appearance', 'Giving gateway': 'giving', 'Church accounts': 'accounts',
     'Admin security': 'security', 'Email delivery': 'email', 'AI drafting': 'ai', 'Social publishing': 'social',
     'Audio distribution': 'distribution', 'Lists': 'lists', 'Legal pages': 'legal', 'General': 'general' };
-  const PAGES = { 'YouTube access': '/admin/clipper#youtube-access', 'Channels': '/admin/clipper/channels' };
+  const PAGES = { 'YouTube access': '/admin/clipper/settings#youtube-access', 'Channels': '/admin/clipper/channels', 'Watermark': '/admin/clipper/settings#watermark' };
   const directions = (html) => html
     .replace(new RegExp(`((?:Admin\\s*→\\s*)?Settings\\s*→\\s*)(${Object.keys(TABS).join('|')})`, 'g'),
       (m, a, k) => `<a class="underline font-semibold" href="/admin/settings#${TABS[k]}">${m}</a>`)
@@ -141,6 +141,13 @@
       const opt = (v, label) => `<option value="${esc(v)}" ${String(s.music || 'default') === v ? 'selected' : ''}>${esc(label)}</option>`;
       return `<label class="vc-framesel">Music <select data-music aria-label="Background music">${opt('default', `Default (${dname})`)}${opt('none', 'No music')}${opt('random', 'Random')}${list.map((t) => opt(t.id, t.name)).join('')}</select></label>`;
     };
+    const markSelect = (s) => {
+      const lib = frameLib.marks || { items: [] };
+      const def = lib.items.find((m) => m.id === lib.default);
+      const opt = (v, label) => `<option value="${esc(v)}" ${String(s.watermark || 'default') === v ? 'selected' : ''}>${esc(label)}</option>`;
+      return `<label class="vc-framesel">Watermark <select data-watermark aria-label="Watermark">${opt('default', `Default (${def ? def.name : 'none'})`)}${opt('none', 'No watermark')}${lib.items.map((m) => opt(m.id, m.name)).join('')}</select></label>`;
+    };
+    const markHtml = (m) => (m ? `<img class="vc-wm-ovl ${esc(m.position)} ${m.tone === 'white' ? 'white' : ''}" src="${esc(m.url)}" alt="" style="width:${Number(m.size)}%;opacity:${Number(m.opacity) / 100}">` : '');
     const outroSelect = (s) => {
       const list = frameLib.outros || [];
       if (!list.length) return '';
@@ -188,7 +195,7 @@
       const fmt = s.format || 'vertical';
       let media;
       if (s.video) {
-        media = `<video src="${esc(s.video)}" poster="${esc(s.thumb)}" controls preload="none" playsinline></video>${s.frame_url ? `<img class="vc-frame-ovl" src="${esc(s.frame_url)}" alt="">` : ''}`;
+        media = `<video src="${esc(s.video)}" poster="${esc(s.thumb)}" controls preload="none" playsinline></video>${s.frame_url ? `<img class="vc-frame-ovl" src="${esc(s.frame_url)}" alt="">` : ''}${markHtml(s.mark)}`;
       } else if (s.status === 'failed') {
         media = `<div class="vc-wait"><i class="ri-error-warning-line"></i><span>${directions(esc(s.error || 'This short could not be cut.'))}</span></div>`;
       } else {
@@ -228,8 +235,8 @@
           ${postsHtml(s)}
           <details><summary><i class="ri-chat-quote-line"></i>Post caption</summary>
             <div class="vc-caption"><textarea data-field="caption" data-richtext="off" rows="5" aria-label="Post caption" placeholder="Post caption and hashtags">${esc(s.caption)}</textarea></div></details>
-          ${s.video && (frameSelect(s) || musicSelect(s) || outroSelect(s)) ? `<details><summary><i class="ri-palette-line"></i>Frame, music and outro</summary>
-            <div class="vc-look">${frameSelect(s)}${musicSelect(s)}${outroSelect(s)}</div></details>` : ''}
+          ${s.video ? `<details><summary><i class="ri-palette-line"></i>Watermark, frame, music and outro</summary>
+            <div class="vc-look">${markSelect(s)}${frameSelect(s)}${musicSelect(s)}${outroSelect(s)}</div></details>` : ''}
           <details><summary><i class="ri-text"></i>What is said</summary><div class="vc-transcript">${esc(s.transcript)}</div></details>
           ${data.source_gone ? '' : `<details><summary><i class="ri-equalizer-line"></i>Adjust and re-cut</summary>
             <form class="vc-recut" data-recut>
@@ -257,7 +264,7 @@
       const busyEl = document.activeElement && grid.contains(document.activeElement);
       const playing = [...grid.querySelectorAll('video')].some((v) => !v.paused);
       const openDetails = new Set([...grid.querySelectorAll('details[open]')].map((d) => `${d.closest('[data-sid]').dataset.sid}:${[...d.parentNode.querySelectorAll(':scope > details')].indexOf(d)}`));
-      const keyNow = JSON.stringify([sortBy, data.shorts.map((s) => [s.id, s.status, s.video, s.starred, s.score, (s.posts || []).map((x) => x.status).join()])]);
+      const keyNow = JSON.stringify([sortBy, data.shorts.map((s) => [s.id, s.status, s.video, s.starred, s.score, s.watermark, (s.posts || []).map((x) => x.status).join()])]);
       if (grid.dataset.key === keyNow && grid.children.length) return;
       if (!force && (busyEl || playing) && grid.children.length) return;   // redraw later
       grid.dataset.key = keyNow;
@@ -384,6 +391,12 @@
       if (msel) {
         const r = await save(msel.closest('[data-sid]').dataset.sid, { music: msel.value });
         if (r) toast(r.short.music_name ? `Music: ${r.short.music_name}, softly under the voice in the download and the post` : 'No music on this short');
+        return;
+      }
+      const wsel = e.target.closest('[data-watermark]');
+      if (wsel) {
+        const r = await save(wsel.closest('[data-sid]').dataset.sid, { watermark: wsel.value });
+        if (r) { grid.dataset.key = ''; drawShorts(true); toast(r.short.mark ? `Watermark: ${r.short.mark.name} on the download and the post` : 'No watermark on this short'); }
         return;
       }
       const osel = e.target.closest('[data-outro]');

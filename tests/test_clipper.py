@@ -1135,3 +1135,76 @@ def test_saved_shorts_become_ranker_input():
     out = ranking_input([s1, s2])
     assert len(out) == 1 and out[0]["id"] == 1
     assert out[0]["edl"] == [{"i": 3}, {"i": 4}] and out[0]["cold_open"] == 7
+
+
+# ─── watermark: the ministry logo in a corner ──────────────────────────
+
+def test_a_new_church_gets_the_ministry_logo_top_right():
+    from app.core.clipper import watermark
+
+    cfg = watermark.parse(None)
+    assert cfg["default"] == watermark.MINISTRY and cfg["position"] == "top-right"
+    assert watermark.resolve("default", cfg)["id"] == watermark.MINISTRY
+    assert watermark.ministry_path().exists()                       # the site's own logo ships with the app
+
+
+def test_watermark_choices_none_and_cleaning():
+    import json
+
+    from app.core.clipper import watermark
+
+    cfg = watermark.parse(json.dumps({"items": [{"id": "abc", "file": "abc.png", "name": "Youth"}], "default": None,
+                                      "position": "middle", "size": 99, "opacity": 3, "tone": "neon"}))
+    assert cfg["default"] is None and watermark.resolve("default", cfg) is None      # the church chose none
+    assert watermark.resolve("none", cfg) is None
+    assert watermark.resolve("abc", cfg)["file"] == "abc.png"                         # a short can still pick one
+    assert watermark.resolve(watermark.MINISTRY, cfg)["id"] == watermark.MINISTRY
+    assert watermark.resolve("deleted", cfg) is None
+    assert (cfg["position"], cfg["size"], cfg["opacity"], cfg["tone"]) == ("top-right", 30, 20, "original")
+    assert [m["id"] for m in watermark.choices(cfg)] == [watermark.MINISTRY, "abc"]
+    gone = watermark.parse(json.dumps({"items": [], "default": "abc"}))
+    assert gone["default"] is None                                                   # a default that was deleted
+
+
+def test_watermark_placement_stays_inside_the_short():
+    from app.core.clipper import watermark
+
+    cfg = {**watermark.DEFAULTS, "size": 20}
+    x, y, w, h = watermark.placement(cfg, 1080, 1920, 2102, 2102)
+    assert (w, h) == (216, 216) and x == 1080 - 216 - 43 and y == 43
+    x, y, w, h = watermark.placement({**cfg, "position": "bottom-left"}, 1080, 1920, 400, 100)
+    assert x == 43 and y + h == 1920 - 43 and w % 2 == 0 and h % 2 == 0
+    _x, _y, w, h = watermark.placement({**cfg, "size": 30}, 1920, 1080, 100, 400)   # a tall logo: capped at 1/4
+    assert h <= 270
+    lines = watermark.overlay_filters({**cfg, "tone": "white", "opacity": 60}, "1:v", "vf", "vw", 1080, 1920, 10, 10)
+    assert "aa=0.60" in lines[0] and "lutrgb" in lines[0] and lines[1].endswith("[vw]")
+    assert watermark.cache_key(cfg, None) is None
+    assert watermark.cache_key(cfg, {"id": "m"}) != watermark.cache_key({**cfg, "size": 21}, {"id": "m"})
+
+
+def test_the_watermark_is_burned_into_the_finished_copy(tmp_path):
+    import shutil
+    import subprocess
+
+    if not shutil.which("ffmpeg"):
+        import pytest
+        pytest.skip("ffmpeg is not installed here")
+    from PIL import Image
+
+    from app.core.clipper import render, watermark
+
+    master = tmp_path / "5.mp4"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=360x640:r=25:d=2",
+                    "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", "2", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", str(master)], check=True)
+    logo = tmp_path / "logo.png"
+    Image.new("RGBA", (200, 200), (255, 255, 255, 255)).save(logo)
+    cfg = {**watermark.DEFAULTS, "opacity": 100}
+    out = render.finish(master, None, mark_path=logo, mark_cfg=cfg, mark_key=watermark.cache_key(cfg, {"id": "x"}))
+    assert out != master and out.exists()
+    still = tmp_path / "still.png"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", "1", "-i", str(out), "-frames:v", "1", str(still)], check=True)
+    img = Image.open(still).convert("L")
+    x, y, w, h = watermark.placement(cfg, 360, 640, 200, 200)
+    assert img.getpixel((x + w // 2, y + h // 2)) > 200          # white logo in the top-right corner
+    assert img.getpixel((20, 600)) < 40                           # the rest of the picture untouched

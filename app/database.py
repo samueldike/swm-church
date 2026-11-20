@@ -75,6 +75,7 @@ _ADDED_COLUMNS = [
     ("clip_shorts", "touches", "BOOLEAN DEFAULT TRUE"),
     ("clip_shorts", "effects", "JSON"),
     ("clip_shorts", "score_why", "VARCHAR(200)"),
+    ("clip_shorts", "watermark", "VARCHAR(40) DEFAULT 'default'"),
     ("branches", "is_hq", "BOOLEAN DEFAULT FALSE"),
     ("givings", "branch_id", "INTEGER"),
     ("givings", "gateway_owner", "VARCHAR(10) DEFAULT 'hq'"),

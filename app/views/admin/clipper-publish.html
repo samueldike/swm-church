@@ -4,7 +4,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}Publish a short{% endblock %}
 {% block topbar_icon %}ri-send-plane-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=6">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=7">{% endblock %}
 
 {% block page_header %}
   {{ page_header("Publish", "Check the words, pick the channels, then publish now or schedule it.",
@@ -20,7 +20,7 @@
 <form method="post" class="vc-pub" id="vc-pub" data-turbo="false">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <div class="flex flex-col gap-2">
-    <div class="vc-player {{ s.format }}"><video src="{{ short.video }}" poster="{{ short.thumb }}" controls playsinline preload="metadata"></video>{% if short.frame_url %}<img class="vc-frame-ovl" src="{{ short.frame_url }}" alt="">{% endif %}</div>
+    <div class="vc-player {{ s.format }}"><video src="{{ short.video }}" poster="{{ short.thumb }}" controls playsinline preload="metadata"></video>{% if short.frame_url %}<img class="vc-frame-ovl" src="{{ short.frame_url }}" alt="">{% endif %}{% if short.mark %}<img class="vc-wm-ovl {{ short.mark.position }} {{ 'white' if short.mark.tone == 'white' }}" src="{{ short.mark.url }}" alt="" style="width:{{ short.mark.size }}%;opacity:{{ short.mark.opacity / 100 }}">{% endif %}</div>
     <p class="vc-muted text-[12px]">{% if s.captions_on %}Posted with <b>{{ cap_label }}</b> captions burned in.{% else %}Posted without captions (switch them on from the shorts page).{% endif %} {{ short.length|round(0)|int }} seconds.</p>
   </div>
 

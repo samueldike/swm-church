@@ -3,7 +3,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}Edit a short{% endblock %}
 {% block topbar_icon %}ri-film-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=6">
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=7">
 <link rel="stylesheet" href="{{ url_for('static', path='css/clipper-editor.css') }}?v=3">{% endblock %}
 
 {% block content %}
@@ -32,6 +32,7 @@
       <div class="ve-stage {{ boot.format }}" id="ve-stage">
         <video id="ve-video" src="{{ boot.source }}" preload="auto" playsinline></video>
         <img class="vc-frame-ovl" id="ve-frame-ovl" alt="" hidden>
+        <img class="vc-wm-ovl" id="ve-wm-ovl" alt="" hidden>
         <div class="ve-flash" id="ve-flash" aria-hidden="true"></div>
         <div class="ve-frame-hint" id="ve-frame-hint" hidden>Follows the speaker when cut</div>
       </div>
@@ -55,7 +56,9 @@
         <input type="range" id="ve-frame-x" min="0" max="1" step="0.01" aria-label="Position of the frame, left to right" hidden>
       </section>
       <section>
-        <h3>Frame</h3>
+        <h3>Watermark</h3>
+        <select id="ve-watermark" aria-label="Watermark"></select>
+        <h3 class="vc-mt">Frame</h3>
         <select id="ve-frame" aria-label="Frame"></select>
         <h3 class="vc-mt">Background music</h3>
         <select id="ve-music" aria-label="Background music"></select>
@@ -123,5 +126,5 @@
 
 {% block extra_body %}
 <script src="{{ url_for('static', path='js/clipper-captions.js') }}?v=1"></script>
-<script src="{{ url_for('static', path='js/clipper-editor.js') }}?v=5"></script>
+<script src="{{ url_for('static', path='js/clipper-editor.js') }}?v=6"></script>
 {% endblock %}
