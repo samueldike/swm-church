@@ -26,7 +26,7 @@
   let S = {
     clips: B.edit.clips.map((c) => ({ start: +c.start, end: +c.end })), tighten: B.edit.tighten !== false,
     frame_x: B.edit.frame_x ?? null, format: B.format, framing: B.framing, title: B.title,
-    captions_on: B.captions_on, caption_style: B.caption_style, frame: B.frame || 'default',
+    captions_on: B.captions_on, caption_style: B.caption_style, frame: B.frame || 'default', outro: B.outro || 'default',
   };
   const saved = JSON.stringify(S);
   const past = [], future = [];
@@ -209,6 +209,10 @@
       .map(([v, l]) => `<option value="${esc(v)}" ${v === S.frame ? 'selected' : ''}>${esc(l)}</option>`).join('');
     if (![...fsel.options].some((x) => x.selected)) fsel.value = 'default';
     const shown = S.frame === 'none' ? null : (S.frame === 'default' ? def : mine.find((f) => f.id === S.frame) || def);
+    const odef = (B.outros || []).find((x) => x.id === B.outro_default);
+    $('ve-outro').innerHTML = [['default', `Default${odef ? ` (${odef.name}, ${odef.seconds} s)` : ' (none)'}`], ['none', 'No outro'],
+      ...(B.outros || []).map((x) => [x.id, `${x.name} (${x.seconds} s)`])]
+      .map(([v, l]) => `<option value="${esc(v)}" ${v === S.outro ? 'selected' : ''}>${esc(l)}</option>`).join('');
     const ovl = $('ve-frame-ovl');
     ovl.hidden = !shown;
     if (shown && ovl.getAttribute('src') !== shown.url) ovl.src = shown.url;
@@ -357,6 +361,7 @@
   $('ve-frame-x').addEventListener('pointerdown', () => { fxBefore = snapshot(); }, o);
   $('ve-frame-x').addEventListener('input', (e) => { S.frame_x = +e.target.value; video.style.objectPosition = `${S.frame_x * 100}% 50%`; }, o);
   $('ve-frame-x').addEventListener('change', () => { if (fxBefore) { past.push(fxBefore); future.length = 0; fxBefore = null; } changed(''); }, o);
+  $('ve-outro').addEventListener('change', (e) => commit(() => { S.outro = e.target.value; }, ''), o);
   $('ve-frame').addEventListener('change', (e) => commit(() => { S.frame = e.target.value; }, ''), o);
   $('ve-tighten').addEventListener('change', (e) => commit(() => { S.tighten = e.target.checked; }, e.target.checked ? 'Pauses removed' : 'Pauses kept'), o);
   $('ve-cap-on').addEventListener('change', (e) => commit(() => { S.captions_on = e.target.checked; }, ''), o);

@@ -303,7 +303,7 @@ async def compose(project_id: int, *, more: int | None = None) -> bool:
                 db.add(ClipShort(project_id=project_id, position=start + n, origin="ai", title=s["title"],
                                  caption=s["caption"], value=s["value"], score=s["score"], plan=s["plan"],
                                  length=s["length"], format=st["format"], quality=int(st["quality"]),
-                                 framing=st["framing"], caption_style=captions.style_id(st["caption_style"]) or captions.DEFAULT,
+                                 framing=st["framing"], caption_style=captions.style_id(st["caption_style"]) or captions.DEFAULT, denoise=st.get("denoise") or "natural",
                                  captions_on=captions.style_id(st["caption_style"]) is not None, status="queued"))
             brief = dict(proj.brief or {})
             if video:
@@ -350,7 +350,7 @@ async def manual_short(project_id: int, start: float, end: float) -> int | None:
         short = ClipShort(project_id=project_id, position=pos, origin="manual",
                           title=f"Clip from {options.clock(first.start)}", caption="", value=None, score=None,
                           plan=plan, length=sum(u.speech for u in units), format=st["format"],
-                          quality=int(st["quality"]), framing=st["framing"], caption_style=captions.style_id(st["caption_style"]) or captions.DEFAULT,
+                          quality=int(st["quality"]), framing=st["framing"], caption_style=captions.style_id(st["caption_style"]) or captions.DEFAULT, denoise=st.get("denoise") or "natural",
                                  captions_on=captions.style_id(st["caption_style"]) is not None,
                           status="queued")
         db.add(short)
@@ -459,7 +459,15 @@ async def final_copy(project_id: int, short, branch_id: int | None):
         item = frames.resolve(getattr(short, "frame", None), short.format, cfg)
         if item:
             fpath, fid = frames.path_of(branch_id, item), item["id"]
-    return await asyncio.to_thread(render.finish, master, style, fpath, fid)
+    opath = oitem = None
+    if branch_id:
+        from app.core.clipper import outros
+
+        async with async_session() as db:
+            ocfg = await outros.load(db, branch_id)
+        oitem = outros.resolve(getattr(short, "outro", None), ocfg)
+        opath = outros.path_of(branch_id, oitem) if oitem else None
+    return await asyncio.to_thread(render.finish, master, style, fpath, fid, opath, oitem)
 
 
 async def premake_captions(project_id: int, short_id: int) -> None:
@@ -548,7 +556,7 @@ async def render_queued(project_id: int) -> None:
         result = render.render(src=media.source_path(project_id), info=info, segments=the_cut["segments"],
                                words=the_cut["words"], out=media.short_file(project_id, s.id, "mp4"), fmt=s.format,
                                quality=s.quality, framing=s.framing, caption_style=s.caption_style, progress=progress,
-                               frame_x=(s.edit or {}).get("frame_x"))
+                               frame_x=(s.edit or {}).get("frame_x"), denoise=getattr(s, "denoise", None))
         return the_cut, result
 
     sem = asyncio.Semaphore(RENDER_PARALLEL)

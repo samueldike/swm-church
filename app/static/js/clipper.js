@@ -133,6 +133,13 @@
       const opt = (v, label) => `<option value="${esc(v)}" ${String(s.frame || 'default') === v ? 'selected' : ''}>${esc(label)}</option>`;
       return `<label class="vc-framesel">Frame <select data-frame aria-label="Frame">${opt('default', `Default${def ? ` (${def.name})` : ' (none)'}`)}${opt('none', 'No frame')}${mine.map((f) => opt(f.id, f.name)).join('')}</select></label>`;
     };
+    const outroSelect = (s) => {
+      const list = frameLib.outros || [];
+      if (!list.length) return '';
+      const def = list.find((o) => o.id === frameLib.outro_default);
+      const opt = (v, label) => `<option value="${esc(v)}" ${String(s.outro || 'default') === v ? 'selected' : ''}>${esc(label)}</option>`;
+      return `<label class="vc-framesel">Outro <select data-outro aria-label="Outro">${opt('default', `Default${def ? ` (${def.name}, ${def.seconds} s)` : ' (none)'}`)}${opt('none', 'No outro')}${list.map((o) => opt(o.id, `${o.name} (${o.seconds} s)`)).join('')}</select></label>`;
+    };
     let data = JSON.parse(document.getElementById('vc-data').textContent);
     const grid = document.getElementById('vc-shorts');
     const toastEl = document.getElementById('vc-toast');
@@ -178,7 +185,7 @@
             <label class="vc-switch" title="${s.words ? 'Show captions on this short (preview, download and post)' : 'Re-cut this short once to add captions'}"><input type="checkbox" data-cap-on ${s.captions_on ? 'checked' : ''} ${s.words ? '' : 'disabled'}><span aria-hidden="true"></span><b>Captions</b></label>
             <div class="vc-capchips" role="group" aria-label="Caption design" aria-disabled="${!s.captions_on}">${Object.entries(capStyles).map(([k, v]) =>
               `<button type="button" data-cap="${esc(k)}" aria-pressed="${k === s.caption_style}" title="${esc(v.hint)}">${esc(v.label)}</button>`).join('')}</div>
-            ${s.video ? frameSelect(s) : ''}
+            ${s.video ? frameSelect(s) : ''}${s.video ? outroSelect(s) : ''}
           </div>
           <div class="vc-caption"><textarea data-field="caption" aria-label="Post caption" placeholder="Post caption and hashtags">${esc(s.caption)}</textarea></div>
           <div class="vc-actions">
@@ -197,6 +204,7 @@
               <label>Shape ${select('format', opts.formats, s.format)}</label>
               <label>Framing ${select('framing', opts.framings, s.framing)}</label>
               <label>Quality ${select('quality', opts.qualities, s.quality)}</label>
+              <label>Noise reduction ${select('denoise', opts.denoise, s.denoise || 'natural')}</label>
               <label>Start <span class="vc-nudge"><button type="button" data-n="nudge_start" data-d="-1" aria-label="Start one second earlier">−</button><output data-o="nudge_start">${secs(s.nudge_start)}</output><button type="button" data-n="nudge_start" data-d="1" aria-label="Start one second later">+</button></span></label>
               <label>End <span class="vc-nudge"><button type="button" data-n="nudge_end" data-d="-1" aria-label="End one second earlier">−</button><output data-o="nudge_end">${secs(s.nudge_end)}</output><button type="button" data-n="nudge_end" data-d="1" aria-label="End one second later">+</button></span></label>
               <input type="hidden" name="nudge_start" value="${s.nudge_start}"><input type="hidden" name="nudge_end" value="${s.nudge_end}">
@@ -307,6 +315,12 @@
       if (await save(sid, { [el.dataset.field]: value })) toast('Saved');
     }, opt);
     grid.addEventListener('change', async (e) => {
+      const osel = e.target.closest('[data-outro]');
+      if (osel) {
+        const r = await save(osel.closest('[data-sid]').dataset.sid, { outro: osel.value });
+        if (r) toast(r.short.outro_name ? `Outro: ${r.short.outro_name} ends the download and the post` : 'No outro on this short');
+        return;
+      }
       const fsel = e.target.closest('[data-frame]');
       if (fsel) {
         const cardEl = fsel.closest('[data-sid]');

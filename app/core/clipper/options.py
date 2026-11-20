@@ -42,6 +42,12 @@ CAPTION_STYLES = {
     "glow": "Glow",
     "clean": "Clean subtitles",
 }
+# Noise reduction (render.DENOISE_MODELS): on by default, like CapCut's "Reduce noise".
+DENOISE = {
+    "natural": "Natural (keeps amens and laughter)",
+    "strong": "Strong (noisy room, fans, generator)",
+    "off": "Off",
+}
 LENGTHS = {
     "15-30": (15, 30),
     "30-60": (30, 60),
@@ -60,6 +66,7 @@ DEFAULTS = {
     "framing": "speaker",
     "caption_style": "none",  # captions are opt-in (the form's "Add captions" switch)
     "language": "en",
+    "denoise": "natural",
     "range_start": None,
     "range_end": None,
 }
@@ -109,7 +116,7 @@ def clean_settings(form) -> tuple[dict, list[str]]:
     length = get("length") or DEFAULTS["length"]
     out["length"] = length if length in LENGTHS else DEFAULTS["length"]
     for key, table in (("style", STYLES), ("format", FORMATS), ("framing", FRAMINGS),
-                       ("caption_style", CAPTION_STYLES), ("language", LANGUAGES)):
+                       ("caption_style", CAPTION_STYLES), ("language", LANGUAGES), ("denoise", DENOISE)):
         val = get(key)
         if key == "caption_style" and val == "bold":      # the first caption design's earlier name
             val = "pop"

@@ -762,3 +762,69 @@ def test_finish_lays_the_frame_and_the_captions_on_in_one_encode(tmp_path):
     assert out.name == "7.fin-pop-abc.mp4" and out.stat().st_size > 1000
     assert render.finish(master, None) == master                               # nothing to add: the master itself
     assert render.finish(master, None, frame, "abc").name == "7.fin-none-abc.mp4"
+
+
+# ─── noise reduction and outros ──────────────────────────────────────
+
+def test_noise_reduction_uses_rnnoise_models_that_ship_with_the_app(tmp_path):
+    import shutil
+    import subprocess
+
+    from app.core.clipper import render
+    from app.core.clipper.media import ASSETS
+
+    assert render.denoise_chain("off") == "" and render.denoise_chain(None) == ""
+    for level, model in render.DENOISE_MODELS.items():
+        assert (ASSETS / model).stat().st_size > 100_000
+        assert f"arnndn=m='{(ASSETS / model).as_posix()}'" in render.denoise_chain(level)
+    _, g = render.graph([[0, 1]], ["scale=1080:1920"], 30, subtitles=None, denoise="natural")
+    assert "arnndn" in g and g.index("arnndn") < g.index("loudnorm")
+    if not shutil.which("ffmpeg"):
+        return
+    out = tmp_path / "o.wav"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "anoisesrc=d=1:a=0.05", "-af",
+                    render.denoise_chain("strong").rstrip(","), str(out)], check=True)
+    assert out.stat().st_size > 1000
+
+
+def test_outros_resolve_and_fit_any_shape():
+    from app.core.clipper import outros
+
+    cfg = outros.parse('{"items":[{"id":"a","kind":"image","name":"Card","file":"a.png","seconds":3},'
+                       '{"id":"b","kind":"video","name":"Sting","file":"b.mp4","seconds":6.5}],"default":"a"}')
+    assert outros.resolve("default", cfg)["id"] == "a" and outros.resolve("b", cfg)["id"] == "b"
+    assert outros.resolve("none", cfg) is None and outros.resolve("gone", cfg)["id"] == "a"
+    assert outros.image_seconds(9) == 4.0 and outros.image_seconds("0.2") == 1.0 and outros.image_seconds("x") == 3.0
+    f = outros.fit_filter(1080, 1920, "2:v", "vx")
+    assert f.startswith("[2:v]split[vxa][vxb]") and f.endswith("[vx]") and "boxblur" in f
+
+
+def test_finish_adds_an_image_or_video_outro_after_the_short(tmp_path, monkeypatch):
+    import json
+    import shutil
+    import subprocess
+
+    if not shutil.which("ffmpeg"):
+        import pytest
+        pytest.skip("ffmpeg is not installed here")
+    from PIL import Image
+
+    from app.core.clipper import render
+    from app.core.clipper.media import probe
+
+    master = tmp_path / "9.mp4"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=180x320:r=30:d=2", "-f", "lavfi",
+                    "-i", "sine=f=440:d=2", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+                    str(master)], check=True)
+    master.with_suffix(".words.json").write_text(json.dumps({"words": [[0.1, 0.6, "Grace"]], "width": 180, "height": 320}))
+    card = tmp_path / "card.png"
+    Image.new("RGB", (320, 180), (240, 200, 55)).save(card)                   # a landscape card on a vertical short
+    out = render.finish(master, "pop", None, None, card, {"id": "c1", "kind": "image", "seconds": 2})
+    assert out.name == "9.fin-pop-none-c1.mp4"
+    assert abs(probe(out)["duration"] - 4.0) < 0.3                             # 2 s short + 2 s card
+    sting = tmp_path / "sting.mp4"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=320x180:r=25:d=1.5",
+                    "-c:v", "libx264", "-pix_fmt", "yuv420p", str(sting)], check=True)          # no sound of its own
+    out2 = render.finish(master, None, None, None, sting, {"id": "v1", "kind": "video", "seconds": 1.5, "audio": False})
+    info = probe(out2)
+    assert abs(info["duration"] - 3.5) < 0.3 and info["width"] == 180 and info["has_audio"]

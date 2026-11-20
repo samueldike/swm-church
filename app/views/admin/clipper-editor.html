@@ -56,6 +56,9 @@
       <section>
         <h3>Frame</h3>
         <select id="ve-frame" aria-label="Frame"></select>
+        <h3 class="vc-mt">Outro</h3>
+        <select id="ve-outro" aria-label="Outro"></select>
+        <small class="vc-muted">Added after the short in the download and the post.</small>
       </section>
       <section>
         <h3>Captions</h3>
@@ -108,5 +111,5 @@
 
 {% block extra_body %}
 <script src="{{ url_for('static', path='js/clipper-captions.js') }}?v=1"></script>
-<script src="{{ url_for('static', path='js/clipper-editor.js') }}?v=2"></script>
+<script src="{{ url_for('static', path='js/clipper-editor.js') }}?v=3"></script>
 {% endblock %}

@@ -155,6 +155,46 @@
   <script>document.querySelectorAll('#frames form[data-confirm]').forEach((f) => f.addEventListener('submit', (e) => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));</script>
   {% endif %}
 
+  {% if frames %}
+  {% set oc = frames.outros %}
+  <details class="vc-panel vc-yt" id="outros">
+    <summary><i class="ri-film-line"></i><b>Outros</b>
+      <span class="vc-pill">{{ oc['items']|length }} outro{{ '' if oc['items']|length == 1 else 's' }}</span>
+      <span class="vc-muted vc-yt-why">What plays after each short: a logo card for a few seconds, or a short branded video.</span></summary>
+    <div class="vc-yt-body">
+      <p class="vc-muted">A picture shows for 1 to 4 seconds; a video (up to 15 seconds) plays whole. Either is fitted into the short's shape over a soft blurred copy of itself, so one outro suits vertical, square and landscape shorts. The default ends every short; each short can pick another or none.</p>
+      <form method="post" action="{{ url_for('admin_clipper_outros_add') }}?church={{ frames.church }}" enctype="multipart/form-data" class="vc-inline" data-turbo="false">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="text" name="name" placeholder="Name, e.g. Logo card" maxlength="60" aria-label="Outro name">
+        <input type="file" name="file" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm" required aria-label="Outro picture or video">
+        <label class="text-[13px]">Picture shows for <select name="seconds" aria-label="Seconds a picture shows">{% for s in [1, 2, 3, 4] %}<option value="{{ s }}" {{ 'selected' if s == 3 }}>{{ s }} s</option>{% endfor %}</select></label>
+        <button type="submit" class="btn btn-primary btn-sm"><i class="ri-upload-2-line"></i>Add outro</button>
+      </form>
+      <div class="vc-frames vc-mt">
+        <div class="vc-frame-card {{ 'is-default' if not oc['default'] }}">
+          <div class="vc-frame-thumb landscape none"><span>No outro</span></div>
+          {% if oc['default'] %}
+          <form method="post" action="{{ url_for('admin_clipper_outro_action', outro_id='none', action='default') }}?church={{ frames.church }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm" type="submit">Make default</button></form>
+          {% else %}<span class="vc-pill ok"><i class="ri-check-line"></i>Default</span>{% endif %}
+        </div>
+        {% for i in oc['items'] %}
+        {% set src = url_for('admin_clipper_outro_file', outro_id=i.id) ~ '?church=' ~ frames.church %}
+        <div class="vc-frame-card {{ 'is-default' if oc['default'] == i.id }}">
+          <div class="vc-frame-thumb landscape">{% if i.kind == 'image' %}<img src="{{ src }}" alt="{{ i.name }}" loading="lazy" style="object-fit:contain">{% else %}<video src="{{ src }}" muted playsinline preload="metadata" controls style="width:100%;height:100%;object-fit:contain"></video>{% endif %}</div>
+          <b>{{ i.name }}</b><small class="vc-muted">{{ 'Picture' if i.kind == 'image' else 'Video' }} · {{ i.seconds }} s</small>
+          <div class="vc-inline">
+            {% if oc['default'] == i.id %}<span class="vc-pill ok"><i class="ri-check-line"></i>Default</span>
+            {% else %}<form method="post" action="{{ url_for('admin_clipper_outro_action', outro_id=i.id, action='default') }}?church={{ frames.church }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm" type="submit">Make default</button></form>{% endif %}
+            <form method="post" action="{{ url_for('admin_clipper_outro_action', outro_id=i.id, action='delete') }}?church={{ frames.church }}" data-confirm="Delete the outro “{{ i.name }}”?"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm text-bad" type="submit" aria-label="Delete {{ i.name }}"><i class="ri-delete-bin-6-line"></i></button></form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </details>
+  <script>document.querySelectorAll('#outros form[data-confirm]').forEach((f) => f.addEventListener('submit', (e) => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));</script>
+  {% endif %}
+
   {% if projects %}
   <div class="vc-grid">
     {% for p in projects %}

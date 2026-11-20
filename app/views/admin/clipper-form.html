@@ -61,6 +61,8 @@
         <select name="content_type">{% for k, v in opt.CONTENT_TYPES.items() %}<option value="{{ k }}" {{ 'selected' if k == defaults.content_type }}>{{ v }}</option>{% endfor %}</select></label>
       <label class="vc-field">Language spoken
         <select name="language">{% for k, v in opt.LANGUAGES.items() %}<option value="{{ k }}" {{ 'selected' if k == defaults.language }}>{{ v }}</option>{% endfor %}</select></label>
+      <label class="vc-field">Noise reduction
+        <select name="denoise">{% for k, v in opt.DENOISE.items() %}<option value="{{ k }}" {{ 'selected' if k == defaults.denoise }}>{{ v }}</option>{% endfor %}</select></label>
     </div>
     <div class="vc-row vc-mt">
       <label class="vc-field">Only this part: from <small>Optional. Skip the worship and announcements: give the time the message starts.</small>
@@ -131,7 +133,7 @@
 {% endblock %}
 
 {% block extra_body %}
-<script src="{{ url_for('static', path='js/clipper.js') }}?v=4"></script>
+<script src="{{ url_for('static', path='js/clipper.js') }}?v=5"></script>
 <script src="{{ url_for('static', path='js/clipper-range.js') }}?v=1"></script>
 <script>window.SWMClipper && window.SWMClipper.form();</script>
 {% endblock %}

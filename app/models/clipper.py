@@ -80,6 +80,8 @@ class ClipShort(Base):
     caption_style: Mapped[str] = mapped_column(String(20), default="pop")      # the design (captions.STYLES)
     captions_on: Mapped[bool] = mapped_column(Boolean, default=False)          # burned into the download/post
     frame: Mapped[str] = mapped_column(String(40), default="default")          # "default" | "none" | a frame id (frames.py)
+    outro: Mapped[str] = mapped_column(String(40), default="default")          # "default" | "none" | an outro id (outros.py)
+    denoise: Mapped[str] = mapped_column(String(10), default="natural")        # natural | strong | off (render.DENOISE_MODELS)
     status: Mapped[str] = mapped_column(String(20), default="queued", index=True)  # queued | rendering | ready | failed
     error: Mapped[str | None] = mapped_column(Text)
     rendered_at: Mapped[datetime | None] = mapped_column(DateTime)

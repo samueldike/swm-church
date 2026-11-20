@@ -10405,6 +10405,13 @@ def _clip_frames_resolve(p, s):
     return frames.resolve(s.frame, s.format, cfg) if cfg else None
 
 
+def _clip_outro_resolve(p, s):
+    from app.core.clipper import outros
+
+    cfg = getattr(p, "_outros_cfg", None)
+    return outros.resolve(s.outro, cfg) if cfg else None
+
+
 def _clip_json_post(x) -> dict:
     from app.core import social
 
@@ -10434,6 +10441,8 @@ def _clip_json_short(p, s) -> dict:
         "words": f"{base}/words.json?v={stamp}" if ready and media.short_file(p.id, s.id, "words.json").exists() else "",
         "edited": bool(s.edit), "posts": [_clip_json_post(x) for x in (s.posts or [])[:6]],
         "frame": s.frame or "default", "frame_url": _clip_frame_url(p.branch_id, _clip_frames_resolve(p, s)),
+        "outro": s.outro or "default", "outro_name": (_clip_outro_resolve(p, s) or {}).get("name", ""),
+        "outro_seconds": (_clip_outro_resolve(p, s) or {}).get("seconds", 0), "denoise": s.denoise or "natural",
         "nudge_start": s.nudge_start or 0, "nudge_end": s.nudge_end or 0, "starred": bool(s.starred),
         "from": clock(body[0]["start"] + offset) if body else "", "to": clock(body[-1]["end"] + offset) if body else "",
         "pieces": len(body), "cold_open": any(x.get("cold_open") for x in pieces),
@@ -10488,8 +10497,11 @@ async def admin_clipper(request: Request, db: AsyncSession = Depends(get_db)):
         from app.core.clipper import frames as _cf
 
         fcfg = await _cf.load(db, wchurch)
+        from app.core.clipper import outros as _co2
+
         frames_ctx = {"cfg": fcfg, "church": wchurch, "formats": _cf.FORMATS,
-                      "urls": {i["id"]: _clip_frame_url(wchurch, i) for i in fcfg["items"]}}
+                      "urls": {i["id"]: _clip_frame_url(wchurch, i) for i in fcfg["items"]},
+                      "outros": await _co2.load(db, wchurch)}
         watch_ctx = {"cfg": wcfg, "state": wstate, "church": wchurch, "church_name": wb.name if wb else "",
                      "every": _cw.EVERY, "days": _cw.DAY_NAMES, "formats": _co.FORMATS, "lengths": _co.LENGTHS,
                      "captions": {k: v["label"] for k, v in _cc.STYLES.items()},
@@ -10777,7 +10789,8 @@ async def admin_clipper_publish(project_id: int, short_id: int, request: Request
     await _clip_frames(db, p)
     return await render_template(request, "admin/clipper-publish.html", {
         "wa": wa, "wa_caption": social.whatsapp_caption(s.title, social.with_ministry(s.caption or "", ministry), ministry),
-        "wa_status_ok": (s.length or 0) <= social.WA_STATUS_MAX_SECONDS + 0.5, "wa_status_max": social.WA_STATUS_MAX_SECONDS,
+        "wa_status_ok": (s.length or 0) + float((_clip_outro_resolve(p, s) or {}).get("seconds") or 0) <= social.WA_STATUS_MAX_SECONDS + 0.5,
+        "wa_status_max": social.WA_STATUS_MAX_SECONDS,
         "p": p, "s": s, "short": _clip_json_short(p, s), "accounts": accounts, "problem": problem, "key_set": key_set,
         "caption": social.with_ministry(s.caption or "", ministry), "ministry": ministry, "labels": social.LABELS,
         "icons": social.ICONS, "tiktok_privacy": social.TIKTOK_PRIVACY, "tz": await _clip_church_tz(db, p.branch_id),
@@ -10812,7 +10825,8 @@ async def admin_clipper_publish_send(project_id: int, short_id: int, request: Re
             return _redirect(request, back, "The church's WhatsApp is not connected (or you may not post with it).", "error")
         wa_text = (form.get("wa_text") or "").strip()[: social.WA_MESSAGE_CAPTION]
         if form.get("wa_status") == "1":
-            if (s.length or 0) > social.WA_STATUS_MAX_SECONDS + 0.5:
+            await _clip_frames(db, p)
+            if (s.length or 0) + float((_clip_outro_resolve(p, s) or {}).get("seconds") or 0) > social.WA_STATUS_MAX_SECONDS + 0.5:
                 return _redirect(request, back, f"WhatsApp Status plays at most {social.WA_STATUS_MAX_SECONDS} seconds; this short is longer. Send it to groups or channels instead.", "error")
             wa_targets.append({"platform": "whatsapp", "kind": "status", "name": "Status",
                                "options": {"text": wa_text[: social.WA_STATUS_CAPTION]}})
@@ -10947,7 +10961,9 @@ async def admin_clipper_edit(project_id: int, short_id: int, request: Request, d
                  "captions_on": bool(s.captions_on), "caption_style": captions.style_id(s.caption_style) or captions.DEFAULT,
                  "formats": options.FORMATS, "framings": options.FRAMINGS, "styles": captions.public_styles(),
                  "frame": s.frame or "default", "frames": [{**i, "url": _clip_frame_url(p.branch_id, i)} for i in fcfg["items"]],
-                 "frame_defaults": fcfg["default"]},
+                 "frame_defaults": fcfg["default"], "outro": s.outro or "default",
+                 "outros": [{"id": i["id"], "name": i["name"], "seconds": i["seconds"]} for i in p._outros_cfg["items"]],
+                 "outro_default": p._outros_cfg["default"]},
         **ctx})
 
 
@@ -11019,6 +11035,10 @@ async def admin_clipper_timeline_save(project_id: int, short_id: int, request: R
         s.caption_style = style
     if "captions_on" in body:
         s.captions_on = bool(body.get("captions_on"))
+    if isinstance(body.get("outro"), str):
+        ocfg = await _clip_outros(db, p)
+        if body["outro"] in ("default", "none") or any(i["id"] == body["outro"] for i in ocfg["items"]):
+            s.outro = body["outro"]
     if isinstance(body.get("frame"), str):
         fcfg = await _clip_frames(db, p)
         if body["frame"] in ("default", "none") or any(i["id"] == body["frame"] for i in fcfg["items"]):
@@ -11082,6 +11102,7 @@ async def _clip_frames(db, p) -> dict:
 
     cfg = await frames.load(db, p.branch_id) if p.branch_id else frames.empty()
     p._frames_cfg = cfg
+    await _clip_outros(db, p)
     return cfg
 
 
@@ -11169,6 +11190,99 @@ async def admin_clipper_frame_file(frame_id: str, request: Request, db: AsyncSes
     return FileResponse(str(path), media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
 
 
+# ── Video Clipper → outros (an image for a few seconds, or a short video, after each short: outros.py) ──
+
+async def _clip_outros(db, p) -> dict:
+    from app.core.clipper import outros
+
+    cfg = await outros.load(db, p.branch_id) if p.branch_id else outros.empty()
+    p._outros_cfg = cfg
+    return cfg
+
+
+@router.post("/clipper/outros", name="admin_clipper_outros_add")
+async def admin_clipper_outros_add(request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None or not _clip_can_manage_channels(admin):
+        return _redirect(request, "/admin/clipper", "Only the church office can add outros.", "error")
+    from app.core.clipper import outros
+
+    church = await _clip_channel_church(request, db, admin, church)
+    back = f"/admin/clipper?church={church}#outros"
+    form = await request.form()
+    upload = form.get("file")
+    if upload is None or not getattr(upload, "filename", ""):
+        return _redirect(request, back, "Choose a picture or a video for the outro.", "error")
+    data = await upload.read(outros.MAX_VIDEO_BYTES + 1)
+    cfg = await outros.load(db, church)
+    if len(cfg["items"]) >= 20:
+        return _redirect(request, back, "A church can keep up to 20 outros. Delete one first.", "error")
+    try:
+        item = await asyncio.to_thread(outros.add, cfg, church, form.get("name") or upload.filename.rsplit(".", 1)[0],
+                                       upload.filename, data, form.get("seconds"))
+    except outros.OutroError as exc:
+        return _redirect(request, back, str(exc), "error")
+    await outros.save(db, church, cfg)
+    await log_admin_action(db, admin.id, "clipper.outro_add", "branch", church, {"outro": item["id"], "kind": item["kind"]}, request)
+    await db.commit()
+    return _redirect(request, back, f"Outro added ({item['seconds']:g} s)" + (" and set as the default." if cfg["default"] == item["id"] else "."), "success")
+
+
+@router.post("/clipper/outros/{outro_id}/{action}", name="admin_clipper_outro_action")
+async def admin_clipper_outro_action(outro_id: str, action: str, request: Request, db: AsyncSession = Depends(get_db)):
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None or not _clip_can_manage_channels(admin):
+        return _redirect(request, "/admin/clipper", "Only the church office can change outros.", "error")
+    from app.core.clipper import outros
+
+    church = await _clip_channel_church(request, db, admin, church)
+    back = f"/admin/clipper?church={church}#outros"
+    cfg = await outros.load(db, church)
+    if outro_id == "none" and action == "default":
+        cfg["default"] = None
+        msg = "No outro by default."
+    else:
+        item = next((i for i in cfg["items"] if i["id"] == outro_id), None)
+        if not item:
+            return _redirect(request, back, "That outro was not found.", "error")
+        if action == "default":
+            cfg["default"] = item["id"]
+            msg = f"“{item['name']}” now ends every short by default."
+        elif action == "delete":
+            outros.remove(cfg, church, outro_id)
+            msg = f"“{item['name']}” deleted."
+        else:
+            return _redirect(request, back, "Unknown action.", "error")
+    await outros.save(db, church, cfg)
+    await log_admin_action(db, admin.id, f"clipper.outro_{action}", "branch", church, {"outro": outro_id}, request)
+    await db.commit()
+    return _redirect(request, back, msg, "success")
+
+
+@router.get("/clipper/outros/{outro_id}/file", name="admin_clipper_outro_file")
+async def admin_clipper_outro_file(outro_id: str, request: Request, db: AsyncSession = Depends(get_db)):
+    from fastapi.responses import FileResponse, Response
+
+    from app.core.clipper import outros
+    from app.core.clipper.options import sees_every_church
+
+    admin, church = await _clip_ctx(request, db)
+    if not admin or church is None:
+        return Response(status_code=404)
+    raw = request.query_params.get("church")
+    if raw and raw.isdigit() and (sees_every_church(admin) or int(raw) == church):
+        church = int(raw)
+    cfg = await outros.load(db, church)
+    item = next((i for i in cfg["items"] if i["id"] == outro_id), None)
+    path = outros.path_of(church, item) if item else None
+    if not path or not path.exists():
+        return Response(status_code=404)
+    import mimetypes
+
+    return FileResponse(str(path), media_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+                        headers={"Cache-Control": "private, max-age=86400"})
+
+
 @router.post("/clipper/{project_id}/upload", name="admin_clipper_upload")
 async def admin_clipper_upload(project_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     """The video file as the raw request body, streamed straight to disk (no copy in memory or /tmp)."""
@@ -11231,7 +11345,9 @@ async def admin_clipper_show(project_id: int, request: Request, db: AsyncSession
     fcfg = await _clip_frames(db, p)
     return await render_template(request, "admin/clipper-show.html", {
         "frames_list": {"items": [{"id": i["id"], "name": i["name"], "format": i["format"]} for i in fcfg["items"]],
-                        "default": fcfg["default"]},
+                        "default": fcfg["default"],
+                        "outros": [{"id": i["id"], "name": i["name"], "seconds": i["seconds"]} for i in p._outros_cfg["items"]],
+                        "outro_default": p._outros_cfg["default"]},
         "fast_listen": bool(await _clip_groq_key()), "p": p, "data": _clip_json_project(p), "opt": options, "st": {**options.DEFAULTS, **(p.settings or {})},
         "cap_styles": __import__("app.core.clipper.captions", fromlist=["public_styles"]).public_styles(),
         "title": p.title or "Video", "full_view": True, **ctx})   # the shorts need the width: menu opens collapsed
@@ -11306,7 +11422,7 @@ async def admin_clipper_short_update(project_id: int, short_id: int, request: Re
     if "starred" in form:
         s.starred = form.get("starred") == "1"
     rerender = False
-    tables = {"format": options.FORMATS, "quality": options.QUALITIES, "framing": options.FRAMINGS}
+    tables = {"format": options.FORMATS, "quality": options.QUALITIES, "framing": options.FRAMINGS, "denoise": options.DENOISE}
     # Captions never need a re-cut: the preview draws them live and the captioned copy is made in the background.
     from app.core.clipper import captions as _clip_captions
 
@@ -11322,6 +11438,12 @@ async def admin_clipper_short_update(project_id: int, short_id: int, request: Re
         on = form.get("captions_on") == "1"
         premake = premake or (on and not s.captions_on)
         s.captions_on = on
+    if "outro" in form:
+        ocfg = await _clip_outros(db, p)
+        val = str(form.get("outro") or "default")
+        if val in ("default", "none") or any(i["id"] == val for i in ocfg["items"]):
+            premake = premake or val != (s.outro or "default")
+            s.outro = val
     if "frame" in form:
         cfg = await _clip_frames(db, p)
         val = str(form.get("frame") or "default")
