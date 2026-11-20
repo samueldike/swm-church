@@ -7,7 +7,7 @@
 
 {% block page_header %}
   {{ page_header(branch.name,
-      ([branch.address, branch.city, region_name(branch.region_code) or branch.state, country_name(branch.country_code) or branch.country]|select|map('trim')|unique|join(', ')) or 'Branch overview',
+      (([branch.address, branch.city, region_name(branch.region_code) or branch.state, country_name(branch.country_code) or branch.country]|select|join(',')).split(',')|map('trim')|select|unique|join(', ')) or 'Branch overview',
       actions=(('<a href="' ~ url_for('admin_branches') ~ '" class="btn btn-secondary"><i class="ri-arrow-left-line"></i>All branches</a>')
                if can('system') else '')
              ~ ('<a href="' ~ ((url_for('admin_branch_settings_for', branch_id=branch.id) if can('system') else url_for('admin_branch_settings')) if not branch.is_hq else url_for('admin_settings')) ~ '" class="btn btn-secondary"><i class="ri-settings-3-line"></i>' ~ ('Branch settings' if not branch.is_hq else 'Settings') ~ '</a>')
