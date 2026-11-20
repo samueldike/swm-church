@@ -119,9 +119,9 @@ with TestClient(app, raise_server_exceptions=False, base_url="https://testserver
     rec("branch admin cannot create administrators", Q("select count(*) from admins where email='x@x.org'")[0][0] == 0)
     # sidebar reflects role
     sb = MEDIA.get("/admin/dashboard").text
-    rec("sidebar shows only the modules a role has", "Donations" not in sb and re.search(r">\s*Members\s*<", sb) is None and "Sliders" in sb and "Books Pub" in sb)
+    rec("sidebar shows only the modules a role has", "Giving</span>" not in sb and re.search(r">\s*Members\s*<", sb) is None and "Home page slides" in sb and "Daily devotional" in sb)
     sb = A.get("/admin/dashboard").text
-    rec("branch admin sidebar: own-branch tools, no HQ tools", "Branch settings" in sb and "Donations" in sb and "Sliders" not in sb and "Settings</span>" not in sb.replace("Branch settings", ""))
+    rec("branch admin sidebar: own-branch tools, no HQ tools", "Branch settings" in sb and "Giving</span>" in sb and "Home page slides" not in sb and "Settings</span>" not in sb.replace("Branch settings", ""))
 
     # ── 2. role management guard rails ──
     t = T(S)

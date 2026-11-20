@@ -9,12 +9,19 @@
   {% set totals = [] %}{% for cur, amt in paid_totals %}{% set _ = totals.append(amt|money(cur)) %}{% endfor %}
   {{ page_header("Giving", ("Every gift, online or recorded by hand, for all branches." if sees_all else "Every gift for your branch, online or recorded by hand."),
       actions='<a href="' ~ export_url ~ '" class="btn btn-secondary" data-turbo="false"><i class="ri-download-2-line"></i>Download (Excel/CSV)</a>'
-              ~ '<a href="#record-gift" class="btn btn-primary" onclick="var d=document.getElementById('record-gift');d.open=true;d.scrollIntoView({behavior:'smooth'});return false;"><i class="ri-add-line"></i>Record a gift</a>',
+              ~ '<a href="#record-gift" class="btn btn-primary" data-open-record><i class="ri-add-line"></i>Record a gift</a>',
       audit=[('Confirmed', (totals|join(' · ')) or '0'), ('Confirmed gifts', paid_count), ('Records', pagination.total)]) }}
 {% endblock %}
 
 {% block content %}
 <div class="flex flex-col gap-3.5">
+  <script>
+  (() => {
+    const open = () => { const d = document.getElementById('record-gift'); if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); } };
+    document.querySelectorAll('[data-open-record]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); open(); }));
+    if (location.hash === '#record-gift') open();
+  })();
+  </script>
   <details class="panel" id="record-gift">
     <summary class="cursor-pointer text-[13px] font-semibold text-ink flex items-center gap-2"><i class="ri-add-circle-line text-gold-text"></i>Record a gift given by cash, transfer, cheque or POS</summary>
     <form method="POST" action="{{ url_for('admin_donations_record') }}" class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
