@@ -183,9 +183,11 @@
   }
   $('cs-presets').innerHTML = Object.entries(B.presets).map(([k, d]) => card(d, k, true)).join('');
 
+  let origin = null;       // what "Undo changes" goes back to
   function open(d, isSaved) {
+    origin = { d, isSaved };
     D = plain(d); D.id = isSaved ? d.id : null;
-    saved = isSaved ? JSON.stringify(plain(d)) : '';
+    saved = JSON.stringify(plain(d));            // untouched = not changed, even for a new design from a preset
     drawFields(); refreshStyle(); drawCards(); clock = 0;
   }
   const leaveOk = () => !D || !dirty() || confirm('Your changes to this design are not saved. Leave them?');
@@ -220,7 +222,7 @@
     const b = e.target.closest('[data-cmd]'); if (!b) return;
     if (b.dataset.cmd === 'save') save(false);
     else if (b.dataset.cmd === 'copy') save(true);
-    else if (b.dataset.cmd === 'revert') { const d = designs.find((x) => x.id === D.id); if (d) open(d, true); else open(B.presets.pop, false); }
+    else if (b.dataset.cmd === 'revert') open(origin.d, origin.isSaved);
     else if (b.dataset.cmd === 'delete') {
       if (!confirm(`Delete the design "${D.name}"? Shorts that use it go back to the Pop design.`)) return;
       const r = await post(`/admin/clipper/captions/${encodeURIComponent(D.id)}/delete${q}`);
