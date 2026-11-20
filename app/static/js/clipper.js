@@ -219,14 +219,12 @@
 
           <div class="vc-capline">
             <label class="vc-switch" title="${s.words ? 'Show captions on this short (preview, download and post)' : 'Re-cut this short once to add captions'}"><input type="checkbox" data-cap-on ${s.captions_on ? 'checked' : ''} ${s.words ? '' : 'disabled'}><span aria-hidden="true"></span><b>Captions</b></label>
-            <details class="vc-pop" ${s.captions_on ? '' : 'data-off'}>
-              <summary aria-label="Caption design"><span data-cap-name>${esc(capName)}</span><i class="ri-arrow-down-s-line"></i></summary>
-              <div class="vc-pop-panel">
-                <div class="vc-pop-head"><b>Caption design</b><span class="vc-muted">Point at one to see it on the video</span></div>
+            <button type="button" class="vc-pop-btn" data-cap-toggle aria-expanded="false" aria-label="Caption design" ${s.captions_on ? '' : 'data-off'}><span data-cap-name>${esc(capName)}</span><i class="ri-arrow-down-s-line"></i></button>
+          </div>
+          <div class="vc-cap-drawer" hidden>
+                <div class="vc-pop-head"><b>Caption design</b><span class="vc-muted">Point at one to see it on the video</span><button type="button" class="vc-drawer-close" data-cap-toggle aria-label="Close"><i class="ri-close-line"></i></button></div>
                 <div class="vc-capchips" role="group" aria-label="Caption design" aria-disabled="${!s.captions_on}">${Object.entries(capStyles).map(([k, v]) =>
                   window.SwmCaptions ? window.SwmCaptions.chip(k, v, k === s.caption_style) : `<button type="button" data-cap="${esc(k)}" aria-pressed="${k === s.caption_style}" title="${esc(v.hint)}">${esc(v.label)}</button>`).join('')}<a class="vc-capchip-new" href="/admin/clipper/captions" title="Make your own caption design in Caption Studio">+ New design</a></div>
-              </div>
-            </details>
           </div>
 
           <div class="vc-actbar">
@@ -331,6 +329,12 @@
     grid.addEventListener('pointerout', (e) => { const c = e.target.closest('[data-cap]'); if (c && !c.contains(e.relatedTarget)) peekCaption(c, false); }, opt);
     grid.addEventListener('focusin', (e) => { const c = e.target.closest('[data-cap]'); if (c) peekCaption(c, true); }, opt);
     grid.addEventListener('focusout', (e) => { const c = e.target.closest('[data-cap]'); if (c) peekCaption(c, false); }, opt);
+    // The caption designs open inside the card, under the Captions row (never over other cards).
+    function toggleDrawer(cardEl, open) {
+      const drawer = cardEl.querySelector('.vc-cap-drawer'), btn = cardEl.querySelector('.vc-pop-btn');
+      drawer.hidden = !open;
+      if (btn) btn.setAttribute('aria-expanded', String(open));
+    }
     function syncCaptionControls(s) {
       const cardEl = grid.querySelector(`[data-sid="${s.id}"]`);
       if (!cardEl) return;
@@ -338,7 +342,7 @@
       cardEl.querySelector('.vc-capchips').setAttribute('aria-disabled', String(!s.captions_on));
       cardEl.querySelectorAll('[data-cap]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cap === s.caption_style)));
       const nm = cardEl.querySelector('[data-cap-name]'); if (nm) nm.textContent = (capStyles[s.caption_style] || {}).label || '';
-      const pop = cardEl.querySelector('.vc-pop'); if (pop) pop.toggleAttribute('data-off', !s.captions_on);
+      const pop = cardEl.querySelector('.vc-pop-btn'); if (pop) pop.toggleAttribute('data-off', !s.captions_on);
       const dl = cardEl.querySelector('[data-dl]');
       if (dl && s.download) dl.href = s.download;
       captionsOn(s);
@@ -417,7 +421,7 @@
       if (await save(sid, { [el.dataset.field]: value })) toast('Saved');
     }, opt);
     document.addEventListener('click', (e) => {
-      document.querySelectorAll('.vc-more[open], .vc-pop[open]').forEach((m) => { if (!m.contains(e.target)) m.open = false; });
+      document.querySelectorAll('.vc-more[open]').forEach((m) => { if (!m.contains(e.target)) m.open = false; });
     }, opt);
     grid.addEventListener('change', async (e) => {
       const msel = e.target.closest('[data-music]');
@@ -476,6 +480,8 @@
       }
       const menu = e.target.closest('.vc-more');
       if (menu && e.target.closest('[data-act]')) menu.open = false;
+      const capToggle = e.target.closest('[data-cap-toggle]');
+      if (capToggle) { const c = capToggle.closest('[data-sid]'); toggleDrawer(c, c.querySelector('.vc-cap-drawer').hidden); return; }
       const tabBtn = e.target.closest('.vc-tabs-mini [data-tab]');
       if (tabBtn) {
         const cardEl = tabBtn.closest('[data-sid]');
@@ -486,7 +492,7 @@
       }
       const chip = e.target.closest('[data-cap]');
       if (chip) {
-        const pop = chip.closest('.vc-pop'); if (pop) pop.open = false;
+        const drawer = chip.closest('.vc-cap-drawer'); if (drawer) toggleDrawer(drawer.closest('[data-sid]'), false);
         const sid = chip.closest('[data-sid]').dataset.sid;
         const r = await save(sid, { caption_style: chip.dataset.cap, captions_on: '1' });
         if (r) { syncCaptionControls(r.short); toast(`Captions: ${capStyles[chip.dataset.cap]?.label || ''}`); }
