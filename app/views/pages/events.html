@@ -20,7 +20,7 @@
 
         {% if upcoming_events %}
         <ul class="ev-list">
-            {% for ev in upcoming_events %}
+            {% for ev in upcoming_events if not (featured_event and ev.id == featured_event.id) %}
             <li><a class="ev-card" href="{{ url_for('event_detail', event_id=ev.id) }}">
                 <span class="date"><b>{{ ev.starts_at.day }}</b>{{ ev.starts_at.strftime('%b') }}</span>
                 <span><strong>{{ ev.title }}</strong><small>{{ ev.starts_at.strftime('%A') }}, {{ ev.starts_at|clock }}{% if ev.branch and not ev.branch.is_hq %} · {{ ev.branch.name }}{% endif %}</small></span>

@@ -663,3 +663,10 @@ html, body, * { scrollbar-width: none !important; -ms-overflow-style: none; }
 
 /* "Discuss this message" on message pages (message-guide.js) */
 .ai-conversation{max-width:780px;margin:0 auto}.ai-turn{padding:1rem 0 1.4rem;line-height:1.75}.ai-turn>strong{font-size:.8rem;color:var(--gold-deep)}.ai-turn p{white-space:pre-wrap;margin:.5rem 0}.ai-turn-user{background:#f2f1ed;padding:.9rem 1.2rem;border-radius:18px;margin-left:12%;margin-bottom:1rem}.ai-turn-user>strong{color:#4a4a48}.ai-source{display:inline-flex;align-items:center;min-height:40px;margin:.4rem .5rem 0 0;padding:.35rem .9rem;border:1px solid #d8d4ca;border-radius:999px;font-size:.88rem;font-weight:600;text-decoration:none;color:var(--ink)}.ai-source:hover{border-color:var(--gold-deep)}
+
+/* Usability (2026-11 audit): on phones the chat button is a round icon, like a chat bubble, and pages leave room for
+   it so it never sits on a card or a button. Currency signs fall back to a font that has ₦. */
+@media(max-width:640px){.scentai-float{padding:.4rem;gap:0;border-radius:50%}.scentai-float .scentai-label,.scentai-float .float-spark{display:none}.scentai-robot{width:44px;height:44px}main{padding-bottom:76px}}
+body,input,select,textarea,button{font-family:Figtree,"Noto Sans",system-ui,sans-serif}
+[hidden]{display:none!important}
+@media(max-width:1139.98px){.bar .brand span{display:block;font-size:.82rem;line-height:1.05;font-weight:700}}

@@ -37,7 +37,8 @@
         <a href="{{ href }}" {% if request.url.path == href %}class="is-active" aria-current="page"{% endif %}><b>{{ '%02d'|format(loop.index) }}</b>{{ label }}</a>
         {% endfor %}
         <a href="{{ url_for('our_pastor') }}"><b>09</b>Our Pastor</a>
-        <a href="{{ url_for('stories') }}"><b>10</b>Stories</a>
+        <a href="/visit"><b>10</b>Plan your visit</a>
+        <a href="/prayer"><b>11</b>Prayer request</a>
     </nav>
     <div class="menu-foot">
         <a class="btn btn-gold" href="{{ url_for('calendar') }}">Calendar</a>

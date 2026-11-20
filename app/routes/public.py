@@ -1575,8 +1575,8 @@ async def terms_of_service(request: Request, db: AsyncSession = Depends(get_db))
 
 
 @router.get("/sitemap", name="sitemap")
-async def sitemap(request: Request):
-    return await render_template(request, "pages/sitemap.html")
+async def sitemap(request: Request, db: AsyncSession = Depends(get_db)):
+    return await render_template(request, "pages/sitemap.html", {"_db": db})   # the footer needs the site settings
 
 
 
