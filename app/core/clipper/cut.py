@@ -75,15 +75,19 @@ def land_ending(segments: list[list[float]], words: list[list], *, limit: float 
         return segments
     out = [list(s) for s in segments]
     s, e = out[-1]
-    ends = [w[1] for w in words if s - 0.01 <= (w[0] + w[1]) / 2 <= e + 0.02]
-    last_word = max(ends) if ends else e
-    nxt = min((w[0] for w in words if w[0] >= last_word - 0.01 and w[0] > e - 0.01), default=None)
-    want = last_word + END_TAIL
-    if nxt is not None:
-        want = min(want, nxt - 0.06)
+    inside = [w for w in words if s - 0.01 <= (w[0] + w[1]) / 2 <= e + 0.02]
+    if not inside:
+        return out
+    last_word = max(w[1] for w in inside)
+    nxt = min((w[0] for w in words if w[0] >= last_word - 0.005 and (w[0] + w[1]) / 2 > e + 0.02), default=None)
+    stop = nxt - 0.06 if nxt is not None else float("inf")        # never into the next thing said
     if limit is not None:
-        want = min(want, limit)
-    out[-1][1] = round(max(e, want), 3)
+        stop = min(stop, limit)                                      # never past the clip a person drew
+    end = min(last_word + END_TAIL, stop)
+    if e <= stop:
+        end = max(end, e)                                            # keep padding that was already fine
+    end = max(end, last_word + 0.02, s + 0.05)                       # never cut into the last word itself
+    out[-1][1] = round(end, 3)
     return out
 
 

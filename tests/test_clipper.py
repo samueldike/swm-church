@@ -124,7 +124,7 @@ def test_cut_removes_pauses_and_fillers_and_lands_on_words():
     assert "um" not in texts                      # hesitations go everywhere
     assert len(c["segments"]) >= 2                # the pause (and the filler) are cut out
     total_raw = words[-1][1] - words[1][0]
-    assert c["length"] < total_raw - 1.0
+    assert c["length"] < total_raw - 1.0 + cut.END_TAIL       # (the ending keeps a short tail after the last word)
     for s, e in c["segments"]:                    # every cut starts just before a word and ends just after one
         assert any(abs(s - (w[0] - speech.PAD_IN)) < 0.07 or s >= w[0] - 0.1 for w in words)
         assert e > s
@@ -859,10 +859,16 @@ def test_music_sits_far_under_the_voice_and_ducks_while_he_speaks(tmp_path):
         pytest.skip("ffmpeg is not installed here")
     from app.core.clipper import render
 
+    from app.core.clipper import music
+
     master = tmp_path / "3.mp4"
-    # "Speech": a 300 Hz voice at -14 LUFS-ish level, on for 1 s, off for 1 s, for 8 s.
+    # "Speech": a 300 Hz voice, on for 1 s, off for 1 s, for 8 s, brought to -14 LUFS like a real short's master.
+    voice = tmp_path / "voice.wav"
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "sine=f=300:d=8,volume='if(lt(mod(t,2),1),0.5,0)':eval=frame",
+                    "-ar", "48000", str(voice)], check=True)
+    gain = -14 - music.measure(voice)
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=black:s=180x320:r=25:d=8",
-                    "-f", "lavfi", "-i", "sine=f=300:d=8,volume='if(lt(mod(t,2),1),0.5,0)':eval=frame",
+                    "-i", str(voice), "-af", f"volume={gain:.2f}dB",
                     "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", str(master)], check=True)
     track = tmp_path / "bed.wav"                                    # loud "music": a 1500 Hz tone at full scale
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "sine=f=1500:d=20", "-af", "volume=0.9",
