@@ -491,3 +491,7 @@
 .vc-brand-fold > summary h2::after { content: "  ›"; color: var(--vc-muted, #888); }
 .vc-brand-fold[open] > summary h2::after { content: "  ⌄"; }
 .vc-look-panel .vc-add-panel { min-width: min(460px, 92vw); }
+.vc-look-panel .vc-add-panel { width: min(540px, 92vw); }
+.vc-look-panel .vc-add-choice { width: 100%; }
+.vc-look-panel .vc-brand-row { grid-template-columns: 150px minmax(0, 1fr); }
+.vc-look-panel .vc-brand-row select { width: 100% !important; max-width: none !important; min-width: 0; }
