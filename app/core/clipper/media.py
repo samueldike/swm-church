@@ -177,7 +177,7 @@ def download(url: str, dest: Path, *, start: float | None = None, end: float | N
            f"bv*[height<={max_height}][vcodec^=avc1]+ba[ext=m4a]/bv*[height<={max_height}]+ba/"
            f"b[height<={max_height}]/bv*+ba/b")
     cmd = ["yt-dlp", "--no-playlist", "--newline", "--no-warnings", "-f", fmt,
-           "--restrict-filenames", "--print", "before_dl:TITLE %(title)s",
+           "--restrict-filenames", "--print", "before_dl:TITLE %(title)s", "--print", "before_dl:CHAPTERS %(chapters)j",
            "--progress-template", "download:PROGRESS %(progress._percent_str)s",
            "-o", str(work / "source.%(ext)s"), "--retries", "5", "--fragment-retries", "10",
            "--concurrent-fragments", "16"]
@@ -205,6 +205,13 @@ def download(url: str, dest: Path, *, start: float | None = None, end: float | N
         line = line.strip()
         if line.startswith("TITLE "):
             title = line[6:].strip()
+        elif line.startswith("CHAPTERS "):
+            try:
+                chapters = json.loads(line[9:])
+            except ValueError:
+                chapters = None
+            if isinstance(chapters, list) and chapters:
+                (dest.parent / "chapters.json").write_text(json.dumps(chapters), encoding="utf-8")
         elif line.startswith("PROGRESS "):
             m = re.search(r"([\d.]+)%", line)
             if m and progress:

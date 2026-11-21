@@ -508,3 +508,9 @@
 .vc-up-msg.bad { color: var(--vc-bad, #b42318); }
 .vc-up-foot { display: flex; justify-content: flex-end; gap: 8px; margin: 8px 0 6px; }
 .vc-up-dlg[open] { position: fixed; inset: 0; margin: auto; height: fit-content; max-height: 90vh; overflow: auto; }
+
+/* The clipper found the sermon itself (scout.py): which part it kept, and a way to use the whole video. */
+.vc-scope { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; margin: 8px 0; border-radius: 12px;
+  background: var(--vc-sunken, #f5f3ee); font-size: 13px; color: var(--vc-ink2, #444); }
+.vc-scope i { color: #b8860b; font-size: 18px; }
+.vc-scope span { flex: 1 1 260px; }

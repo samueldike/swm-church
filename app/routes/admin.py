@@ -10517,7 +10517,19 @@ def _clip_json_project(p) -> dict:
             "speaker_refused": bool(((p.brief or {}).get("speaker_check") or {}).get("refused")) and p.status == "failed",
             "stage": p.stage or "", "progress": round(p.progress or 0, 3), "error": p.error or "",
             "busy": p.busy and not stale, "shorts": [_clip_json_short(p, s) for s in p.shorts],
-            "source_gone": bool(p.source_deleted_at)}
+            "source_gone": bool(p.source_deleted_at), "scope": _clip_scope(p)}
+
+
+def _clip_scope(p) -> dict | None:
+    """When the clipper found the sermon itself (scout.py): which part it kept and how, for the video page."""
+    from app.core.clipper.options import clock
+
+    st = p.settings or {}
+    auto = st.get("auto_range")
+    if not isinstance(auto, dict) or st.get("range_start") != auto.get("start"):
+        return None
+    return {"from": clock(auto["start"]), "to": clock(auto["end"]),
+            "how": "from the video's YouTube chapters" if auto.get("how") == "chapters" else "by a quick listen to the whole video"}
 
 
 @router.get("/clipper", response_class=HTMLResponse, name="admin_clipper")
@@ -12413,6 +12425,44 @@ async def admin_clipper_manual(project_id: int, request: Request, db: AsyncSessi
     if not sid:
         return JSONResponse({"ok": False, "error": "Nothing is said between those times."}, status_code=400)
     await _clip_enqueue(clip_render_task, p.id)
+    return JSONResponse({"ok": True})
+
+
+@router.post("/clipper/{project_id}/whole", name="admin_clipper_whole")
+async def admin_clipper_whole(project_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    """The sermon finder kept the wrong part: start again from the whole video (its shorts are removed)."""
+    admin, church = await _clip_ctx(request, db)
+    p = await _clip_project(db, admin, church, project_id) if church is not None else None
+    if not p:
+        return JSONResponse({"ok": False, "error": "That project was not found."}, status_code=404)
+    from app.core.clipper import media, pipeline
+    from app.tasks import clip_fetch_task
+
+    if p.busy and not pipeline.stale(p):
+        return JSONResponse({"ok": False, "error": "This video is still being worked on. Try again when it stops."}, status_code=409)
+    if p.source_deleted_at:
+        return JSONResponse({"ok": False, "error": "The source video has been removed. Start a new project."}, status_code=409)
+    st = dict(p.settings or {})
+    st.update({"whole": True, "scouted": True, "auto_range": None, "range_start": None, "range_end": None})
+    p.settings = st
+    for s in list(p.shorts):
+        await db.delete(s)
+    d = media.project_dir(p.id)
+    for name in ("words.json", "words.partial.json", "gaps.json", "audio.wav"):
+        (d / name).unlink(missing_ok=True)
+    import shutil
+
+    shutil.rmtree(d / "shorts", ignore_errors=True)
+    info_file = d / "info.json"
+    if info_file.exists():                    # the picture was kept whole: read it from the start again
+        info = json.loads(info_file.read_text(encoding="utf-8"))
+        info["offset"] = 0.0
+        info_file.write_text(json.dumps(info), encoding="utf-8")
+    p.status, p.stage, p.progress, p.error, p.heartbeat_at = "queued", "Getting the video", 0.0, None, datetime.utcnow()
+    p.brief = {}
+    await log_admin_action(db, admin.id, "clipper.whole_video", "clip_project", p.id, None, request)
+    await db.commit()
+    await _clip_enqueue(clip_fetch_task, p.id)
     return JSONResponse({"ok": True})
 
 

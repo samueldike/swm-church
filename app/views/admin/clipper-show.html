@@ -4,7 +4,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}{{ p.title or 'Video' }}{% endblock %}
 {% block topbar_icon %}ri-scissors-cut-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=17">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=18">{% endblock %}
 
 {% block content %}
 {#- Rendered from JSON by app/static/js/clipper.js, which polls status.json while the project works. -#}
@@ -34,6 +34,7 @@
       <span class="vc-muted text-[12px]">You can leave this page; the work carries on. Writing down every word takes{% if fast_listen %} a minute or two{% else %} about half as long as the part being clipped{% endif %}; then the shorts appear one by one as they are cut.</span>
     </div>
     <div id="vc-problem" hidden></div>
+    <div id="vc-scope" class="vc-scope" hidden></div>
     <div class="vc-tools" id="vc-tools" hidden>
       <details class="vc-add">
         <summary class="btn btn-primary btn-sm"><i class="ri-add-line"></i>Add shorts</summary>
@@ -92,6 +93,6 @@
 
 {% block extra_body %}
 <script src="{{ url_for('static', path='js/clipper-captions.js') }}?v=5"></script>
-<script src="{{ url_for('static', path='js/clipper.js') }}?v=15"></script>
+<script src="{{ url_for('static', path='js/clipper.js') }}?v=16"></script>
 <script>window.SWMClipper && window.SWMClipper.show();</script>
 {% endblock %}

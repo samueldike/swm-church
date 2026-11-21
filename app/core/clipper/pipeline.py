@@ -8,6 +8,7 @@ import asyncio
 import json
 import logging
 import shutil
+import subprocess
 from datetime import datetime
 
 from sqlalchemy import func, select, update
@@ -170,6 +171,9 @@ async def transcribe(project_id: int) -> bool:
         if not audio.exists():
             raise ClipperError("The audio of this video is missing. Retry the project.")
         await _update(project_id, status="transcribing", stage="Writing down every word", progress=0.0, error=None)
+        if await _scout_sermon(project_id, p, st):
+            p = await _load(project_id)
+            st = _settings(p)
         hot = await _hotwords()
         gaps_file = media.project_dir(project_id) / "gaps.json"
         gaps = json.loads(gaps_file.read_text(encoding="utf-8")) if gaps_file.exists() else []
@@ -189,6 +193,56 @@ async def transcribe(project_id: int) -> bool:
         logger.exception("Clipper transcription failed for project %s", project_id)
         await _fail(project_id, "Transcribing the video failed unexpectedly. Please try again.")
     return False
+
+
+async def _scout_sermon(project_id: int, p, st: dict) -> bool:
+    """Before writing every word: find the sermon and keep only it (plus margins), exactly as if the person had
+    typed "Only this part". True when the audio was cut. Runs once per project; never when a range was given,
+    when the video is not a sermon, or when the person chose "Clip the whole video". See scout.py."""
+    from app.core.clipper import scout
+
+    if (st.get("content_type") != "sermon" or st.get("whole") or st.get("scouted")
+            or st.get("range_start") is not None or st.get("range_end") is not None):
+        return False
+    audio = media.audio_path(project_id)
+    duration = float(p.duration or 0)
+    await _update(project_id, stage="Finding where the sermon is", progress=0.0)
+
+    try:
+        found = await scout.find(audio, duration, chapters_file=media.project_dir(project_id) / "chapters.json",
+                                 title=p.title or "", language=st.get("language") or None, progress=None)
+    except Exception:
+        logger.exception("Sermon scout failed for project %s; writing down the whole video", project_id)
+        found = None
+    async with async_session() as db:
+        proj = await db.get(ClipProject, project_id)
+        proj.settings = {**(proj.settings or {}), "scouted": True, "auto_range": found}
+        await db.commit()
+    if not found:
+        await _update(project_id, stage="Writing down every word", progress=0.0)
+        return False
+    s, e = found["start"], found["end"]
+    cut = audio.with_name("audio.cut.wav")
+    await asyncio.to_thread(subprocess.run, ["ffmpeg", "-y", "-v", "error", "-ss", f"{s:.3f}", "-t", f"{e - s:.3f}",
+                                             "-i", str(audio), "-c:a", "pcm_s16le", str(cut)], check=True, timeout=900)
+    cut.replace(audio)
+    gaps = await asyncio.to_thread(media.silence_map, audio)
+    (media.project_dir(project_id) / "gaps.json").write_text(json.dumps(gaps), encoding="utf-8")
+    async with async_session() as db:
+        proj = await db.get(ClipProject, project_id)
+        proj.settings = {**(proj.settings or {}), "range_start": s, "range_end": e}
+        proj.duration = e - s
+        await db.commit()
+    # The picture (whole) may already be here: it is read from the sermon's start, like a typed range.
+    info_file = media.project_dir(project_id) / "info.json"
+    if info_file.exists():
+        info = json.loads(info_file.read_text(encoding="utf-8"))
+        info["offset"] = float(s)
+        info["duration"] = float(e - s)
+        info_file.write_text(json.dumps(info), encoding="utf-8")
+    logger.info("Project %s: sermon found by %s at %.0f-%.0f s (of %.0f s)", project_id, found["how"], s, e, duration)
+    await _update(project_id, stage="Writing down the sermon", progress=0.0)
+    return True
 
 
 async def groq_key() -> str:
@@ -504,8 +558,9 @@ async def fetch_video(project_id: int) -> bool:
             raise ClipperError("That link has no picture. The clipper needs a video.")
         # The words are timed from range_start (the sound was cut there); the source is kept whole and read at
         # this offset, so there is no keyframe drift between picture and words.
-        info["offset"] = float(st.get("range_start") or 0)
-        info["duration"] = float(p.duration or info["duration"])
+        latest = await _load(project_id) or p
+        info["offset"] = float(_settings(latest).get("range_start") or 0)
+        info["duration"] = float(latest.duration or info["duration"])
         (media.project_dir(project_id) / "info.json").write_text(json.dumps(info), encoding="utf-8")
         await _update(project_id, width=info["width"], height=info["height"], size_bytes=info["size"])
         return await _shorts_waiting(project_id)

@@ -1376,3 +1376,33 @@ def test_a_video_can_have_its_own_branding():
     assert st["frame"] == "default" and st["music"] == "default"          # anything odd: the church's usual
     st, _ = options.clean_settings({})
     assert all(st[k] == "default" for k in options.LOOK_KEYS)
+
+
+# ─── finding the sermon before writing every word (scout.py) ───────────
+
+def test_youtube_chapters_name_the_sermon():
+    from app.core.clipper import scout
+
+    ch = [{"title": "Praise & Worship", "start_time": 0, "end_time": 2400},
+          {"title": "Announcements", "start_time": 2400, "end_time": 3000},
+          {"title": "The Word - Pastor Samuel", "start_time": 3000, "end_time": 7200},
+          {"title": "Offering & Closing", "start_time": 7200, "end_time": 9000}]
+    assert scout.from_chapters(ch, 9000) == (2940.0, 7260.0)          # a minute either side
+    assert scout.from_chapters([{"title": "Worship", "start_time": 0, "end_time": 9000}], 9000) is None
+    assert scout.from_chapters(None, 9000) is None
+    assert scout.from_chapters([{"title": "Sermon", "start_time": 0, "end_time": 8900}], 9000) is None   # saves nothing
+
+
+def test_the_quick_listen_answer_keeps_a_margin_and_never_guesses():
+    from app.core.clipper import scout
+
+    assert scout.from_answer({"sermons": [{"start": "45:00", "end": "2:30:00"}], "confident": True}, 3 * 3600) \
+        == (45 * 60 - scout.MARGIN, 2.5 * 3600 + scout.MARGIN)
+    two = {"sermons": [{"start": "30:00", "end": "1:10:00"}, {"start": "1:40:00", "end": "2:20:00"}], "confident": True}
+    assert scout.from_answer(two, 3 * 3600) == (30 * 60 - scout.MARGIN, 140 * 60 + scout.MARGIN)   # both kept
+    assert scout.from_answer({"sermons": [{"start": "45:00", "end": "2:30:00"}], "confident": False}, 10800) is None
+    assert scout.from_answer({"sermons": [{"start": "45:00", "end": "48:00"}], "confident": True}, 10800) is None
+    assert scout.from_answer("nonsense", 10800) is None
+    times = scout.sample_times(3600)
+    assert times[0] == 30 and all(b - a == scout.EVERY for a, b in zip(times, times[1:])) and times[-1] + scout.SAMPLE <= 3600
+    assert "[0:30]" in scout.prompt([(30.0, "Let us worship")], title="Sunday", duration=3600)

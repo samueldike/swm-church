@@ -364,6 +364,15 @@
 
     function drawHead() {
       document.getElementById('vc-status').innerHTML = statusPill(data);
+      // The clipper found the sermon itself: say which part it kept, and offer the whole video.
+      const scope = document.getElementById('vc-scope');
+      if (scope) {
+        scope.hidden = !data.scope;
+        if (data.scope) {
+          scope.innerHTML = `<i class="ri-focus-3-line"></i><span>Only the sermon is used: <b>${esc(data.scope.from)} to ${esc(data.scope.to)}</b>, found ${esc(data.scope.how)}. The rest of the service was not written down, which saved time.</span>`
+            + (data.busy ? '' : '<button type="button" class="btn btn-ghost btn-sm" data-whole>Clip the whole video instead</button>');
+        }
+      }
       const prog = document.getElementById('vc-progress');
       const problem = document.getElementById('vc-problem');
       const tools = document.getElementById('vc-tools');
@@ -551,6 +560,14 @@
       clearTimeout(window.__swmClipTimer); window.__swmClipTimer = setTimeout(poll, 1500);
     }, opt);
 
+    const scopeBox = document.getElementById('vc-scope');
+    if (scopeBox) scopeBox.addEventListener('click', async (e) => {
+      if (!e.target.closest('[data-whole]')) return;
+      if (!confirm('Start again from the whole video? The shorts made from the sermon part are removed and new ones are made.')) return;
+      const r = await post(`${base}/whole`, {}, csrf);
+      if (!r.ok) { toast(r.error || 'Could not start again.'); return; }
+      location.reload();
+    }, { signal: ctl.signal });
     const lookForm = document.getElementById('vc-look-form');
     if (lookForm) lookForm.addEventListener('submit', async (e) => {
       e.preventDefault();
