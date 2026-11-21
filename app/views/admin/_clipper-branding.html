@@ -1,5 +1,7 @@
 {#- Branding for one video: its own watermark, frame, outro and music, or the church's defaults (Clipper settings).
-    Used by the new-video form and the video's own page. `branding` comes from admin.py:_clip_branding. -#}
+    Used by the new-video form and the video's own page. `branding` comes from admin.py:_clip_branding_ctx.
+    "＋ Upload a new one…" (office roles) opens one window that adds the item to the church's library and picks it
+    for this video at once; it never changes the church's defaults. -#}
 {% macro branding_fields(branding, st, fmt='vertical') -%}
   {% set d = branding.defaults %}
   {% set rows = [
@@ -8,23 +10,135 @@
       ('outro', 'Outro', 'ri-film-line', d.outro),
       ('music', 'Background music', 'ri-music-2-line', d.music),
   ] %}
-  <div class="vc-brand">
+  <div class="vc-brand" data-brand data-church="{{ branding.church or '' }}">
     {% for key, label, icon, dname in rows %}
       {% set cur = st.get(key) or 'default' %}
       <label class="vc-brand-row" for="vc-brand-{{ key }}">
         <span><i class="{{ icon }}"></i>{{ label }}</span>
-        <select id="vc-brand-{{ key }}" name="{{ key }}" {% if key == 'frame' %}data-brand-frame data-shape="{{ fmt }}" data-defaults='{{ (d.frame or {})|tojson }}'{% endif %}>
+        <select id="vc-brand-{{ key }}" name="{{ key }}" data-brand-kind="{{ key }}" {% if key == 'frame' %}data-brand-frame data-shape="{{ fmt }}" data-defaults='{{ (d.frame or {})|tojson }}'{% endif %}>
           <option value="default" {{ 'selected' if cur == 'default' }} data-default-label="1">The church's usual ({{ 'random track' if dname == 'random' else dname }})</option>
           <option value="none" {{ 'selected' if cur == 'none' }}>None for this video</option>
           {% if key == 'music' and branding.music %}<option value="random" {{ 'selected' if cur == 'random' }}>A random track from the library</option>{% endif %}
           {% for i in branding[key] %}
             <option value="{{ i.id }}" {{ 'selected' if cur == i.id }} {% if i.format %}data-format="{{ i.format }}"{% endif %}>{{ i.name }}</option>
           {% endfor %}
+          {% if branding.can_upload %}<option value="__new__" data-new>＋ Upload a new one…</option>{% endif %}
         </select>
       </label>
     {% endfor %}
-    {% if not (branding.watermark|length > 1 or branding.frame or branding.outro or branding.music) %}
-      <p class="vc-muted text-[12px]">Add frames, outros and music in {{ 'Video Clipper → Settings'|directions }} to choose them here.</p>
+    {% if not branding.can_upload and not (branding.watermark|length > 1 or branding.frame or branding.outro or branding.music) %}
+      <p class="vc-muted text-[12px]">The church office adds frames, outros and music in {{ 'Video Clipper → Settings'|directions }}.</p>
     {% endif %}
   </div>
+{%- endmacro %}
+
+{#- The upload window: put it OUTSIDE any <form> (a form inside a form is invalid and would send its fields). -#}
+{% macro branding_upload_window(branding) -%}
+{% if branding.can_upload %}
+<dialog class="vc-up-dlg" id="vc-up-dlg" aria-labelledby="vc-up-title">
+  <form method="dialog" class="vc-up-form" id="vc-up-form" enctype="multipart/form-data">
+    <div class="vc-up-head">
+      <h2 id="vc-up-title">Upload</h2>
+      <button type="button" class="vc-up-x" data-up-close aria-label="Close"><i class="ri-close-line"></i></button>
+    </div>
+    <p class="vc-muted text-[12.5px]" id="vc-up-hint"></p>
+    <label class="field-label" for="vc-up-name">Name</label>
+    <input id="vc-up-name" name="name" maxlength="60" placeholder="e.g. Conference logo">
+    <label class="field-label vc-mt" for="vc-up-file">File</label>
+    <input id="vc-up-file" name="file" type="file" required>
+    <label class="vc-mt text-[13px]" id="vc-up-secs-row" hidden>A picture shows for
+      <select name="seconds" id="vc-up-secs">{% for n in [1, 2, 3, 4] %}<option value="{{ n }}" {{ 'selected' if n == 3 }}>{{ n }} s</option>{% endfor %}</select></label>
+    <p class="vc-up-msg" id="vc-up-msg" role="status" aria-live="polite"></p>
+    <div class="vc-up-foot">
+      <button type="button" class="btn btn-secondary" data-up-close>Cancel</button>
+      <button type="submit" class="btn btn-primary" id="vc-up-go"><i class="ri-upload-2-line"></i><span>Upload and use it</span></button>
+    </div>
+    <p class="vc-muted text-[12px]">It is added to the church's library (Clipper settings) and chosen for this video. The church's usual stays as it is.</p>
+  </form>
+</dialog>
+<script>
+(() => {
+  const dlg = document.getElementById('vc-up-dlg');
+  if (!dlg || dlg.dataset.ready) return;
+  dlg.dataset.ready = '1';
+  const ctl = new AbortController(); const o = { signal: ctl.signal };
+  document.addEventListener('turbo:before-visit', () => ctl.abort(), { once: true });
+  const KINDS = {
+    watermark: { title: 'New watermark', url: '/admin/clipper/watermarks', accept: 'image/png,image/webp',
+                 hint: 'A PNG logo with a see-through background, at least 300 pixels wide.' },
+    frame: { title: 'New frame', url: '/admin/clipper/frames', accept: 'image/png',
+             hint: 'A PNG the size of the short (1080×1920 vertical, 1080×1080 square, 1920×1080 landscape) with a see-through middle.' },
+    outro: { title: 'New outro', url: '/admin/clipper/outros', accept: 'image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm',
+             hint: 'A picture (shown for 1 to 4 seconds) or a short video (up to 15 seconds) played after the short.' },
+    music: { title: 'New background music', url: '/admin/clipper/music', accept: 'audio/*,.mp3,.m4a,.wav,.ogg,.flac',
+             hint: 'An MP3, M4A, WAV, OGG or FLAC file the church has the rights to use.' },
+  };
+  const SHAPE = { vertical: '9:16', square: '1:1', landscape: '16:9' };
+  const form = document.getElementById('vc-up-form');
+  const msg = document.getElementById('vc-up-msg');
+  const go = document.getElementById('vc-up-go');
+  let sel = null, before = 'default', kind = '';
+  const csrf = '{{ csrf_token }}';
+
+  const shapeOf = (s) => (document.querySelector('[name=format]:checked') || {}).value || s.dataset.shape || 'vertical';
+  document.addEventListener('change', (e) => {
+    const s = e.target.closest('[data-brand-kind]');
+    if (!s) return;
+    if (s.value !== '__new__') { s.dataset.prev = s.value; return; }
+    sel = s; kind = s.dataset.brandKind; before = s.dataset.prev || 'default';
+    const k = KINDS[kind];
+    document.getElementById('vc-up-title').textContent = k.title;
+    document.getElementById('vc-up-hint').textContent = k.hint;
+    const file = document.getElementById('vc-up-file'); file.value = ''; file.accept = k.accept;
+    document.getElementById('vc-up-name').value = '';
+    document.getElementById('vc-up-secs-row').hidden = kind !== 'outro';
+    msg.textContent = ''; msg.className = 'vc-up-msg';
+    dlg.showModal();
+  }, o);
+  document.querySelectorAll('[data-brand-kind]').forEach((s) => { s.dataset.prev = s.value; });
+
+  const close = () => { if (sel && sel.value === '__new__') sel.value = before; dlg.close(); };
+  dlg.addEventListener('click', (e) => { if (e.target.closest('[data-up-close]') || e.target === dlg) close(); }, o);
+  dlg.addEventListener('cancel', (e) => { e.preventDefault(); close(); }, o);
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const file = document.getElementById('vc-up-file').files[0];
+    if (!file) { msg.textContent = 'Choose a file first.'; msg.className = 'vc-up-msg bad'; return; }
+    const data = new FormData(form);
+    data.set('csrf_token', csrf); data.set('for_video', '1');
+    if (!data.get('name')) data.set('name', file.name.replace(/\.[^.]+$/, ''));
+    go.disabled = true; go.querySelector('span').textContent = 'Uploading…';
+    msg.textContent = ''; msg.className = 'vc-up-msg';
+    const church = (sel.closest('[data-brand]') || {}).dataset?.church || '';
+    let r = {};
+    try {
+      const res = await fetch(`${KINDS[kind].url}?json=1&church=${encodeURIComponent(church)}`, {
+        method: 'POST', body: data, credentials: 'same-origin', headers: { 'X-CSRF-Token': csrf } });
+      try { r = await res.json(); } catch (err) { r = { ok: false, error: res.status === 413 ? 'That file is too big.' : 'The server answered unexpectedly.' }; }
+    } catch (err) { r = { ok: false, error: 'The upload did not reach the server. Check the connection and try again.' }; }
+    go.disabled = false; go.querySelector('span').textContent = 'Upload and use it';
+    if (!r.ok || !r.item) { msg.textContent = r.error || 'Could not upload.'; msg.className = 'vc-up-msg bad'; return; }
+    const it = r.item;
+    let label = it.name;
+    if (kind === 'frame') label += ` (${SHAPE[it.format] || it.format})`;
+    if (kind === 'outro') label += ` (${it.seconds} s)`;
+    const opt = new Option(label, it.id);
+    if (it.format) opt.dataset.format = it.format;
+    sel.insertBefore(opt, sel.querySelector('[data-new]'));
+    if (kind === 'frame' && it.format !== shapeOf(sel)) {
+      sel.value = before; opt.hidden = opt.disabled = true;
+      msg.textContent = `Saved, but it is a ${SHAPE[it.format] || it.format} frame and this video is ${SHAPE[shapeOf(sel)]}. It is in the library for videos of that shape.`;
+      msg.className = 'vc-up-msg bad';
+      return;
+    }
+    sel.value = it.id; sel.dataset.prev = it.id;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    dlg.close();
+    const t = document.getElementById('vc-toast');
+    if (t) { t.textContent = `“${it.name}” added and chosen for this video.`; t.classList.add('on'); setTimeout(() => t.classList.remove('on'), 2600); }
+  }, o);
+})();
+</script>
+{% endif %}
 {%- endmacro %}

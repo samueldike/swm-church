@@ -495,3 +495,15 @@
 .vc-look-panel .vc-add-choice { width: 100%; }
 .vc-look-panel .vc-brand-row { grid-template-columns: 150px minmax(0, 1fr); }
 .vc-look-panel .vc-brand-row select { width: 100% !important; max-width: none !important; min-width: 0; }
+
+/* "Upload a new one" window (branding for one video). */
+.vc-up-dlg { border: 0; border-radius: 16px; padding: 0; width: min(460px, 94vw); box-shadow: 0 24px 60px rgba(0,0,0,.3); background: var(--vc-surface, #fff); color: var(--vc-ink, #111); }
+.vc-up-dlg::backdrop { background: rgba(0,0,0,.45); }
+.vc-up-form { display: flex; flex-direction: column; gap: 4px; padding: 18px 18px 14px; }
+.vc-up-head { display: flex; align-items: center; justify-content: space-between; }
+.vc-up-head h2 { font-size: 17px; font-weight: 800; margin: 0; }
+.vc-up-x { width: 36px; height: 36px; border: 0; border-radius: 10px; background: var(--vc-sunken, #f3f1ec); cursor: pointer; font-size: 18px; }
+.vc-up-form input[type=file] { font-size: 13px; padding: 10px; border: 1px dashed var(--vc-line, #ccc); border-radius: 10px; }
+.vc-up-msg { min-height: 18px; font-size: 13px; margin: 6px 0 0; }
+.vc-up-msg.bad { color: var(--vc-bad, #b42318); }
+.vc-up-foot { display: flex; justify-content: flex-end; gap: 8px; margin: 8px 0 6px; }

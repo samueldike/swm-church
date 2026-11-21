@@ -10632,7 +10632,7 @@ async def admin_clipper_new(request: Request, db: AsyncSession = Depends(get_db)
     return await render_template(request, "admin/clipper-form.html", {
         "opt": options, "defaults": options.DEFAULTS, "max_mb": app_settings.CLIPPER_MAX_UPLOAD_MB,
         "custom_captions": {k: v["label"] for k, v in (await _clip_cap_styles(db, church)).items() if v.get("custom")},
-        "branding": await _clip_branding(db, church),
+        "branding": await _clip_branding_ctx(db, admin, church),
         "ai_ready": await ai.is_configured(), "fast_listen": bool(await _clip_groq_key()), "title": "New video", **ctx})
 
 
@@ -11195,6 +11195,14 @@ async def admin_clipper_watch_check(request: Request, db: AsyncSession = Depends
     return _redirect(request, f"/admin/clipper/settings?church={church}#watch", "Checking the channel now. New finished lives appear below in a minute or two.", "success")
 
 
+def _clip_lib_answer(request: Request, back: str, msg: str, ok: bool, item: dict | None = None):
+    """Library uploads (watermark, frame, outro, music): a page redirect for the settings forms, or JSON for the
+    "Upload a new one" window on the new-video form and the video page (``?json=1``)."""
+    if request.query_params.get("json") == "1":
+        return JSONResponse({"ok": ok, ("message" if ok else "error"): msg, "item": item}, status_code=200 if ok else 400)
+    return _redirect(request, back, msg, "success" if ok else "error")
+
+
 # ── Video Clipper → frames (PNG overlays per church, app/core/clipper/frames.py) ──
 
 async def _clip_frames(db, p) -> dict:
@@ -11217,7 +11225,7 @@ def _clip_frame_url(branch_id: int, item: dict | None) -> str:
 async def admin_clipper_frames_add(request: Request, db: AsyncSession = Depends(get_db)):
     admin, church = await _clip_ctx(request, db)
     if not admin or church is None or not _clip_can_manage_channels(admin):
-        return _redirect(request, "/admin/clipper", "Only the church office can add frames.", "error")
+        return _clip_lib_answer(request, "/admin/clipper", "Only the church office can add frames.", False)
     from app.core.clipper import frames
 
     church = await _clip_channel_church(request, db, admin, church)
@@ -11225,20 +11233,23 @@ async def admin_clipper_frames_add(request: Request, db: AsyncSession = Depends(
     form = await request.form()
     upload = form.get("file")
     if upload is None or not getattr(upload, "filename", ""):
-        return _redirect(request, back, "Choose a PNG frame to upload.", "error")
+        return _clip_lib_answer(request, back, "Choose a PNG frame to upload.", False)
     data = await upload.read(frames.MAX_BYTES + 1)
     cfg = await frames.load(db, church)
     if len(cfg["items"]) >= 30:
-        return _redirect(request, back, "A church can keep up to 30 frames. Delete one first.", "error")
+        return _clip_lib_answer(request, back, "A church can keep up to 30 frames. Delete one first.", False)
+    before = dict(cfg["default"])
     try:
         item = await asyncio.to_thread(frames.add, cfg, church, form.get("name") or upload.filename.rsplit(".", 1)[0], data)
     except frames.FrameError as exc:
-        return _redirect(request, back, str(exc), "error")
+        return _clip_lib_answer(request, back, str(exc), False)
+    if form.get("for_video") == "1":
+        cfg["default"] = before
     await frames.save(db, church, cfg)
     await log_admin_action(db, admin.id, "clipper.frame_add", "branch", church, {"frame": item["id"], "format": item["format"]}, request)
     await db.commit()
     default = cfg["default"].get(item["format"]) == item["id"]
-    return _redirect(request, back, f"Frame added for {item['format']} shorts" + (" and set as their default." if default else "."), "success")
+    return _clip_lib_answer(request, back, f"Frame added for {item['format']} shorts" + (" and set as their default." if default else "."), True, item={'id': item['id'], 'name': item['name'], 'format': item['format']})
 
 
 @router.post("/clipper/frames/{frame_id}/{action}", name="admin_clipper_frame_action")
@@ -11519,7 +11530,7 @@ def _clip_marks_view(church: int, cfg: dict) -> dict:
 async def admin_clipper_watermarks_add(request: Request, db: AsyncSession = Depends(get_db)):
     admin, church = await _clip_ctx(request, db)
     if not admin or church is None or not _clip_can_manage_channels(admin):
-        return _redirect(request, "/admin/clipper", "Only the church office can add a watermark.", "error")
+        return _clip_lib_answer(request, "/admin/clipper", "Only the church office can add a watermark.", False)
     from app.core.clipper import watermark
 
     church = await _clip_channel_church(request, db, admin, church)
@@ -11527,22 +11538,22 @@ async def admin_clipper_watermarks_add(request: Request, db: AsyncSession = Depe
     form = await request.form()
     upload = form.get("file")
     if upload is None or not getattr(upload, "filename", ""):
-        return _redirect(request, back, "Choose a PNG logo to upload.", "error")
+        return _clip_lib_answer(request, back, "Choose a PNG logo to upload.", False)
     data = await upload.read(watermark.MAX_BYTES + 1)
     cfg = await watermark.load(db, church)
     if len(cfg["items"]) >= 10:
-        return _redirect(request, back, "A church can keep up to 10 watermarks. Delete one first.", "error")
+        return _clip_lib_answer(request, back, "A church can keep up to 10 watermarks. Delete one first.", False)
     try:
         entry = await asyncio.to_thread(watermark.add, cfg, church, form.get("name") or upload.filename.rsplit(".", 1)[0], data)
     except watermark.WatermarkError as exc:
-        return _redirect(request, back, str(exc), "error")
+        return _clip_lib_answer(request, back, str(exc), False)
     if form.get("make_default") == "1":
         cfg["default"] = entry["id"]
     await watermark.save(db, church, cfg)
     await log_admin_action(db, admin.id, "clipper.watermark_add", "branch", church, {"watermark": entry["id"]}, request)
     await db.commit()
     made_default = cfg["default"] == entry["id"]
-    return _redirect(request, back, f"Watermark “{entry['name']}” added" + (" and set as the default." if made_default else "."), "success")
+    return _clip_lib_answer(request, back, f"Watermark “{entry['name']}” added" + (" and set as the default." if made_default else "."), True, item={'id': entry['id'], 'name': entry['name']})
 
 
 @router.post("/clipper/watermarks/look", name="admin_clipper_watermark_look")
@@ -11634,7 +11645,7 @@ async def _clip_outros(db, p) -> dict:
 async def admin_clipper_outros_add(request: Request, db: AsyncSession = Depends(get_db)):
     admin, church = await _clip_ctx(request, db)
     if not admin or church is None or not _clip_can_manage_channels(admin):
-        return _redirect(request, "/admin/clipper", "Only the church office can add outros.", "error")
+        return _clip_lib_answer(request, "/admin/clipper", "Only the church office can add outros.", False)
     from app.core.clipper import outros
 
     church = await _clip_channel_church(request, db, admin, church)
@@ -11642,20 +11653,23 @@ async def admin_clipper_outros_add(request: Request, db: AsyncSession = Depends(
     form = await request.form()
     upload = form.get("file")
     if upload is None or not getattr(upload, "filename", ""):
-        return _redirect(request, back, "Choose a picture or a video for the outro.", "error")
+        return _clip_lib_answer(request, back, "Choose a picture or a video for the outro.", False)
     data = await upload.read(outros.MAX_VIDEO_BYTES + 1)
     cfg = await outros.load(db, church)
     if len(cfg["items"]) >= 20:
-        return _redirect(request, back, "A church can keep up to 20 outros. Delete one first.", "error")
+        return _clip_lib_answer(request, back, "A church can keep up to 20 outros. Delete one first.", False)
+    before = cfg.get("default")
     try:
         item = await asyncio.to_thread(outros.add, cfg, church, form.get("name") or upload.filename.rsplit(".", 1)[0],
                                        upload.filename, data, form.get("seconds"))
     except outros.OutroError as exc:
-        return _redirect(request, back, str(exc), "error")
+        return _clip_lib_answer(request, back, str(exc), False)
+    if form.get("for_video") == "1":
+        cfg["default"] = before
     await outros.save(db, church, cfg)
     await log_admin_action(db, admin.id, "clipper.outro_add", "branch", church, {"outro": item["id"], "kind": item["kind"]}, request)
     await db.commit()
-    return _redirect(request, back, f"Outro added ({item['seconds']:g} s)" + (" and set as the default." if cfg["default"] == item["id"] else "."), "success")
+    return _clip_lib_answer(request, back, f"Outro added ({item['seconds']:g} s)" + (" and set as the default." if cfg["default"] == item["id"] else "."), True, item={'id': item['id'], 'name': item['name'], 'seconds': item['seconds']})
 
 
 @router.post("/clipper/outros/{outro_id}/{action}", name="admin_clipper_outro_action")
@@ -11734,7 +11748,7 @@ def _clip_music_resolve(p, s):
 async def admin_clipper_music_add(request: Request, db: AsyncSession = Depends(get_db)):
     admin, church = await _clip_ctx(request, db)
     if not admin or church is None or not _clip_can_manage_channels(admin):
-        return _redirect(request, "/admin/clipper", "Only the church office can add music.", "error")
+        return _clip_lib_answer(request, "/admin/clipper", "Only the church office can add music.", False)
     from app.core.clipper import music
 
     church = await _clip_channel_church(request, db, admin, church)
@@ -11742,20 +11756,20 @@ async def admin_clipper_music_add(request: Request, db: AsyncSession = Depends(g
     form = await request.form()
     upload = form.get("file")
     if upload is None or not getattr(upload, "filename", ""):
-        return _redirect(request, back, "Choose a music file to upload.", "error")
+        return _clip_lib_answer(request, back, "Choose a music file to upload.", False)
     data = await upload.read(music.MAX_BYTES + 1)
     cfg = await music.load(db, church)
     if len(cfg["items"]) >= 50:
-        return _redirect(request, back, "A church can keep up to 50 tracks. Delete one first.", "error")
+        return _clip_lib_answer(request, back, "A church can keep up to 50 tracks. Delete one first.", False)
     try:
         item = await asyncio.to_thread(music.add, cfg, church, form.get("name") or upload.filename.rsplit(".", 1)[0],
                                        upload.filename, data)
     except music.MusicError as exc:
-        return _redirect(request, back, str(exc), "error")
+        return _clip_lib_answer(request, back, str(exc), False)
     await music.save(db, church, cfg)
     await log_admin_action(db, admin.id, "clipper.music_add", "branch", church, {"track": item["id"]}, request)
     await db.commit()
-    return _redirect(request, back, f"“{item['name']}” added. Choose it as the default, or pick Random, to use it.", "success")
+    return _clip_lib_answer(request, back, f"“{item['name']}” added. Choose it as the default, or pick Random, to use it.", True, item={'id': item['id'], 'name': item['name']})
 
 
 @router.post("/clipper/music/{track_id}/{action}", name="admin_clipper_music_action")
@@ -12035,6 +12049,14 @@ async def _clip_branding(db, church: int | None) -> dict:
     }
 
 
+async def _clip_branding_ctx(db, admin, church: int | None) -> dict:
+    """_clip_branding plus what the "Upload a new one" window needs: the church and whether this person may add."""
+    lib = await _clip_branding(db, church)
+    lib["church"] = church
+    lib["can_upload"] = bool(church) and _clip_can_manage_channels(admin)
+    return lib
+
+
 def _clip_branding_check(st: dict, lib: dict) -> dict:
     """Keep only choices that exist in the church's libraries (anything else falls back to the church default)."""
     from app.core.clipper.options import LOOK_KEYS
@@ -12169,7 +12191,7 @@ async def admin_clipper_show(project_id: int, request: Request, db: AsyncSession
                         "tracks": [{"id": i["id"], "name": i["name"]} for i in p._music_cfg["items"]],
                         "music_default": p._music_cfg["default"]},
         "fast_listen": bool(await _clip_groq_key()), "p": p, "data": _clip_json_project(p), "opt": options, "st": {**options.DEFAULTS, **(p.settings or {})},
-        "branding": await _clip_branding(db, p.branch_id),
+        "branding": await _clip_branding_ctx(db, admin, p.branch_id),
         "cap_styles": await _clip_cap_styles(db, p.branch_id),
         "title": p.title or "Video", "full_view": True, **ctx})   # the shorts need the width: menu opens collapsed
 
