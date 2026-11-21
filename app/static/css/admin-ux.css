@@ -130,3 +130,25 @@ body:has(.page-head) #admin-topbar .topbar-title { display: none !important; }
 
 /* Bulk actions appear only once something is ticked (like Gmail). */
 #bulk-review-form:has(#bulk-submit:disabled) { display: none !important; }
+
+/* File uploads: a clear drop zone instead of the browser's tiny "Choose File" (admin-files.js). */
+.file-drop { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; flex: 1 1 100%; width: 100%;
+  min-height: 76px; padding: 14px 16px; border: 2px dashed var(--color-gold, #d4af37); border-radius: 14px;
+  background: var(--color-gold-tint, #fbf3dc); cursor: pointer; transition: background .15s, border-color .15s; }
+.file-drop:hover, .file-drop.is-over, .file-drop:focus-within { background: #f7e8bd; border-color: #b8860b; }
+.file-drop.is-over { border-style: solid; }
+.file-drop > input[type=file] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 2; }
+.file-drop-icon { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 12px;
+  background: var(--color-surface, #fff); color: #b8860b; font-size: 24px; flex-shrink: 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.file-drop-text { display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: var(--color-ink, #222); min-width: 0; }
+.file-drop-text b { color: #8a6d12; text-decoration: underline; text-underline-offset: 3px; }
+.file-drop-text small { font-size: 12px; color: var(--color-ink-3, #777); }
+.file-drop-chosen { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 10px; background: var(--color-surface, #fff);
+  border: 1px solid var(--color-line, #e2dfd6); font-size: 13px; font-weight: 600; color: var(--color-ink, #222); min-width: 0; max-width: 100%; }
+.file-drop-chosen i { color: #1a7f37; font-size: 18px; }
+.file-drop-chosen span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-drop-chosen small { color: var(--color-ink-3, #777); font-weight: 500; }
+.file-drop.has-file { border-style: solid; border-color: #1a7f37; background: #eef8f0; }
+.file-drop.has-file .file-drop-icon { color: #1a7f37; }
+.dark .file-drop { background: rgba(212,175,55,.08); }
+.dark .file-drop.has-file { background: rgba(26,127,55,.12); }

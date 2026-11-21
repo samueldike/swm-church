@@ -181,21 +181,15 @@
 {%- endmacro %}
 
 {% macro file_field(label, name, hint='', multiple=False, accept=None, required=False, id=None) -%}
+  {#- A plain file box: admin-files.js turns it into the console's drop zone (icon, "Choose a file or drag it here",
+      the chosen file's name and size), the same everywhere. -#}
   <div>
-    <label class="field-label">{{ label }}{% if required %}<span class="text-bad ml-0.5">*</span>{% endif %}</label>
-    <label for="{{ id or name }}" class="relative flex items-center gap-2.5 rounded-md border border-dashed border-line-2 bg-sunken px-3.5 py-3 cursor-pointer">
-      <i class="ri-upload-2-line text-lg text-ink-3"></i>
-      <span class="flex-grow min-w-0">
-        <span class="block text-[12.5px] font-semibold text-ink" data-file-name>{{ 'Choose files' if multiple else 'Choose a file' }}</span>
-        {% if hint %}<span class="block text-[12px] text-ink-3 mt-0.5">{{ hint }}</span>{% endif %}
-      </span>
-      <span class="text-[12px] font-semibold text-gold-text border border-line-2 rounded px-2.5 py-1 whitespace-nowrap">Browse</span>
-      <input id="{{ id or name }}" type="file" name="{{ name }}" class="sr-only"
-             onchange="var n=this.closest('label').querySelector('[data-file-name]'); if(n) n.textContent = this.files.length > 1 ? this.files.length + ' files selected' : (this.files[0] ? this.files[0].name : '{{ 'Choose files' if multiple else 'Choose a file' }}');"
-             {% if multiple %}multiple{% endif %}
-             {% if accept %}accept="{{ accept }}"{% endif %}
-             {% if required %}required{% endif %}>
-    </label>
+    <label class="field-label" for="{{ id or name }}">{{ label }}{% if required %}<span class="text-bad ml-0.5">*</span>{% endif %}</label>
+    <input id="{{ id or name }}" type="file" name="{{ name }}"
+           {% if multiple %}multiple{% endif %}
+           {% if accept %}accept="{{ accept }}"{% endif %}
+           {% if required %}required{% endif %}>
+    {% if hint %}<p class="field-hint">{{ hint }}</p>{% endif %}
   </div>
 {%- endmacro %}
 
