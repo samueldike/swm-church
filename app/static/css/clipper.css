@@ -528,3 +528,26 @@
 .vc-keyer > label { display: flex; align-items: flex-start; gap: 10px; font-size: 13.5px; font-weight: 600; line-height: 1.4; }
 .vc-keyer > label input[type=checkbox] { width: 18px; height: 18px; min-height: 0; flex: none; margin-top: 2px; accent-color: #b8860b; }
 .vc-keyer > label .vc-muted { font-weight: 500; }
+
+/* ── Add/upload forms in Clipper settings: a titled card, labels above full-width fields, one action row. ── */
+.vc-addform { display: flex; flex-direction: column; gap: 14px; max-width: 760px; margin-top: 14px; padding: 16px 18px;
+  border: 1px solid var(--vc-line, #e2dfd6); border-radius: 14px; background: var(--vc-surface, #fff); }
+.vc-addform h3 { margin: 0; font-size: 15px; font-weight: 800; color: var(--vc-ink, #111); }
+.vc-f { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.vc-f > label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 700; color: var(--vc-ink, #222); }
+.vc-f > label output { font-weight: 600; color: var(--vc-muted, #777); font-variant-numeric: tabular-nums; }
+.vc-f > input[type=text], .vc-f > select { width: 100% !important; max-width: none !important; min-height: 44px; }
+.vc-f > input[type=range] { width: 100%; accent-color: #b8860b; }
+.vc-f-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+.vc-f-row > .vc-f-wide { grid-column: span 2; }
+@media (max-width: 560px) { .vc-f-row > .vc-f-wide { grid-column: auto; } }
+.vc-addform-foot { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 12px; border-top: 1px solid var(--vc-line, #ece9e1); }
+.vc-addform .vc-keyer { margin-top: 0; }
+.vc-check { display: flex; align-items: flex-start; gap: 10px; font-size: 13.5px; font-weight: 600; }
+.vc-check input[type=checkbox] { width: 18px; height: 18px; min-height: 0; flex: none; margin-top: 2px; accent-color: #b8860b; }
+.vc-or { display: flex; align-items: center; gap: 10px; margin: -4px 0; color: var(--vc-muted, #888); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.vc-or::before, .vc-or::after { content: ""; flex: 1; height: 1px; background: var(--vc-line, #e2dfd6); }
+/* Tick boxes with a sentence ("ve-check" in the editor) look the same on every clipper page. */
+.ve-check { display: flex; align-items: flex-start; gap: 10px; font-size: 13.5px; font-weight: 600; line-height: 1.4; }
+.ve-check input[type=checkbox] { width: 18px; height: 18px; min-height: 0; flex: none; margin-top: 2px; accent-color: #b8860b; }
+.vc-watch { max-width: 760px; }
