@@ -29,6 +29,11 @@ MIN_MOVE = 0.7            # every move eases in and out over at least this long
 SWITCH_SAMPLES = 6        # samples in a row someone else must dominate before the camera changes person
 SCENE_CUT = 38.0          # mean absolute grey difference between samples that marks a cut in the source
 MAX_KEYS = 70
+LINK = 0.08               # a face continues a track when its centre is this close (share of the frame) ...
+LINK_GAP = 4              # ... to the track's last face, seen at most this many samples ago
+PICTURE_SECONDS = 3.0     # a parked face is judged over at least this long
+PICTURE_STILL = 0.12      # a face moving less than this share of its own width (std of its centre) is parked
+PICTURE_ALIVE = 3.0       # a face moving this many times more than a parked one is the live person
 
 
 @lru_cache(maxsize=1)
@@ -74,7 +79,82 @@ def detect(src: str, start: float, end: float, src_w: int, src_h: int) -> list[d
                     continue
                 found.append(((x + w / 2) / dw, (y + h / 2) / dh, w / dw, h / dh, score))
         out.append({"t": n / SAMPLE_FPS, "faces": found, "cut": cut})
-    return out
+    return drop_pictures(out)
+
+
+def tracks(samples: list[dict]) -> list[list[tuple[int, int]]]:
+    """Faces linked across samples into one track per person: [[(sample index, face index), ...], ...].
+
+    A face continues the track whose last face is nearest (centre within ``LINK`` of a frame and a similar size),
+    seen at most ``LINK_GAP`` samples ago; a source cut ends every track."""
+    done: list[list[tuple[int, int]]] = []
+    live: list[list[tuple[int, int]]] = []
+    for n, s in enumerate(samples):
+        if s.get("cut"):
+            done += live
+            live = []
+        live_next, taken = [], set()
+        for k, f in enumerate(s["faces"]):
+            best, gap = None, None
+            for j, tr in enumerate(live):
+                if j in taken:
+                    continue
+                m, i = tr[-1]
+                g = samples[m]["faces"][i]
+                d = max(abs(f[0] - g[0]), abs(f[1] - g[1]))
+                ratio = max(f[3], g[3]) / max(1e-6, min(f[3], g[3]))
+                if n - m <= LINK_GAP and d < LINK and ratio < 1.6 and (gap is None or d < gap):
+                    best, gap = j, d
+            if best is None:
+                live_next.append([(n, k)])
+            else:
+                taken.add(best)
+                live[best].append((n, k))
+        done += [tr for tr in live if n - tr[-1][0] >= LINK_GAP]
+        live = [tr for tr in live if n - tr[-1][0] < LINK_GAP] + live_next
+    return done + live
+
+
+def drop_pictures(samples: list[dict]) -> list[dict]:
+    """Samples without the faces that are pictures, while a live person is on screen.
+
+    A face on an LED wall, a screen, a poster or a banner behind the speaker is often far bigger than the speaker's
+    own face, so "the largest face" would frame the wall. Such a face stays parked in one place: over a track of at
+    least ``PICTURE_SECONDS`` its centre moves less than ``PICTURE_STILL`` of its own width. When a face like that
+    shares the frame with a smaller face that is alive (it moves at least ``PICTURE_ALIVE`` times as much, measured
+    the same way), the parked one is a picture and is left out. Alone, or beside another still face (two people
+    seated for an interview), nothing is dropped."""
+    import statistics
+
+    trs = tracks(samples)
+
+    def spread(tr):
+        fs = [samples[n]["faces"][i] for n, i in tr]
+        if len(fs) < 2:
+            return 0.0, fs
+        w = statistics.median(f[2] for f in fs) or 1e-6
+        return max(statistics.pstdev(f[0] for f in fs), statistics.pstdev(f[1] for f in fs)) / w, fs
+
+    need = int(PICTURE_SECONDS * SAMPLE_FPS)
+    info = []
+    for tr in trs:
+        sp, fs = spread(tr)
+        info.append({"tr": tr, "spread": sp, "area": statistics.median(f[2] * f[3] for f in fs),
+                     "span": (tr[0][0], tr[-1][0]), "long": len(tr) >= need})
+    drop: set[tuple[int, int]] = set()
+    for a in info:
+        if not a["long"] or a["spread"] >= PICTURE_STILL:
+            continue
+        for b in info:
+            if b is a or len(b["tr"]) < need or b["area"] >= a["area"]:
+                continue
+            overlap = min(a["span"][1], b["span"][1]) - max(a["span"][0], b["span"][0])
+            if overlap >= need and b["spread"] >= max(PICTURE_STILL, a["spread"] * PICTURE_ALIVE):
+                drop.update(a["tr"])
+                break
+    if not drop:
+        return samples
+    return [{**s, "faces": [f for k, f in enumerate(s["faces"]) if (n, k) not in drop]} for n, s in enumerate(samples)]
 
 
 def choose_subject(samples: list[dict], start_x: float | None = None) -> list[tuple[float, float | None, bool]]:

@@ -1437,3 +1437,30 @@ def test_a_green_screen_frame_becomes_see_through_where_the_screen_is(tmp_path, 
     assert item["format"] == "vertical" and (tmp_path / item["file"]).exists()
     with pytest.raises(frames.FrameError):                                # a colour that is not there
         frames.add(frames.empty(), 1, "x", buf.getvalue(), key="#FF00FF", tolerance=10)
+
+
+def test_a_face_on_the_screen_behind_never_wins_over_the_live_speaker():
+    # Short 26: an LED wall shows a face three times the speaker's size, parked at x 0.79; the preacher walks.
+    import math
+
+    samples = []
+    for n in range(120):
+        t = n / reframe.SAMPLE_FPS
+        live = (0.36 + 0.12 * (1 + math.sin(t / 2)), 0.45, 0.085, 0.20, 0.9)
+        wall = (0.79 + 0.004 * math.sin(t * 3), 0.28, 0.245, 0.48, 0.95)
+        samples.append({"t": t, "faces": [wall, live], "cut": False})
+    kept = reframe.drop_pictures(samples)
+    assert all(len(s["faces"]) == 1 and s["faces"][0][2] < 0.1 for s in kept)
+    picked = [x for _, x, _ in reframe.choose_subject(kept)]
+    assert all(x < 0.65 for x in picked)
+
+    # Alone on screen, a still face is the speaker (a seated close-up): kept.
+    alone = [{"t": n / 6, "faces": [(0.5, 0.4, 0.25, 0.45, 0.9)], "cut": False} for n in range(60)]
+    assert reframe.drop_pictures(alone) == alone
+    # Two people seated for an interview, both still: nobody is dropped.
+    two = [{"t": n / 6, "faces": [(0.3, 0.4, 0.2, 0.4, 0.9), (0.7 + 0.002 * (n % 3), 0.4, 0.12, 0.25, 0.9)], "cut": False}
+           for n in range(60)]
+    assert reframe.drop_pictures(two) == two
+    # Tracks follow each person and end at a source cut.
+    trs = reframe.tracks(samples[:10] + [{**samples[10], "cut": True}] + samples[11:20])
+    assert len(trs) == 4 and sorted(len(t) for t in trs) == [10, 10, 10, 10]
