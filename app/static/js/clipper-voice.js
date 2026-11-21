@@ -1,0 +1,156 @@
+// Learn a pastor's voice (Clipper settings → Whose messages): the chosen video plays here and two handles mark the
+// part where only he speaks. YouTube links play in YouTube's own player (IFrame API); the church's own videos and a
+// recording on this computer play in a normal video player. The form posts source + start/end (seconds).
+(() => {
+  const clock = (t) => {
+    t = Math.max(0, Math.round(t || 0));
+    const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+    return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
+  };
+  const ytId = (url) => {
+    const m = String(url).match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|live\/|shorts\/|embed\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+    return m ? m[1] : null;
+  };
+  let apiReady = null;
+  const loadYT = () => apiReady || (apiReady = new Promise((res) => {
+    if (window.YT && window.YT.Player) { res(); return; }
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { if (prev) prev(); res(); };
+    const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; s.async = true;
+    document.head.appendChild(s);
+  }));
+
+  function enhance(box) {
+    if (box.dataset.ready) return;
+    box.dataset.ready = '1';
+    const form = box.closest('form');
+    const $ = (sel) => box.querySelector(sel);
+    const wrap = $('[data-player]'), stage = $('[data-stage]'), bar = $('[data-bar]'), sel = $('[data-sel]');
+    const hLo = $('[data-h=lo]'), hHi = $('[data-h=hi]'), now = $('[data-now]'), read = $('[data-read]');
+    const inStart = box.querySelector('input[name=start]'), inEnd = box.querySelector('input[name=end]');
+    let player = null, total = 0, lo = 0, hi = 0, stopAt = null, timer = null;
+
+    const cur = () => (player ? player.time() : 0);
+    const paint = () => {
+      if (!total) return;
+      const pct = (t) => `${(Math.max(0, Math.min(total, t)) / total) * 100}%`;
+      hLo.style.left = pct(lo); hHi.style.left = pct(hi);
+      sel.style.left = pct(lo); sel.style.width = `${((hi - lo) / total) * 100}%`;
+      now.style.left = pct(cur());
+      read.textContent = `${clock(lo)} to ${clock(hi)} (${clock(hi - lo)})`;
+      read.classList.toggle('bad', hi - lo < 20 || hi - lo > 600);
+      inStart.value = String(Math.round(lo)); inEnd.value = String(Math.round(hi));
+    };
+    const ready = (duration) => {
+      total = duration || 0;
+      if (!total) return;
+      lo = Math.min(total * 0.3, Math.max(0, total - 150));
+      hi = Math.min(total, lo + 120);
+      wrap.hidden = false;
+      paint();
+      clearInterval(timer);
+      timer = setInterval(() => {
+        if (!document.body.contains(box)) { clearInterval(timer); return; }
+        if (stopAt !== null && cur() >= stopAt) { player.pause(); stopAt = null; }
+        paint();
+      }, 250);
+    };
+    const reset = () => {
+      if (player) player.destroy();
+      player = null; total = 0; stage.innerHTML = ''; wrap.hidden = true; inStart.value = ''; inEnd.value = '';
+    };
+    const html5 = (src) => {
+      reset();
+      const v = document.createElement('video');
+      v.src = src; v.controls = true; v.playsInline = true; v.preload = 'metadata';
+      stage.appendChild(v);
+      v.addEventListener('loadedmetadata', () => ready(v.duration), { once: true });
+      player = { time: () => v.currentTime, seek: (t) => { v.currentTime = t; }, play: () => v.play(), pause: () => v.pause(),
+        destroy: () => { v.pause(); v.removeAttribute('src'); v.load(); } };
+    };
+    const youtube = async (id) => {
+      reset();
+      await loadYT();
+      const holder = document.createElement('div');
+      stage.appendChild(holder);
+      const yp = new window.YT.Player(holder, {
+        videoId: id, playerVars: { rel: 0, modestbranding: 1, playsinline: 1 },
+        events: { onReady: () => ready(yp.getDuration()) },
+      });
+      player = { time: () => (yp.getCurrentTime ? yp.getCurrentTime() : 0), seek: (t) => yp.seekTo(t, true),
+        play: () => yp.playVideo(), pause: () => yp.pauseVideo(), destroy: () => yp.destroy() };
+    };
+
+    // where the video comes from
+    const showSource = () => {
+      const src = (form.querySelector('[name=source]:checked') || {}).value || 'link';
+      box.querySelectorAll('[data-when]').forEach((el) => { el.hidden = el.dataset.when !== src; });
+      reset();
+      if (src === 'project') { const o = $('select[name=project]'); if (o && o.selectedOptions[0] && o.selectedOptions[0].dataset.src) html5(o.selectedOptions[0].dataset.src); }
+      if (src === 'file') { const f = $('input[name=file]'); if (f && f.files && f.files[0]) html5(URL.createObjectURL(f.files[0])); }
+    };
+    box.addEventListener('change', (e) => {
+      if (e.target.name === 'source') showSource();
+      else if (e.target.name === 'project') { const o = e.target.selectedOptions[0]; if (o && o.dataset.src) html5(o.dataset.src); else reset(); }
+      else if (e.target.name === 'file') { const f = e.target.files && e.target.files[0]; if (f) html5(URL.createObjectURL(f)); else reset(); }
+    });
+    const openLink = () => {
+      const url = $('input[name=url]').value.trim();
+      const id = ytId(url);
+      if (id) youtube(id);
+      else if (/^https?:\/\/\S+\.(mp4|webm|mov|m4v|mp3|m4a|wav)(\?|$)/i.test(url)) html5(url);
+      else if (url) { reset(); wrap.hidden = false; stage.innerHTML = '<p class="vc-muted vc-train-noprev">This link cannot play here. Type the start and end below as minutes:seconds.</p>'; manual(); }
+    };
+    $('[data-load]').addEventListener('click', openLink);
+    $('input[name=url]').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); openLink(); } });
+    // A link that cannot play here (another site): type the times instead.
+    const manual = () => {
+      bar.hidden = true; box.querySelector('.vc-train-tools').hidden = true;
+      if (box.querySelector('[data-manual]')) return;
+      const m = document.createElement('div');
+      m.className = 'vc-f-row'; m.dataset.manual = '1';
+      m.innerHTML = '<div class="vc-f"><label>From</label><input type="text" placeholder="50:00" data-mfrom></div><div class="vc-f"><label>To</label><input type="text" placeholder="52:00" data-mto></div>';
+      wrap.appendChild(m);
+      const parse = (v) => (/^\d+(:\d{1,2}){0,2}$/.test(v.trim()) ? v.trim().split(':').reduce((n, x) => n * 60 + Number(x), 0) : null);
+      m.addEventListener('input', () => { const a = parse(m.querySelector('[data-mfrom]').value), b = parse(m.querySelector('[data-mto]').value); inStart.value = a ?? ''; inEnd.value = b ?? ''; });
+    };
+
+    // handles: drag, or set them at the playing moment
+    const at = (clientX) => { const r = bar.getBoundingClientRect(); return Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * total; };
+    [hLo, hHi].forEach((h) => h.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); h.setPointerCapture(e.pointerId);
+      const move = (ev) => {
+        const t = at(ev.clientX);
+        if (h === hLo) lo = Math.min(t, hi - 5); else hi = Math.max(t, lo + 5);
+        if (player) player.seek(h === hLo ? lo : hi);
+        paint();
+      };
+      const up = () => { h.removeEventListener('pointermove', move); h.removeEventListener('pointerup', up); };
+      h.addEventListener('pointermove', move); h.addEventListener('pointerup', up);
+    }));
+    bar.addEventListener('click', (e) => { if (e.target === bar || e.target === sel) { player && player.seek(at(e.clientX)); paint(); } });
+    box.querySelectorAll('[data-set]').forEach((b) => b.addEventListener('click', () => {
+      const t = cur();
+      if (b.dataset.set === 'lo') { lo = Math.min(t, total - 5); if (hi <= lo + 5) hi = Math.min(total, lo + 120); }
+      else { hi = Math.max(t, 5); if (lo >= hi - 5) lo = Math.max(0, hi - 120); }
+      paint();
+    }));
+    $('[data-play-part]').addEventListener('click', () => { if (!player) return; player.seek(lo); player.play(); stopAt = hi; });
+
+    form.addEventListener('submit', (e) => {
+      const a = Number(inStart.value), b = Number(inEnd.value);
+      if (inStart.value === '' || inEnd.value === '' || !(b - a >= 20)) {
+        e.preventDefault();
+        alert('Open the video and mark the part where only he speaks: a start and an end at least 20 seconds apart.');
+        return;
+      }
+      const btn = form.querySelector('button[type=submit]');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ri-loader-4-line vc-spin"></i>Learning his voice… (a link takes about a minute)'; }
+    });
+    showSource();
+  }
+
+  const run = () => document.querySelectorAll('[data-voice-train]').forEach(enhance);
+  run();
+  document.addEventListener('turbo:load', run);
+})();

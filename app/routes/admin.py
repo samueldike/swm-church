@@ -10584,7 +10584,7 @@ async def _clip_page(request: Request, db: AsyncSession, template: str, title: s
                       "watermark": _clip_marks_view(wchurch, await __import__("app.core.clipper.watermark", fromlist=["load"]).load(db, wchurch)),
                       "music": await __import__("app.core.clipper.music", fromlist=["load"]).load(db, wchurch),
                       "voices": _clip_voices_view(await __import__("app.core.clipper.speakers", fromlist=["load"]).load(db, wchurch)),
-                      "audio_projects": [x for x in projects if x.branch_id == wchurch and __import__("app.core.clipper.media", fromlist=["audio_path"]).audio_path(x.id).exists()][:30]}
+                      "audio_projects": [x for x in projects if x.branch_id == wchurch and __import__("app.core.clipper.media", fromlist=["source_path"]).source_path(x.id).exists()][:30]}
         watch_ctx = {"cfg": wcfg, "state": wstate, "church": wchurch, "church_name": wb.name if wb else "",
                      "every": _cw.EVERY, "days": _cw.DAY_NAMES, "formats": _co.FORMATS, "lengths": _co.LENGTHS,
                      "captions": {k: v["label"] for k, v in (await _clip_cap_styles(db, wchurch)).items()},
@@ -11900,8 +11900,95 @@ async def admin_clipper_voices_mode(request: Request, db: AsyncSession = Depends
                      else "Every preacher's message will be clipped.", "success")
 
 
+class _VoiceError(Exception):
+    pass
+
+
+async def _clip_voice_sample(db, church: int, form) -> tuple[list, str]:
+    """Voiceprints of one pastor from the part of a video the person marked (start/end on the player):
+    a YouTube (or any video) link, one of the church's clipper videos, or an uploaded recording.
+    Returns (voiceprints, label); raises _VoiceError with a message for the person."""
+    import shutil
+    import tempfile
+    from pathlib import Path
+
+    from app.core.clipper import media, speakers
+    from app.core.clipper.options import clock, parse_clock
+    from app.models.clipper import ClipProject
+
+    source = str(form.get("source") or "")
+    start, end = parse_clock(str(form.get("start") or "")), parse_clock(str(form.get("end") or ""))
+    if start is None or end is None or end - start < 20:
+        raise _VoiceError("Mark where he speaks on the video: a start and an end at least 20 seconds apart.")
+    end = min(end, start + 600)                 # ten minutes is plenty; longer only slows things down
+    work = Path(tempfile.mkdtemp(prefix="voice_"))
+    try:
+        audio = work / "a.wav"
+        if source == "link":
+            url = str(form.get("url") or "").strip()
+            if not media.valid_url(url):
+                raise _VoiceError("Paste the full link to the video (it starts with https://).")
+            sound = work / "sound.m4a"
+            try:
+                title = await asyncio.to_thread(media.download, url, sound, sound_only=True,
+                                                cookies=(await _clip_pipeline_cookies()) or None)
+            except media.ClipperError as exc:
+                raise _VoiceError(str(exc)) from exc
+            await asyncio.to_thread(media.extract_audio, sound, audio, start, end)
+            label = f"{(title or 'Video')[:40]} {clock(start)}–{clock(end)}"
+        elif source == "project":
+            pid = form.get("project")
+            p = await db.get(ClipProject, int(pid)) if str(pid or "").isdigit() else None
+            if not p or p.branch_id != church:
+                raise _VoiceError("Choose one of this church's videos.")
+            src = media.source_path(p.id)
+            if src.exists():                    # the video itself: its clock is the one on the player
+                await asyncio.to_thread(media.extract_audio, src, audio, start, end)
+            else:
+                full = media.audio_path(p.id)
+                if not full.exists():
+                    raise _VoiceError("That video is no longer on the server. Choose another, or paste its link.")
+                off = float((p.settings or {}).get("range_start") or 0)
+                await asyncio.to_thread(media.extract_audio, full, audio, max(0.0, start - off), max(0.0, end - off))
+            label = f"{(p.title or 'Video')[:40]} {clock(start)}–{clock(end)}"
+        elif source == "file":
+            upload = form.get("file")
+            if upload is None or not getattr(upload, "filename", ""):
+                raise _VoiceError("Choose the recording to learn his voice from.")
+            raw = work / ("in" + Path(upload.filename).suffix.lower()[:6])
+            data = await upload.read(500 * 1024 * 1024 + 1)
+            if len(data) > 500 * 1024 * 1024:
+                raise _VoiceError("That recording is over 500 MB. Mark a part of a smaller file, or paste its link.")
+            raw.write_bytes(data)
+            try:
+                await asyncio.to_thread(media.extract_audio, raw, audio, start, end)
+            except media.ClipperError as exc:
+                raise _VoiceError("That file could not be read as audio or video.") from exc
+            label = f"{upload.filename[:40]} {clock(start)}–{clock(end)}"
+        else:
+            raise _VoiceError("Choose a video: a link, one of your videos, or a recording.")
+        if not audio.exists():
+            raise _VoiceError("The sound of that part could not be read. Try another part or another video.")
+        try:
+            embs = await asyncio.to_thread(speakers.sample_prints, audio, 0.0, end - start)
+        except FileNotFoundError as exc:
+            raise _VoiceError("The voice model is not installed on this server yet.") from exc
+        if len(embs) < 2:
+            raise _VoiceError("Hardly any speech was found in that part. Mark a part where only he is speaking.")
+        return embs, label
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+async def _clip_pipeline_cookies() -> str:
+    from app.core.clipper import pipeline
+
+    return await pipeline.youtube_cookies()
+
+
 @router.post("/clipper/voices/people", name="admin_clipper_voices_person")
 async def admin_clipper_voices_person(request: Request, db: AsyncSession = Depends(get_db)):
+    """Add a pastor AND learn his voice from the part of a video marked on the player, in one step."""
     admin, church = await _clip_ctx(request, db)
     if not admin or church is None or not _clip_can_manage_channels(admin):
         return _redirect(request, "/admin/clipper", "Only the church office can change the voice library.", "error")
@@ -11919,10 +12006,19 @@ async def admin_clipper_voices_person(request: Request, db: AsyncSession = Depen
         return _redirect(request, back, "The senior pastor is already added. Remove him first to start again.", "error")
     if len(cfg["people"]) >= 12:
         return _redirect(request, back, "Up to 12 people can be in the voice library.", "error")
-    cfg["people"].append({"id": speakers.new_id(), "name": name, "role": role, "samples": []})
+    try:
+        embs, label = await _clip_voice_sample(db, church, form)
+    except _VoiceError as exc:
+        return _redirect(request, back, str(exc), "error")
+    cfg = await speakers.load(db, church)                 # (the download may have taken a minute)
+    cfg["people"].append({"id": speakers.new_id(), "name": name, "role": role,
+                          "samples": [{"id": speakers.new_id(), "label": label, "embs": embs}]})
     await speakers.save(db, church, cfg)
+    await log_admin_action(db, admin.id, "clipper.voice_person", "branch", church, {"name": name, "prints": len(embs)}, request)
     await db.commit()
-    return _redirect(request, back, f"{name} added. Now add voice samples of him.", "success")
+    cal = speakers.calibrate(cfg)
+    return _redirect(request, back, f"{name} added and his voice learned from {label} ({len(embs)} voiceprints). "
+                                    f"Add one or two more parts from other services for steadier recognition. {cal['note']}", "success")
 
 
 @router.post("/clipper/voices/{person_id}/sample", name="admin_clipper_voices_sample")
@@ -11930,12 +12026,7 @@ async def admin_clipper_voices_sample(person_id: str, request: Request, db: Asyn
     admin, church = await _clip_ctx(request, db)
     if not admin or church is None or not _clip_can_manage_channels(admin):
         return _redirect(request, "/admin/clipper", "Only the church office can change the voice library.", "error")
-    import tempfile
-    from pathlib import Path
-
-    from app.core.clipper import media, speakers
-    from app.core.clipper.options import clock, parse_clock
-    from app.models.clipper import ClipProject
+    from app.core.clipper import speakers
 
     church = await _clip_channel_church(request, db, admin, church)
     back = f"/admin/clipper/settings?church={church}#voices"
@@ -11946,47 +12037,14 @@ async def admin_clipper_voices_sample(person_id: str, request: Request, db: Asyn
     if len(person["samples"]) >= speakers.MAX_SAMPLES:
         return _redirect(request, back, f"Up to {speakers.MAX_SAMPLES} samples per person. Remove one first.", "error")
     form = await request.form()
-    upload = form.get("file")
-    tmp_dir = None
     try:
-        if upload is not None and getattr(upload, "filename", ""):
-            tmp_dir = Path(tempfile.mkdtemp(prefix="voice_"))
-            raw = tmp_dir / ("in" + Path(upload.filename).suffix.lower()[:6])
-            data = await upload.read(60 * 1024 * 1024 + 1)
-            if len(data) > 60 * 1024 * 1024:
-                return _redirect(request, back, "A voice sample can be at most 60 MB.", "error")
-            raw.write_bytes(data)
-            audio = tmp_dir / "a.wav"
-            try:
-                await asyncio.to_thread(media.extract_audio, raw, audio)
-            except media.ClipperError:
-                return _redirect(request, back, "That file could not be read as audio.", "error")
-            start, end, label = 0.0, 600.0, upload.filename[:60]
-        else:
-            pid = form.get("project")
-            p = await db.get(ClipProject, int(pid)) if str(pid or "").isdigit() else None
-            if not p or p.branch_id != church:
-                return _redirect(request, back, "Choose one of this church's videos.", "error")
-            audio = media.audio_path(p.id)
-            if not audio.exists():
-                return _redirect(request, back, "That video's sound is no longer on the server. Choose a newer one.", "error")
-            start, end = parse_clock(form.get("start")), parse_clock(form.get("end"))
-            if start is None or end is None or end - start < 30:
-                return _redirect(request, back, "Give a from and to time at least 30 seconds apart (e.g. 50:00 to 52:00), "
-                                                "where only he is speaking.", "error")
-            end = min(end, start + 600)
-            label = f"{(p.title or 'Video')[:40]} {clock(start)}–{clock(end)}"
-        try:
-            embs = await asyncio.to_thread(speakers.sample_prints, audio, start, end)
-        except FileNotFoundError:
-            return _redirect(request, back, "The voice model is not installed on this server yet.", "error")
-        if len(embs) < 2:
-            return _redirect(request, back, "Hardly any speech was found in that stretch. Choose one where he speaks throughout.", "error")
-    finally:
-        if tmp_dir is not None:
-            import shutil
-
-            shutil.rmtree(tmp_dir, ignore_errors=True)
+        embs, label = await _clip_voice_sample(db, church, form)
+    except _VoiceError as exc:
+        return _redirect(request, back, str(exc), "error")
+    cfg = await speakers.load(db, church)
+    person = next((x for x in cfg["people"] if x["id"] == person_id), None)
+    if not person:
+        return _redirect(request, back, "That person was removed meanwhile.", "error")
     person["samples"].append({"id": speakers.new_id(), "label": label, "embs": embs})
     await speakers.save(db, church, cfg)
     await log_admin_action(db, admin.id, "clipper.voice_sample", "branch", church, {"person": person_id, "prints": len(embs)}, request)

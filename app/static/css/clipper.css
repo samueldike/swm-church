@@ -551,3 +551,28 @@
 .ve-check { display: flex; align-items: flex-start; gap: 10px; font-size: 13.5px; font-weight: 600; line-height: 1.4; }
 .ve-check input[type=checkbox] { width: 18px; height: 18px; min-height: 0; flex: none; margin-top: 2px; accent-color: #b8860b; }
 .vc-watch { max-width: 760px; }
+
+/* Learn a pastor's voice: where the video is, the player, and the part marked with two handles (clipper-voice.js). */
+.vc-train { display: flex; flex-direction: column; gap: 14px; }
+.vc-train-label { font-size: 13px; font-weight: 700; }
+.vc-seg-choice { display: flex; flex-wrap: wrap; gap: 8px; }
+.vc-seg-choice label { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid var(--vc-line, #ddd); border-radius: 10px;
+  font-size: 13px; font-weight: 600; cursor: pointer; background: var(--vc-surface, #fff); }
+.vc-seg-choice label:has(input:checked) { border-color: #c9a227; box-shadow: 0 0 0 2px #f0c837; background: #fffaf0; }
+.vc-seg-choice input { accent-color: #b8860b; }
+.vc-train-load { display: flex; gap: 8px; }
+.vc-train-load input { flex: 1; min-width: 0; min-height: 44px; }
+.vc-train-player { display: flex; flex-direction: column; gap: 10px; }
+.vc-train-stage { position: relative; width: 100%; max-width: 640px; aspect-ratio: 16 / 9; background: #000; border-radius: 12px; overflow: hidden; }
+.vc-train-stage iframe, .vc-train-stage video { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.vc-train-noprev { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 20px; color: #ddd; text-align: center; }
+.vc-train-bar { position: relative; height: 34px; max-width: 640px; border-radius: 8px; background: var(--vc-sunken, #efece4); cursor: pointer; }
+.vc-train-sel { position: absolute; top: 0; bottom: 0; background: rgba(240, 200, 55, .55); border-radius: 6px; }
+.vc-train-h { position: absolute; top: -4px; bottom: -4px; width: 14px; margin-left: -7px; border: 0; border-radius: 6px; background: #b8860b; cursor: ew-resize; touch-action: none; }
+.vc-train-h:focus-visible { outline: 2px solid #111; }
+.vc-train-now { position: absolute; top: -6px; bottom: -6px; width: 2px; background: #111; pointer-events: none; }
+.vc-train-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 640px; font-size: 13px; }
+.vc-train-tools b.bad { color: var(--vc-bad, #b42318); }
+.vc-more-sample { margin-top: 8px; }
+.vc-more-sample > summary { list-style: none; display: inline-flex; }
+.vc-more-sample > summary::-webkit-details-marker { display: none; }
