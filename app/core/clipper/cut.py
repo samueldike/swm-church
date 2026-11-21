@@ -62,6 +62,31 @@ def true_words(words: list[list], gaps: list[list[float]]) -> list[list]:
     return out
 
 
+END_TAIL = 0.6        # seconds kept after the short's very last word: the word lands, then the fade-out has room
+
+
+def land_ending(segments: list[list[float]], words: list[list], *, limit: float | None = None) -> list[list[float]]:
+    """Give the short's last segment a natural tail after its last word (pure; tested).
+
+    Word end times from speech recognition are often early and the short fades out over its final moments, so a
+    cut that stops a breath after the last word swallows it. The tail stops before the next word said in the
+    source (nothing of the next sentence is heard) and never runs past ``limit`` (a person's drawn clip end)."""
+    if not segments:
+        return segments
+    out = [list(s) for s in segments]
+    s, e = out[-1]
+    ends = [w[1] for w in words if s - 0.01 <= (w[0] + w[1]) / 2 <= e + 0.02]
+    last_word = max(ends) if ends else e
+    nxt = min((w[0] for w in words if w[0] >= last_word - 0.01 and w[0] > e - 0.01), default=None)
+    want = last_word + END_TAIL
+    if nxt is not None:
+        want = min(want, nxt - 0.06)
+    if limit is not None:
+        want = min(want, limit)
+    out[-1][1] = round(max(e, want), 3)
+    return out
+
+
 def piece_spans(words: list[list], idx: list[int]) -> list[list[float]]:
     """Continuous-speech spans for the kept words (timings already corrected), padded, cut at pauses."""
     if not idx:
@@ -146,6 +171,7 @@ def build_cut(plan: list[dict], words: list[list], gaps: list[list[float]], *, f
             else:
                 segments.append([round(s, 3), round(e, 3)])
     segments = [s for s in segments if s[1] - s[0] >= 0.08]
+    segments = land_ending(segments, words)
 
     # Words on the short's own timeline.
     out_words: list[list] = []

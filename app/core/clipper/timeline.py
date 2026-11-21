@@ -106,5 +106,9 @@ def cut_for(edit: dict, words: list[list], gaps: list[list[float]]) -> dict:
                 segments.append([round(a, 3), round(b, 3)])
     if not segments:
         raise TimelineError("Nothing is left to play in this short.")
+    if tighten and clips:                          # a tail after the last word, inside the clip the person drew
+        from app.core.clipper.cut import land_ending
+
+        segments = land_ending(segments, tw, limit=float(clips[-1]["end"]))
     out_words, length = words_on_timeline(segments, tw)
     return {"segments": segments, "words": out_words, "length": length}

@@ -210,7 +210,7 @@ SCRIPTURE_LOOK = "vignette=angle=PI/5,eq=gamma_r=1.04:gamma_b=0.96:saturation=1.
 
 def graph(segments: list[list[float]], vfs: list[str], fps: int, *, subtitles: str | None,
           denoise: str | None = None, flashes: bool = False, fade_out: bool = False,
-          sharpen: bool = False) -> tuple[list[tuple[float, float]], str]:
+          sharpen: bool = False, speech_end: float | None = None) -> tuple[list[tuple[float, float]], str]:
     """(inputs as (seek, duration), filter graph) for the whole short (pure; tested)."""
     inputs: list[tuple[float, float]] = []
     where: dict[int, tuple[int, float]] = {}
@@ -249,13 +249,17 @@ def graph(segments: list[list[float]], vfs: list[str], fps: int, *, subtitles: s
     flash_at = transition_points(segments) if flashes else []
     light = flash_filter(flash_at)
     total = sum(e - s for s, e in segments)
+    # The fade-out starts only once the last word has ended (else it swallows the end of the sentence).
+    fade_st = max(0.0, total - FADE_OUT, (speech_end + 0.05) if speech_end is not None else 0.0)
+    fade_d = total - fade_st
+    fade_out = fade_out and fade_d >= 0.08
     touches = [x for x in (light, "unsharp=5:5:0.5:5:5:0" if sharpen else "",
-                           f"fade=t=out:st={max(0.0, total - FADE_OUT):.3f}:d={FADE_OUT}" if fade_out else "") if x]
+                           f"fade=t=out:st={fade_st:.3f}:d={fade_d:.3f}" if fade_out else "") if x]
     if touches:
         lines.append(f"[vc]{','.join(touches)}[vcl]")
     src = "vcl" if touches else "vc"
     lines.append(f"[{src}]{subtitles}[vo]" if subtitles else f"[{src}]null[vo]")
-    tail = f",afade=t=out:st={max(0.0, total - FADE_OUT):.3f}:d={FADE_OUT}" if fade_out else ""
+    tail = f",afade=t=out:st={fade_st:.3f}:d={fade_d:.3f}" if fade_out else ""
     if flash_at:
         # One whoosh per light transition, its middle on the flash, mixed under the levelled speech.
         lines.append(f"[ac]{denoise_chain(denoise)}loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000[asp]")
@@ -385,7 +389,8 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
         if touches:
             used.append("fade out")
         inputs, filters = graph(segments, vfs, fps, subtitles=None, denoise=denoise, flashes=flashes,
-                                fade_out=touches, sharpen=sharpen)
+                                fade_out=touches, sharpen=sharpen,
+                                speech_end=max((w[1] for w in words), default=None) if words else None)
         script = work / "graph.txt"
         script.write_text(filters, encoding="utf-8")
         tmp_out = work / "final.mp4"
@@ -501,7 +506,9 @@ def finish(master: Path, style: str | None, frame: Path | None = None, frame_id:
         speech = "0:a"
         if music_path is not None:            # the music bed, levelled and ducked under the speaker
             cmd += ["-stream_loop", "-1", "-ss", f"{music.start_of(music_item):.2f}", "-i", str(music_path)]
-            chain += music.mix_filters("0:a", f"{n}:a", float(info.get("duration") or 0), "mixed")
+            chain += music.mix_filters("0:a", f"{n}:a", float(info.get("duration") or 0), "mixed",
+                                       level=music.level_of(music_item),
+                                       track_lufs=music.measure(music_path, music.start_of(music_item)))
             speech, n = "mixed", n + 1
         if outro is None:
             chain.append(f"[{last}]format=yuv420p[vo]")

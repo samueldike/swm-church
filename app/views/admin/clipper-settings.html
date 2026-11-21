@@ -283,9 +283,19 @@
     <summary><i class="ri-music-2-line"></i><b>Background music</b>
       <span class="vc-pill">{{ mc['items']|length }} track{{ '' if mc['items']|length == 1 else 's' }}</span>
       <span class="vc-pill {{ 'ok' if mc['default'] }}">Default: {{ 'Random' if mc['default'] == 'random' else ((mc['items']|selectattr('id', 'equalto', mc['default'])|map(attribute='name')|first) or 'None') }}</span>
-      <span class="vc-muted vc-yt-why">Played softly under the shorts, always below the preacher's voice.</span></summary>
+      <span class="vc-muted vc-yt-why">Played under the shorts, always below the preacher's voice.</span></summary>
     <div class="vc-yt-body">
-      <p class="vc-muted">The level is set for you: every track is brought to the same quiet loudness, dips further whenever the preacher speaks, comes up a little in the pauses, and fades in and out. His voice is never changed. Use music the church has the rights to: platforms mute or take down videos with copyrighted songs.</p>
+      <p class="vc-muted">Every track is brought to the same loudness, dips a little whenever the preacher speaks, comes up in the pauses, and fades in and out. His voice is never changed. Use music the church has the rights to: platforms mute or take down videos with copyrighted songs.</p>
+      <form method="post" action="{{ url_for('admin_clipper_music_action', track_id='all', action='volume') }}?church={{ frames.church }}" class="vc-inline vc-mt" data-turbo="false">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <b class="text-[13px]">Music volume</b>
+        <div class="vc-choice" role="radiogroup" aria-label="Music volume">
+          {% for k, label, hint in [('soft', 'Soft', 'barely there'), ('normal', 'Normal', 'heard, never in the way'), ('lively', 'Lively', 'more energy')] %}
+          <label><input type="radio" name="volume" value="{{ k }}" {{ 'checked' if (mc.volume or 'normal') == k }} onchange="this.form.submit()">{{ label }}<small>{{ hint }}</small></label>
+          {% endfor %}
+        </div>
+        <noscript><button type="submit" class="btn btn-secondary btn-sm">Save</button></noscript>
+      </form>
       <form method="post" action="{{ url_for('admin_clipper_music_add') }}?church={{ frames.church }}" enctype="multipart/form-data" class="vc-inline" data-turbo="false">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="text" name="name" placeholder="Name, e.g. Soft piano" maxlength="60" aria-label="Track name">

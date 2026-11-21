@@ -13,14 +13,15 @@ own id, so the same short always gets the same track (and its finished copy stay
 
 How the level is set (``mix_filters``, one pass inside render.finish):
 
-1. every track is brought to the same quiet loudness (``BED_LUFS``, ~18 LU under the -14 LUFS speech), whatever
-   its own mastering, and limited so a loud drum hit cannot poke out;
-2. it is side-chain compressed by the speech: whenever the speaker talks it dips a further ~10-15 dB, and comes back
-   up gently in the pauses;
+1. every track is brought to the same loudness (``LEVELS[volume]``: soft/normal/lively, 13-8 LU under the -14 LUFS
+   speech), whatever its own mastering, and limited so a loud drum hit cannot poke out;
+2. it is side-chain compressed by the speech: whenever the speaker talks it dips a few dB more (gently, so it is
+   still heard on a phone), and comes back up in the pauses;
 3. it fades in over 1 s and out over 1.5 s, and loops if the short is longer than the track;
 4. the speech itself is untouched: it is mixed on top at full level (``normalize=0``).
 
-Tested in tests/test_clipper.py (including a measured check that the music sits 20 dB+ under speech while speaking).
+Tested in tests/test_clipper.py (measured: the music is clearly there but stays well under the voice while he speaks,
+and rises in the pauses). The first version sat 35 dB under the voice: correct on paper, silent on a phone.
 """
 from __future__ import annotations
 
@@ -32,7 +33,10 @@ from pathlib import Path
 TYPES = {".mp3", ".m4a", ".aac", ".wav", ".ogg", ".flac"}
 MAX_BYTES = 25 * 1024 * 1024
 MAX_SECONDS = 15 * 60
-BED_LUFS = -32          # the music bed's loudness before ducking (speech is -14)
+# The music bed's loudness before ducking (the speech is -14 LUFS). Per church: Settings -> Background music.
+LEVELS = {"soft": -27, "normal": -24, "lively": -21}
+VOLUME_LABELS = {"soft": "Soft", "normal": "Normal", "lively": "Lively"}
+BED_LUFS = LEVELS["normal"]
 
 
 class MusicError(ValueError):
@@ -40,7 +44,7 @@ class MusicError(ValueError):
 
 
 def empty() -> dict:
-    return {"items": [], "default": None}
+    return {"items": [], "default": None, "volume": "normal"}
 
 
 def parse(raw: str | None) -> dict:
@@ -53,6 +57,7 @@ def parse(raw: str | None) -> dict:
     ids = {i["id"] for i in out["items"]}
     d = data.get("default")
     out["default"] = d if d in ids or (d == "random" and ids) else None
+    out["volume"] = data.get("volume") if data.get("volume") in LEVELS else "normal"
     return out
 
 
@@ -70,9 +75,9 @@ def resolve(choice: str | None, cfg: dict, short_id: int) -> dict | None:
     choice = choice or "default"
     if choice == "none":
         return None
-    if choice == "default":
-        return pick(cfg.get("default"))
-    return pick(choice) or pick(cfg.get("default"))      # a deleted track falls back to the default
+    item = pick(cfg.get("default")) if choice == "default" else (pick(choice) or pick(cfg.get("default")))
+    # the church's volume travels with the track (render.finish and the finished file's name read it)
+    return {**item, "volume": cfg.get("volume") or "normal"} if item else None
 
 
 def start_of(item: dict | None) -> float:
@@ -86,20 +91,60 @@ def start_of(item: dict | None) -> float:
     return max(0.0, min(s, max(0.0, float(item.get("seconds") or 0) - 5.0)))
 
 
+def measure(path: Path, start: float = 0.0) -> float:
+    """Integrated loudness (LUFS) of up to 3 minutes of the track from ``start``, cached beside the file."""
+    import re
+    import subprocess
+
+    side = path.with_suffix(path.suffix + ".loud.json")
+    key = f"{round(float(start), 1)}"
+    try:
+        cache = json.loads(side.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        cache = {}
+    if key in cache:
+        return float(cache[key])
+    proc = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-ss", f"{start:.2f}", "-t", "180", "-i", str(path),
+                           "-af", "ebur128", "-f", "null", "-"], capture_output=True, text=True, timeout=180)
+    found = re.findall(r"I:\s*(-?[\d.]+) LUFS", proc.stderr or "")
+    lufs = float(found[-1]) if found else -14.0
+    if lufs < -70:                                  # (near) silence: don't boost the hiss
+        lufs = -14.0
+    cache[key] = lufs
+    try:
+        side.write_text(json.dumps(cache), encoding="utf-8")
+    except OSError:
+        pass
+    return lufs
+
+
+def level_of(item: dict | None) -> int:
+    return LEVELS.get((item or {}).get("volume") or "normal", BED_LUFS)
+
+
 def cache_key(item: dict) -> str:
-    """Identifies the track AND its start, so moving the start makes new finished copies."""
-    return f"{item['id']}s{int(round(start_of(item)))}"
+    """Identifies the track, its start and its volume, so changing any of them makes new finished copies."""
+    # "m2": the mix without loudnorm (copies made by the first mix lost their last seconds and are remade).
+    return f"{item['id']}s{int(round(start_of(item)))}v{abs(level_of(item))}m2"
 
 
-def mix_filters(speech: str, music: str, length: float, out: str) -> list[str]:
-    """Filter-graph lines that lay ``music`` under ``speech`` (labels without brackets) as ``out`` (pure; tested)."""
+def mix_filters(speech: str, music: str, length: float, out: str, level: int | None = None,
+                track_lufs: float | None = None) -> list[str]:
+    """Filter-graph lines that lay ``music`` under ``speech`` (labels without brackets) as ``out`` (pure; tested).
+
+    The track is brought to the bed level with a FIXED gain from its measured loudness (``measure``), never with
+    ffmpeg's loudnorm: loudnorm holds ~3 s of audio back, and when the speech ended the mix ended with it, so the
+    last seconds of every short with music came out silent (found 2026-11, measured)."""
     fade_out = max(0.0, length - 1.5)
+    lufs = level if level is not None else BED_LUFS
+    gain = max(-40.0, min(20.0, lufs - (track_lufs if track_lufs is not None else -14.0)))
     return [
         f"[{speech}]aresample=48000,aformat=channel_layouts=stereo,asplit=2[mxsp][mxsc]",
         f"[{music}]aresample=48000,aformat=channel_layouts=stereo,atrim=duration={length:.3f},asetpts=PTS-STARTPTS,"
-        f"loudnorm=I={BED_LUFS}:TP=-9:LRA=7,alimiter=limit=0.25,"
+        f"volume={gain:.2f}dB,alimiter=limit=0.5:attack=5:release=80,apad,atrim=duration={length:.3f},"
         f"afade=t=in:st=0:d=1,afade=t=out:st={fade_out:.3f}:d=1.5[mxbed]",
-        "[mxbed][mxsc]sidechaincompress=threshold=0.012:ratio=12:attack=15:release=450:knee=4[mxduck]",
+        # Gentle ducking: a few dB down while he speaks (heard, never competing), back up in the pauses.
+        "[mxbed][mxsc]sidechaincompress=threshold=0.03:ratio=3:attack=40:release=600:knee=6:makeup=1[mxduck]",
         f"[mxsp][mxduck]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[{out}]",
     ]
 

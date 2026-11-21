@@ -11766,6 +11766,16 @@ async def admin_clipper_music_action(track_id: str, action: str, request: Reques
     church = await _clip_channel_church(request, db, admin, church)
     back = f"/admin/clipper/settings?church={church}#music"
     cfg = await music.load(db, church)
+    if action == "volume":                       # /clipper/music/all/volume: how loud the music sits under the voice
+        form = await request.form()
+        vol = str(form.get("volume") or "")
+        if vol not in music.LEVELS:
+            return _redirect(request, back, "Choose Soft, Normal or Lively.", "error")
+        cfg["volume"] = vol
+        await music.save(db, church, cfg)
+        await log_admin_action(db, admin.id, "clipper.music_volume", "branch", church, {"volume": vol}, request)
+        await db.commit()
+        return _redirect(request, back, f"Music volume: {music.VOLUME_LABELS[vol]}. New downloads and posts use it.", "success")
     if action == "default" and track_id in ("none", "random"):
         if track_id == "random" and not cfg["items"]:
             return _redirect(request, back, "Add some tracks first.", "error")

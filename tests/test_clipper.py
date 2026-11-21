@@ -843,7 +843,7 @@ def test_music_choice_random_is_stable_and_start_stays_inside_the_track():
     assert picks == {"a", "b"}                                          # random spreads over the library
     assert music.resolve("gone", cfg, 5) == music.resolve("random", cfg, 5)  # a deleted track: the default
     assert music.start_of(cfg["items"][0]) == 30 and music.start_of({"seconds": 20, "start": 99}) == 15
-    assert music.cache_key(cfg["items"][0]) == "as30"
+    assert music.cache_key(cfg["items"][0]) == "as30v24m2"
     assert music.parse('{"items":[],"default":"random"}')["default"] is None
 
 
@@ -881,9 +881,13 @@ def test_music_sits_far_under_the_voice_and_ducks_while_he_speaks(tmp_path):
     talk = [x[int(s * 16000):int((s + 0.5) * 16000)] for s in (2.3, 4.3, 6.3)]     # middle of speech bursts
     rest = [x[int(s * 16000):int((s + 0.5) * 16000)] for s in (3.3, 5.3)]          # middle of pauses
     under = np.mean([band(t, 300) - band(t, 1500) for t in talk])
-    assert under >= 20, f"music only {under:.1f} dB under the voice"
+    assert 6 <= under <= 26, f"music {under:.1f} dB under the voice (heard, but never in the way)"
     duck = np.mean([band(r, 1500) for r in rest]) - np.mean([band(t, 1500) for t in talk])
-    assert duck >= 6, f"music dipped only {duck:.1f} dB while he spoke"
+    assert duck >= 1.0, f"music rose only {duck:.1f} dB in the pauses"
+    # The whole short keeps its sound to the very end (the first mix lost its last ~3 s: loudnorm's look-ahead).
+    tail = x[int(6.6 * 16000):int(7.4 * 16000)]
+    assert np.sqrt(np.mean(tail ** 2)) > 30, "the end of the short went silent"
+    assert len(x) / 16000 > 7.8
 
 
 # ─── effects: light transitions, smart zoom, finishing touches ───────
@@ -1338,3 +1342,20 @@ def test_the_preview_knows_how_big_libass_draws_each_font():
     assert all(0.4 < studio.font_em(f["file"]) <= 1.0 for f in studio.FONTS.values())
     assert all("em" in st for st in captions.public_styles().values())
     assert studio.public(studio.preset("comic"))["em"] == studio.font_em("Bangers-Regular.ttf")
+
+
+def test_the_last_word_lands_before_the_short_ends():
+    from app.core.clipper import cut, render
+
+    words = [[10.0, 10.4, "Grace"], [10.5, 10.9, "is"], [11.0, 11.6, "enough."], [13.0, 13.4, "Next"]]
+    seg = cut.land_ending([[9.9, 11.74]], words)
+    assert seg == [[9.9, 12.2]]                                   # a 0.6 s tail after the last word
+    close = cut.land_ending([[9.9, 11.74]], words[:3] + [[11.9, 12.2, "Next"]])
+    assert close[-1][1] == 11.84                                  # never into the next thing said
+    drawn = cut.land_ending([[9.9, 11.74]], words, limit=11.9)
+    assert drawn[-1][1] == 11.9                                   # never past the clip a person drew
+    # The fade-out waits for the last word: 10 s short whose speech ends at 9.9 s fades only over the last 0.05 s.
+    _, g = render.graph([[0, 10]], ["scale=180:320"], 25, subtitles=None, fade_out=True, speech_end=9.5)
+    assert "afade=t=out:st=9.650:d=0.350" in g
+    _, g = render.graph([[0, 10]], ["scale=180:320"], 25, subtitles=None, fade_out=True, speech_end=9.98)
+    assert ":d=0.350" not in g and "fade=t=out:st=10" not in g    # no room left: no fade over his words
