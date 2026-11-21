@@ -479,3 +479,15 @@
   .vc-setnav { display: grid !important; grid-template-columns: 1fr 1fr; gap: 6px; overflow: visible !important; }
   .vc-setnav a { white-space: normal; }
 }
+
+/* Branding for one video (new-video form and the video page): four plain rows, label left, choice right. */
+.vc-brand { display: flex; flex-direction: column; gap: 8px; }
+.vc-brand-row { display: grid; grid-template-columns: 170px minmax(0, 1fr); align-items: center; gap: 10px; font-size: 13px; font-weight: 600; }
+.vc-brand-row span { display: inline-flex; align-items: center; gap: 8px; color: var(--vc-ink2, #555); }
+.vc-brand-row select { width: 100%; min-height: 40px; }
+@media (max-width: 560px) { .vc-brand-row { grid-template-columns: 1fr; gap: 4px; } }
+.vc-brand-fold > summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.vc-brand-fold > summary::-webkit-details-marker { display: none; }
+.vc-brand-fold > summary h2::after { content: "  ›"; color: var(--vc-muted, #888); }
+.vc-brand-fold[open] > summary h2::after { content: "  ⌄"; }
+.vc-look-panel .vc-add-panel { min-width: min(460px, 92vw); }

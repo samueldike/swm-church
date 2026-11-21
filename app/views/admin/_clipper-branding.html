@@ -1,0 +1,30 @@
+{#- Branding for one video: its own watermark, frame, outro and music, or the church's defaults (Clipper settings).
+    Used by the new-video form and the video's own page. `branding` comes from admin.py:_clip_branding. -#}
+{% macro branding_fields(branding, st, fmt='vertical') -%}
+  {% set d = branding.defaults %}
+  {% set rows = [
+      ('watermark', 'Watermark', 'ri-copyright-line', d.watermark),
+      ('frame', 'Frame', 'ri-layout-masonry-line', d.frame.get(fmt, 'none') if d.frame else 'none'),
+      ('outro', 'Outro', 'ri-film-line', d.outro),
+      ('music', 'Background music', 'ri-music-2-line', d.music),
+  ] %}
+  <div class="vc-brand">
+    {% for key, label, icon, dname in rows %}
+      {% set cur = st.get(key) or 'default' %}
+      <label class="vc-brand-row" for="vc-brand-{{ key }}">
+        <span><i class="{{ icon }}"></i>{{ label }}</span>
+        <select id="vc-brand-{{ key }}" name="{{ key }}" {% if key == 'frame' %}data-brand-frame data-shape="{{ fmt }}" data-defaults='{{ (d.frame or {})|tojson }}'{% endif %}>
+          <option value="default" {{ 'selected' if cur == 'default' }} data-default-label="1">The church's usual ({{ 'random track' if dname == 'random' else dname }})</option>
+          <option value="none" {{ 'selected' if cur == 'none' }}>None for this video</option>
+          {% if key == 'music' and branding.music %}<option value="random" {{ 'selected' if cur == 'random' }}>A random track from the library</option>{% endif %}
+          {% for i in branding[key] %}
+            <option value="{{ i.id }}" {{ 'selected' if cur == i.id }} {% if i.format %}data-format="{{ i.format }}"{% endif %}>{{ i.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    {% endfor %}
+    {% if not (branding.watermark|length > 1 or branding.frame or branding.outro or branding.music) %}
+      <p class="vc-muted text-[12px]">Add frames, outros and music in {{ 'Video Clipper → Settings'|directions }} to choose them here.</p>
+    {% endif %}
+  </div>
+{%- endmacro %}

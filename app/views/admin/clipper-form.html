@@ -1,10 +1,11 @@
 {% extends "layouts/admin_base.html" %}
 {% from "macros/admin.html" import page_header with context %}
+{% from "admin/_clipper-branding.html" import branding_fields with context %}
 {% block title %}New video | Video Clipper | {{ siteName }}{% endblock %}
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}New video{% endblock %}
 {% block topbar_icon %}ri-scissors-cut-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=13">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=14">{% endblock %}
 
 {% block page_header %}
   {{ page_header("New video", "Choose the video, how many shorts you want and how they should look. You can leave the page while it works.",
@@ -129,6 +130,14 @@
     </div>
   </section>
 
+  <section class="vc-panel vc-section">
+    <details class="vc-brand-fold">
+      <summary><h2><i class="ri-palette-line"></i>Branding for this video</h2>
+        <span class="vc-muted text-[12.5px]">Uses the church's usual watermark, frame, outro and music. Open to choose different ones for this video only.</span></summary>
+      <div class="vc-mt">{{ branding_fields(branding, defaults, defaults.format) }}</div>
+    </details>
+  </section>
+
   <div class="vc-foot">
     <span class="vc-msg" id="vc-msg" role="status" aria-live="polite"></span>
     <div class="vc-upbar" id="vc-upbar"><div class="vc-bar"><i id="vc-upfill" style="width:0%"></i></div></div>
@@ -140,7 +149,7 @@
 {% endblock %}
 
 {% block extra_body %}
-<script src="{{ url_for('static', path='js/clipper.js') }}?v=14"></script>
+<script src="{{ url_for('static', path='js/clipper.js') }}?v=15"></script>
 <script src="{{ url_for('static', path='js/clipper-range.js') }}?v=1"></script>
 <script>window.SWMClipper && window.SWMClipper.form();</script>
 {% endblock %}

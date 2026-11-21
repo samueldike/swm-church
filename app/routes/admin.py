@@ -10632,6 +10632,7 @@ async def admin_clipper_new(request: Request, db: AsyncSession = Depends(get_db)
     return await render_template(request, "admin/clipper-form.html", {
         "opt": options, "defaults": options.DEFAULTS, "max_mb": app_settings.CLIPPER_MAX_UPLOAD_MB,
         "custom_captions": {k: v["label"] for k, v in (await _clip_cap_styles(db, church)).items() if v.get("custom")},
+        "branding": await _clip_branding(db, church),
         "ai_ready": await ai.is_configured(), "fast_listen": bool(await _clip_groq_key()), "title": "New video", **ctx})
 
 
@@ -10648,6 +10649,7 @@ async def admin_clipper_create(request: Request, db: AsyncSession = Depends(get_
 
     form = await request.form()
     st, problems = options.clean_settings(form)
+    _clip_branding_check(st, await _clip_branding(db, church))
     if not await _clip_style_ok(db, church, st.get("caption_style")):
         st["caption_style"] = options.DEFAULTS["caption_style"] if st.get("caption_style") == "none" else "pop"
     kind = "upload" if form.get("source_kind") == "upload" else "url"
@@ -12004,6 +12006,82 @@ async def admin_clipper_clip_anyway(project_id: int, request: Request, db: Async
     return JSONResponse({"ok": True})
 
 
+# ── Video Clipper → branding for one video (its own watermark, frame, outro and music instead of the church's) ──
+
+async def _clip_branding(db, church: int | None) -> dict:
+    """The church's libraries, as the new-video form and the video page offer them, and which item is the default."""
+    from app.core.clipper import frames, music, outros, watermark
+
+    if not church:
+        return {"watermark": [], "frame": [], "outro": [], "music": [], "defaults": {}}
+    wcfg, fcfg = await watermark.load(db, church), await frames.load(db, church)
+    ocfg, mcfg = await outros.load(db, church), await music.load(db, church)
+    shape = {"vertical": "9:16", "square": "1:1", "landscape": "16:9"}
+    wm_name = {m["id"]: m["name"] for m in watermark.choices(wcfg)}
+    return {
+        "watermark": [{"id": m["id"], "name": m["name"]} for m in watermark.choices(wcfg)],
+        "frame": [{"id": i["id"], "name": f"{i['name']} ({shape.get(i['format'], i['format'])})", "format": i["format"]}
+                  for i in fcfg["items"]],
+        "outro": [{"id": i["id"], "name": f"{i['name']} ({i['seconds']:g} s)"} for i in ocfg["items"]],
+        "music": [{"id": i["id"], "name": i["name"]} for i in mcfg["items"]],
+        "defaults": {
+            "watermark": wm_name.get(wcfg.get("default")) or "none",
+            "frame": {f: next((i["name"] for i in fcfg["items"] if i["id"] == fid), None) or "none"
+                      for f, fid in (fcfg.get("default") or {}).items()},
+            "outro": next((i["name"] for i in ocfg["items"] if i["id"] == ocfg.get("default")), None) or "none",
+            "music": "random" if mcfg.get("default") == "random" else (next(
+                (i["name"] for i in mcfg["items"] if i["id"] == mcfg.get("default")), None) or "none"),
+        },
+    }
+
+
+def _clip_branding_check(st: dict, lib: dict) -> dict:
+    """Keep only choices that exist in the church's libraries (anything else falls back to the church default)."""
+    from app.core.clipper.options import LOOK_KEYS
+
+    for key in LOOK_KEYS:
+        val = st.get(key) or "default"
+        ok = val in ("default", "none") or (key == "music" and val == "random" and lib["music"]) \
+            or any(i["id"] == val for i in lib[key])
+        st[key] = val if ok else "default"
+    return st
+
+
+@router.post("/clipper/{project_id}/look", name="admin_clipper_look")
+async def admin_clipper_look(project_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    """Branding for one video: set its watermark, frame, outro and music, and give every short of it the same."""
+    admin, church = await _clip_ctx(request, db)
+    p = await _clip_project(db, admin, church, project_id) if church is not None else None
+    if not p:
+        return JSONResponse({"ok": False, "error": "That video was not found."}, status_code=404)
+    from app.core.clipper.options import LOOK_KEYS, clean_look
+
+    form = await request.form()
+    lib = await _clip_branding(db, p.branch_id)
+    chosen = _clip_branding_check({k: clean_look(form.get(k)) for k in LOOK_KEYS if k in form}, lib)
+    if not chosen:
+        return JSONResponse({"ok": False, "error": "Nothing to change."}, status_code=400)
+    p.settings = {**(p.settings or {}), **chosen}
+    changed = []
+    for sh in p.shorts:
+        moved = False
+        for key, val in chosen.items():
+            if (getattr(sh, key) or "default") != val:
+                setattr(sh, key, val)
+                moved = True
+        if moved:
+            changed.append(sh)
+    await log_admin_action(db, admin.id, "clipper.look", "clip_project", p.id, {**chosen, "shorts": len(changed)}, request)
+    await db.commit()
+    from app.tasks import clip_caption_task
+
+    for sh in changed:                     # the download and post copies are made ahead with the new look
+        if sh.status == "ready":
+            await _clip_enqueue(clip_caption_task, p.id, sh.id)
+    await _clip_frames(db, p)
+    return JSONResponse({"ok": True, "changed": len(changed), **_clip_json_project(p)})
+
+
 @router.post("/clipper/{project_id}/rank", name="admin_clipper_rank")
 async def admin_clipper_rank(project_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     """Rank all the AI shorts of this video against each other, best first (one AI call, ~10-30 s)."""
@@ -12091,6 +12169,7 @@ async def admin_clipper_show(project_id: int, request: Request, db: AsyncSession
                         "tracks": [{"id": i["id"], "name": i["name"]} for i in p._music_cfg["items"]],
                         "music_default": p._music_cfg["default"]},
         "fast_listen": bool(await _clip_groq_key()), "p": p, "data": _clip_json_project(p), "opt": options, "st": {**options.DEFAULTS, **(p.settings or {})},
+        "branding": await _clip_branding(db, p.branch_id),
         "cap_styles": await _clip_cap_styles(db, p.branch_id),
         "title": p.title or "Video", "full_view": True, **ctx})   # the shorts need the width: menu opens collapsed
 

@@ -29,6 +29,19 @@
     const ctl = fresh(); const opt = { signal: ctl.signal };
     const f = document.getElementById('vc-form');
     if (!f) return;
+    // Branding for this video: a frame is made for one shape, so only the chosen shape's frames are offered.
+    const frameSel = f.querySelector('[data-brand-frame]');
+    const fitFrames = () => {
+      if (!frameSel) return;
+      const shape = (f.querySelector('[name=format]:checked') || {}).value || frameSel.dataset.shape;
+      const defs = JSON.parse(frameSel.dataset.defaults || '{}');
+      const first = frameSel.querySelector('[data-default-label]');
+      if (first) first.textContent = `The church's usual (${(defs[shape] && defs[shape] !== 'none') ? defs[shape] : 'none'})`;
+      frameSel.querySelectorAll('option[data-format]').forEach((o) => { o.hidden = o.disabled = o.dataset.format !== shape; });
+      if (frameSel.selectedOptions[0] && frameSel.selectedOptions[0].disabled) frameSel.value = 'default';
+    };
+    f.addEventListener('change', (e) => { if (e.target.name === 'format') fitFrames(); }, opt);
+    fitFrames();
     const csrf = f.querySelector('[name=csrf_token]').value;
     const msg = document.getElementById('vc-msg');
     const go = document.getElementById('vc-go');
@@ -82,6 +95,7 @@
       go.disabled = true;
       say('Starting…');
       const data = new FormData(f);
+      data.set('frame', (f.querySelector('[data-brand-frame]') || {}).value || 'default');
       if (kind === 'upload') data.set('file_name', file.name);
       const start = await post(f.dataset.create, data, csrf);
       if (!start.ok) { say(start.error, true); go.disabled = false; return; }
@@ -537,6 +551,18 @@
       clearTimeout(window.__swmClipTimer); window.__swmClipTimer = setTimeout(poll, 1500);
     }, opt);
 
+    const lookForm = document.getElementById('vc-look-form');
+    if (lookForm) lookForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = lookForm.querySelector('button[type=submit]'); btn.disabled = true;
+      const r = await post(`${base}/look`, new FormData(lookForm), csrf);
+      btn.disabled = false;
+      if (!r.ok) { toast(r.error || 'Could not change the branding.'); return; }
+      lookForm.closest('details').open = false;
+      delete r.ok; const n = r.changed; delete r.changed;
+      data = r; grid.dataset.key = ''; draw();
+      toast(n ? `Branding applied to ${n} short${n > 1 ? 's' : ''}. Their downloads are being remade.` : 'Every short already had this branding.');
+    }, { signal: ctl.signal });
     document.getElementById('vc-more').addEventListener('submit', async (e) => {
       e.preventDefault();
       const r = await post(`${base}/more`, new FormData(e.target), csrf);

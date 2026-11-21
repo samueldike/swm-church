@@ -69,7 +69,21 @@ DEFAULTS = {
     "denoise": "natural",
     "range_start": None,
     "range_end": None,
+    # Branding for this video: "default" (the church's), "none", or a library item's id (frames/watermark/outros/music).
+    "watermark": "default",
+    "frame": "default",
+    "outro": "default",
+    "music": "default",
 }
+
+LOOK_KEYS = ("watermark", "frame", "outro", "music")
+_LOOK_ID = re.compile(r"^(default|none|random|[a-z0-9-]{1,40})$")
+
+
+def clean_look(value) -> str:
+    """A branding choice as posted: default / none / random / an id (checked against the library by the route)."""
+    v = str(value or "default").strip().lower()
+    return v if _LOOK_ID.match(v) else "default"
 
 _CLOCK = re.compile(r"^\s*(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\.\d+)?\s*$")
 
@@ -124,6 +138,8 @@ def clean_settings(form) -> tuple[dict, list[str]]:
             out[key] = val                                  # a Caption Studio design
             continue
         out[key] = val if val in table else DEFAULTS[key]
+    for key in LOOK_KEYS:
+        out[key] = clean_look(get(key))
     try:
         q = int(get("quality") or DEFAULTS["quality"])
     except (TypeError, ValueError):

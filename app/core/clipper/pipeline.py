@@ -351,7 +351,8 @@ async def compose(project_id: int, *, more: int | None = None) -> bool:
                                  score_why=(s.get("why") or None), plan=s["plan"],
                                  length=s["length"], format=st["format"], quality=int(st["quality"]),
                                  framing=st["framing"], caption_style=captions.style_id(st["caption_style"]) or captions.DEFAULT, denoise=st.get("denoise") or "natural",
-                                 captions_on=captions.style_id(st["caption_style"]) is not None, status="queued"))
+                                 captions_on=captions.style_id(st["caption_style"]) is not None, status="queued",
+                                 watermark=st.get("watermark") or "default", frame=st.get("frame") or "default", outro=st.get("outro") or "default", music=st.get("music") or "default",))
             brief = dict(proj.brief or {})
             if video:
                 brief["video"] = video
@@ -440,7 +441,7 @@ async def manual_short(project_id: int, start: float, end: float) -> int | None:
                           plan=plan, length=sum(u.speech for u in units), format=st["format"],
                           quality=int(st["quality"]), framing=st["framing"], caption_style=captions.style_id(st["caption_style"]) or captions.DEFAULT, denoise=st.get("denoise") or "natural",
                                  captions_on=captions.style_id(st["caption_style"]) is not None,
-                          status="queued")
+                          status="queued", watermark=st.get("watermark") or "default", frame=st.get("frame") or "default", outro=st.get("outro") or "default", music=st.get("music") or "default",)
         db.add(short)
         proj.status, proj.stage, proj.progress, proj.error = "rendering", "Cutting the shorts", 0.0, None
         await db.commit()

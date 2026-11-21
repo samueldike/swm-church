@@ -1365,3 +1365,14 @@ def test_the_last_word_lands_before_the_short_ends():
     assert "afade=t=out:st=9.650:d=0.350" in g
     _, g = render.graph([[0, 10]], ["scale=180:320"], 25, subtitles=None, fade_out=True, speech_end=9.98)
     assert ":d=0.350" not in g and "fade=t=out:st=10" not in g    # no room left: no fade over his words
+
+
+def test_a_video_can_have_its_own_branding():
+    from app.core.clipper import options
+
+    st, _ = options.clean_settings({"watermark": "none", "frame": "abc123", "outro": "default", "music": "random"})
+    assert (st["watermark"], st["frame"], st["outro"], st["music"]) == ("none", "abc123", "default", "random")
+    st, _ = options.clean_settings({"frame": "../etc", "music": "<x>"})
+    assert st["frame"] == "default" and st["music"] == "default"          # anything odd: the church's usual
+    st, _ = options.clean_settings({})
+    assert all(st[k] == "default" for k in options.LOOK_KEYS)

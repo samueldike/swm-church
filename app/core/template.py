@@ -83,7 +83,7 @@ SETTINGS_TABS = {
 }
 CLIPPER_PAGES = {"Channels": "/admin/clipper/channels", "YouTube access": "/admin/clipper/settings#youtube-access",
                  "Clip our YouTube lives automatically": "/admin/clipper/settings#watch",
-                 "Watermark": "/admin/clipper/settings#watermark"}
+                 "Watermark": "/admin/clipper/settings#watermark", "Settings": "/admin/clipper/settings"}
 
 
 def _directions(value):

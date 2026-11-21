@@ -1,9 +1,10 @@
 {% extends "layouts/admin_base.html" %}
+{% from "admin/_clipper-branding.html" import branding_fields with context %}
 {% block title %}{{ p.title or 'Video' }} | Video Clipper | {{ siteName }}{% endblock %}
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}{{ p.title or 'Video' }}{% endblock %}
 {% block topbar_icon %}ri-scissors-cut-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=13">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=14">{% endblock %}
 
 {% block content %}
 {#- Rendered from JSON by app/static/js/clipper.js, which polls status.json while the project works. -#}
@@ -52,6 +53,17 @@
           </form>
         </div>
       </details>
+      <details class="vc-add vc-look-panel">
+        <summary class="btn btn-secondary btn-sm"><i class="ri-palette-line"></i>Branding for this video</summary>
+        <div class="vc-add-panel">
+          <form id="vc-look-form" class="vc-add-choice">
+            <b><i class="ri-palette-line"></i>Watermark, frame, outro and music</b>
+            <span class="vc-muted">For every short of this video (each short can still change its own).</span>
+            {{ branding_fields(branding, st, st.format) }}
+            <div class="vc-inline"><button type="submit" class="btn btn-primary btn-sm"><i class="ri-check-line"></i>Apply to all shorts</button></div>
+          </form>
+        </div>
+      </details>
       <span class="flex-grow"></span>
       <a href="{{ url_for('admin_clipper_channels') }}" class="btn btn-ghost btn-sm"><i class="ri-share-forward-line"></i>Channels</a>
       <form method="post" action="{{ url_for('admin_clipper_delete', project_id=p.id) }}" data-confirm="Delete this video and all its shorts? This cannot be undone.">
@@ -79,6 +91,6 @@
 
 {% block extra_body %}
 <script src="{{ url_for('static', path='js/clipper-captions.js') }}?v=5"></script>
-<script src="{{ url_for('static', path='js/clipper.js') }}?v=14"></script>
+<script src="{{ url_for('static', path='js/clipper.js') }}?v=15"></script>
 <script>window.SWMClipper && window.SWMClipper.show();</script>
 {% endblock %}
