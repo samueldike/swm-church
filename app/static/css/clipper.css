@@ -514,3 +514,12 @@
   background: var(--vc-sunken, #f5f3ee); font-size: 13px; color: var(--vc-ink2, #444); }
 .vc-scope i { color: #b8860b; font-size: 18px; }
 .vc-scope span { flex: 1 1 260px; }
+
+/* Green-screen frames: the remove-a-colour controls and the live preview (clipper-keyer.js). */
+.vc-keyer { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding: 10px 12px; border: 1px solid var(--vc-line, #e2dfd6); border-radius: 12px; }
+.vc-keyer-wide { flex-basis: 100%; }
+.vc-keyer-row { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; font-size: 13px; }
+.vc-keyer-row label { display: inline-flex; align-items: center; gap: 8px; }
+.vc-keyer-row input[type=color] { width: 44px; height: 32px; padding: 0 2px; border: 1px solid var(--vc-line, #ddd); border-radius: 8px; background: none; }
+.vc-keyer-preview { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.vc-keyer-preview canvas { max-width: 100%; max-height: 320px; border-radius: 8px; cursor: crosshair; box-shadow: 0 2px 10px rgba(0,0,0,.15); }

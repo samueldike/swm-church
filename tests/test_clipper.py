@@ -1406,3 +1406,34 @@ def test_the_quick_listen_answer_keeps_a_margin_and_never_guesses():
     times = scout.sample_times(3600)
     assert times[0] == 30 and all(b - a == scout.EVERY for a, b in zip(times, times[1:])) and times[-1] + scout.SAMPLE <= 3600
     assert "[0:30]" in scout.prompt([(30.0, "Let us worship")], title="Sunday", duration=3600)
+
+
+def test_a_green_screen_frame_becomes_see_through_where_the_screen_is(tmp_path, monkeypatch):
+    import io
+
+    import numpy as np
+    import pytest
+    from PIL import Image, ImageDraw
+
+    from app.core.clipper import frames
+
+    img = Image.new("RGB", (1080, 1920), (0, 200, 40))                   # a green screen...
+    d = ImageDraw.Draw(img)
+    d.rectangle((0, 0, 1079, 160), fill=(255, 255, 255))                 # ...with a white bar,
+    d.rectangle((0, 1760, 1079, 1919), fill=(20, 20, 20))                # a black bar,
+    d.rectangle((300, 40, 780, 120), fill=(240, 200, 55))                # gold lettering
+    buf = io.BytesIO(); img.save(buf, "JPEG", quality=92)
+    png, cleared = frames.chroma_key(buf.getvalue(), "#00C828", 40)
+    out = np.asarray(Image.open(io.BytesIO(png)))
+    assert out[960, 540, 3] == 0                                         # the screen: see-through
+    assert out[80, 100, 3] == 255 and out[80, 100, :3].min() > 230       # white stays white
+    assert out[1840, 540, 3] == 255 and out[80, 540, 3] == 255           # black and gold stay
+    assert 0.6 < cleared < 0.85
+    with pytest.raises(frames.FrameError):                                # without the option: refused, with advice
+        frames.check_png(buf.getvalue())
+    monkeypatch.setattr(frames, "folder", lambda branch_id: tmp_path)
+    cfg = frames.empty()
+    item = frames.add(cfg, 1, "Conference", buf.getvalue(), key="#00C828", tolerance=40)
+    assert item["format"] == "vertical" and (tmp_path / item["file"]).exists()
+    with pytest.raises(frames.FrameError):                                # a colour that is not there
+        frames.add(frames.empty(), 1, "x", buf.getvalue(), key="#FF00FF", tolerance=10)

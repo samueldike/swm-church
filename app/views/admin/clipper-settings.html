@@ -1,10 +1,11 @@
 {% extends "layouts/admin_base.html" %}
 {% from "macros/admin.html" import page_header with context %}
+{% from "admin/_clipper-keyer.html" import keyer_fields with context %}
 {% block title %}Clipper settings | {{ siteName }}{% endblock %}
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}Settings{% endblock %}
 {% block topbar_icon %}ri-settings-3-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=18">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=19">{% endblock %}
 
 {% block page_header %}
   {{ page_header("Clipper settings", "Set these up once. Every new video uses them.",
@@ -132,8 +133,9 @@
       <form method="post" action="{{ url_for('admin_clipper_frames_add') }}?church={{ frames.church }}" enctype="multipart/form-data" class="vc-inline" data-turbo="false">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="text" name="name" placeholder="Name, e.g. Sunday logo bar" maxlength="60" aria-label="Frame name">
-        <input type="file" name="file" accept="image/png" required aria-label="PNG frame">
+        <input type="file" name="file" accept="image/png,image/jpeg,image/webp" required aria-label="Frame picture">
         <button type="submit" class="btn btn-primary btn-sm"><i class="ri-upload-2-line"></i>Add frame</button>
+        <div class="vc-keyer-wide">{{ keyer_fields() }}</div>
       </form>
       {% for fmt in frames.formats %}
         {% set items = fc['items']|selectattr('format', 'equalto', fmt)|list %}

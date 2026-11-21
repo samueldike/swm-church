@@ -32,6 +32,7 @@
   </div>
 {%- endmacro %}
 
+{% from "admin/_clipper-keyer.html" import keyer_fields with context %}
 {#- The upload window: put it OUTSIDE any <form> (a form inside a form is invalid and would send its fields). -#}
 {% macro branding_upload_window(branding) -%}
 {% if branding.can_upload %}
@@ -46,6 +47,7 @@
     <input id="vc-up-name" name="name" maxlength="60" placeholder="e.g. Conference logo">
     <label class="field-label vc-mt" for="vc-up-file">File</label>
     <input id="vc-up-file" name="file" type="file" required>
+    {{ keyer_fields(id='vc-up-keyer') }}
     <label class="vc-mt text-[13px]" id="vc-up-secs-row" hidden>A picture shows for
       <select name="seconds" id="vc-up-secs">{% for n in [1, 2, 3, 4] %}<option value="{{ n }}" {{ 'selected' if n == 3 }}>{{ n }} s</option>{% endfor %}</select></label>
     <p class="vc-up-msg" id="vc-up-msg" role="status" aria-live="polite"></p>
@@ -66,8 +68,8 @@
   const KINDS = {
     watermark: { title: 'New watermark', url: '/admin/clipper/watermarks', accept: 'image/png,image/webp',
                  hint: 'A PNG logo with a see-through background, at least 300 pixels wide.' },
-    frame: { title: 'New frame', url: '/admin/clipper/frames', accept: 'image/png',
-             hint: 'A PNG the size of the short (1080×1920 vertical, 1080×1080 square, 1920×1080 landscape) with a see-through middle.' },
+    frame: { title: 'New frame', url: '/admin/clipper/frames', accept: 'image/png,image/jpeg,image/webp',
+             hint: 'The size of the short (1080×1920 vertical, 1080×1080 square, 1920×1080 landscape), with a see-through middle or a green screen where the video goes.' },
     outro: { title: 'New outro', url: '/admin/clipper/outros', accept: 'image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm',
              hint: 'A picture (shown for 1 to 4 seconds) or a short video (up to 15 seconds) played after the short.' },
     music: { title: 'New background music', url: '/admin/clipper/music', accept: 'audio/*,.mp3,.m4a,.wav,.ogg,.flac',
@@ -89,8 +91,9 @@
     const k = KINDS[kind];
     document.getElementById('vc-up-title').textContent = k.title;
     document.getElementById('vc-up-hint').textContent = k.hint;
-    const file = document.getElementById('vc-up-file'); file.value = ''; file.accept = k.accept;
-    document.getElementById('vc-up-name').value = '';
+    form.reset();
+    const file = document.getElementById('vc-up-file'); file.accept = k.accept;
+    document.getElementById('vc-up-keyer').hidden = kind !== 'frame';
     document.getElementById('vc-up-secs-row').hidden = kind !== 'outro';
     msg.textContent = ''; msg.className = 'vc-up-msg';
     dlg.showModal();

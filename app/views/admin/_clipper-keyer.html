@@ -1,0 +1,18 @@
+{#- Green-screen frames: "Remove a green screen", the screen colour (click the preview to pick it), how much is
+    removed, and a live preview with a stand-in video showing through. Goes INSIDE the frame upload form, next to
+    its file input (name="file"). Server side: app/core/clipper/frames.py:chroma_key; browser: clipper-keyer.js. -#}
+{% macro keyer_fields(id='') -%}
+<div class="vc-keyer" data-keyer {% if id %}id="{{ id }}"{% endif %}>
+  <label class="ve-check"><input type="checkbox" name="green" value="1"> Remove a green screen <span class="vc-muted">(makes one colour see-through, for frames made on a green or other one-colour background)</span></label>
+  <div class="vc-keyer-row">
+    <label>Screen colour <input type="color" name="key_color" value="#00ff00" aria-label="Screen colour"></label>
+    <label>How much is removed <input type="range" name="key_tolerance" min="5" max="90" value="40" aria-label="How much is removed"> <output data-tol>40</output></label>
+  </div>
+  <p class="vc-muted text-[12px]" data-keyer-note></p>
+  <div class="vc-keyer-preview" data-keyer-preview hidden>
+    <canvas title="Click the screen colour to pick it"></canvas>
+    <small class="vc-muted">Preview: the video shows through the see-through part. Click the screen colour in the picture to pick it.</small>
+  </div>
+</div>
+<script src="{{ url_for('static', path='js/clipper-keyer.js') }}?v=1"></script>
+{%- endmacro %}

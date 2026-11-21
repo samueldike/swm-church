@@ -11252,7 +11252,13 @@ async def admin_clipper_frames_add(request: Request, db: AsyncSession = Depends(
         return _clip_lib_answer(request, back, "A church can keep up to 30 frames. Delete one first.", False)
     before = dict(cfg["default"])
     try:
-        item = await asyncio.to_thread(frames.add, cfg, church, form.get("name") or upload.filename.rsplit(".", 1)[0], data)
+        key = (form.get("key_color") or frames.KEY_DEFAULT) if form.get("green") == "1" else None
+        try:
+            tol = int(form.get("key_tolerance") or frames.KEY_TOLERANCE)
+        except ValueError:
+            tol = frames.KEY_TOLERANCE
+        item = await asyncio.to_thread(frames.add, cfg, church, form.get("name") or upload.filename.rsplit(".", 1)[0], data,
+                                       key=key, tolerance=tol)
     except frames.FrameError as exc:
         return _clip_lib_answer(request, back, str(exc), False)
     if form.get("for_video") == "1":
