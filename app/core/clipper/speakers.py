@@ -75,7 +75,7 @@ def calibrate(cfg: dict) -> dict:
     own = prints(s)
     if len(own) < 4 or len({x["id"] for x in (s or {}).get("samples") or []}) < 2:
         return {"accept": None, "consistency": None, "closest_other": None, "strength": "missing",
-                "note": "Add at least two voice samples of the senior pastor, from different services."}
+                "note": "Add at least two parts of the chosen preacher's preaching, from different services."}
     # Leave-one-sample-out: how alike his samples are to each other (different days, rooms, moods).
     by_sample = {}
     for smp in s["samples"]:
@@ -89,10 +89,10 @@ def calibrate(cfg: dict) -> dict:
     others = [p for p in cfg["people"] if p["role"] == "other" and len(prints(p))]
     closest = max((_score(x, own) for p in others for x in prints(p)), default=None)
     if closest is not None and closest > accept - MARGIN:
-        strength, note = "fair", ("A registered pastor sounds very close to him; add more samples of both from "
+        strength, note = "fair", ("Another voice in the library sounds very close; add more parts of both from "
                                   "different services so the difference is clearer.")
     elif consistency >= 0.7:
-        strength, note = "strong", "His voice is recognised reliably."
+        strength, note = "strong", "The voice is recognised reliably."
     else:
         strength, note = "fair", "Add another sample from a different service to make recognition steadier."
     return {"accept": round(accept, 3), "consistency": round(consistency, 3),

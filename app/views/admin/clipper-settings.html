@@ -428,15 +428,22 @@
   {% set sp = vc.people|selectattr('role', 'equalto', 'senior')|first %}
   <details class="vc-panel vc-yt" id="voices">
     <summary><i class="ri-user-voice-line"></i><b>Whose messages are clipped</b>
-      <span class="vc-pill {{ 'ok' if vc.mode == 'senior' }}">{{ ('Only ' ~ (sp.name if sp else 'the senior pastor')) if vc.mode == 'senior' else 'All preachers' }}</span>
-      <span class="vc-muted vc-yt-why">Recognises the senior pastor by his voice, even next to pastors who preach like him.</span></summary>
+      <span class="vc-pill {{ 'ok' if vc.mode == 'senior' }}">{{ ('Only ' ~ sp.name) if vc.mode == 'senior' and sp else 'All preachers' }}</span>
+      <span class="vc-muted vc-yt-why">Recognises a preacher by voice, even next to preachers who sound alike.</span></summary>
     <div class="vc-yt-body">
-      <p class="vc-muted">A voiceprint captures the sound of a voice itself (the throat, mouth and chest), not the preaching style, so a pastor who has learned the senior pastor's phrasing still sounds like himself to it. Add the senior pastor with two or more samples from different services; add the pastors who sound most like him too: each part of a sermon goes to whoever it is closest to.</p>
+      <p class="vc-muted">A voiceprint captures the sound of a voice itself (the throat, mouth and chest), not the preaching style, so a preacher who has learned another's phrasing still sounds like themselves to it. Add each voice with two or more parts from different services, including the preachers who sound most alike: each part of a sermon goes to whoever it is closest to.</p>
 
       <form method="post" action="{{ url_for('admin_clipper_voices_mode') }}?church={{ frames.church }}" class="vc-choice" role="radiogroup" aria-label="Whose messages are clipped">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <label><input type="radio" name="mode" value="all" {{ 'checked' if vc.mode != 'senior' }} onchange="this.form.submit()">All preachers<small>Every sermon in a video is clipped.</small></label>
-        <label><input type="radio" name="mode" value="senior" {{ 'checked' if vc.mode == 'senior' }} {{ 'disabled' if cal.accept is none }} onchange="this.form.submit()">Only the senior pastor<small>{{ 'Only the parts he preaches are clipped.' if cal.accept is not none else 'Add him and two voice samples first.' }}</small></label>
+        <label><input type="radio" name="mode" value="senior" {{ 'checked' if vc.mode == 'senior' }} {{ 'disabled' if not vc.people }} onchange="this.form.submit()">Only one preacher
+          {% if vc.people %}
+          <select name="person" aria-label="The preacher whose messages are clipped" onchange="this.form.querySelector('[name=mode][value=senior]').checked = true; this.form.submit()">
+            {% if not sp %}<option value="" selected disabled>Choose from the voices below…</option>{% endif %}
+            {% for person in vc.people %}<option value="{{ person.id }}" {{ 'selected' if sp and sp.id == person.id }}>{{ person.name }}</option>{% endfor %}
+          </select>
+          <small>Only the parts this person preaches are clipped. Needs two parts of their preaching.</small>
+          {% else %}<small>Add a voice below first.</small>{% endif %}</label>
       </form>
 
       {% if sp %}
@@ -450,7 +457,7 @@
         <li>
           <div class="vc-track-head">
             <i class="{{ 'ri-vip-crown-2-line' if person.role == 'senior' else 'ri-user-line' }}"></i><b>{{ person.name }}</b>
-            <span class="vc-pill {{ 'gold' if person.role == 'senior' }}">{{ 'Senior pastor' if person.role == 'senior' else 'Another pastor' }}</span>
+            {% if person.role == 'senior' %}<span class="vc-pill gold">{{ 'Only this voice is clipped' if vc.mode == 'senior' else 'Chosen preacher' }}</span>{% endif %}
             <small class="vc-muted">{{ person.samples|length }} sample{{ '' if person.samples|length == 1 else 's' }}</small>
             <span class="flex-grow"></span>
             <form method="post" action="{{ url_for('admin_clipper_voices_delete', person_id=person.id) }}?church={{ frames.church }}" data-confirm="Remove {{ person.name }} and his samples?"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-ghost btn-sm text-bad" type="submit" aria-label="Remove {{ person.name }}"><i class="ri-delete-bin-6-line"></i></button></form>
@@ -475,17 +482,13 @@
 
       <form method="post" action="{{ url_for('admin_clipper_voices_person') }}?church={{ frames.church }}" enctype="multipart/form-data" class="vc-addform vc-mt" data-turbo="false">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <h3>Add a pastor</h3>
-        <div class="vc-f-row">
-          <div class="vc-f vc-f-wide"><label for="vc-vp-name">Pastor's name</label>
-            <input id="vc-vp-name" type="text" name="name" maxlength="80" required autocomplete="off"></div>
-          <div class="vc-f vc-f-wide"><label for="vc-vp-role">Who he is</label>
-            <select id="vc-vp-role" name="role" required><option value="" disabled selected>Choose…</option>{% if not sp %}<option value="senior">The senior pastor</option>{% endif %}<option value="other">Another pastor (sounds like him)</option></select></div>
-        </div>
+        <h3>Add a voice</h3>
+        <div class="vc-f vc-f-wide"><label for="vc-vp-name">Name</label>
+          <input id="vc-vp-name" type="text" name="name" maxlength="80" required autocomplete="off"></div>
         {{ voice_trainer('new', frames.audio_projects) }}
-        <div class="vc-addform-foot"><button type="submit" class="btn btn-primary"><i class="ri-user-add-line"></i>Add him and learn his voice</button></div>
+        <div class="vc-addform-foot"><button type="submit" class="btn btn-primary"><i class="ri-user-add-line"></i>Add and learn this voice</button></div>
       </form>
-      <p class="vc-muted text-[12px]">No pastor is added for you: add each one with a video where he preaches, and mark 1 to 3 minutes where only he speaks (no singing). Then add one or two more parts from other services for each.</p>
+      <p class="vc-muted text-[12px]">The library starts empty. Add each preacher with a video where they preach, and mark 1 to 3 minutes where only they speak (no singing); then add one or two more parts from other services. Add the preachers who sound alike too, so each part goes to whoever it is closest to. Then choose above whose messages are clipped.</p>
     </div>
   </details>
   <script src="{{ url_for('static', path='js/clipper-voice.js') }}?v=1"></script>

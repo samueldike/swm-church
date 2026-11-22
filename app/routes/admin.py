@@ -11890,13 +11890,26 @@ async def admin_clipper_voices_mode(request: Request, db: AsyncSession = Depends
     form = await request.form()
     cfg = await speakers.load(db, church)
     mode = "senior" if form.get("mode") == "senior" else "all"
-    if mode == "senior" and speakers.calibrate(cfg)["accept"] is None:
-        return _redirect(request, back, "Add the senior pastor and at least two voice samples of him first.", "error")
+    chosen = None
+    if mode == "senior":
+        pid = (form.get("person") or "").strip()
+        chosen = next((p for p in cfg["people"] if p["id"] == pid), None) or speakers.senior(cfg)
+        if chosen is None:
+            return _redirect(request, back, "Choose whose messages are clipped from the voices you added.", "error")
+        for p in cfg["people"]:                       # the chosen voice is the one clipped; the rest are told apart
+            p["role"] = "senior" if p is chosen else "other"
+        if speakers.calibrate(cfg)["accept"] is None:
+            cfg["mode"] = "all"
+            await speakers.save(db, church, cfg)
+            await db.commit()
+            return _redirect(request, back, f"{chosen['name']} is chosen. Add a second part of their preaching (from "
+                                            "another service) to switch this on.", "error")
     cfg["mode"] = mode
     await speakers.save(db, church, cfg)
-    await log_admin_action(db, admin.id, "clipper.voices_mode", "branch", church, {"mode": mode}, request)
+    await log_admin_action(db, admin.id, "clipper.voices_mode", "branch", church,
+                           {"mode": mode, "person": chosen["name"] if chosen else None}, request)
     await db.commit()
-    return _redirect(request, back, "Only the senior pastor's messages will be clipped." if mode == "senior"
+    return _redirect(request, back, f"Only {chosen['name']}'s messages will be clipped." if chosen
                      else "Every preacher's message will be clipped.", "success")
 
 
@@ -11998,12 +12011,12 @@ async def admin_clipper_voices_person(request: Request, db: AsyncSession = Depen
     back = f"/admin/clipper/settings?church={church}#voices"
     form = await request.form()
     name = (form.get("name") or "").strip()[:80]
-    role = "senior" if form.get("role") == "senior" else "other"
+    role = "other"                       # whose messages are clipped is chosen afterwards, from the voices added
     if not name:
-        return _redirect(request, back, "Write the pastor's name.", "error")
+        return _redirect(request, back, "Write the name.", "error")
     cfg = await speakers.load(db, church)
-    if role == "senior" and speakers.senior(cfg):
-        return _redirect(request, back, "The senior pastor is already added. Remove him first to start again.", "error")
+    if any(p["name"].lower() == name.lower() for p in cfg["people"]):
+        return _redirect(request, back, f"{name} is already in the voice library: add another part of their preaching there.", "error")
     if len(cfg["people"]) >= 12:
         return _redirect(request, back, "Up to 12 people can be in the voice library.", "error")
     try:
@@ -12017,8 +12030,9 @@ async def admin_clipper_voices_person(request: Request, db: AsyncSession = Depen
     await log_admin_action(db, admin.id, "clipper.voice_person", "branch", church, {"name": name, "prints": len(embs)}, request)
     await db.commit()
     cal = speakers.calibrate(cfg)
-    return _redirect(request, back, f"{name} added and his voice learned from {label} ({len(embs)} voiceprints). "
-                                    f"Add one or two more parts from other services for steadier recognition. {cal['note']}", "success")
+    return _redirect(request, back, f"{name} added; the voice was learned from {label} ({len(embs)} voiceprints). "
+                                    "Add one or two more parts from other services for steadier recognition"
+                                    + (f". {cal['note']}" if speakers.senior(cfg) else ", then choose above whose messages are clipped."), "success")
 
 
 @router.post("/clipper/voices/{person_id}/sample", name="admin_clipper_voices_sample")
