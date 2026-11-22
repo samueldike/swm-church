@@ -318,6 +318,20 @@ async def _busy(branch_id: int) -> int:
     return sum(1 for st in rows if (st or {}).get("auto"))
 
 
+async def clipped_ids(branch_id: int) -> set[str]:
+    """YouTube ids of every video this church has already clipped (by hand or automatically, whatever became of
+    it): the Automatic Clipper never starts one of them again, whatever its starting point."""
+    from sqlalchemy import select
+
+    from app.database import async_session
+    from app.models.clipper import ClipProject
+
+    async with async_session() as db:
+        urls = (await db.execute(select(ClipProject.source_url).where(
+            ClipProject.branch_id == branch_id, ClipProject.source_url.isnot(None)))).scalars().all()
+    return {v for v in (video_id(u) for u in urls) if v}
+
+
 async def check(branch_id: int) -> str:
     """Read the channel, start projects for new finished services and, while the clipper is free, for older ones
     still waiting (the backlog). Returns a one-line summary (also saved)."""
@@ -353,6 +367,10 @@ async def check(branch_id: int) -> str:
             new_ids: list[str] = []
         else:
             new_ids = pick_new(entries, seen, backlog)
+        done = await clipped_ids(branch_id)          # never clip a video of this church twice
+        seen |= done & {str(e.get("id")) for e in entries}
+        backlog = [v for v in backlog if v not in done]
+        new_ids = [v for v in new_ids if v not in done]
         titles = {str(e.get("id")): e.get("title") or "" for e in entries}
         busy = await _busy(branch_id)
         # New services first; older ones only while the clipper is not already busy with automatic videos.
@@ -381,6 +399,8 @@ async def check(branch_id: int) -> str:
             seen.add(vid)
             backlog = [x for x in backlog if x != vid]
             if state_ == SKIP:
+                continue
+            if vid in await clipped_ids(branch_id):  # started meanwhile (a "Look now" running alongside, or by hand)
                 continue
             settings = {**options.DEFAULTS, "content_type": "sermon", "count": AUTO_COUNT, "length": cfg["length"],
                         "format": cfg["format"], "caption_style": cfg["captions"] if captions.style_id(cfg["captions"]) else "none",
