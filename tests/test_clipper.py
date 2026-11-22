@@ -1464,3 +1464,39 @@ def test_a_face_on_the_screen_behind_never_wins_over_the_live_speaker():
     # Tracks follow each person and end at a source cut.
     trs = reframe.tracks(samples[:10] + [{**samples[10], "cut": True}] + samples[11:20])
     assert len(trs) == 4 and sorted(len(t) for t in trs) == [10, 10, 10, 10]
+
+
+def test_the_camera_follows_whoever_is_talking():
+    # Two people side by side (pastor left, interpreter right, the interpreter a little bigger). They take turns:
+    # 0-10 s the pastor talks, 10-20 s the interpreter, 20-30 s the pastor again.
+    import math
+
+    fps = reframe.SAMPLE_FPS
+    n_all = int(30 * fps)
+    levels, lips = [], {}
+    samples = []
+    for n in range(n_all):
+        t = n / fps
+        speaker = 0 if (t < 10 or t >= 20) else 1
+        syll = math.sin(t * 2 * math.pi * 1.7) > 0          # syllables: loud / soft, ~2 a second
+        levels.append(-20.0 if syll else -34.0)
+        samples.append({"t": t, "faces": [(0.3, 0.4, 0.08, 0.18, 0.9), (0.7, 0.4, 0.10, 0.22, 0.9)], "cut": False})
+        for k in (0, 1):
+            if n:
+                talking = k == speaker
+                lips[(n, k)] = (0.9 if syll else 0.3) if talking else 0.45 + 0.05 * math.sin(n * 1.3 + k)
+    talk = reframe.talk_scores(samples, lips, levels)
+    with_talk = [{**s, "faces": [(*f, talk.get((n, k))) for k, f in enumerate(s["faces"])]} for n, s in enumerate(samples)]
+    xs = [x for _, x, _ in reframe.choose_subject(with_talk)]
+    at = lambda sec: xs[int(sec * fps)]  # noqa: E731
+    assert at(6) == 0.3            # the pastor talks: on him, though the interpreter's face is bigger
+    assert at(18) == 0.7           # the other person talks on: the camera follows within ~4-7 s
+    assert at(28.5) == 0.3         # and back
+    flips = sum(1 for a, b in zip(xs, xs[1:]) if a != b)
+    assert flips == 2              # no ping-pong
+
+    # No sound to follow (steady level): the old rule, the bigger face, holds.
+    flat = reframe.talk_scores(samples, lips, [-25.0] * n_all)
+    assert flat == {}
+    # A listener nodding beside a talker never steals the frame from a talker who is smaller.
+    assert all(x == 0.3 for x in xs[int(4 * fps):int(9 * fps)])

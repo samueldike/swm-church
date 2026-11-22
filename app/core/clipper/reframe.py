@@ -34,6 +34,14 @@ LINK_GAP = 4              # ... to the track's last face, seen at most this many
 PICTURE_SECONDS = 3.0     # a parked face is judged over at least this long
 PICTURE_STILL = 0.12      # a face moving less than this share of its own width (std of its centre) is parked
 PICTURE_ALIVE = 3.0       # a face moving this many times more than a parked one is the live person
+LIP_SCALE = 2             # lips are read at this many times the detector's width (a mouth is ~12 px at 480)
+TALK_WINDOW = 3.0         # seconds either side over which lips are compared with the voice
+TALK_MIN_SAMPLES = 10     # fewest lip readings in that window to judge at all
+TALK_MIN_RANGE = 6.0      # dB the voice must rise and fall by within the window (else there is nothing to follow)
+TALK_MIN = 0.2            # a face is "talking" from this score up ...
+TALK_MARGIN = 0.2         # ... and the camera moves to them only when they beat the person it is on by this much
+TALK_SWITCH = 24          # samples in a row (4 s) someone else must be the one talking before the camera moves: an
+                          # interpreter repeating each sentence never makes it bounce; the first speaker keeps the frame
 
 
 @lru_cache(maxsize=1)
@@ -43,8 +51,47 @@ def _detector_factory():
     return cv2
 
 
+def _mouth(frame, f, scale: float, cv2, np):
+    """The mouth of a detected face (YuNet's two mouth-corner landmarks), as a small brightness-free patch."""
+    fh, fw = frame.shape[:2]
+    w, h = float(f[2]) * scale, float(f[3]) * scale
+    rx, ry, lx, ly = (float(v) * scale for v in f[10:14])
+    mx, my = (rx + lx) / 2, (ry + ly) / 2
+    mw = max(abs(lx - rx), w * 0.3) * 1.5
+    x0, x1 = int(max(0, mx - mw / 2)), int(min(fw, mx + mw / 2))
+    y0, y1 = int(max(0, my - 0.14 * h)), int(min(fh, my + 0.16 * h))
+    if x1 - x0 < 4 or y1 - y0 < 3:
+        return None
+    p = cv2.resize(cv2.cvtColor(frame[y0:y1, x0:x1], cv2.COLOR_BGR2GRAY), (32, 16), interpolation=cv2.INTER_AREA)
+    p = p.astype("float32")
+    return (p - p.mean()) / (p.std() + 1e-6)
+
+
+def voice_levels(src: str, start: float, end: float, count: int) -> list[float] | None:
+    """Loudness (dB) of the sound for each sample, or None when the source has no sound."""
+    import numpy as np
+
+    cmd = ["ffmpeg", "-v", "error", "-ss", f"{start:.3f}", "-i", src, "-t", f"{max(0.1, end - start):.3f}",
+           "-vn", "-ac", "1", "-ar", "8000", "-f", "s16le", "-"]
+    try:
+        raw = subprocess.run(cmd, capture_output=True, timeout=300).stdout
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return None
+    a = np.frombuffer(raw[: len(raw) // 2 * 2], dtype=np.int16).astype(np.float32) / 32768
+    step = int(8000 / SAMPLE_FPS)
+    n = min(count, len(a) // step)
+    if n < 2:
+        return None
+    rms = np.sqrt(np.mean(a[: n * step].reshape(n, step) ** 2, axis=1) + 1e-10)
+    levels = [float(v) for v in 20 * np.log10(rms)]
+    return levels + [levels[-1]] * (count - n)
+
+
 def detect(src: str, start: float, end: float, src_w: int, src_h: int) -> list[dict]:
-    """[{t, faces:[(cx, cy, w, h, score)] normalised 0..1, cut:bool}] for samples of source[start:end]."""
+    """[{t, faces:[(cx, cy, w, h, score, talk)] normalised 0..1, cut:bool}] for samples of source[start:end].
+
+    ``talk`` (-1..1, or None when it cannot be told) says how closely that face's lips follow the voice: see
+    ``talk_scores``. Pictures of faces (screens, posters) are left out: see ``drop_pictures``."""
     import numpy as np
 
     cv2 = _detector_factory()
@@ -52,34 +99,88 @@ def detect(src: str, start: float, end: float, src_w: int, src_h: int) -> list[d
         return []
     dw = DETECT_WIDTH
     dh = max(2, int(round(src_h * dw / src_w / 2)) * 2)
+    mw = min(src_w, dw * LIP_SCALE) // 2 * 2         # lips are read from a sharper copy than faces are found in
+    mh = max(2, int(round(src_h * mw / src_w / 2)) * 2)
     cmd = ["ffmpeg", "-v", "error", "-ss", f"{start:.3f}", "-i", src, "-t", f"{max(0.1, end - start):.3f}",
-           "-vf", f"fps={SAMPLE_FPS},scale={dw}:{dh}", "-f", "rawvideo", "-pix_fmt", "bgr24", "-an", "-"]
+           "-vf", f"fps={SAMPLE_FPS},scale={mw}:{mh}", "-f", "rawvideo", "-pix_fmt", "bgr24", "-an", "-"]
     try:
-        raw = subprocess.run(cmd, capture_output=True, timeout=600).stdout
+        raw = subprocess.run(cmd, capture_output=True, timeout=900).stdout
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return []
-    frame_bytes = dw * dh * 3
+    frame_bytes = mw * mh * 3
     count = len(raw) // frame_bytes
     if not count:
         return []
     net = cv2.FaceDetectorYN.create(str(ASSETS / "face_detection_yunet_2023mar.onnx"), "", (dw, dh), 0.62, 0.3, 50)
-    out = []
+    out, mouths = [], []
     prev_grey = None
     for n in range(count):
-        frame = np.frombuffer(raw, dtype=np.uint8, count=frame_bytes, offset=n * frame_bytes).reshape(dh, dw, 3)
+        big = np.frombuffer(raw, dtype=np.uint8, count=frame_bytes, offset=n * frame_bytes).reshape(mh, mw, 3)
+        frame = cv2.resize(big, (dw, dh), interpolation=cv2.INTER_AREA) if mw != dw else big
         grey = cv2.cvtColor(cv2.resize(frame, (96, max(2, int(96 * dh / dw)))), cv2.COLOR_BGR2GRAY).astype("int16")
         cut = prev_grey is not None and float(np.mean(np.abs(grey - prev_grey))) > SCENE_CUT
         prev_grey = grey
         _, faces = net.detect(frame)
-        found = []
+        found, ms = [], []
         if faces is not None:
             for f in faces:
                 x, y, w, h, score = float(f[0]), float(f[1]), float(f[2]), float(f[3]), float(f[14])
                 if w < dw * 0.025:          # specks in a crowd shot
                     continue
                 found.append(((x + w / 2) / dw, (y + h / 2) / dh, w / dw, h / dh, score))
+                ms.append(_mouth(big, f, mw / dw, cv2, np))
         out.append({"t": n / SAMPLE_FPS, "faces": found, "cut": cut})
+        mouths.append(ms)
+    lips: dict[tuple[int, int], float] = {}
+    for tr in tracks(out):
+        for (n1, i1), (n2, i2) in zip(tr, tr[1:]):
+            a, b = mouths[n1][i1], mouths[n2][i2]
+            if n2 - n1 == 1 and a is not None and b is not None:
+                lips[(n2, i2)] = float(np.mean(np.abs(b - a)))
+    talk = talk_scores(out, lips, voice_levels(src, start, end, count))
+    out = [{**s, "faces": [(*f, talk.get((n, k))) for k, f in enumerate(s["faces"])]} for n, s in enumerate(out)]
     return drop_pictures(out)
+
+
+def _corr(xs: list[float], ys: list[float]) -> float | None:
+    n = len(xs)
+    if n < 3:
+        return None
+    mx, my = sum(xs) / n, sum(ys) / n
+    vx = sum((x - mx) ** 2 for x in xs)
+    vy = sum((y - my) ** 2 for y in ys)
+    if vx <= 1e-12 or vy <= 1e-12:
+        return None
+    return sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / (vx * vy) ** 0.5
+
+
+def talk_scores(samples: list[dict], lips: dict[tuple[int, int], float],
+                levels: list[float] | None) -> dict[tuple[int, int], float]:
+    """{(sample, face): talk} — how closely a face's lip movement follows the loudness of the voice around that
+    moment (Pearson correlation over ``TALK_WINDOW`` seconds either side, within the face's own track).
+
+    The person speaking opens and closes their mouth as the sound rises and falls; a listener, a choir member or a
+    face on a screen (which runs a little late) does not follow it. Measured on a real service: the preacher +0.2 to
+    +0.3, the same face on the LED wall -0.1 to -0.2. Faces with too little to go on get no score."""
+    if not levels:
+        return {}
+    half = int(TALK_WINDOW * SAMPLE_FPS)
+    out: dict[tuple[int, int], float] = {}
+    for tr in tracks(samples):
+        series = [(n, k, lips[(n, k)]) for n, k in tr if (n, k) in lips and n < len(levels)]
+        if len(series) < TALK_MIN_SAMPLES:
+            continue
+        for j, (n, k, _) in enumerate(series):
+            win = [(m, v) for m, _, v in series[max(0, j - half):j + half + 1] if abs(m - n) <= half]
+            if len(win) < TALK_MIN_SAMPLES:
+                continue
+            lv = [levels[m] for m, _ in win]
+            if max(lv) - min(lv) < TALK_MIN_RANGE:       # steady sound (music, silence): nothing to follow
+                continue
+            c = _corr([v for _, v in win], lv)
+            if c is not None:
+                out[(n, k)] = round(c, 3)
+    return out
 
 
 def tracks(samples: list[dict]) -> list[list[tuple[int, int]]]:
@@ -160,30 +261,77 @@ def drop_pictures(samples: list[dict]) -> list[dict]:
 def choose_subject(samples: list[dict], start_x: float | None = None) -> list[tuple[float, float | None, bool]]:
     """[(t, subject centre x or None, cut)]: the person the camera is on, sample by sample.
 
-    The camera stays with the person it is on. Someone else takes over only after being clearly the main face for
-    ``SWITCH_SAMPLES`` samples in a row (a second), so a head turning or a passer-by never yanks the frame across."""
+    With several people on screen, the one talking leads: a face whose lips follow the voice (``talk``, see
+    ``talk_scores``) beats the person the camera is on by ``TALK_MARGIN`` for ``TALK_SWITCH`` samples (4 s) and the
+    camera moves to them; it never moves away from the person talking just because someone else is bigger. When
+    talking cannot be told (no sound, one face, steady music), the biggest face leads as before: someone else takes
+    over only after being clearly the main face for ``SWITCH_SAMPLES`` samples in a row (a second), so a head
+    turning or a passer-by never yanks the frame across."""
+    def talk(f) -> float | None:
+        return f[5] if len(f) > 5 else None
+
+    def talker(faces, largest):
+        """The face clearly talking among the speaker-sized ones, or None."""
+        sized = [f for f in faces if f[2] >= largest[2] * 0.35 and talk(f) is not None]
+        if not sized:
+            return None
+        best = max(sized, key=talk)
+        if talk(best) < TALK_MIN:
+            return None
+        others = [talk(f) for f in sized if f is not best]
+        return best if not others or talk(best) - max(others) >= TALK_MARGIN else None
+
+    def opener(k: int) -> float | None:
+        """Where the person talking stands in the first seconds of a shot (talk is only known after a moment)."""
+        seen: list[float] = []
+        for j in range(k, len(samples)):
+            if j > k and (samples[j]["cut"] or samples[j]["t"] - samples[k]["t"] > TALK_WINDOW * 2):
+                break
+            fs = samples[j]["faces"]
+            if fs:
+                sp = talker(fs, max(fs, key=lambda f: f[2] * f[3]))
+                if sp is not None:
+                    seen.append(sp[0])
+        if len(seen) < TALK_SWITCH:
+            return None
+        seen.sort()
+        return seen[len(seen) // 2]
+
     out = []
     cur = start_x
     rival, streak = None, 0
-    for s in samples:
+    for n, s in enumerate(samples):
         faces = s["faces"]
         if s["cut"]:
             cur = None if not faces else cur
             rival, streak = None, 0
+        if cur is None and faces:
+            cur = opener(n)
         pick = None
         if faces:
             largest = max(faces, key=lambda f: f[2] * f[3])
-            pick = largest
+            speaking = talker(faces, largest)
+            pick = speaking or largest
             if cur is not None:
                 near = [f for f in faces if abs(f[0] - cur) < 0.12]
                 if near:
                     stay = max(near, key=lambda f: f[2] * f[3])
-                    if stay[2] * stay[3] * 1.8 >= largest[2] * largest[3]:
+                    ts = talk(stay)
+                    if speaking is not None and abs(speaking[0] - stay[0]) >= 0.12 and \
+                            (ts is None or talk(speaking) - ts >= TALK_MARGIN):
+                        contender, need = speaking, TALK_SWITCH          # someone else is the one talking
+                    elif speaking is not None and abs(speaking[0] - stay[0]) < 0.12:
+                        contender, need = None, 0                        # the camera is on the one talking
+                    elif stay[2] * stay[3] * 1.8 < largest[2] * largest[3]:
+                        contender, need = largest, SWITCH_SAMPLES        # someone clearly bigger
+                    else:
+                        contender, need = None, 0
+                    if contender is None:
                         pick, rival, streak = stay, None, 0
                     else:
-                        streak = streak + 1 if rival is not None and abs(rival - largest[0]) < 0.12 else 1
-                        rival = largest[0]
-                        pick = largest if streak >= SWITCH_SAMPLES else stay
+                        streak = streak + 1 if rival is not None and abs(rival - contender[0]) < 0.12 else 1
+                        rival = contender[0]
+                        pick = contender if streak >= need else stay
         if pick is not None:
             cur = pick[0]
         out.append((s["t"], pick[0] if pick is not None else None, s["cut"]))
