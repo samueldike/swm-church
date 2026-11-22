@@ -331,11 +331,17 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
         # 1. The camera: where the speaker is in each segment (a light 6 fps look at a small picture).
         vfs, centre = [], None
         wides: list[list[tuple[float, float]]] = []      # per segment: when a slide / scripture fills the screen
+        glitched: list[int] = []                          # segments where colour bars were held on a good frame
         looked: dict[int, tuple[float, list[dict]]] = {}
-        if track:  # one look per group of nearby segments, then each segment takes its own samples
-            for group in clusters(segments):
-                a, b = min(segments[i][0] for i in group), max(segments[i][1] for i in group)
-                samples = reframe.detect(str(src), a + offset, b + offset, src_w, src_h)
+        bars_at: dict[int, tuple[float, list[tuple[float, float]]]] = {}
+        src_fps = float(info.get("fps") or 30)
+        for group in clusters(segments):   # colour bars (a "no signal" glitch), checked on every frame
+            a, b = min(segments[i][0] for i in group), max(segments[i][1] for i in group)
+            found = reframe.glitches(str(src), a + offset, b + offset, src_fps)
+            for i in group:
+                bars_at[i] = (a, found)
+            if track:  # one look per group of nearby segments, then each segment takes its own samples
+                samples = reframe.detect(str(src), a + offset, b + offset, src_w, src_h, bars=found)
                 for i in group:
                     looked[i] = (a, samples)
         for n, (s, e) in enumerate(segments):
@@ -355,8 +361,14 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
                 fx = frac / 2 + min(1.0, max(0.0, float(frame_x))) * (1 - frac)
                 keys = [(0.0, fx), (max(0.05, e - s), fx)]
             wides.append(wide)
-            vfs.append(reframe.video_filter(fmt=fmt, quality=quality, framing="speaker" if manual else framing,
-                                            src_w=src_w, src_h=src_h, keys=keys, wide=wide))
+            ga, gl = bars_at.get(n, (s, []))
+            mine = [(x - (s - ga), y - (s - ga)) for x, y in gl if y > s - ga and x < e - ga]
+            freeze = reframe.freeze_filter(mine, src_fps, max(0.05, e - s))
+            if freeze:
+                glitched.append(n)
+            vf = reframe.video_filter(fmt=fmt, quality=quality, framing="speaker" if manual else framing,
+                                      src_w=src_w, src_h=src_h, keys=keys, wide=wide)
+            vfs.append(f"{freeze},{vf}" if freeze else vf)
             report(0.25 * (n + 1) / len(segments) if track else 0.02)
 
         # 2. One encode: segments, joins, loudness. The master never has captions burned in: they are drawn live
@@ -371,6 +383,8 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
         plan = zoom_plan(segments, emphasis) if zooms and framing != "fit" else [(1.0, 1.0)] * len(segments)
         # A zoom never crops into a slide: segments with a full-picture stretch stay unzoomed.
         plan = [(1.0, 1.0) if wides and wides[k] else z for k, z in enumerate(plan)]
+        if glitched:
+            used.append("colour bars hidden at " + ", ".join(clock(starts[k]) for k in glitched[:6]))
         wide_at = [starts[k] + a for k, w in enumerate(wides) for a, _ in w]
         if wide_at:
             used.append("full picture for slides at " + ", ".join(clock(t) for t in wide_at[:6]))

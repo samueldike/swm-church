@@ -73,6 +73,78 @@ def _mouth(frame, f, scale: float, cv2, np):
     return (p - p.mean()) / (p.std() + 1e-6)
 
 
+def colour_bars(frame) -> bool:
+    """Is this picture a test pattern (colour bars: the vision mixer's "no signal" glitch)? Upright bands of strong,
+    flat colour side by side: every column is nearly one colour from top to bottom, most columns are saturated,
+    and there are several different hues with sharp steps between them. A real picture (people, a stage, a slide
+    with text on a gradient) fails at least one of these."""
+    import numpy as np
+
+    cv2 = _detector_factory()
+    small = cv2.resize(frame, (64, 36), interpolation=cv2.INTER_AREA)
+    top = small[: 24].astype(np.float32)                       # the bars fill the top two thirds
+    if float(top.std(axis=0).mean()) > 8:                       # columns must be flat from top to bottom (bars: ~3)
+        return False
+    cols = top.mean(axis=0)                                     # 64 column colours (BGR)
+    hsv = cv2.cvtColor(cols.reshape(1, 64, 3).astype(np.uint8), cv2.COLOR_BGR2HSV)[0]
+    saturated = hsv[:, 1] > 110
+    if saturated.mean() < 0.55:
+        return False
+    hues = {int(h) // 15 for h, s in zip(hsv[:, 0], saturated) if s}
+    steps = int((np.abs(np.diff(cols, axis=0)).max(axis=1) > 60).sum())
+    return len(hues) >= 4 and 4 <= steps <= 14
+
+
+def glitches(src: str, start: float, end: float, fps: float) -> list[tuple[float, float]]:
+    """Stretches (seconds from ``start``) where the source shows colour bars, found on EVERY frame (a dropout can
+    flash the bars for a single frame). Each is widened by a frame either side. Read at 64x36, so it is cheap."""
+    import numpy as np
+
+    fps = fps or 30.0
+    cmd = ["ffmpeg", "-v", "error", "-ss", f"{start:.3f}", "-i", src, "-t", f"{max(0.1, end - start):.3f}",
+           "-vf", f"fps={fps:.3f},scale=64:36", "-f", "rawvideo", "-pix_fmt", "bgr24", "-an", "-"]
+    try:
+        raw = subprocess.run(cmd, capture_output=True, timeout=900).stdout
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return []
+    fb = 64 * 36 * 3
+    bad = [n for n in range(len(raw) // fb)
+           if colour_bars(np.frombuffer(raw, dtype=np.uint8, count=fb, offset=n * fb).reshape(36, 64, 3))]
+    return glitch_spans(bad, fps)
+
+
+def glitch_spans(frames: list[int], fps: float) -> list[tuple[float, float]]:
+    """Frame numbers showing bars -> stretches in seconds, joined across gaps of up to 2 frames and widened by a
+    frame either side (pure; tested)."""
+    spans: list[list[int]] = []
+    for n in sorted(frames):
+        if spans and n - spans[-1][1] <= 3:
+            spans[-1][1] = n
+        else:
+            spans.append([n, n])
+    return [(round(max(0, a - 1) / fps, 3), round((b + 2) / fps, 3)) for a, b in spans]
+
+
+def freeze_filter(spans: list[tuple[float, float]], fps: float, duration: float) -> str:
+    """ffmpeg ``freezeframes`` for one segment: each glitch shows the last good frame before it (the first good one
+    after it when the segment starts with it). Times are seconds from the segment's start (pure; tested)."""
+    fps = fps or 30.0
+    last_frame = max(0, int(duration * fps) - 1)
+    parts = []
+    for a, b in spans:
+        if b <= 0 or a >= duration:
+            continue
+        first, last = max(0, int(a * fps)), min(last_frame, int(b * fps + 0.999))
+        if first > 0:
+            keep = first - 1
+        elif last < last_frame:
+            keep = last + 1
+        else:
+            continue                                   # the whole segment is bars: nothing good to hold
+        parts.append(f"freezeframes=first={first}:last={last}:replace={keep}")
+    return ",".join(parts)
+
+
 def voice_levels(src: str, start: float, end: float, count: int) -> list[float] | None:
     """Loudness (dB) of the sound for each sample, or None when the source has no sound."""
     import numpy as np
@@ -93,11 +165,13 @@ def voice_levels(src: str, start: float, end: float, count: int) -> list[float] 
     return levels + [levels[-1]] * (count - n)
 
 
-def detect(src: str, start: float, end: float, src_w: int, src_h: int) -> list[dict]:
+def detect(src: str, start: float, end: float, src_w: int, src_h: int,
+           bars: list[tuple[float, float]] | None = None) -> list[dict]:
     """[{t, faces:[(cx, cy, w, h, score, talk)] normalised 0..1, cut:bool}] for samples of source[start:end].
 
     ``talk`` (-1..1, or None when it cannot be told) says how closely that face's lips follow the voice: see
-    ``talk_scores``. Pictures of faces (screens, posters) are left out: see ``drop_pictures``."""
+    ``talk_scores``. Pictures of faces (screens, posters) are left out: see ``drop_pictures``. ``bars``: glitch
+    stretches (``glitches``) where the picture is held on the frame before, so the camera carries on as it was."""
     import numpy as np
 
     cv2 = _detector_factory()
@@ -123,6 +197,12 @@ def detect(src: str, start: float, end: float, src_w: int, src_h: int) -> list[d
     for n in range(count):
         big = np.frombuffer(raw, dtype=np.uint8, count=frame_bytes, offset=n * frame_bytes).reshape(mh, mw, 3)
         frame = cv2.resize(big, (dw, dh), interpolation=cv2.INTER_AREA) if mw != dw else big
+        t = n / SAMPLE_FPS
+        if bars and any(a <= t <= b for a, b in bars):    # colour bars: held on the frame before, so is the camera
+            prev = out[-1] if out else {"faces": []}
+            out.append({"t": t, "faces": list(prev["faces"]), "cut": False, "glitch": True})
+            mouths.append([None] * len(prev["faces"]))
+            continue
         grey = cv2.cvtColor(cv2.resize(frame, (96, max(2, int(96 * dh / dw)))), cv2.COLOR_BGR2GRAY).astype("int16")
         cut = prev_grey is not None and float(np.mean(np.abs(grey - prev_grey))) > SCENE_CUT
         prev_grey = grey

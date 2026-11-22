@@ -1581,3 +1581,26 @@ def test_automatic_clipper_retries_a_failed_video_a_few_times():
     assert not watch.retry_due("v1", {"v1": {"n": 1, "at": (now - timedelta(minutes=20)).isoformat()}}, now)
     assert watch.retry_due("v1", {"v1": {"n": 1, "at": (now - timedelta(hours=2)).isoformat()}}, now)
     assert not watch.retry_due("v1", {"v1": {"n": watch.RETRY_TIMES, "at": (now - timedelta(days=1)).isoformat()}}, now)
+
+
+def test_colour_bars_are_held_on_the_last_good_frame():
+    import numpy as np
+
+    bars = np.zeros((36, 64, 3), np.uint8)
+    colours = [(255, 255, 255), (0, 255, 255), (255, 255, 0), (0, 255, 0), (255, 0, 255), (0, 0, 255), (255, 0, 0), (0, 0, 0)]
+    for k, c in enumerate(colours):                        # BGR, the usual eight bars
+        bars[:, k * 8:(k + 1) * 8] = c
+    assert reframe.colour_bars(bars)
+    rng = np.random.default_rng(1)
+    photo = rng.integers(0, 255, (36, 64, 3), dtype=np.uint8)
+    assert not reframe.colour_bars(photo)
+    slide = np.zeros((36, 64, 3), np.uint8)
+    slide[:, :] = (120, 60, 20)
+    slide[10:14, 8:56] = 255                               # a line of white text on a flat background
+    assert not reframe.colour_bars(slide)
+    # one-frame flashes join into stretches, widened by a frame either side
+    assert reframe.glitch_spans([30, 31, 33, 90], 30) == [(0.967, 1.167), (2.967, 3.067)]
+    # held on the frame before; at the very start, on the first good frame after
+    assert reframe.freeze_filter([(1.0, 1.2)], 30, 5.0) == "freezeframes=first=30:last=36:replace=29"
+    assert reframe.freeze_filter([(0.0, 0.5)], 30, 5.0) == "freezeframes=first=0:last=15:replace=16"
+    assert reframe.freeze_filter([(0.0, 5.0)], 30, 5.0) == ""
