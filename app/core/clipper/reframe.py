@@ -125,7 +125,7 @@ def glitch_spans(frames: list[int], fps: float) -> list[tuple[float, float]]:
     return [(round(max(0, a - 1) / fps, 3), round((b + 2) / fps, 3)) for a, b in spans]
 
 
-def freeze_filter(spans: list[tuple[float, float]], fps: float, duration: float) -> str:
+def freeze_filter(spans: list[tuple[float, float]], fps: float, duration: float, tag: str | int = 0) -> str:
     """ffmpeg ``freezeframes`` for one segment: each glitch shows the last good frame before it (the first good one
     after it when the segment starts with it). Times are seconds from the segment's start (pure; tested)."""
     fps = fps or 30.0
@@ -141,7 +141,10 @@ def freeze_filter(spans: list[tuple[float, float]], fps: float, duration: float)
             keep = last + 1
         else:
             continue                                   # the whole segment is bars: nothing good to hold
-        parts.append(f"freezeframes=first={first}:last={last}:replace={keep}")
+        # freezeframes takes the held frame from a second input: the same stream, split
+        k = len(parts)
+        parts.append(f"split[zf{tag}_{k}a][zf{tag}_{k}b];[zf{tag}_{k}a][zf{tag}_{k}b]"
+                     f"freezeframes=first={first}:last={last}:replace={keep}")
     return ",".join(parts)
 
 

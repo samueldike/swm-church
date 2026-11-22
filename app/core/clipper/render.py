@@ -363,7 +363,7 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
             wides.append(wide)
             ga, gl = bars_at.get(n, (s, []))
             mine = [(x - (s - ga), y - (s - ga)) for x, y in gl if y > s - ga and x < e - ga]
-            freeze = reframe.freeze_filter(mine, src_fps, max(0.05, e - s))
+            freeze = reframe.freeze_filter(mine, src_fps, max(0.05, e - s), tag=n)
             if freeze:
                 glitched.append(n)
             vf = reframe.video_filter(fmt=fmt, quality=quality, framing="speaker" if manual else framing,

@@ -1601,6 +1601,6 @@ def test_colour_bars_are_held_on_the_last_good_frame():
     # one-frame flashes join into stretches, widened by a frame either side
     assert reframe.glitch_spans([30, 31, 33, 90], 30) == [(0.967, 1.167), (2.967, 3.067)]
     # held on the frame before; at the very start, on the first good frame after
-    assert reframe.freeze_filter([(1.0, 1.2)], 30, 5.0) == "freezeframes=first=30:last=36:replace=29"
-    assert reframe.freeze_filter([(0.0, 0.5)], 30, 5.0) == "freezeframes=first=0:last=15:replace=16"
+    assert reframe.freeze_filter([(1.0, 1.2)], 30, 5.0, tag=2) ==         "split[zf2_0a][zf2_0b];[zf2_0a][zf2_0b]freezeframes=first=30:last=36:replace=29"
+    assert reframe.freeze_filter([(0.0, 0.5)], 30, 5.0).endswith("freezeframes=first=0:last=15:replace=16")
     assert reframe.freeze_filter([(0.0, 5.0)], 30, 5.0) == ""
