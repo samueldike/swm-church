@@ -28,7 +28,7 @@
     const wrap = $('[data-player]'), stage = $('[data-stage]'), bar = $('[data-bar]'), sel = $('[data-sel]');
     const hLo = $('[data-h=lo]'), hHi = $('[data-h=hi]'), now = $('[data-now]'), read = $('[data-read]');
     const inStart = box.querySelector('input[name=start]'), inEnd = box.querySelector('input[name=end]');
-    let player = null, total = 0, lo = null, hi = null, stopAt = null, timer = null;
+    let player = null, total = 0, lo = null, hi = null, stopAt = null, timer = null, seq = 0;
     const steps = box.querySelectorAll('[data-step]');
 
     const cur = () => (player ? player.time() : 0);
@@ -71,6 +71,7 @@
       }, 250);
     };
     const reset = () => {
+      seq += 1;                                    // a player still starting for an earlier choice is dropped
       if (player) player.destroy();
       player = null; total = 0; lo = null; hi = null; stage.innerHTML = ''; wrap.hidden = true; inStart.value = ''; inEnd.value = '';
     };
@@ -87,8 +88,11 @@
     };
     const youtube = async (id) => {
       reset();
-      loading('Opening the video…');
+      const mine = seq;
+      // The video's own picture shows at once; YouTube's player takes its place a moment later.
+      loading('Opening the video…', `https://i.ytimg.com/vi/${id}/hqdefault.jpg`);
       await loadYT();
+      if (mine !== seq) return;
       const holder = document.createElement('div');
       stage.appendChild(holder);
       const yp = new window.YT.Player(holder, {
@@ -100,12 +104,14 @@
     };
 
     // The player area shows at once with a note while the video loads (no silent wait).
-    function loading(text) {
+    function loading(text, poster) {
       wrap.hidden = false;
       let w = stage.querySelector('.vc-train-loading');
       if (!w) { w = document.createElement('div'); w.className = 'vc-train-loading'; stage.prepend(w); }
       w.innerHTML = '<i class="ri-loader-4-line vc-spin" aria-hidden="true"></i><span></span>';
       w.querySelector('span').textContent = text;
+      w.classList.toggle('has-poster', !!poster);
+      w.style.backgroundImage = poster ? `linear-gradient(rgba(0,0,0,.45), rgba(0,0,0,.45)), url("${poster}")` : '';
     }
     // One of the church's videos: one that came from YouTube plays in YouTube's player (instant, quick to seek).
     const playProject = (o) => {
@@ -192,9 +198,22 @@
       if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ri-loader-4-line vc-spin"></i>Learning the voice… (a link takes about a minute)'; }
     });
     showSource();
+    // A window opened with a video already chosen (or a choice the browser remembered) starts it at once.
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver((seen) => {
+        if (!seen.some((x) => x.isIntersecting) || player || !wrap.hidden) return;
+        const src = (form.querySelector('[name=source]:checked') || {}).value;
+        const o = $('select[name=project]');
+        if (src === 'project' && o && o.value) playProject(o.selectedOptions[0]);
+      }).observe(box);
+    }
   }
 
-  const run = () => document.querySelectorAll('[data-voice-train]').forEach(enhance);
+  const run = () => {
+    const boxes = document.querySelectorAll('[data-voice-train]');
+    if (boxes.length) loadYT();                      // YouTube's player code is fetched before anyone picks a video
+    boxes.forEach(enhance);
+  };
   run();
   document.addEventListener('turbo:load', run);
 })();
