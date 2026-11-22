@@ -60,6 +60,13 @@ def enough_disk() -> bool:
     return free_bytes() >= MIN_FREE_BYTES
 
 
+def best_height() -> int:
+    """The tallest picture to download: 4K when the disk has plenty of room (a 3-hour 4K service is ~15 GB),
+    1440p with a fair amount, else 1080p."""
+    free = free_bytes()
+    return 2160 if free >= 80 * 1024 ** 3 else 1440 if free >= 25 * 1024 ** 3 else 1080
+
+
 def remove_project_files(project_id: int) -> None:
     shutil.rmtree(root() / str(int(project_id)), ignore_errors=True)
 
@@ -173,10 +180,12 @@ def download(url: str, dest: Path, *, start: float | None = None, end: float | N
     work = dest.parent / ("incoming-sound" if sound_only else "incoming")
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True, exist_ok=True)
+    # The sharpest picture there is, up to ``max_height``: a vertical short crops a third of a 16:9 frame, so a
+    # 1440p or 4K source (VP9/AV1 on YouTube; ffmpeg here decodes both) gives a far sharper short than 1080p H.264.
     fmt = ("ba[ext=m4a]/ba/b" if sound_only else
-           f"bv*[height<={max_height}][vcodec^=avc1]+ba[ext=m4a]/bv*[height<={max_height}]+ba/"
-           f"b[height<={max_height}]/bv*+ba/b")
-    cmd = ["yt-dlp", "--no-playlist", "--newline", "--no-warnings", "-f", fmt,
+           f"bv*[height<={max_height}]+ba[ext=m4a]/bv*[height<={max_height}]+ba/b[height<={max_height}]/bv*+ba/b")
+    sort = [] if sound_only else ["-S", f"res:{max_height},fps,vcodec:vp9,acodec:m4a"]
+    cmd = ["yt-dlp", "--no-playlist", "--newline", "--no-warnings", "-f", fmt, *sort,
            "--restrict-filenames", "--print", "before_dl:TITLE %(title)s", "--print", "before_dl:CHAPTERS %(chapters)j",
            "--progress-template", "download:PROGRESS %(progress._percent_str)s",
            "-o", str(work / "source.%(ext)s"), "--retries", "5", "--fragment-retries", "10",

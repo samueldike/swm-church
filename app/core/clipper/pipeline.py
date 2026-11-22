@@ -120,7 +120,7 @@ async def fetch(project_id: int) -> bool:
             cookies = await youtube_cookies() if media.is_youtube(p.source_url or "") else None
             title = await _in_thread(project_id, media.download, p.source_url or "", src,
                                      start=st.get("range_start"), end=st.get("range_end"),
-                                     max_height=1080, cookies=cookies or None, stage="Downloading the video")
+                                     max_height=media.best_height(), cookies=cookies or None, stage="Downloading the video")
             if title and not p.title:
                 await _update(project_id, title=title[:255])
         else:
@@ -556,7 +556,7 @@ async def fetch_video(project_id: int) -> bool:
     try:
         task = asyncio.create_task(asyncio.to_thread(
             media.download, p.source_url or "", src, start=st.get("range_start"), end=st.get("range_end"),
-            keep_whole=True, max_height=1080, cookies=(await youtube_cookies()) or None))
+            keep_whole=True, max_height=media.best_height(), cookies=(await youtube_cookies()) or None))
         while not task.done():
             await asyncio.wait({task}, timeout=15)
             lock.touch()
@@ -819,6 +819,44 @@ def resume_stage(project_id: int) -> str:
     if media.audio_path(project_id).exists() and (media.project_dir(project_id) / "gaps.json").exists():
         return "transcribe"
     return "fetch"
+
+
+async def retry(project_id: int) -> str | None:
+    """Start a stopped or failed project again from where it got to (the files already made). Returns a reason it
+    cannot, or None. Used by the Retry button and by the Automatic Clipper for its failed videos."""
+    from app.core.jobs import enqueue
+    from app.tasks import clip_compose_task, clip_fetch_task, clip_listen_task, clip_render_task
+
+    async with async_session() as db:
+        p = await db.get(ClipProject, project_id)
+        if p is None:
+            return "That project was not found."
+        if p.busy and not stale(p):
+            return "This project is still working."
+        if p.source_deleted_at:
+            return "The source video has been removed. Start a new project."
+        shorts = (await db.execute(select(ClipShort).where(ClipShort.project_id == p.id))).scalars().all()
+        if any(x.status in ("queued", "rendering") for x in shorts):
+            for x in shorts:
+                if x.status == "rendering":
+                    x.status = "queued"
+            task, label, status = clip_render_task, "Cutting the shorts", "rendering"
+        else:
+            stage = resume_stage(p.id)
+            if (stage == "fetch" and p.source_kind == "upload" and not list(media.project_dir(p.id).glob("upload.*"))
+                    and not media.source_path(p.id).exists()):
+                return "The uploaded file is gone. Start a new project and upload it again."
+            task, label, status = {
+                "fetch": (clip_fetch_task, "Getting the video", "queued"),
+                "transcribe": (clip_listen_task, "Writing down every word", "transcribing"),
+                "compose": (clip_compose_task, "Waiting for the editor", "composing"),
+            }[stage]
+            if stage == "compose" and shorts:
+                task, label, status = clip_render_task, "Cutting the shorts", "rendering"
+        p.status, p.stage, p.progress, p.error, p.heartbeat_at = status, label, 0.0, None, datetime.utcnow()
+        await db.commit()
+    await enqueue(task, project_id)
+    return None
 
 
 def disk_summary() -> dict:

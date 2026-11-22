@@ -34,7 +34,13 @@ LINK_GAP = 4              # ... to the track's last face, seen at most this many
 PICTURE_SECONDS = 3.0     # a parked face is judged over at least this long
 PICTURE_STILL = 0.12      # a face moving less than this share of its own width (std of its centre) is parked
 PICTURE_ALIVE = 3.0       # a face moving this many times more than a parked one is the live person
-LIP_SCALE = 2             # lips are read at this many times the detector's width (a mouth is ~12 px at 480)
+WIDE_FACE_W = 0.035       # a face at least this wide (share of the frame) means a speaker is on screen
+WIDE_MIN = 1.2            # seconds without one before the short shows the whole picture (a slide, a scripture)
+WIDE_LONG = 4.0           # ... at once when it came in by a cut, else only after this long (a head turned away)
+WIDE_GAP = 0.6            # stretches closer than this are joined; ends this close to the segment's edge reach it
+WIDE_FIT = ("scale={ow}:{oh}:force_original_aspect_ratio=decrease:flags=lanczos,"
+            "pad={ow}:{oh}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1")
+LIP_SCALE = 2            # lips are read at this many times the detector's width (a mouth is ~12 px at 480)
 TALK_WINDOW = 3.0         # seconds either side over which lips are compared with the voice
 TALK_MIN_SAMPLES = 10     # fewest lip readings in that window to judge at all
 TALK_MIN_RANGE = 6.0      # dB the voice must rise and fall by within the window (else there is nothing to follow)
@@ -471,6 +477,60 @@ def crop_expr(keys: list[tuple[float, float]], src_w: int, crop_px: int) -> str:
     return expr
 
 
+def wide_spans(samples: list[dict], duration: float) -> list[tuple[float, float]]:
+    """Stretches (seconds from the segment start) when the screen shows no speaker: a scripture or a slide put up
+    by the vision mixer, an announcement graphic, a wide shot of the hall. There the short shows the whole 16:9
+    picture (``WIDE_FIT``), so every word of the scripture is on screen, and goes back to following the speaker
+    the moment he is back (pure; tested).
+
+    A stretch counts when no face of speaker size (``WIDE_FACE_W``) is seen for ``WIDE_MIN`` seconds and it either
+    begins with a cut in the source (slides come in by a cut), at the segment's start, or lasts ``WIDE_LONG``
+    seconds; so a preacher turning his head for a moment never flips the view. Its edges snap to the source's cuts."""
+    if not samples:
+        return []
+    step = 1 / SAMPLE_FPS
+
+    def speaker(s) -> bool:
+        return any(f[2] >= WIDE_FACE_W for f in s["faces"])
+
+    runs, k, n = [], 0, len(samples)
+    while k < n:
+        if speaker(samples[k]):
+            k += 1
+            continue
+        j = k
+        while j + 1 < n and not speaker(samples[j + 1]):
+            j += 1
+        a = samples[k]["t"]
+        b = samples[j + 1]["t"] if j + 1 < n else duration
+        # snap the edges to a cut in the source just around them (the mixer's switch)
+        for m in range(max(0, k - 2), min(n, k + 3)):
+            if samples[m]["cut"] and abs(samples[m]["t"] - a) <= 2.5 * step:
+                a = samples[m]["t"]
+                break
+        if j + 1 < n:
+            for m in range(max(0, j - 1), min(n, j + 4)):
+                if samples[m]["cut"] and abs(samples[m]["t"] - b) <= 2.5 * step:
+                    b = samples[m]["t"]
+                    break
+        cut_in = any(samples[m]["cut"] for m in range(max(0, k - 2), min(n, k + 3)))
+        if b - a >= WIDE_MIN and (cut_in or a <= 2 * step or b - a >= WIDE_LONG):
+            runs.append([max(0.0, a), min(duration, b)])
+        k = j + 1
+    merged: list[list[float]] = []
+    for a, b in runs:
+        if merged and a - merged[-1][1] < WIDE_GAP:
+            merged[-1][1] = b
+        else:
+            merged.append([a, b])
+    out = []
+    for a, b in merged:
+        a = 0.0 if a < WIDE_GAP else a
+        b = duration if duration - b < WIDE_GAP else b
+        out.append((round(a, 3), round(b, 3)))
+    return out
+
+
 def output_size(fmt: str, quality: int) -> tuple[int, int]:
     q = 1080 if quality >= 1080 else 720
     if fmt == "square":
@@ -480,24 +540,33 @@ def output_size(fmt: str, quality: int) -> tuple[int, int]:
     return (q, round(q * 16 / 9))
 
 
-def video_filter(*, fmt: str, quality: int, framing: str, src_w: int, src_h: int, keys=None) -> str:
-    """The -vf chain for one segment: crop (following the camera keys) or fit on a blurred background, then scale."""
+def video_filter(*, fmt: str, quality: int, framing: str, src_w: int, src_h: int, keys=None,
+                 wide: list[tuple[float, float]] | None = None) -> str:
+    """The -vf chain for one segment: crop (following the camera keys) or fit on a blurred background, then scale.
+    ``wide``: stretches (see ``wide_spans``) shown as the whole picture on black instead of the crop."""
     ow, oh = output_size(fmt, quality)
     target = ow / oh
     src = src_w / src_h if src_h else target
     if framing == "fit" or (fmt == "landscape" and src < target - 0.01):
         return (f"split[a][b];[a]scale={ow}:{oh}:force_original_aspect_ratio=increase,crop={ow}:{oh},"
-                f"boxblur=24:3,eq=brightness=-0.06[bg];[b]scale={ow}:{oh}:force_original_aspect_ratio=decrease[fg];"
-                f"[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1")
+                f"boxblur=24:3,eq=brightness=-0.06[bg];[b]scale={ow}:{oh}:force_original_aspect_ratio=decrease"
+                f":flags=lanczos[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,setsar=1")
     if abs(src - target) < 0.01:
-        return f"scale={ow}:{oh},setsar=1"
+        return f"scale={ow}:{oh}:flags=lanczos,setsar=1"
     if src > target:                                   # wider than the output: crop the sides
         cw = int(src_h * target) // 2 * 2
         if framing == "speaker" and keys:
             x = crop_expr(keys, src_w, cw)
         else:
             x = f"{(src_w - cw) / 2:.1f}"
-        return f"crop=w={cw}:h={src_h}:x='{x}':y=0,scale={ow}:{oh},setsar=1"
+        crop = f"crop=w={cw}:h={src_h}:x='{x}':y=0,scale={ow}:{oh}:flags=lanczos,setsar=1"
+        if not wide:
+            return crop
+        fit = WIDE_FIT.format(ow=ow, oh=oh)
+        if len(wide) == 1 and wide[0][0] <= 0.0 and keys and wide[0][1] >= keys[-1][0] - 1e-3:
+            return fit                                  # the whole segment is a slide
+        when = "+".join(f"between(t,{a:.3f},{b:.3f})" for a, b in wide)
+        return f"split[a][b];[a]{crop}[bg];[b]{fit}[fg];[bg][fg]overlay=0:0:enable='{when}',setsar=1"
     ch = int(src_w / target) // 2 * 2                  # taller than the output: crop top and bottom
     y = max(0, min(src_h - ch, int((src_h - ch) * 0.4)))
     return f"crop=w={src_w}:h={ch}:x=0:y={y},scale={ow}:{oh},setsar=1"

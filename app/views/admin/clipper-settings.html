@@ -101,7 +101,7 @@
           <div class="vc-f vc-mt" data-start-from {{ 'hidden' if w.start != 'from' }}><label for="vc-w-from">Link of the video to start from</label>
             <input id="vc-w-from" type="url" name="start_url" value="{{ w.start_url }}" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off"></div>
           {% if watch.backlog %}<p class="vc-muted text-[12.5px] vc-mt"><i class="ri-stack-line"></i> {{ watch.backlog }} older video{{ '' if watch.backlog == 1 else 's' }} still to clip. They are started two at a time, after new services.</p>{% endif %}
-          <p class="vc-muted text-[12px] vc-mt">Changing the channel, what to clip or where to start makes the next look start afresh from your choice. A video this church has already clipped (by hand or automatically) is never clipped again, whatever you choose here.</p>
+          <p class="vc-muted text-[12px] vc-mt">Changing the channel, what to clip or where to start makes the next look start afresh from your choice. A video this church has already clipped (by hand or automatically) is never clipped again, whatever you choose here. A video that failed is tried again instead, up to 3 times an hour apart.</p>
         </section>
 
         <section class="vc-auto-sec">

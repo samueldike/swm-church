@@ -41,6 +41,8 @@ SOURCES = {"streams": "Live services (the Live tab)", "videos": "Uploaded videos
 DEFAULTS = {"enabled": False, "url": "", "every": "hours", "n": 6, "days": [6], "at": "15:00", "format": "vertical",
             "length": "30-60", "captions": "none", "min_score": 70, "source": "streams", "start": "now",
             "start_url": "", "speaker": "all"}
+RETRY_TIMES = 3           # a failed video is tried again at most this often ...
+RETRY_AFTER = timedelta(hours=1)        # ... and no sooner than this after the last try
 BACKLOG_BUSY = 2          # older videos are started only while fewer automatic videos than this are still working
 BACKLOG_EVERY = timedelta(minutes=45)   # how soon the next look comes while older videos are waiting
 LIST_RECENT = 30          # videos read from a tab on an ordinary look
@@ -318,18 +320,40 @@ async def _busy(branch_id: int) -> int:
     return sum(1 for st in rows if (st or {}).get("auto"))
 
 
-async def clipped_ids(branch_id: int) -> set[str]:
-    """YouTube ids of every video this church has already clipped (by hand or automatically, whatever became of
-    it): the Automatic Clipper never starts one of them again, whatever its starting point."""
+async def clipped_ids(branch_id: int) -> tuple[set[str], dict[str, int]]:
+    """(YouTube ids this church has already clipped or is clipping, {id: failed project}). A video in the first set
+    (by hand or automatically) is never started again, whatever the starting point; a video whose only project
+    failed is not a duplicate: that project is retried instead (``retry_due``)."""
     from sqlalchemy import select
 
     from app.database import async_session
     from app.models.clipper import ClipProject
 
     async with async_session() as db:
-        urls = (await db.execute(select(ClipProject.source_url).where(
-            ClipProject.branch_id == branch_id, ClipProject.source_url.isnot(None)))).scalars().all()
-    return {v for v in (video_id(u) for u in urls) if v}
+        rows = (await db.execute(select(ClipProject.id, ClipProject.source_url, ClipProject.status, ClipProject.brief)
+                                 .where(ClipProject.branch_id == branch_id, ClipProject.source_url.isnot(None))
+                                 .order_by(ClipProject.id))).all()
+    done: set[str] = set()
+    failed: dict[str, int] = {}
+    for pid, url, status, brief in rows:
+        vid = video_id(url)
+        if not vid:
+            continue
+        if status == "failed" and not ((brief or {}).get("speaker_check") or {}).get("refused"):
+            failed[vid] = pid
+        else:
+            done.add(vid)          # a video refused because another preacher speaks is a decision, not a failure
+    return done, {v: p for v, p in failed.items() if v not in done}
+
+
+def retry_due(vid: str, retries: dict, now: datetime) -> bool:
+    """May this failed video be tried again now? At most ``RETRY_TIMES`` times, ``RETRY_AFTER`` apart (pure;
+    tested): a lasting problem (no sermon found, the video removed) is not retried for ever."""
+    r = retries.get(vid) or {}
+    if int(r.get("n") or 0) >= RETRY_TIMES:
+        return False
+    last = r.get("at")
+    return not last or now - datetime.fromisoformat(last) >= RETRY_AFTER
 
 
 async def check(branch_id: int) -> str:
@@ -367,10 +391,28 @@ async def check(branch_id: int) -> str:
             new_ids: list[str] = []
         else:
             new_ids = pick_new(entries, seen, backlog)
-        done = await clipped_ids(branch_id)          # never clip a video of this church twice
-        seen |= done & {str(e.get("id")) for e in entries}
+        done, failed = await clipped_ids(branch_id)   # never clip a video of this church twice ...
+        on_channel = {str(e.get("id")) for e in entries}
+        seen |= done & on_channel
         backlog = [v for v in backlog if v not in done]
         new_ids = [v for v in new_ids if v not in done]
+        # ... but a video whose project failed is tried again (that project, from where it stopped), a few times.
+        retries = dict(state.get("retries") or {})
+        retried: list[str] = []
+        for vid, pid in failed.items():
+            if len(retried) >= MAX_NEW_PER_CHECK or vid not in (on_channel | set(backlog) | set(new_ids) | seen):
+                continue
+            if not retry_due(vid, retries, now):
+                continue
+            problem = await pipeline.retry(pid)
+            retries[vid] = {"n": int((retries.get(vid) or {}).get("n") or 0) + 1, "at": now.isoformat(),
+                            "last": problem or "retried"}
+            if not problem:
+                retried.append(vid)
+        state["retries"] = retries
+        backlog = [v for v in backlog if v not in failed]
+        new_ids = [v for v in new_ids if v not in failed]
+        seen |= set(failed) & on_channel
         titles = {str(e.get("id")): e.get("title") or "" for e in entries}
         busy = await _busy(branch_id)
         # New services first; older ones only while the clipper is not already busy with automatic videos.
@@ -400,7 +442,8 @@ async def check(branch_id: int) -> str:
             backlog = [x for x in backlog if x != vid]
             if state_ == SKIP:
                 continue
-            if vid in await clipped_ids(branch_id):  # started meanwhile (a "Look now" running alongside, or by hand)
+            now_done, now_failed = await clipped_ids(branch_id)
+            if vid in now_done or vid in now_failed:  # started meanwhile (a "Look now" alongside, or by hand)
                 continue
             settings = {**options.DEFAULTS, "content_type": "sermon", "count": AUTO_COUNT, "length": cfg["length"],
                         "format": cfg["format"], "caption_style": cfg["captions"] if captions.style_id(cfg["captions"]) else "none",
@@ -418,10 +461,14 @@ async def check(branch_id: int) -> str:
             clip_fetch_task.apply_async((started[-1]["id"],))
         state["seen"] = list(seen)
         state["baseline"] = True
+        if retried:
+            summary_retry = f"Tried {len(retried)} failed video{'s' if len(retried) != 1 else ''} again. "
+        else:
+            summary_retry = ""
         left = f" {len(backlog)} older video{'s' if len(backlog) != 1 else ''} still to clip." if backlog else ""
-        if started:
-            summary = (f"Started {len(started)} video{'s' if len(started) != 1 else ''}: "
-                       + "; ".join(x["title"] for x in started)[:300] + "." + left)
+        if started or retried:
+            summary = summary_retry + (f"Started {len(started)} video{'s' if len(started) != 1 else ''}: "
+                       + "; ".join(x["title"] for x in started)[:300] + "." if started else "") + left
         elif waiting:
             summary = (f"{waiting} video{'s' if waiting != 1 else ''} not finished or still processing on YouTube; "
                        "looking again later." + left)
@@ -440,7 +487,7 @@ async def check(branch_id: int) -> str:
         cfg, fresh = await load(db, branch_id)
         if fresh.get("epoch") != epoch:          # the settings were changed (a new start) while this look ran
             return summary
-        fresh.update({k: v for k, v in state.items() if k in ("seen", "baseline", "waiting")})
+        fresh.update({k: v for k, v in state.items() if k in ("seen", "baseline", "waiting", "retries")})
         fresh["backlog"] = backlog
         fresh["last_check"] = now.isoformat()
         fresh["last_result"] = summary

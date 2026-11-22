@@ -1526,3 +1526,58 @@ def test_the_camera_follows_whoever_is_talking():
     assert flat == {}
     # A listener nodding beside a talker never steals the frame from a talker who is smaller.
     assert all(x == 0.3 for x in xs[int(4 * fps):int(9 * fps)])
+
+
+def test_slides_and_scriptures_show_the_whole_picture():
+    fps = reframe.SAMPLE_FPS
+    face = (0.5, 0.4, 0.08, 0.2, 0.9)
+
+    def run(spec):
+        """spec: list of (seconds, has_face); a cut where it changes."""
+        out, t, prev = [], 0.0, None
+        for secs, has in spec:
+            for k in range(int(secs * fps)):
+                out.append({"t": round(t, 4), "faces": [face] if has else [], "cut": prev is not None and k == 0 and has != prev})
+                t += 1 / fps
+            prev = has
+        return out, t
+
+    # speaker 5 s, a scripture slide put up by a cut for 6 s, speaker again 5 s
+    samples, d = run([(5, True), (6, False), (5, True)])
+    spans = reframe.wide_spans(samples, d)
+    assert len(spans) == 1 and abs(spans[0][0] - 5.0) < 0.2 and abs(spans[0][1] - 11.0) < 0.2
+    # the preacher turns his head for 2 s (no cut): the view does not flip
+    turn = [{**x, "cut": False} for x in run([(5, True), (2, False), (5, True)])[0]]
+    assert reframe.wide_spans(turn, 12.0) == []
+    # ... but a long stretch with nobody (a wide shot, a long slide) counts even without a cut
+    long = [{**x, "cut": False} for x in run([(3, True), (5, False), (3, True)])[0]]
+    assert len(reframe.wide_spans(long, 11.0)) == 1
+    # a segment that opens on a slide starts wide from its first frame; a slide to the end stays to the end
+    samples, d = run([(3, False), (4, True), (3, False)])
+    spans = reframe.wide_spans(samples, d)
+    assert spans[0][0] == 0.0 and spans[-1][1] == round(d, 3)
+
+    keys = [(0.0, 0.5), (16.0, 0.5)]
+    vf = reframe.video_filter(fmt="vertical", quality=1080, framing="speaker", src_w=1920, src_h=1080, keys=keys,
+                              wide=[(5.0, 11.0)])
+    assert "overlay=0:0:enable='between(t,5.000,11.000)'" in vf and "pad=1080:1920" in vf and "color=black" in vf
+    whole = reframe.video_filter(fmt="vertical", quality=1080, framing="speaker", src_w=1920, src_h=1080, keys=keys,
+                                 wide=[(0.0, 16.0)])
+    assert whole.startswith("scale=1080:1920:force_original_aspect_ratio=decrease") and "crop" not in whole
+    # the labels stay unique when several segments are joined in one graph
+    from app.core.clipper import render
+
+    _, g = render.graph([[0, 16], [20, 30]], [vf, vf], 30, subtitles=None)
+    assert g.count("[xbg0]") == 2 and g.count("[xbg1]") == 2
+
+
+def test_automatic_clipper_retries_a_failed_video_a_few_times():
+    from datetime import datetime, timedelta
+
+    from app.core.clipper import watch
+
+    now = datetime(2026, 11, 22, 12, 0)
+    assert watch.retry_due("v1", {}, now)
+    assert not watch.retry_due("v1", {"v1": {"n": 1, "at": (now - timedelta(minutes=20)).isoformat()}}, now)
+    assert watch.retry_due("v1", {"v1": {"n": 1, "at": (now - timedelta(hours=2)).isoformat()}}, now)
+    assert not watch.retry_due("v1", {"v1": {"n": watch.RETRY_TIMES, "at": (now - timedelta(days=1)).isoformat()}}, now)

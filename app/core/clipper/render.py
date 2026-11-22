@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 
 CLUSTER_GAP = 40.0    # segments closer than this read from one input (decoding the gap is cheaper than a seek)
 LEAD = 1.0            # seconds decoded before a cluster's first segment
-PRESET = "veryfast"    # x264 speed/size trade-off for the one encode
-CRF = "20"
+PRESET = "fast"        # x264 speed/size trade-off for the one encode (sharper than veryfast at the same size)
+CRF = "18"              # visually lossless for phone screens
 
 
 def _fps(src_fps: float) -> int:
@@ -330,6 +330,7 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
     try:
         # 1. The camera: where the speaker is in each segment (a light 6 fps look at a small picture).
         vfs, centre = [], None
+        wides: list[list[tuple[float, float]]] = []      # per segment: when a slide / scripture fills the screen
         looked: dict[int, tuple[float, list[dict]]] = {}
         if track:  # one look per group of nearby segments, then each segment takes its own samples
             for group in clusters(segments):
@@ -338,7 +339,7 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
                 for i in group:
                     looked[i] = (a, samples)
         for n, (s, e) in enumerate(segments):
-            keys = None
+            keys, wide = None, []
             if track:
                 a, every = looked[n]
                 samples = [{**x, "t": x["t"] - (s - a)} for x in every if s - a - 1e-6 <= x["t"] <= e - a + 1e-6]
@@ -347,13 +348,15 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
                 subject = reframe.choose_subject(samples, centre)
                 keys = reframe.camera_path(subject, crop_w, start_x=centre, duration=max(0.05, e - s))
                 centre = keys[-1][1]
+                wide = reframe.wide_spans(samples, max(0.05, e - s))
             if manual:                     # the editor's fixed crop position
                 # frame_x 0..1 = the crop from the left edge to the right edge; keys hold the crop's centre.
                 frac = min(1.0, (int(src_h * ow / oh) // 2 * 2) / src_w) if src_w else 1.0
                 fx = frac / 2 + min(1.0, max(0.0, float(frame_x))) * (1 - frac)
                 keys = [(0.0, fx), (max(0.05, e - s), fx)]
+            wides.append(wide)
             vfs.append(reframe.video_filter(fmt=fmt, quality=quality, framing="speaker" if manual else framing,
-                                            src_w=src_w, src_h=src_h, keys=keys))
+                                            src_w=src_w, src_h=src_h, keys=keys, wide=wide))
             report(0.25 * (n + 1) / len(segments) if track else 0.02)
 
         # 2. One encode: segments, joins, loudness. The master never has captions burned in: they are drawn live
@@ -366,6 +369,11 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
 
         starts = [sum(e - s for s, e in segments[:k]) for k in range(len(segments))]
         plan = zoom_plan(segments, emphasis) if zooms and framing != "fit" else [(1.0, 1.0)] * len(segments)
+        # A zoom never crops into a slide: segments with a full-picture stretch stay unzoomed.
+        plan = [(1.0, 1.0) if wides and wides[k] else z for k, z in enumerate(plan)]
+        wide_at = [starts[k] + a for k, w in enumerate(wides) for a, _ in w]
+        if wide_at:
+            used.append("full picture for slides at " + ", ".join(clock(t) for t in wide_at[:6]))
         for k, ((z0, z1), (s, e)) in enumerate(zip(plan, segments)):
             vfs[k] += zoom_filter(z0, z1, e - s, ow, oh)
         punches = sum(1 for k in range(1, len(plan)) if abs(plan[k][0] - plan[k - 1][1]) > 1e-3 and plan[k][0] > 1.0)
@@ -374,7 +382,7 @@ def render(*, src: Path, info: dict, segments: list[list[float]], words: list[li
             used.append(f"punch-in x{punches}")
         if pushes:
             used.append("push-in at " + ", ".join(clock(t) for t in pushes))
-        if touches and framing != "fit" and plan[0] == (1.0, 1.0) and segments[0][1] - segments[0][0] >= 1.2:
+        if touches and framing != "fit" and plan[0] == (1.0, 1.0) and segments[0][1] - segments[0][0] >= 1.2                 and not (wides and wides[0]):
             vfs[0] += zoom_filter(HOOK_POP[0], 1.0, HOOK_POP[1], ow, oh)
             used.append("hook pop")
         if touches:

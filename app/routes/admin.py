@@ -12581,33 +12581,11 @@ async def admin_clipper_retry(project_id: int, request: Request, db: AsyncSessio
     p = await _clip_project(db, admin, church, project_id) if church is not None else None
     if not p:
         return JSONResponse({"ok": False, "error": "That project was not found."}, status_code=404)
-    from app.core.clipper import media, pipeline
-    from app.tasks import clip_compose_task, clip_fetch_task, clip_listen_task, clip_render_task
+    from app.core.clipper import pipeline
 
-    if p.busy and not pipeline.stale(p):
-        return JSONResponse({"ok": False, "error": "This project is still working."}, status_code=409)
-    if p.source_deleted_at:
-        return JSONResponse({"ok": False, "error": "The source video has been removed. Start a new project."}, status_code=409)
-    if any(s.status in ("queued", "rendering") for s in p.shorts):
-        for s in p.shorts:
-            if s.status == "rendering":
-                s.status = "queued"
-        task, label, status = clip_render_task, "Cutting the shorts", "rendering"
-    else:
-        stage = pipeline.resume_stage(p.id)
-        if (stage == "fetch" and p.source_kind == "upload" and not list(media.project_dir(p.id).glob("upload.*"))
-                and not media.source_path(p.id).exists()):
-            return JSONResponse({"ok": False, "error": "The uploaded file is gone. Start a new project and upload it again."}, status_code=409)
-        task, label, status = {
-            "fetch": (clip_fetch_task, "Getting the video", "queued"),
-            "transcribe": (clip_listen_task, "Writing down every word", "transcribing"),
-            "compose": (clip_compose_task, "Waiting for the editor", "composing"),
-        }[stage]
-        if stage == "compose" and p.shorts:
-            task, label, status = clip_render_task, "Cutting the shorts", "rendering"
-    p.status, p.stage, p.progress, p.error, p.heartbeat_at = status, label, 0.0, None, datetime.utcnow()
-    await db.commit()
-    await _clip_enqueue(task, p.id)
+    problem = await pipeline.retry(p.id)
+    if problem:
+        return JSONResponse({"ok": False, "error": problem}, status_code=409)
     return JSONResponse({"ok": True})
 
 
