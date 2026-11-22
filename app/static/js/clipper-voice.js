@@ -28,24 +28,39 @@
     const wrap = $('[data-player]'), stage = $('[data-stage]'), bar = $('[data-bar]'), sel = $('[data-sel]');
     const hLo = $('[data-h=lo]'), hHi = $('[data-h=hi]'), now = $('[data-now]'), read = $('[data-read]');
     const inStart = box.querySelector('input[name=start]'), inEnd = box.querySelector('input[name=end]');
-    let player = null, total = 0, lo = 0, hi = 0, stopAt = null, timer = null;
+    let player = null, total = 0, lo = null, hi = null, stopAt = null, timer = null;
+    const steps = box.querySelectorAll('[data-step]');
 
     const cur = () => (player ? player.time() : 0);
+    // Nothing is marked until the person marks it: Start and End appear on the bar as they are set.
     const paint = () => {
       if (!total) return;
       const pct = (t) => `${(Math.max(0, Math.min(total, t)) / total) * 100}%`;
-      hLo.style.left = pct(lo); hHi.style.left = pct(hi);
-      sel.style.left = pct(lo); sel.style.width = `${((hi - lo) / total) * 100}%`;
+      hLo.hidden = lo === null; hHi.hidden = hi === null;
+      if (lo !== null) hLo.style.left = pct(lo);
+      if (hi !== null) hHi.style.left = pct(hi);
+      const both = lo !== null && hi !== null;
+      sel.hidden = !both;
+      if (both) { sel.style.left = pct(lo); sel.style.width = `${((hi - lo) / total) * 100}%`; }
       now.style.left = pct(cur());
-      read.textContent = `${clock(lo)} to ${clock(hi)} (${clock(hi - lo)})`;
-      read.classList.toggle('bad', hi - lo < 20 || hi - lo > 600);
-      inStart.value = String(Math.round(lo)); inEnd.value = String(Math.round(hi));
+      read.textContent = both ? `${clock(lo)} to ${clock(hi)} (${clock(hi - lo)})`
+        : `Start: ${lo === null ? 'not set' : clock(lo)} · End: ${hi === null ? 'not set' : clock(hi)}`;
+      read.classList.toggle('bad', both && (hi - lo < 20 || hi - lo > 600));
+      inStart.value = lo === null ? '' : String(Math.round(lo));
+      inEnd.value = hi === null ? '' : String(Math.round(hi));
+      const at_ = lo === null ? 'lo' : hi === null ? 'hi' : 'ok';
+      steps.forEach((li) => {
+        const k = li.dataset.step;
+        li.classList.toggle('now', k === at_);
+        li.classList.toggle('done', (k === 'lo' && lo !== null) || (k === 'hi' && hi !== null));
+      });
     };
     const ready = (duration) => {
       total = duration || 0;
       if (!total) return;
-      lo = Math.min(total * 0.3, Math.max(0, total - 150));
-      hi = Math.min(total, lo + 120);
+      lo = null; hi = null;
+      const wait = stage.querySelector('.vc-train-loading');
+      if (wait) wait.remove();
       wrap.hidden = false;
       paint();
       clearInterval(timer);
@@ -57,19 +72,22 @@
     };
     const reset = () => {
       if (player) player.destroy();
-      player = null; total = 0; stage.innerHTML = ''; wrap.hidden = true; inStart.value = ''; inEnd.value = '';
+      player = null; total = 0; lo = null; hi = null; stage.innerHTML = ''; wrap.hidden = true; inStart.value = ''; inEnd.value = '';
     };
     const html5 = (src) => {
       reset();
+      loading('Loading the video… a long service can take a little while before it can be played.');
       const v = document.createElement('video');
       v.src = src; v.controls = true; v.playsInline = true; v.preload = 'metadata';
       stage.appendChild(v);
+      v.addEventListener('error', () => loading('This video could not be loaded here. Choose another, or paste its YouTube link.'), { once: true });
       v.addEventListener('loadedmetadata', () => ready(v.duration), { once: true });
       player = { time: () => v.currentTime, seek: (t) => { v.currentTime = t; }, play: () => v.play(), pause: () => v.pause(),
         destroy: () => { v.pause(); v.removeAttribute('src'); v.load(); } };
     };
     const youtube = async (id) => {
       reset();
+      loading('Opening the video…');
       await loadYT();
       const holder = document.createElement('div');
       stage.appendChild(holder);
@@ -81,17 +99,33 @@
         play: () => yp.playVideo(), pause: () => yp.pauseVideo(), destroy: () => yp.destroy() };
     };
 
+    // The player area shows at once with a note while the video loads (no silent wait).
+    function loading(text) {
+      wrap.hidden = false;
+      let w = stage.querySelector('.vc-train-loading');
+      if (!w) { w = document.createElement('div'); w.className = 'vc-train-loading'; stage.prepend(w); }
+      w.innerHTML = '<i class="ri-loader-4-line vc-spin" aria-hidden="true"></i><span></span>';
+      w.querySelector('span').textContent = text;
+    }
+    // One of the church's videos: one that came from YouTube plays in YouTube's player (instant, quick to seek).
+    const playProject = (o) => {
+      if (!o || !o.value) { reset(); return; }
+      if (o.dataset.yt) youtube(o.dataset.yt);
+      else if (o.dataset.src) html5(o.dataset.src);
+      else reset();
+    };
+
     // where the video comes from
     const showSource = () => {
       const src = (form.querySelector('[name=source]:checked') || {}).value || 'link';
       box.querySelectorAll('[data-when]').forEach((el) => { el.hidden = el.dataset.when !== src; });
       reset();
-      if (src === 'project') { const o = $('select[name=project]'); if (o && o.selectedOptions[0] && o.selectedOptions[0].dataset.src) html5(o.selectedOptions[0].dataset.src); }
+      if (src === 'project') { const o = $('select[name=project]'); if (o && o.selectedOptions[0]) playProject(o.selectedOptions[0]); }
       if (src === 'file') { const f = $('input[name=file]'); if (f && f.files && f.files[0]) html5(URL.createObjectURL(f.files[0])); }
     };
     box.addEventListener('change', (e) => {
       if (e.target.name === 'source') showSource();
-      else if (e.target.name === 'project') { const o = e.target.selectedOptions[0]; if (o && o.dataset.src) html5(o.dataset.src); else reset(); }
+      else if (e.target.name === 'project') playProject(e.target.selectedOptions[0]);
       else if (e.target.name === 'file') { const f = e.target.files && e.target.files[0]; if (f) html5(URL.createObjectURL(f)); else reset(); }
     });
     const openLink = () => {
@@ -121,7 +155,7 @@
       e.preventDefault(); h.setPointerCapture(e.pointerId);
       const move = (ev) => {
         const t = at(ev.clientX);
-        if (h === hLo) lo = Math.min(t, hi - 5); else hi = Math.max(t, lo + 5);
+        if (h === hLo) lo = hi === null ? t : Math.min(t, hi - 5); else hi = lo === null ? t : Math.max(t, lo + 5);
         if (player) player.seek(h === hLo ? lo : hi);
         paint();
       };
@@ -131,21 +165,31 @@
     bar.addEventListener('click', (e) => { if (e.target === bar || e.target === sel) { player && player.seek(at(e.clientX)); paint(); } });
     box.querySelectorAll('[data-set]').forEach((b) => b.addEventListener('click', () => {
       const t = cur();
-      if (b.dataset.set === 'lo') { lo = Math.min(t, total - 5); if (hi <= lo + 5) hi = Math.min(total, lo + 120); }
-      else { hi = Math.max(t, 5); if (lo >= hi - 5) lo = Math.max(0, hi - 120); }
+      if (b.dataset.set === 'lo') { lo = Math.min(t, total - 5); if (hi !== null && hi <= lo + 5) hi = null; }
+      else {
+        if (lo === null) { alert('Set the start first: go to where only this preacher speaks and press Start here.'); return; }
+        if (t <= lo + 5) { alert('The end must come after the start. Let it play on, then press End here.'); return; }
+        hi = t;
+      }
       paint();
     }));
-    $('[data-play-part]').addEventListener('click', () => { if (!player) return; player.seek(lo); player.play(); stopAt = hi; });
+    $('[data-play-part]').addEventListener('click', () => {
+      if (!player || lo === null || hi === null) { alert('Set the start and the end first.'); return; }
+      player.seek(lo); player.play(); stopAt = hi;
+    });
 
     form.addEventListener('submit', (e) => {
+      if (form.dataset.ajax) return;              // the Automatic Clipper's window sends it itself
       const a = Number(inStart.value), b = Number(inEnd.value);
       if (inStart.value === '' || inEnd.value === '' || !(b - a >= 20)) {
         e.preventDefault();
-        alert('Open the video and mark the part where only he speaks: a start and an end at least 20 seconds apart.');
+        alert(inStart.value === '' ? 'Set the start: open the video, go to where only this preacher speaks and press Start here.'
+          : inEnd.value === '' ? 'Set the end: let the video play 1 to 3 minutes on, then press End here.'
+            : 'The start and the end must be at least 20 seconds apart.');
         return;
       }
       const btn = form.querySelector('button[type=submit]');
-      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ri-loader-4-line vc-spin"></i>Learning his voice… (a link takes about a minute)'; }
+      if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ri-loader-4-line vc-spin"></i>Learning the voice… (a link takes about a minute)'; }
     });
     showSource();
   }

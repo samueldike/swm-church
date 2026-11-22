@@ -4,7 +4,7 @@
     start, end). `videos`: the church's clipper videos whose source is still on the server. -#}
 {% macro voice_trainer(uid, videos) -%}
 <div class="vc-train" data-voice-train>
-  <div class="vc-f"><span class="vc-train-label">Learn his voice from</span>
+  <div class="vc-f"><span class="vc-train-label">Learn the voice from</span>
     <div class="vc-seg-choice" role="radiogroup" aria-label="Where the video is">
       <label><input type="radio" name="source" value="link" checked><i class="ri-youtube-line"></i>A YouTube or video link</label>
       {% if videos %}<label><input type="radio" name="source" value="project"><i class="ri-film-line"></i>One of our videos</label>{% endif %}
@@ -17,7 +17,7 @@
   {% if videos %}
   <div class="vc-f" data-when="project" hidden><label for="vc-tr-proj-{{ uid }}">Video</label>
     <select id="vc-tr-proj-{{ uid }}" name="project"><option value="">Choose a video…</option>
-      {% for x in videos %}<option value="{{ x.id }}" data-src="{{ url_for('admin_clipper_source', project_id=x.id) }}">{{ (x.title or 'Video')[:90] }}</option>{% endfor %}
+      {% for x in videos %}<option value="{{ x.id }}" data-src="{{ x.src }}" data-yt="{{ x.yt }}">{{ (x.title or 'Video')[:90] }}</option>{% endfor %}
     </select></div>
   {% endif %}
   <div class="vc-f" data-when="file" hidden><label for="vc-tr-file-{{ uid }}">Recording (sound or video)</label>
@@ -27,8 +27,8 @@
     <div class="vc-train-stage" data-stage></div>
     <div class="vc-train-bar" data-bar aria-label="The part to learn from: drag the start and end">
       <div class="vc-train-sel" data-sel></div>
-      <button type="button" class="vc-train-h" data-h="lo" aria-label="Start of the part"></button>
-      <button type="button" class="vc-train-h" data-h="hi" aria-label="End of the part"></button>
+      <button type="button" class="vc-train-h" data-h="lo" aria-label="Start of the part" hidden><span>Start</span></button>
+      <button type="button" class="vc-train-h" data-h="hi" aria-label="End of the part" hidden><span>End</span></button>
       <div class="vc-train-now" data-now></div>
     </div>
     <div class="vc-train-tools">
@@ -36,9 +36,13 @@
       <button type="button" class="btn btn-secondary btn-sm" data-set="hi"><i class="ri-skip-right-line"></i>End here</button>
       <button type="button" class="btn btn-ghost btn-sm" data-play-part><i class="ri-play-line"></i>Play the part</button>
       <span class="flex-grow"></span>
-      <b data-read>0:00 to 0:00</b>
+      <b data-read>Start: not set · End: not set</b>
     </div>
-    <p class="vc-muted text-[12px]" data-hint>Play the video, find where only he is preaching (no singing, no one else), then press <b>Start here</b> and <b>End here</b>, or drag the two handles. 1 to 3 minutes is ideal.</p>
+    <ol class="vc-train-steps" data-hint>
+      <li data-step="lo">Play or drag along the bar to where only this preacher is speaking (no singing, no one else), then press <b>Start here</b>.</li>
+      <li data-step="hi">Let it play 1 to 3 minutes further and press <b>End here</b>.</li>
+      <li data-step="ok">Press <b>Play the part</b> to check it, then save. You can drag the <b>Start</b> and <b>End</b> markers on the bar.</li>
+    </ol>
   </div>
   <input type="hidden" name="start" value="">
   <input type="hidden" name="end" value="">

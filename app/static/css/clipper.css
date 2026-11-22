@@ -584,3 +584,11 @@
 .vc-auto-n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--vc-gold-tint, #f6ecd2); color: var(--vc-ink, #111); font-size: 12px; font-weight: 800; }
 .vc-auto .vc-choice { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 .vc-voice-dlg { width: min(720px, 96vw); }
+
+.vc-train-h[hidden] { display: none; }
+.vc-train-h span { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 800; color: #7a5a00; white-space: nowrap; pointer-events: none; }
+.vc-train-bar { margin-top: 18px; }
+.vc-train-loading { display: grid; place-items: center; min-height: 180px; color: var(--vc-ink3, #666); font-size: 13px; gap: 6px; text-align: center; }
+.vc-train-steps { margin: 6px 0 0; padding-left: 20px; font-size: 12.5px; color: var(--vc-ink3, #666); display: grid; gap: 2px; }
+.vc-train-steps li.now { color: var(--vc-ink, #111); font-weight: 600; }
+.vc-train-steps li.done { text-decoration: line-through; opacity: .6; }

@@ -10584,7 +10584,7 @@ async def _clip_page(request: Request, db: AsyncSession, template: str, title: s
                       "watermark": _clip_marks_view(wchurch, await __import__("app.core.clipper.watermark", fromlist=["load"]).load(db, wchurch)),
                       "music": await __import__("app.core.clipper.music", fromlist=["load"]).load(db, wchurch),
                       "voices": _clip_voices_view(await __import__("app.core.clipper.speakers", fromlist=["load"]).load(db, wchurch)),
-                      "audio_projects": [x for x in projects if x.branch_id == wchurch and __import__("app.core.clipper.media", fromlist=["source_path"]).source_path(x.id).exists()][:30]}
+                      "audio_projects": _clip_voice_videos([x for x in projects if x.branch_id == wchurch])}
         watch_ctx = {"cfg": wcfg, "state": wstate, "church": wchurch, "church_name": wb.name if wb else "",
                      "every": _cw.EVERY, "days": _cw.DAY_NAMES, "formats": _co.FORMATS, "lengths": _co.LENGTHS,
                      "starts": _cw.STARTS, "sources": _cw.SOURCES, "backlog": len(wstate.get("backlog") or []),
@@ -11875,6 +11875,27 @@ async def admin_clipper_music_file(track_id: str, request: Request, db: AsyncSes
 
 
 # ── Video Clipper → whose messages are clipped (voices: speakers.py, voice.py) ──
+
+def _clip_voice_videos(projects) -> list[dict]:
+    """The church's videos a voice can be learned from, for the trainer: a video that came from YouTube plays in
+    YouTube's own player (instant, quick to seek; its clock is the one of the copy on the server); any other plays
+    the copy on the server. Videos whose sound is gone are left out."""
+    import re as _re
+
+    from app.core.clipper import media
+
+    out = []
+    for x in projects:
+        m = _re.search(r"(?:[?&]v=|youtu\.be/|/live/|/shorts/|/embed/)([\w-]{11})(?![\w-])", x.source_url or "")
+        local = media.source_path(x.id).exists()
+        if not local and not (m and media.audio_path(x.id).exists()):
+            continue
+        out.append({"id": x.id, "title": x.title, "yt": m.group(1) if m else "",
+                    "src": f"/admin/clipper/{x.id}/source.mp4" if local else ""})
+        if len(out) >= 30:
+            break
+    return out
+
 
 def _clip_voices_view(cfg: dict) -> dict:
     """The voice library for the page: names and samples, never the voiceprints themselves."""

@@ -6,7 +6,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}Settings{% endblock %}
 {% block topbar_icon %}ri-settings-3-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=23">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=24">{% endblock %}
 
 {% block page_header %}
   {{ page_header("Clipper settings", "Set these up once. Every new video uses them.",
@@ -157,7 +157,7 @@
   {% if frames %}
   {#- "＋ Add a new voice…": learn a voice here, without leaving the Automatic Clipper (kept OUTSIDE the form above). -#}
   <dialog class="vc-up-dlg vc-voice-dlg" id="vc-voice-dlg" aria-labelledby="vc-voice-title">
-    <form class="vc-up-form" id="vc-voice-form" action="{{ url_for('admin_clipper_voices_person') }}?church={{ watch.church }}&json=1" enctype="multipart/form-data">
+    <form class="vc-up-form" id="vc-voice-form" data-ajax="1" action="{{ url_for('admin_clipper_voices_person') }}?church={{ watch.church }}&json=1" enctype="multipart/form-data">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="vc-up-head">
         <h2 id="vc-voice-title">Add a new voice</h2>
@@ -603,7 +603,7 @@
       <p class="vc-muted text-[12px]">The library starts empty. Add each preacher with a video where they preach, and mark 1 to 3 minutes where only they speak (no singing); then add one or two more parts from other services. Add the preachers who sound alike too, so each part goes to whoever it is closest to. Then choose above whose messages are clipped.</p>
     </div>
   </details>
-  <script src="{{ url_for('static', path='js/clipper-voice.js') }}?v=1"></script>
+  <script src="{{ url_for('static', path='js/clipper-voice.js') }}?v=2"></script>
   <script>document.querySelectorAll('#voices form[data-confirm]').forEach((f) => f.addEventListener('submit', (e) => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));</script>
   {% endif %}
   </div>
