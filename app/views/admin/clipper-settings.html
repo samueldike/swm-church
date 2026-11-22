@@ -6,7 +6,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}Settings{% endblock %}
 {% block topbar_icon %}ri-settings-3-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=22">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=23">{% endblock %}
 
 {% block page_header %}
   {{ page_header("Clipper settings", "Set these up once. Every new video uses them.",
@@ -17,7 +17,7 @@
 <div class="vc vc-settings">
   <nav class="vc-setnav" aria-label="Clipper settings">
     {% if youtube is not none %}<a href="#youtube-access" data-tab="youtube-access"><i class="ri-youtube-line"></i><span>YouTube access</span></a>{% endif %}
-    {% if watch %}<a href="#watch" data-tab="watch"><i class="ri-live-line"></i><span>Clip lives automatically</span></a>{% endif %}
+    {% if watch %}<a href="#watch" data-tab="watch"><i class="ri-robot-2-line"></i><span>Automatic Clipper</span></a>{% endif %}
     {% if frames %}
     <a href="#voices" data-tab="voices"><i class="ri-user-voice-line"></i><span>Whose messages</span></a>
     <a href="#frames" data-tab="frames"><i class="ri-layout-masonry-line"></i><span>Video frames</span></a>
@@ -64,22 +64,59 @@
 
   {% if watch %}
   {% set w = watch.cfg %}{% set ws = watch.state %}
+  {% set people = frames.voices.people if frames else [] %}
   <details class="vc-panel vc-yt" id="watch" {{ 'open' if not w.url }}>
-    <summary><i class="ri-live-line"></i><b>Clip our YouTube lives automatically</b>
-      {% if w.enabled %}<span class="vc-pill ok"><i class="ri-radar-line"></i>Watching</span>{% else %}<span class="vc-pill">Off</span>{% endif %}
-      <span class="vc-muted vc-yt-why">{% if ws.last_result %}{{ ws.last_result }}{% else %}Every finished live service becomes ready-to-post shorts on its own.{% endif %}</span></summary>
+    <summary><i class="ri-robot-2-line"></i><b>Automatic Clipper</b>
+      {% if w.enabled %}<span class="vc-pill ok"><i class="ri-radar-line"></i>On</span>{% else %}<span class="vc-pill">Off</span>{% endif %}
+      <span class="vc-muted vc-yt-why">{% if ws.last_result %}{{ ws.last_result }}{% else %}The church's YouTube services become ready-to-post shorts on their own.{% endif %}</span></summary>
     <div class="vc-yt-body">
       {% if watch.churches %}
       <form method="get" class="vc-inline vc-mt"><label class="text-[13px] font-semibold" for="vc-wchurch">Church</label>
         <select id="vc-wchurch" name="church" onchange="this.form.submit()">{% for b in watch.churches %}<option value="{{ b.id }}" {{ 'selected' if b.id == watch.church }}>{{ b.name }}{{ ' (HQ)' if b.is_hq }}</option>{% endfor %}</select>
       </form>
       {% endif %}
-      <p class="vc-muted">The server looks at the channel's <b>Live</b> tab. A live that is still on, scheduled, or still being processed by YouTube is left for the next look; once the recording is ready it is downloaded and clipped. Every moment is scored for value: the ones under your bar are left out, and all the others are cut.</p>
-      <form method="post" action="{{ url_for('admin_clipper_watch') }}?church={{ watch.church }}" class="vc-watch" data-turbo="false">
+      <p class="vc-muted">The server looks at the church's YouTube channel on a schedule. A live that is still on, scheduled or still being processed is left for the next look; once the recording is ready it is downloaded and clipped. Every moment is scored for value: the ones under your bar are left out, all the others are cut.</p>
+
+      <form method="post" action="{{ url_for('admin_clipper_watch') }}?church={{ watch.church }}" class="vc-watch vc-auto" data-turbo="false">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <label class="vc-switch"><input type="checkbox" name="enabled" value="1" {{ 'checked' if w.enabled }}><span aria-hidden="true"></span><b>Watch the channel</b><small>{{ watch.church_name }}</small></label>
-        <label class="vc-field">Channel link<input type="url" name="url" value="{{ w.url }}" placeholder="https://www.youtube.com/@yourchurch" autocomplete="off"></label>
-        <fieldset class="vc-field"><legend>Look for new lives</legend>
+        <label class="vc-switch"><input type="checkbox" name="enabled" value="1" {{ 'checked' if w.enabled }}><span aria-hidden="true"></span><b>Automatic Clipper is on</b><small>{{ watch.church_name }}</small></label>
+
+        <section class="vc-auto-sec">
+          <h3><span class="vc-auto-n">1</span>The channel</h3>
+          <div class="vc-f-row">
+            <div class="vc-f vc-f-wide"><label for="vc-w-url">Channel link</label>
+              <input id="vc-w-url" type="url" name="url" value="{{ w.url }}" placeholder="https://www.youtube.com/@yourchurch" autocomplete="off"></div>
+            <div class="vc-f"><label for="vc-w-src">Clip</label>
+              <select id="vc-w-src" name="source">{% for k, v in watch.sources.items() %}<option value="{{ k }}" {{ 'selected' if w.source == k }}>{{ v }}</option>{% endfor %}</select></div>
+          </div>
+        </section>
+
+        <section class="vc-auto-sec">
+          <h3><span class="vc-auto-n">2</span>Where to start</h3>
+          <div class="vc-choice" role="radiogroup" aria-label="Where to start">
+            <label><input type="radio" name="start" value="now" {{ 'checked' if w.start == 'now' }}>From now on<small>Videos already on the channel are left alone. Only services that appear from now are clipped.</small></label>
+            <label><input type="radio" name="start" value="all" {{ 'checked' if w.start == 'all' }}>From the very first video<small>Every video already on the channel is clipped, oldest first, a few at a time, then every new one.</small></label>
+            <label><input type="radio" name="start" value="from" {{ 'checked' if w.start == 'from' }}>From a video I choose<small>That video and every one after it, then every new one. Older ones are left alone.</small></label>
+          </div>
+          <div class="vc-f vc-mt" data-start-from {{ 'hidden' if w.start != 'from' }}><label for="vc-w-from">Link of the video to start from</label>
+            <input id="vc-w-from" type="url" name="start_url" value="{{ w.start_url }}" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off"></div>
+          {% if watch.backlog %}<p class="vc-muted text-[12.5px] vc-mt"><i class="ri-stack-line"></i> {{ watch.backlog }} older video{{ '' if watch.backlog == 1 else 's' }} still to clip. They are started two at a time, after new services.</p>{% endif %}
+          <p class="vc-muted text-[12px] vc-mt">Changing the channel, what to clip or where to start makes the next look start afresh from your choice. Videos already clipped stay as they are.</p>
+        </section>
+
+        <section class="vc-auto-sec">
+          <h3><span class="vc-auto-n">3</span>Whose messages</h3>
+          <div class="vc-f"><label for="vc-w-speaker">Clip the messages of</label>
+            <select id="vc-w-speaker" name="speaker" data-speaker data-prev="{{ w.speaker }}">
+              <option value="all" {{ 'selected' if w.speaker == 'all' }}>Every preacher</option>
+              {% for p in people %}<option value="{{ p.id }}" {{ 'selected' if w.speaker == p.id }}>{{ p.name }}{{ ' (needs a second part to be recognised)' if p.samples|length < 2 }}</option>{% endfor %}
+              <option value="__new">＋ Add a new voice…</option>
+            </select>
+            <small class="vc-muted">With one preacher chosen, only the parts that preacher speaks are clipped, recognised by voice. A video they do not preach in is stopped with a "Clip anyway" button.</small></div>
+        </section>
+
+        <section class="vc-auto-sec">
+          <h3><span class="vc-auto-n">4</span>When to look</h3>
           <div class="vc-inline">
             <select name="every" aria-label="How often" data-every>{% for k, v in watch.every.items() %}<option value="{{ k }}" {{ 'selected' if w.every == k }}>{{ v }}</option>{% endfor %}</select>
             <label data-show="hours days">every <input type="number" name="n" min="1" max="168" value="{{ w.n }}" style="width:5em" aria-label="How many"> <span data-unit>{{ 'hours' if w.every == 'hours' else 'days' }}</span></label>
@@ -88,39 +125,114 @@
           <div class="vc-inline vc-mt" data-show="weekdays">
             {% for d in watch.days %}<label class="vc-day"><input type="checkbox" name="days" value="{{ loop.index0 }}" {{ 'checked' if loop.index0 in w.days }}>{{ d[:3] }}</label>{% endfor %}
           </div>
-        </fieldset>
-        <div class="vc-row">
-          <label class="vc-field">Shape<select name="format">{% for k, v in watch.formats.items() %}<option value="{{ k }}" {{ 'selected' if w.format == k }}>{{ v.label if v is mapping else v }}</option>{% endfor %}</select></label>
-          <label class="vc-field">Length<select name="length">{% for k, v in watch.lengths.items() %}<option value="{{ k }}" {{ 'selected' if w.length == k }}>{{ v[0] }} to {{ v[1] }} seconds</option>{% endfor %}</select></label>
-          <label class="vc-field">Captions<select name="captions"><option value="none">None</option>{% for k, v in watch.captions.items() %}<option value="{{ k }}" {{ 'selected' if w.captions == k }}>{{ v }}</option>{% endfor %}</select></label>
-        </div>
-        <label class="vc-field">Value bar: keep moments scoring at least <output data-score>{{ w.min_score }}</output> of 100
-          <input type="range" name="min_score" min="40" max="95" step="5" value="{{ w.min_score }}" data-score-in>
-          <small>70 keeps every strong moment; raise it for fewer, stronger shorts. There is no fixed number: each message gives as many as clear the bar.</small></label>
-        <label class="ve-check"><input type="checkbox" name="latest" value="1" {{ 'checked' if w.latest }}> On the first look, also clip the most recent finished live</label>
-        <div class="vc-inline">
-          <button type="submit" class="btn btn-primary btn-sm"><i class="ri-save-line"></i>Save</button>
+        </section>
+
+        <section class="vc-auto-sec">
+          <h3><span class="vc-auto-n">5</span>The shorts</h3>
+          <div class="vc-f-row">
+            <div class="vc-f"><label for="vc-w-fmt">Shape</label><select id="vc-w-fmt" name="format">{% for k, v in watch.formats.items() %}<option value="{{ k }}" {{ 'selected' if w.format == k }}>{{ v.label if v is mapping else v }}</option>{% endfor %}</select></div>
+            <div class="vc-f"><label for="vc-w-len">Length</label><select id="vc-w-len" name="length">{% for k, v in watch.lengths.items() %}<option value="{{ k }}" {{ 'selected' if w.length == k }}>{{ v[0] }} to {{ v[1] }} seconds</option>{% endfor %}</select></div>
+            <div class="vc-f"><label for="vc-w-cap">Captions</label><select id="vc-w-cap" name="captions"><option value="none">None</option>{% for k, v in watch.captions.items() %}<option value="{{ k }}" {{ 'selected' if w.captions == k }}>{{ v }}</option>{% endfor %}</select></div>
+          </div>
+          <div class="vc-f vc-mt"><label for="vc-w-score">Value bar: keep moments scoring at least <output data-score>{{ w.min_score }}</output> of 100</label>
+            <input id="vc-w-score" type="range" name="min_score" min="40" max="95" step="5" value="{{ w.min_score }}" data-score-in>
+            <small class="vc-muted">70 keeps every strong moment; raise it for fewer, stronger shorts. There is no fixed number: each message gives as many as clear the bar.</small></div>
+        </section>
+
+        <div class="vc-addform-foot">
           <span class="vc-muted text-[12px]">{% if ws.last_check %}Last look {{ ws.last_check[:16].replace('T', ' ') }} UTC.{% endif %}{% if w.enabled and ws.next_check %} Next {{ ws.next_check[:16].replace('T', ' ') }} UTC.{% endif %}</span>
+          <span class="flex-grow"></span>
+          {% if w.url %}<button type="submit" class="btn btn-secondary" form="vc-watch-now"><i class="ri-refresh-line"></i>Look now</button>{% endif %}
+          <button type="submit" class="btn btn-primary"><i class="ri-save-line"></i>Save</button>
         </div>
       </form>
       {% if w.url %}
-      <form method="post" action="{{ url_for('admin_clipper_watch_check') }}?church={{ watch.church }}" class="vc-inline">
+      <form method="post" action="{{ url_for('admin_clipper_watch_check') }}?church={{ watch.church }}" id="vc-watch-now" hidden>
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button type="submit" class="btn btn-secondary btn-sm"><i class="ri-refresh-line"></i>Check now</button>
       </form>
       {% endif %}
     </div>
   </details>
+
+  {% if frames %}
+  {#- "＋ Add a new voice…": learn a voice here, without leaving the Automatic Clipper (kept OUTSIDE the form above). -#}
+  <dialog class="vc-up-dlg vc-voice-dlg" id="vc-voice-dlg" aria-labelledby="vc-voice-title">
+    <form class="vc-up-form" id="vc-voice-form" action="{{ url_for('admin_clipper_voices_person') }}?church={{ watch.church }}&json=1" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="vc-up-head">
+        <h2 id="vc-voice-title">Add a new voice</h2>
+        <button type="button" class="vc-up-x" data-voice-close aria-label="Close"><i class="ri-close-line"></i></button>
+      </div>
+      <p class="vc-muted text-[12.5px]">Open a video where this preacher speaks, mark 1 to 3 minutes where only they speak (no singing), and it is learned and chosen here. Add a second part from another service later under Whose messages, so it can be recognised.</p>
+      <div class="vc-f"><label for="vc-voice-name">Name</label>
+        <input id="vc-voice-name" type="text" name="name" maxlength="80" required autocomplete="off"></div>
+      {{ voice_trainer('dlg', frames.audio_projects) }}
+      <p class="vc-up-msg" id="vc-voice-msg" role="status" aria-live="polite"></p>
+      <div class="vc-up-foot">
+        <button type="button" class="btn btn-secondary" data-voice-close>Cancel</button>
+        <button type="submit" class="btn btn-primary" id="vc-voice-go"><i class="ri-user-add-line"></i><span>Learn and choose this voice</span></button>
+      </div>
+    </form>
+  </dialog>
+  {% endif %}
   <script>
   (() => {
     const f = document.querySelector('.vc-watch'); if (!f) return;
+    const ctl = new AbortController(); const o = { signal: ctl.signal };
+    document.addEventListener('turbo:before-visit', () => ctl.abort(), { once: true });
     const sync = () => {
       const every = f.querySelector('[data-every]').value;
       f.querySelectorAll('[data-show]').forEach((el) => { el.hidden = !el.dataset.show.split(' ').includes(every); });
       f.querySelector('[data-unit]').textContent = every === 'hours' ? 'hours' : 'days';
       f.querySelector('[data-score]').textContent = f.querySelector('[data-score-in]').value;
+      const start = (f.querySelector('[name=start]:checked') || {}).value;
+      const from = f.querySelector('[data-start-from]');
+      from.hidden = start !== 'from';
+      from.querySelector('input').required = start === 'from';
     };
-    f.addEventListener('input', sync); f.addEventListener('change', sync); sync();
+    f.addEventListener('input', sync, o); f.addEventListener('change', sync, o); sync();
+
+    // Whose messages: "＋ Add a new voice…" opens the window; the select keeps its choice until a voice is added.
+    const sel = f.querySelector('[data-speaker]');
+    const dlg = document.getElementById('vc-voice-dlg');
+    const vf = document.getElementById('vc-voice-form');
+    const msg = document.getElementById('vc-voice-msg');
+    const go = document.getElementById('vc-voice-go');
+    if (!sel || !dlg || !vf) return;
+    sel.addEventListener('change', () => {
+      if (sel.value !== '__new') { sel.dataset.prev = sel.value; return; }
+      sel.value = sel.dataset.prev || 'all';
+      msg.textContent = ''; msg.classList.remove('bad');
+      dlg.showModal();
+      setTimeout(() => document.getElementById('vc-voice-name').focus(), 50);
+    }, o);
+    dlg.querySelectorAll('[data-voice-close]').forEach((b) => b.addEventListener('click', () => dlg.close(), o));
+    vf.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!vf.reportValidity()) return;
+      if (!vf.querySelector('[name=start]').value || !vf.querySelector('[name=end]').value) {
+        msg.textContent = 'Open the video and mark where only this preacher speaks (Start here, End here).';
+        msg.classList.add('bad'); return;
+      }
+      go.disabled = true; msg.classList.remove('bad');
+      msg.textContent = 'Listening to the part you marked… (a YouTube link is downloaded first: up to a minute)';
+      try {
+        const r = await fetch(vf.action, { method: 'POST', body: new FormData(vf), headers: { 'X-CSRF-Token': vf.csrf_token.value } });
+        const data = await r.json().catch(() => ({ ok: false, error: 'The server did not answer. Try again.' }));
+        if (!data.ok) throw new Error(data.error || 'That did not work.');
+        const opt = new Option(`${data.item.name} (needs a second part to be recognised)`, data.item.id, true, true);
+        sel.insertBefore(opt, sel.querySelector('option[value="__new"]'));
+        sel.dataset.prev = data.item.id;
+        msg.textContent = data.message;
+        setTimeout(() => dlg.close(), 900);
+        const note = document.createElement('p');
+        note.className = 'vc-muted text-[12.5px] vc-mt';
+        note.textContent = `${data.item.name} was added to the voice library and chosen. Press Save to keep it.`;
+        sel.closest('.vc-f').appendChild(note);
+      } catch (err) {
+        msg.textContent = err.message; msg.classList.add('bad');
+      } finally { go.disabled = false; }
+    }, o);
   })();
   </script>
   {% endif %}

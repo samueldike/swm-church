@@ -445,6 +445,15 @@ async def _only_the_senior_pastor(project_id: int, p, st: dict, structure: dict 
         return structure
     async with async_session() as db:
         cfg = await speakers.load(db, p.branch_id)
+    choice = st.get("speaker")                 # this video's own choice (the Automatic Clipper), else the church's
+    if choice == "all":
+        return structure
+    if choice:
+        person = next((x for x in cfg["people"] if x["id"] == choice), None)
+        if person is None:
+            return structure                   # the voice was removed from the library since: clip every preacher
+        cfg = {**cfg, "mode": "senior",
+               "people": [{**x, "role": "senior" if x is person else "other"} for x in cfg["people"]]}
     him = speakers.senior(cfg)
     cal = speakers.calibrate(cfg)
     if cfg["mode"] != "senior" or not him or cal["accept"] is None:

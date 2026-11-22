@@ -10587,6 +10587,7 @@ async def _clip_page(request: Request, db: AsyncSession, template: str, title: s
                       "audio_projects": [x for x in projects if x.branch_id == wchurch and __import__("app.core.clipper.media", fromlist=["source_path"]).source_path(x.id).exists()][:30]}
         watch_ctx = {"cfg": wcfg, "state": wstate, "church": wchurch, "church_name": wb.name if wb else "",
                      "every": _cw.EVERY, "days": _cw.DAY_NAMES, "formats": _co.FORMATS, "lengths": _co.LENGTHS,
+                     "starts": _cw.STARTS, "sources": _cw.SOURCES, "backlog": len(wstate.get("backlog") or []),
                      "captions": {k: v["label"] for k, v in (await _clip_cap_styles(db, wchurch)).items()},
                      "churches": (await db.execute(select(Branch).order_by(Branch.is_hq.desc(), Branch.name))).scalars().all()
                      if sees_every_church(admin) else []}
@@ -11171,24 +11172,31 @@ async def admin_clipper_watch(request: Request, db: AsyncSession = Depends(get_d
     admin, church = await _clip_ctx(request, db)
     if not admin or church is None or not _clip_can_manage_channels(admin):
         return _redirect(request, "/admin/clipper", "Only the church office can set up the YouTube watch.", "error")
-    from app.core.clipper import watch
+    from app.core.clipper import speakers, watch
 
     church = await _clip_channel_church(request, db, admin, church)
     form = await request.form()
     cfg, state = await watch.load(db, church)
-    new, problems = watch.clean(form, cfg)
+    people = (await speakers.load(db, church))["people"]
+    new, problems = watch.clean(form, cfg, [x["id"] for x in people])
     back = f"/admin/clipper/settings?church={church}#watch"
     if problems:
         return _redirect(request, back, " ".join(problems), "error")
-    changed_url = new.get("url") != cfg.get("url")
-    if changed_url:
-        state = {}                                       # a new channel starts from now
-    if new["enabled"] and (changed_url or not cfg.get("enabled") or not state.get("next_check")):
-        state["next_check"] = datetime.utcnow().isoformat()      # check straight away
+    restart = watch.restart_needed(cfg, new)
+    if restart:
+        import secrets
+
+        state = {"epoch": secrets.token_hex(4)}         # look at the channel afresh from the chosen starting point
+    if new["enabled"] and (restart or not cfg.get("enabled") or not state.get("next_check")):
+        state["next_check"] = datetime.utcnow().isoformat()      # look straight away
     await watch.save(db, church, cfg=new, state=state)
-    await log_admin_action(db, admin.id, "clipper.watch", "branch", church, {"enabled": new["enabled"], "every": new["every"]}, request)
+    await log_admin_action(db, admin.id, "clipper.watch", "branch", church,
+                           {"enabled": new["enabled"], "every": new["every"], "start": new["start"], "source": new["source"],
+                            "speaker": new["speaker"]}, request)
     await db.commit()
-    return _redirect(request, back, "YouTube watch saved." + (" The first check runs in a minute." if new["enabled"] else " It is switched off."), "success")
+    start_words = {"now": "from now on", "all": "from the very first video", "from": "from the video you chose"}[new["start"]]
+    return _redirect(request, back, f"Automatic Clipper saved: clipping {start_words}."
+                     + (" The first look runs in a minute." if new["enabled"] else " It is switched off."), "success")
 
 
 @router.post("/clipper/watch/check", name="admin_clipper_watch_check")
@@ -12013,26 +12021,28 @@ async def admin_clipper_voices_person(request: Request, db: AsyncSession = Depen
     name = (form.get("name") or "").strip()[:80]
     role = "other"                       # whose messages are clipped is chosen afterwards, from the voices added
     if not name:
-        return _redirect(request, back, "Write the name.", "error")
+        return _clip_lib_answer(request, back, "Write the name.", False)
     cfg = await speakers.load(db, church)
     if any(p["name"].lower() == name.lower() for p in cfg["people"]):
-        return _redirect(request, back, f"{name} is already in the voice library: add another part of their preaching there.", "error")
+        return _clip_lib_answer(request, back, f"{name} is already in the voice library: add another part of their preaching there.", False)
     if len(cfg["people"]) >= 12:
-        return _redirect(request, back, "Up to 12 people can be in the voice library.", "error")
+        return _clip_lib_answer(request, back, "Up to 12 people can be in the voice library.", False)
     try:
         embs, label = await _clip_voice_sample(db, church, form)
     except _VoiceError as exc:
-        return _redirect(request, back, str(exc), "error")
+        return _clip_lib_answer(request, back, str(exc), False)
     cfg = await speakers.load(db, church)                 # (the download may have taken a minute)
-    cfg["people"].append({"id": speakers.new_id(), "name": name, "role": role,
+    pid = speakers.new_id()
+    cfg["people"].append({"id": pid, "name": name, "role": role,
                           "samples": [{"id": speakers.new_id(), "label": label, "embs": embs}]})
     await speakers.save(db, church, cfg)
     await log_admin_action(db, admin.id, "clipper.voice_person", "branch", church, {"name": name, "prints": len(embs)}, request)
     await db.commit()
     cal = speakers.calibrate(cfg)
-    return _redirect(request, back, f"{name} added; the voice was learned from {label} ({len(embs)} voiceprints). "
-                                    "Add one or two more parts from other services for steadier recognition"
-                                    + (f". {cal['note']}" if speakers.senior(cfg) else ", then choose above whose messages are clipped."), "success")
+    note = (f"{name} added; the voice was learned from {label} ({len(embs)} voiceprints). "
+            "Add one or two more parts from other services for steadier recognition"
+            + (f". {cal['note']}" if speakers.senior(cfg) else ", then choose whose messages are clipped."))
+    return _clip_lib_answer(request, back, note, True, {"id": pid, "name": name, "parts": 1})
 
 
 @router.post("/clipper/voices/{person_id}/sample", name="admin_clipper_voices_sample")

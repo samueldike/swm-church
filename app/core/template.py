@@ -82,7 +82,7 @@ SETTINGS_TABS = {
     "Legal pages": "legal",
 }
 CLIPPER_PAGES = {"Channels": "/admin/clipper/channels", "YouTube access": "/admin/clipper/settings#youtube-access",
-                 "Clip our YouTube lives automatically": "/admin/clipper/settings#watch",
+                 "Automatic Clipper": "/admin/clipper/settings#watch",
                  "Watermark": "/admin/clipper/settings#watermark", "Settings": "/admin/clipper/settings"}
 
 

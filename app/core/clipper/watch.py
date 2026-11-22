@@ -1,13 +1,17 @@
-"""Watch a church's YouTube channel and clip every finished live service automatically.
+"""The Automatic Clipper: watch a church's YouTube channel and clip its services on its own.
 
 Per church (branch settings, JSON):
 
 * ``clipper_watch``: {"enabled", "url" (the channel), "every": "hours"|"days"|"weekdays", "n" (every N hours/days),
   "days" ([0..6], Monday = 0, for "weekdays"), "at" ("HH:MM" church time, for days/weekdays), "format", "length",
-  "captions" (a design id or "none"), "min_score" (0-100: moments below it are not cut), "latest" (on the first check,
-  also clip the most recent finished live)}.
+  "captions" (a design id or "none"), "min_score" (0-100: moments below it are not cut), "source" (``SOURCES``: the
+  Live tab, the Videos tab or both), "start" (``STARTS``: from now on / from the very first video / from a chosen
+  video, "start_url"), "speaker" ("all" or a voice-library person id: only that preacher's parts are clipped)}.
 * ``clipper_watch_state``: {"last_check", "next_check" (UTC ISO), "seen" (video ids already handled), "baseline",
-  "last_result", "projects" ([{id, video, title}] the newest auto projects)}.
+  "backlog" (older video ids still to clip, oldest first), "last_result", "projects" ([{id, video, title}])}.
+
+Older videos (``start`` = all / from) are a backlog: a few per check, newest lives first, and only while fewer than
+``BACKLOG_BUSY`` automatic videos are still being worked on; while a backlog is left the next look comes sooner.
 
 A check lists the channel's Live tab with yt-dlp (``/streams``, the saved YouTube cookies), skips what it has seen,
 and for each new video asks YouTube for its own state: ``was_live`` = the stream ended and the recording is ready;
@@ -32,8 +36,15 @@ logger = logging.getLogger(__name__)
 
 EVERY = {"hours": "Every few hours", "days": "Every few days", "weekdays": "On chosen days of the week"}
 DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+STARTS = {"now": "From now on", "all": "From the very first video", "from": "From a video I choose"}
+SOURCES = {"streams": "Live services (the Live tab)", "videos": "Uploaded videos (the Videos tab)", "both": "Both"}
 DEFAULTS = {"enabled": False, "url": "", "every": "hours", "n": 6, "days": [6], "at": "15:00", "format": "vertical",
-            "length": "30-60", "captions": "none", "min_score": 70, "latest": True}
+            "length": "30-60", "captions": "none", "min_score": 70, "source": "streams", "start": "now",
+            "start_url": "", "speaker": "all"}
+BACKLOG_BUSY = 2          # older videos are started only while fewer automatic videos than this are still working
+BACKLOG_EVERY = timedelta(minutes=45)   # how soon the next look comes while older videos are waiting
+LIST_RECENT = 30          # videos read from a tab on an ordinary look
+LIST_ALL = 1000           # ... and when starting from the first or a chosen video
 AUTO_COUNT = 30           # "as many as possible": the editor stops earlier when the message runs out
 AUTO_REFILLS = 4
 MAX_NEW_PER_CHECK = 3     # finished lives turned into projects per check (the rest wait for the next one)
@@ -52,8 +63,24 @@ def streams_url(url: str) -> str | None:
     return f"https://www.youtube.com/{m.group(1)}/streams"
 
 
-def clean(form, current: dict | None = None) -> tuple[dict, list[str]]:
-    """Validated watch settings from the form, and the problems found."""
+def video_id(url: str) -> str | None:
+    """The id of a YouTube video link (watch?v=, youtu.be/, /live/, /shorts/), or None (pure; tested)."""
+    u = str(url or "").strip()
+    m = re.search(r"(?:[?&]v=|youtu\.be/|/live/|/shorts/|/embed/)([\w-]{11})(?![\w-])", u)
+    return m.group(1) if m else None
+
+
+def tab_urls(url: str, source: str) -> list[str]:
+    """The channel tabs to read: Live, Videos or both (pure; tested)."""
+    live = streams_url(url)
+    if not live:
+        return []
+    videos = live[: -len("/streams")] + "/videos"
+    return {"streams": [live], "videos": [videos]}.get(source, [live, videos])
+
+
+def clean(form, current: dict | None = None, people: list[str] | None = None) -> tuple[dict, list[str]]:
+    """Validated watch settings from the form, and the problems found. ``people``: the voice library's ids."""
     from app.core.clipper import captions, options
 
     get = form.get
@@ -82,8 +109,20 @@ def clean(form, current: dict | None = None) -> tuple[dict, list[str]]:
         out["min_score"] = max(0, min(95, int(get("min_score") or out["min_score"])))
     except (TypeError, ValueError):
         out["min_score"] = DEFAULTS["min_score"]
-    out["latest"] = get("latest") == "1"
+    out.pop("latest", None)
+    out["source"] = get("source") if get("source") in SOURCES else DEFAULTS["source"]
+    out["start"] = get("start") if get("start") in STARTS else DEFAULTS["start"]
+    out["start_url"] = str(get("start_url") or "").strip()[:300] if out["start"] == "from" else ""
+    if out["start"] == "from" and not video_id(out["start_url"]):
+        problems.append("Paste the link of the video to start from, like https://www.youtube.com/watch?v=....")
+    sp = str(get("speaker") or "all")
+    out["speaker"] = sp if sp == "all" or sp in (people or []) else "all"
     return out, problems
+
+
+def restart_needed(old: dict, new: dict) -> bool:
+    """A new channel, tab or starting point means looking at the channel afresh (pure; tested)."""
+    return any(old.get(k) != new.get(k) for k in ("url", "source", "start", "start_url"))
 
 
 def next_due(cfg: dict, after_utc: datetime, tz: str) -> datetime:
@@ -108,15 +147,29 @@ def next_due(cfg: dict, after_utc: datetime, tz: str) -> datetime:
     return after_utc + timedelta(days=7)
 
 
-def pick_new(entries: list[dict], seen: set[str], *, baseline: bool, latest: bool) -> tuple[list[str], set[str]]:
-    """(video ids to look at now, ids to mark seen without clipping). On the first check (``baseline``) everything
-    already on the channel is marked seen, except the most recent when ``latest`` (pure; tested)."""
-    ids = [str(e.get("id")) for e in entries if e.get("id")]
-    fresh = [i for i in ids if i not in seen]
-    if baseline:
-        keep = fresh[:1] if latest else []
-        return keep, set(fresh[len(keep):])
-    return fresh[:MAX_NEW_PER_CHECK * 3], set()
+def first_look(entries: list[dict], start: str, start_id: str | None) -> tuple[list[str], set[str], str | None]:
+    """The first look at the channel: (backlog oldest first, ids to leave alone, problem). ``entries`` are
+    newest first, as YouTube lists them (pure; tested).
+
+    * now: everything already there is left alone; only videos that appear from now on are clipped.
+    * all: every video already there is clipped, oldest first, then every new one.
+    * from: the chosen video and every one after it, then every new one; older ones are left alone."""
+    ids = list(dict.fromkeys(str(e.get("id")) for e in entries if e.get("id")))
+    if start == "all":
+        return list(reversed(ids)), set(), None
+    if start == "from":
+        if start_id not in ids:
+            return [], set(), "The video to start from is not on the channel's list (check the link and the tab chosen)."
+        k = ids.index(start_id)
+        return list(reversed(ids[: k + 1])), set(ids[k + 1:]), None
+    return [], set(ids), None
+
+
+def pick_new(entries: list[dict], seen: set[str], backlog: list[str]) -> list[str]:
+    """Videos that appeared since the last look, newest first (pure; tested)."""
+    queued = set(backlog)
+    return [i for i in dict.fromkeys(str(e.get("id")) for e in entries if e.get("id"))
+            if i not in seen and i not in queued][: MAX_NEW_PER_CHECK * 3]
 
 
 READY, LATER, SKIP = "ready", "later", "skip"
@@ -164,8 +217,13 @@ def _ytdlp(args: list[str], cookies: str | None, timeout: int = 180) -> dict:
                 pass
 
 
-def list_streams(url: str, cookies: str | None) -> list[dict]:
-    data = _ytdlp(["--flat-playlist", "--playlist-end", "15", url], cookies)
+def list_streams(url: str, cookies: str | None, limit: int = LIST_RECENT) -> list[dict]:
+    try:
+        data = _ytdlp(["--flat-playlist", "--playlist-end", str(limit), url], cookies, timeout=600)
+    except RuntimeError as exc:
+        if "does not have a" in str(exc).lower() or "404" in str(exc):
+            return []                          # the channel has no such tab (no lives, or no uploads)
+        raise
     return [e for e in data.get("entries") or [] if isinstance(e, dict)]
 
 
@@ -199,6 +257,7 @@ async def save(db, branch_id: int, cfg: dict | None = None, state: dict | None =
     if state is not None:
         state["seen"] = list(state.get("seen") or [])[-SEEN_KEEP:]
         state["projects"] = list(state.get("projects") or [])[-10:]
+        state["backlog"] = list(state.get("backlog") or [])[:LIST_ALL]
         values["clipper_watch_state"] = json.dumps(state)
     await update_branch_settings(db, branch_id, values)
 
@@ -244,38 +303,68 @@ async def dispatch_due(now: datetime | None = None) -> int:
     return n
 
 
+async def _busy(branch_id: int) -> int:
+    """Automatic videos of this church still being worked on (started in the last 12 hours)."""
+    from sqlalchemy import select
+
+    from app.database import async_session
+    from app.models.clipper import ClipProject
+
+    since = datetime.utcnow() - timedelta(hours=12)
+    async with async_session() as db:
+        rows = (await db.execute(select(ClipProject.settings).where(
+            ClipProject.branch_id == branch_id, ClipProject.created_at >= since,
+            ClipProject.status.notin_(("ready", "failed", "stopped"))))).scalars().all()
+    return sum(1 for st in rows if (st or {}).get("auto"))
+
+
 async def check(branch_id: int) -> str:
-    """List the Live tab, start projects for finished lives. Returns a one-line summary (also saved)."""
+    """Read the channel, start projects for new finished services and, while the clipper is free, for older ones
+    still waiting (the backlog). Returns a one-line summary (also saved)."""
     from app.core.clipper import captions, media, options, pipeline
     from app.database import async_session
     from app.models.clipper import ClipProject
 
     async with async_session() as db:
         cfg, state = await load(db, branch_id)
-    url = streams_url(cfg.get("url"))
+    epoch = state.get("epoch")
+    tabs = tab_urls(cfg.get("url"), cfg.get("source") or "streams")
     now = datetime.utcnow()
     summary = ""
     started: list[dict] = []
+    backlog: list[str] = list(state.get("backlog") or [])
     try:
-        if not url:
+        if not tabs:
             raise RuntimeError("No channel link is saved.")
         if not media.enough_disk():
             raise RuntimeError("The server is short of disk space; nothing new was started.")
         cookies = await pipeline.youtube_cookies() or None
-        entries = await asyncio.to_thread(list_streams, url, cookies)
-        seen = set(state.get("seen") or [])
         baseline = not state.get("baseline")
-        look, mark = pick_new(entries, seen, baseline=baseline, latest=bool(cfg.get("latest")))
-        seen |= mark
-        waiting = 0
+        limit = LIST_ALL if baseline and cfg.get("start") in ("all", "from") else LIST_RECENT
+        entries: list[dict] = []
+        for tab in tabs:
+            entries += await asyncio.to_thread(list_streams, tab, cookies, limit)
+        seen = set(state.get("seen") or [])
+        if baseline:
+            backlog, mark, problem = first_look(entries, cfg.get("start") or "now", video_id(cfg.get("start_url")))
+            if problem:
+                raise RuntimeError(problem)
+            seen |= mark
+            new_ids: list[str] = []
+        else:
+            new_ids = pick_new(entries, seen, backlog)
         titles = {str(e.get("id")): e.get("title") or "" for e in entries}
-        for vid in look:
-            if len(started) >= MAX_NEW_PER_CHECK:
+        busy = await _busy(branch_id)
+        # New services first; older ones only while the clipper is not already busy with automatic videos.
+        queue = [(v, False) for v in new_ids] + ([(v, True) for v in backlog] if busy < BACKLOG_BUSY else [])
+        waiting = 0
+        for vid, old in queue:
+            if len(started) >= MAX_NEW_PER_CHECK or (old and busy + len(started) >= BACKLOG_BUSY):
                 break
             try:
                 info = await asyncio.to_thread(video_info, vid, cookies)
             except RuntimeError as exc:
-                logger.info("Watch b%s: %s not readable yet (%s)", branch_id, vid, exc)
+                logger.info("Automatic Clipper b%s: %s not readable yet (%s)", branch_id, vid, exc)
                 waiting += 1
                 continue
             state_ = readiness(info)
@@ -284,16 +373,19 @@ async def check(branch_id: int) -> str:
                 if now - datetime.fromisoformat(first) > GIVE_UP_AFTER:
                     seen.add(vid)
                     state["waiting"].pop(vid, None)
+                    backlog = [x for x in backlog if x != vid]
                     continue
                 waiting += 1
                 continue
             (state.get("waiting") or {}).pop(vid, None)
             seen.add(vid)
+            backlog = [x for x in backlog if x != vid]
             if state_ == SKIP:
                 continue
             settings = {**options.DEFAULTS, "content_type": "sermon", "count": AUTO_COUNT, "length": cfg["length"],
                         "format": cfg["format"], "caption_style": cfg["captions"] if captions.style_id(cfg["captions"]) else "none",
-                        "min_score": int(cfg.get("min_score") or 0), "refills": AUTO_REFILLS, "auto": True}
+                        "min_score": int(cfg.get("min_score") or 0), "refills": AUTO_REFILLS, "auto": True,
+                        "speaker": cfg.get("speaker") or "all"}
             async with async_session() as db:
                 p = ClipProject(branch_id=branch_id, created_by=None, title=(info.get("title") or titles.get(vid) or "")[:255],
                                 source_kind="url", source_url=f"https://www.youtube.com/watch?v={vid}", settings=settings,
@@ -306,27 +398,38 @@ async def check(branch_id: int) -> str:
             clip_fetch_task.apply_async((started[-1]["id"],))
         state["seen"] = list(seen)
         state["baseline"] = True
+        left = f" {len(backlog)} older video{'s' if len(backlog) != 1 else ''} still to clip." if backlog else ""
         if started:
-            summary = f"Started {len(started)} new video{'s' if len(started) != 1 else ''}: " + "; ".join(s["title"] for s in started)[:300]
+            summary = (f"Started {len(started)} video{'s' if len(started) != 1 else ''}: "
+                       + "; ".join(x["title"] for x in started)[:300] + "." + left)
         elif waiting:
-            summary = f"{waiting} live{'s' if waiting != 1 else ''} not finished or still processing on YouTube; checking again later."
-        elif baseline:
+            summary = (f"{waiting} video{'s' if waiting != 1 else ''} not finished or still processing on YouTube; "
+                       "looking again later." + left)
+        elif backlog:
+            summary = "Waiting for the videos being clipped to finish." + left
+        elif baseline and cfg.get("start") == "now":
             summary = "Watching from now on: earlier videos are left alone."
         else:
-            summary = "No new finished live."
+            summary = "Nothing new to clip."
     except RuntimeError as exc:
         summary = f"Could not read the channel: {exc}"
     except Exception:
-        logger.exception("YouTube watch failed for branch %s", branch_id)
-        summary = "The check failed unexpectedly; it will try again at the next time."
+        logger.exception("Automatic Clipper failed for branch %s", branch_id)
+        summary = "The look failed unexpectedly; it will try again at the next time."
     async with async_session() as db:
         cfg, fresh = await load(db, branch_id)
+        if fresh.get("epoch") != epoch:          # the settings were changed (a new start) while this look ran
+            return summary
         fresh.update({k: v for k, v in state.items() if k in ("seen", "baseline", "waiting")})
+        fresh["backlog"] = backlog
         fresh["last_check"] = now.isoformat()
         fresh["last_result"] = summary
         fresh["projects"] = list(fresh.get("projects") or []) + started
-        if not fresh.get("next_check") or datetime.fromisoformat(fresh["next_check"]) <= now:
-            fresh["next_check"] = next_due(cfg, now, await _tz(db, branch_id)).isoformat()
+        due = next_due(cfg, now, await _tz(db, branch_id))
+        if backlog:
+            due = min(due, now + BACKLOG_EVERY)
+        if not fresh.get("next_check") or datetime.fromisoformat(fresh["next_check"]) <= now or backlog:
+            fresh["next_check"] = due.isoformat()
         await save(db, branch_id, state=fresh)
         await db.commit()
     return summary

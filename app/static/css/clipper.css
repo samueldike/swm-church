@@ -576,3 +576,11 @@
 .vc-more-sample { margin-top: 8px; }
 .vc-more-sample > summary { list-style: none; display: inline-flex; }
 .vc-more-sample > summary::-webkit-details-marker { display: none; }
+
+/* Automatic Clipper: numbered sections; the "add a new voice" window is wide enough for the player */
+.vc-auto { display: flex; flex-direction: column; gap: 14px; }
+.vc-auto-sec { border: 1px solid var(--vc-line, #e6e2d8); border-radius: 12px; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+.vc-auto-sec h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 2px; font-size: 14.5px; font-weight: 800; }
+.vc-auto-n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--vc-gold-tint, #f6ecd2); color: var(--vc-ink, #111); font-size: 12px; font-weight: 800; }
+.vc-auto .vc-choice { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.vc-voice-dlg { width: min(720px, 96vw); }

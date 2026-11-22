@@ -641,11 +641,37 @@ def test_watch_reads_channel_links_and_only_takes_finished_lives():
     assert watch.readiness({"live_status": "is_upcoming"}) == watch.LATER
     assert watch.readiness({"live_status": "was_live", "duration": 30}) == watch.SKIP
     assert watch.readiness({"live_status": "was_live", "duration": 0}) == watch.LATER      # recording not ready yet
-    entries = [{"id": "new2"}, {"id": "new1"}, {"id": "old"}]
-    look, mark = watch.pick_new(entries, set(), baseline=True, latest=True)
-    assert look == ["new2"] and mark == {"new1", "old"}                 # first look: only the latest
-    look, mark = watch.pick_new(entries, {"new1", "old"}, baseline=False, latest=True)
-    assert look == ["new2"] and not mark
+    entries = [{"id": "new2"}, {"id": "new1"}, {"id": "old"}]           # YouTube lists newest first
+    assert watch.pick_new(entries, {"new1", "old"}, []) == ["new2"]
+    assert watch.pick_new(entries, {"old"}, ["new1"]) == ["new2"]        # waiting in the backlog: not twice
+
+
+def test_automatic_clipper_start_points_and_settings():
+    from app.core.clipper import watch
+
+    entries = [{"id": "v4"}, {"id": "v3"}, {"id": "v2"}, {"id": "v1"}]
+    assert watch.first_look(entries, "now", None) == ([], {"v1", "v2", "v3", "v4"}, None)
+    assert watch.first_look(entries, "all", None) == (["v1", "v2", "v3", "v4"], set(), None)   # oldest first
+    assert watch.first_look(entries, "from", "v2") == (["v2", "v3", "v4"], {"v1"}, None)
+    backlog, mark, problem = watch.first_look(entries, "from", "zzzzzzzzzzz")
+    assert not backlog and problem
+    assert watch.video_id("https://www.youtube.com/watch?v=khHq1XtF3z0&t=30s") == "khHq1XtF3z0"
+    assert watch.video_id("https://youtu.be/khHq1XtF3z0") == "khHq1XtF3z0"
+    assert watch.video_id("https://www.youtube.com/live/khHq1XtF3z0?si=x") == "khHq1XtF3z0"
+    assert watch.video_id("https://www.youtube.com/@church") is None
+    ch = "https://www.youtube.com/@church"
+    assert watch.tab_urls(ch, "streams") == [ch + "/streams"]
+    assert watch.tab_urls(ch, "videos") == [ch + "/videos"]
+    assert watch.tab_urls(ch, "both") == [ch + "/streams", ch + "/videos"]
+    form = {"url": ch, "start": "from", "start_url": "nope", "speaker": "p1", "source": "both"}
+    cfg, problems = watch.clean(form, None, ["p1"])
+    assert problems and cfg["speaker"] == "p1" and cfg["source"] == "both"      # the start video must be a link
+    cfg, problems = watch.clean({**form, "start_url": "https://youtu.be/khHq1XtF3z0", "speaker": "gone"}, None, ["p1"])
+    assert not problems and cfg["speaker"] == "all"                      # a voice not in the library: every preacher
+    old = {**watch.DEFAULTS, "url": ch}
+    assert not watch.restart_needed(old, {**old, "min_score": 80, "speaker": "p1"})
+    assert watch.restart_needed(old, {**old, "start": "all"})
+    assert watch.restart_needed(old, {**old, "source": "videos"})
 
 
 def test_watch_schedule_hours_days_and_weekdays():
