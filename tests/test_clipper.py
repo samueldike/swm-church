@@ -1604,3 +1604,56 @@ def test_colour_bars_are_held_on_the_last_good_frame():
     assert reframe.freeze_filter([(1.0, 1.2)], 30, 5.0, tag=2) ==         "split[zf2_0a][zf2_0b];[zf2_0a][zf2_0b]freezeframes=first=30:last=36:replace=29"
     assert reframe.freeze_filter([(0.0, 0.5)], 30, 5.0).endswith("freezeframes=first=0:last=15:replace=16")
     assert reframe.freeze_filter([(0.0, 5.0)], 30, 5.0) == ""
+
+
+def test_quality_is_computed_from_the_judges_marks_and_gates_cap_it():
+    assert sum(w for _, w, _ in editorial.QUALITY) == 100
+    top = {k: 10 for k, _, _ in editorial.QUALITY}
+    assert editorial.quality(top) == 100
+    ordinary = {k: 6 for k, _, _ in editorial.QUALITY}
+    assert editorial.quality(ordinary) == 60
+    assert editorial.quality(top, ["misrepresents"]) == editorial.GATE_CAP      # a gate caps even a perfect clip
+    assert editorial.quality(top, ["made_up_gate"]) == 100                   # unknown gates are ignored
+    assert editorial.quality({"hook": 9}) is None                            # too few marks to judge
+    shorts = [{"title": "a", "score": 90}, {"title": "b", "score": 50}, {"title": "c", "score": 70}]
+    out = editorial.apply_ranking(shorts, [
+        {"k": 0, "marks": {**top, "hook": 2, "truth": 3}, "gates": [], "why": "weak opening"},
+        {"k": 1, "marks": top, "gates": [], "why": "best"},
+        {"k": 2, "marks": top, "gates": ["needs_context"], "why": "leans on what came before"},
+    ])
+    assert [s["title"] for s in out] == ["b", "a", "c"]                     # by the computed quality, not the list order
+    assert out[0]["score"] == 100 and out[2]["score"] <= editorial.GATE_CAP and out[2]["gates"] == ["needs_context"]
+    assert out[0]["marks"]["hook"] == 10
+
+
+def test_a_message_with_nothing_over_the_quality_bar_is_skipped(monkeypatch):
+    import asyncio
+
+    import pytest
+
+    from app.core.clipper.speech import Unit
+
+    units = [Unit(i=i, w0=i, w1=i + 1, start=i * 10.0, end=i * 10.0 + 10, text=f"s{i}", speech=10.0) for i in range(40)]
+
+    async def fake_round(units_, pool, *, ask, used, **kw):
+        free = [u.i for u in pool if u.i not in used]
+        return [{"edl": [{"i": i, "role": "point"} for i in free[n * 4:n * 4 + 4]], "score": 75, "length": 40.0}
+                for n in range(min(ask, len(free) // 4))], {"hashtags": []}
+
+    async def fake_structure(*a, **k):
+        return {"body": [[0.0, 100000.0]]}
+
+    async def strict_judge(units_, shorts, *, brief):            # the judge finds them ordinary
+        return [{**s, "score": 70 - n} for n, s in enumerate(shorts)]
+
+    monkeypatch.setattr(editorial, "_round", fake_round)
+    monkeypatch.setattr(editorial, "map_structure", fake_structure)
+    monkeypatch.setattr(editorial, "rank", strict_judge)
+    with pytest.raises(editorial.BelowTheBar) as err:
+        asyncio.run(editorial.make_shorts(units, count=30, floor=30, target=45, content_type="sermon", title="",
+                                          style="passage", duration=400, min_score=80, refills=1))
+    assert err.value.best == 70 and "Nothing was cut" in str(err.value)
+    # with a bar the judge's best clears, only those are kept
+    out, _, _ = asyncio.run(editorial.make_shorts(units, count=30, floor=30, target=45, content_type="sermon",
+                                                  title="", style="passage", duration=400, min_score=69, refills=1))
+    assert out and all(s["score"] >= 69 for s in out)

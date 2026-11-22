@@ -6,7 +6,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}Settings{% endblock %}
 {% block topbar_icon %}ri-settings-3-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=24">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=25">{% endblock %}
 
 {% block page_header %}
   {{ page_header("Clipper settings", "Set these up once. Every new video uses them.",
@@ -134,9 +134,14 @@
             <div class="vc-f"><label for="vc-w-len">Length</label><select id="vc-w-len" name="length">{% for k, v in watch.lengths.items() %}<option value="{{ k }}" {{ 'selected' if w.length == k }}>{{ v[0] }} to {{ v[1] }} seconds</option>{% endfor %}</select></div>
             <div class="vc-f"><label for="vc-w-cap">Captions</label><select id="vc-w-cap" name="captions"><option value="none">None</option>{% for k, v in watch.captions.items() %}<option value="{{ k }}" {{ 'selected' if w.captions == k }}>{{ v }}</option>{% endfor %}</select></div>
           </div>
-          <div class="vc-f vc-mt"><label for="vc-w-score">Value bar: keep moments scoring at least <output data-score>{{ w.min_score }}</output> of 100</label>
-            <input id="vc-w-score" type="range" name="min_score" min="40" max="95" step="5" value="{{ w.min_score }}" data-score-in>
-            <small class="vc-muted">70 keeps every strong moment; raise it for fewer, stronger shorts. There is no fixed number: each message gives as many as clear the bar.</small></div>
+          <div class="vc-f vc-mt vc-qbar"><label for="vc-w-score">Quality bar: post only shorts scoring at least <output data-score>{{ w.min_score }}</output> of 100 <b data-score-word></b></label>
+            <input id="vc-w-score" type="range" name="min_score" min="50" max="95" step="5" value="{{ w.min_score }}" data-score-in list="vc-w-score-marks">
+            <datalist id="vc-w-score-marks"><option value="60" label="Good"></option><option value="70" label="Strong"></option><option value="80" label="Very strong"></option><option value="90" label="Exceptional"></option></datalist>
+            <div class="vc-qbar-scale" aria-hidden="true"><span>50</span><span>Good 60</span><span>Strong 70</span><span>Very strong 80</span><span>Exceptional 90</span></div>
+            <small class="vc-muted">Quality before quantity. Every short is judged on its own against a fixed standard, not against the other shorts of the same message:
+              <b>a hook</b> in the first 2 seconds (18), <b>one clear truth</b> faithful to Scripture (20), <b>it changes something</b> in the viewer (15), <b>it stirs the heart</b> (15), <b>a believer would share it</b> (14), <b>it carries the heart of the whole sermon</b> (10) and <b>it stands alone</b> (8).
+              A short that bends a verse out of context, needs what was said before, is cut off, is service business (announcements, offering) or is divisive scores 45 at most and is never posted.
+              Only the shorts that clear the bar are cut. <b>A message with none is marked Skipped</b>: nothing is cut or posted (a person can still choose "Clip anyway" on its page). 80 is the recommended standard.</small></div>
         </section>
 
         <div class="vc-addform-foot">
@@ -184,7 +189,10 @@
       const every = f.querySelector('[data-every]').value;
       f.querySelectorAll('[data-show]').forEach((el) => { el.hidden = !el.dataset.show.split(' ').includes(every); });
       f.querySelector('[data-unit]').textContent = every === 'hours' ? 'hours' : 'days';
-      f.querySelector('[data-score]').textContent = f.querySelector('[data-score-in]').value;
+      const bar = Number(f.querySelector('[data-score-in]').value);
+      f.querySelector('[data-score]').textContent = bar;
+      f.querySelector('[data-score-word]').textContent = bar >= 90 ? '(exceptional only)' : bar >= 80 ? '(very strong: recommended)'
+        : bar >= 70 ? '(strong)' : bar >= 60 ? '(good)' : '(lenient)';
       const start = (f.querySelector('[name=start]:checked') || {}).value;
       const from = f.querySelector('[data-start-from]');
       from.hidden = start !== 'from';

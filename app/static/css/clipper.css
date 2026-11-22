@@ -592,3 +592,6 @@
 .vc-train-steps { margin: 6px 0 0; padding-left: 20px; font-size: 12.5px; color: var(--vc-ink3, #666); display: grid; gap: 2px; }
 .vc-train-steps li.now { color: var(--vc-ink, #111); font-weight: 600; }
 .vc-train-steps li.done { text-decoration: line-through; opacity: .6; }
+.vc-qbar input[type=range] { width: 100%; accent-color: var(--vc-gold, #c9a227); }
+.vc-qbar-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--vc-ink3, #666); margin-top: -2px; }
+.vc-qbar label b[data-score-word] { font-weight: 600; color: var(--vc-ink3, #666); }

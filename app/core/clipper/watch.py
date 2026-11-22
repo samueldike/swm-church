@@ -39,7 +39,7 @@ DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
 STARTS = {"now": "From now on", "all": "From the very first video", "from": "From a video I choose"}
 SOURCES = {"streams": "Live services (the Live tab)", "videos": "Uploaded videos (the Videos tab)", "both": "Both"}
 DEFAULTS = {"enabled": False, "url": "", "every": "hours", "n": 6, "days": [6], "at": "15:00", "format": "vertical",
-            "length": "30-60", "captions": "none", "min_score": 70, "source": "streams", "start": "now",
+            "length": "30-60", "captions": "none", "min_score": 80, "source": "streams", "start": "now",
             "start_url": "", "speaker": "all"}
 RETRY_TIMES = 3           # a failed video is tried again at most this often ...
 RETRY_AFTER = timedelta(hours=1)        # ... and no sooner than this after the last try
@@ -108,7 +108,7 @@ def clean(form, current: dict | None = None, people: list[str] | None = None) ->
     cap = get("captions")
     out["captions"] = cap if captions.style_id(cap) else "none"
     try:
-        out["min_score"] = max(0, min(95, int(get("min_score") or out["min_score"])))
+        out["min_score"] = max(50, min(95, int(get("min_score") or out["min_score"])))
     except (TypeError, ValueError):
         out["min_score"] = DEFAULTS["min_score"]
     out.pop("latest", None)
@@ -316,7 +316,7 @@ async def _busy(branch_id: int) -> int:
     async with async_session() as db:
         rows = (await db.execute(select(ClipProject.settings).where(
             ClipProject.branch_id == branch_id, ClipProject.created_at >= since,
-            ClipProject.status.notin_(("ready", "failed", "stopped"))))).scalars().all()
+            ClipProject.status.notin_(("ready", "failed", "stopped", "skipped"))))).scalars().all()
     return sum(1 for st in rows if (st or {}).get("auto"))
 
 

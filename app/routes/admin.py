@@ -12127,14 +12127,15 @@ async def admin_clipper_voices_delete(person_id: str, request: Request, db: Asyn
 
 @router.post("/clipper/{project_id}/clip-anyway", name="admin_clipper_clip_anyway")
 async def admin_clipper_clip_anyway(project_id: int, request: Request, db: AsyncSession = Depends(get_db)):
-    """Clip a video the voice check refused (another preacher), this once."""
+    """Clip a video anyway, this once: one the voice check refused (another preacher), or one skipped because no
+    moment reached the Automatic Clipper's quality bar (then the bar is lifted for this video)."""
     admin, church = await _clip_ctx(request, db)
     p = await _clip_project(db, admin, church, project_id) if admin and church is not None else None
     if not p:
         return JSONResponse({"ok": False, "error": "That video was not found."}, status_code=404)
     from app.tasks import clip_compose_task
 
-    p.settings = {**(p.settings or {}), "ignore_speaker": True}
+    p.settings = {**(p.settings or {}), **({"min_score": 0} if p.status == "skipped" else {"ignore_speaker": True})}
     p.status, p.stage, p.progress, p.error, p.heartbeat_at = "composing", "Waiting for the editor", 0.0, None, datetime.utcnow()
     await db.commit()
     await _clip_enqueue(clip_compose_task, p.id)

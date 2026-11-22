@@ -217,7 +217,7 @@
         media = `<div class="vc-wait"><i class="ri-loader-4-line vc-spin"></i><span>${s.status === 'rendering' ? 'Cutting this short…' : 'Waiting to be cut…'}</span></div>`;
       }
       const r = ranks[s.id];
-      const tier = s.score >= 85 ? 'Top pick' : s.score >= 70 ? 'Strong' : 'Good';
+      const tier = s.score >= 85 ? 'Top pick' : s.score >= 75 ? 'Strong' : s.score >= 60 ? 'Good' : 'Weak';
       const badges = `<div class="vc-badges">${s.score != null
         ? `<span class="vc-pill gold vc-rank ${r === 1 ? 'first' : ''}" title="${esc(`Ranked ${r} of ${rankedCount} by how valuable and shareable it is. Score ${s.score} of 100.${s.why ? ' ' + s.why : ''}`)}">#${r} · ${esc(tier)} ${s.score}</span>`
         : (s.origin === 'manual' ? '<span class="vc-pill gold">Your clip</span>' : '<span></span>')}${s.length ? `<span class="vc-pill gold">${Math.round(s.length)} s</span>` : ''}</div>`;
@@ -385,7 +385,11 @@
         document.getElementById('vc-pct').textContent = `Step ${step + 1} of 5`;
         document.getElementById('vc-fill').style.width = `${(overall * 100).toFixed(1)}%`;
       }
-      if (data.status === 'failed' || data.status === 'stalled') {
+      if (data.status === 'skipped') {
+        problem.hidden = false;
+        problem.innerHTML = `<div class="vc-alert info"><i class="ri-shield-star-line"></i><span><b>Skipped: below the quality bar.</b> ${esc(data.error || 'No moment in this message was strong enough to post.')}</span><span class="flex-grow"></span>
+          <button type="button" class="btn btn-secondary btn-sm" data-act="anyway" title="Cut the best moments of this video, ignoring the bar"><i class="ri-scissors-cut-line"></i>Clip anyway</button></div>`;
+      } else if (data.status === 'failed' || data.status === 'stalled') {
         problem.hidden = false;
         problem.innerHTML = `<div class="vc-alert bad"><i class="ri-error-warning-line"></i><span>${directions(esc(data.status === 'stalled'
           ? 'The work stopped (the server may have restarted). Retry carries on from where it stopped.'

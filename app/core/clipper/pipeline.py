@@ -422,6 +422,15 @@ async def compose(project_id: int, *, more: int | None = None) -> bool:
             except Exception as exc:
                 logger.warning("Re-ranking project %s failed: %s", project_id, exc)
         return True
+    except editorial.BelowTheBar as exc:
+        # Quality before quantity: nothing reached the bar, so nothing is cut. A finished state, not a failure
+        # (the Automatic Clipper never retries it); "Find more" on a video that has shorts simply ends.
+        if more:
+            await _update(project_id, status="ready", stage=None, progress=1.0, error=None)
+        else:
+            await _update(project_id, status="skipped", stage=None, progress=1.0, error=str(exc)[:2000],
+                          finished_at=datetime.utcnow())
+        return False
     except (ClipperError, editorial.EditorialError) as exc:
         await _fail(project_id, str(exc))
     except Exception as exc:

@@ -4,7 +4,7 @@
 {% block topbar_title %}Video Clipper{% endblock %}
 {% block topbar_subtitle %}Long videos into ready-to-post shorts{% endblock %}
 {% block topbar_icon %}ri-scissors-cut-line{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=24">{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{{ url_for('static', path='css/clipper.css') }}?v=25">{% endblock %}
 
 {% block page_header %}
   {{ page_header("Video Clipper", "Turn a service or teaching into short videos for Reels, TikTok, YouTube Shorts and WhatsApp Status.",
@@ -39,6 +39,7 @@
           {% if p.settings and p.settings.auto %}<span class="vc-pill gold vc-auto" title="Started by the YouTube watch"><i class="ri-live-line"></i>Auto</span>{% endif %}
           {% if p.status == 'ready' %}<span class="vc-pill ok"><i class="ri-check-line"></i>{{ ready|length }} short{{ '' if ready|length == 1 else 's' }}</span>
           {% elif p.status == 'failed' %}<span class="vc-pill bad"><i class="ri-error-warning-line"></i>Needs attention</span>
+          {% elif p.status == 'skipped' %}<span class="vc-pill" title="{{ p.error or '' }}"><i class="ri-shield-star-line"></i>Skipped: below the quality bar</span>
           {% elif is_stale %}<span class="vc-pill bad"><i class="ri-pause-line"></i>Stopped</span>
           {% else %}<span class="vc-pill run"><i class="ri-loader-4-line vc-spin"></i>{{ p.stage or 'Working' }}</span>{% endif %}
         </div>
